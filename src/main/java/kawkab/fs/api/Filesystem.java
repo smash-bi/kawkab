@@ -1,12 +1,11 @@
 package kawkab.fs.api;
 
-import java.util.HashMap;
-
-import kawkab.fs.client.FileHandle;
-
 public class Filesystem {
+	public enum FileMode {
+		READ, APPEND
+	}
+	
 	private static Filesystem instance;
-	private HashMap<Long, FileHandle> handles;
 	
 	private Filesystem(){}
 	
@@ -18,19 +17,14 @@ public class Filesystem {
 		return instance;
 	}
 	
-	public FileHandle create(FilePath path, FileOptions opts){
+	public FileHandle open(String filename, FileMode mode, FileOptions opts){
 		//TODO: Validate input
 		//TODO: Check if file already exists
 		
-		FileHandle file = new FileHandle(path, opts);
+		FileHandle file = new FileHandle(filename, opts);
 		
-		//Save the new file handles
-		//handles.put(path.uuid().getLeastSignificantBits(), file);
+		//Save file handles
 		
 		return file;
-	}
-	
-	public FileHandle open(FilePath path){
-		return null;
 	}
 }
