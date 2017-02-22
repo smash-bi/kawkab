@@ -1,4 +1,7 @@
-package kawkab.fs.api;
+package kawkab.fs.core;
+
+import kawkab.fs.api.FileHandle;
+import kawkab.fs.api.FileOptions;
 
 public class Filesystem {
 	public enum FileMode {
@@ -6,8 +9,11 @@ public class Filesystem {
 	}
 	
 	private static Filesystem instance;
+	private FileDirectory directory;
 	
-	private Filesystem(){}
+	private Filesystem(){
+		directory = new FileDirectory();
+	}
 	
 	public static Filesystem instance(){
 		if (instance == null) {
@@ -21,7 +27,12 @@ public class Filesystem {
 		//TODO: Validate input
 		//TODO: Check if file already exists
 		
-		FileHandle file = new FileHandle(filename, opts);
+		FileIndex fileIndex = directory.get(filename);
+		if (fileIndex == null){
+			fileIndex = directory.add(filename);
+		}
+		
+		FileHandle file = new FileHandle(filename, opts, fileIndex);
 		
 		//Save file handles
 		

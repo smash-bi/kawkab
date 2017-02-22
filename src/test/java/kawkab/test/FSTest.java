@@ -1,29 +1,107 @@
 package kawkab.test;
 
+import java.util.Arrays;
+import java.util.Random;
+
 import kawkab.fs.api.FileHandle;
-import kawkab.fs.api.DataIndex;
 import kawkab.fs.api.FileOptions;
-import kawkab.fs.api.Filesystem;
-import kawkab.fs.api.Filesystem.FileMode;
+import kawkab.fs.core.Filesystem;
+import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
+import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 public class FSTest {
-	public static void main(String args[]) {
+	public static void main(String args[]) throws OutOfMemoryException, MaxFileSizeExceededException {
+		FSTest tester = new FSTest();
+		//tester.testSmall();
+		//tester.testLarge();
+		tester.testVeryLarge();
+	}
+	
+	public void testSmall() throws OutOfMemoryException, MaxFileSizeExceededException{
 		Filesystem fs = Filesystem.instance();
 		
-		String filename = new String("/home/smash/test");
+		String filename = new String("/home/smash/testSmall");
 		FileOptions opts = new FileOptions();
 		
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
-		String data = "sample data";
-		byte[] dataBuffer = data.getBytes();
+		byte[] dataBuffer = new byte[100];
+		new Random().nextBytes(dataBuffer);
 		
-		DataIndex index = file.append(dataBuffer, 0, dataBuffer.length);
+		int appended = file.append(dataBuffer, 0, dataBuffer.length);
 		
-		file.seekBytes(10);
-		file.read(dataBuffer, 100);
+		byte[] readBuf = new byte[dataBuffer.length];
+		int read = file.read(readBuf, readBuf.length);
+
+		assert appended == read;
+		assert Arrays.equals(dataBuffer, readBuf);
+	}
+	
+	public void testLarge() throws OutOfMemoryException, MaxFileSizeExceededException{
+		Filesystem fs = Filesystem.instance();
 		
-		file.seekTime(index.timestamp());
-		file.read(dataBuffer, 100);
+		String filename = new String("/home/smash/testLarge");
+		FileOptions opts = new FileOptions();
+		
+		int dataSize = 1*1024*1024*1024;
+		
+		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
+		
+		byte[] dataBuffer = new byte[dataSize];
+		new Random().nextBytes(dataBuffer);
+		
+		int appended = file.append(dataBuffer, 0, dataBuffer.length);
+		
+		byte[] readBuf = new byte[dataBuffer.length];
+		int read = file.read(readBuf, readBuf.length);
+		
+		//System.out.println(Arrays.toString(dataBuffer));
+		//System.out.println(Arrays.toString(readBuf));
+		
+		assert appended == read;
+		assert Arrays.equals(dataBuffer, readBuf);
+	}
+	
+	public void testVeryLarge() throws OutOfMemoryException, MaxFileSizeExceededException{
+		Filesystem fs = Filesystem.instance();
+		
+		String filename = new String("/home/smash/testVeryLarge");
+		FileOptions opts = new FileOptions();
+		Random rand = new Random(0);
+		
+		int bufSize = 128*1024*1024;
+		long dataSize = (long)512*bufSize;
+		long appended = 0;
+		long read = 0;
+		
+		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
+		
+		byte[] writeBuf = new byte[bufSize];
+		rand.nextBytes(writeBuf);
+		
+		while(appended < dataSize) {
+			int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
+			
+			appended += file.append(writeBuf, 0, toWrite);
+		}
+		
+		byte[] readBuf = new byte[bufSize];
+		rand = new Random(0);
+		rand.nextBytes(writeBuf);
+
+		while(read < dataSize) {
+			int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
+			read += file.read(readBuf, toRead);
+			
+			rand.nextBytes(writeBuf);
+			
+			assert Arrays.equals(readBuf, writeBuf);
+		}
+		
+		//System.out.println(Arrays.toString(dataBuffer));
+		//System.out.println(Arrays.toString(readBuf));
+		
+		assert appended == read;
 	}
 }
