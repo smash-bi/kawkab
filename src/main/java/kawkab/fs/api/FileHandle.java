@@ -33,7 +33,7 @@ public final class FileHandle {
 		while(remaining > 0) {
 			if (currentBlock == null || !currentBlock.hasByte(readOffsetInFile)){
 				try {
-					currentBlock = fileIndex.getByByte(readOffsetInFile);
+					currentBlock = fileIndex.getByFileOffset(readOffsetInFile);
 				} catch (InvalidFileOffsetException e) {
 					e.printStackTrace();
 					return read;
@@ -75,10 +75,20 @@ public final class FileHandle {
 	}
 	
 	/**
-	 * Seek the read pointer to the first byte that was appended at or after time timestamp
+	 * Seek the read pointer to the first byte of the data block that contains the timestamp.
 	 * @param tiemstamp
 	 */
 	public void seekTime(long tiemstamp){
+		/*
+		  - How to perform the read operation using the timestamp?
+		  - Move the read pointer to the first byte of the block that contains the timestamp?
+		  - What if the pointer does not lies within any block?
+		    a) Move the read pointer to the first byte of the previous block?
+		    b) Or move the read pointer to the first byte of the next block?
+		    c) Or do not move the read pointer and return an error?
+		  - What if the timestamp is greater than the last append time?
+		    - Should return an error in the seekTime function?
+		 */
 	}
 	
 	/**
@@ -86,6 +96,7 @@ public final class FileHandle {
 	 * @param bytes number of bytes to move the read pointer
 	 */
 	public void relativeSeek(long numBytes){
+		readOffsetInFile = readOffsetInFile + numBytes;
 	}
 	
 	/**

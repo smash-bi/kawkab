@@ -13,12 +13,12 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 public class FSTest {
 	public static void main(String args[]) throws OutOfMemoryException, MaxFileSizeExceededException {
 		FSTest tester = new FSTest();
-		//tester.testSmall();
-		//tester.testLarge();
-		tester.testVeryLarge();
+		//tester.testSmallReadWrite();
+		//tester.testLargeReadWrite();
+		tester.testVeryLargeReadWrite();
 	}
 	
-	public void testSmall() throws OutOfMemoryException, MaxFileSizeExceededException{
+	public void testSmallReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException{
 		Filesystem fs = Filesystem.instance();
 		
 		String filename = new String("/home/smash/testSmall");
@@ -38,16 +38,14 @@ public class FSTest {
 		assert Arrays.equals(dataBuffer, readBuf);
 	}
 	
-	public void testLarge() throws OutOfMemoryException, MaxFileSizeExceededException{
+	public void testLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException{
 		Filesystem fs = Filesystem.instance();
 		
 		String filename = new String("/home/smash/testLarge");
 		FileOptions opts = new FileOptions();
-		
-		int dataSize = 1*1024*1024*1024;
-		
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
+		int dataSize = 1*1024*1024*1024;
 		byte[] dataBuffer = new byte[dataSize];
 		new Random().nextBytes(dataBuffer);
 		
@@ -63,19 +61,18 @@ public class FSTest {
 		assert Arrays.equals(dataBuffer, readBuf);
 	}
 	
-	public void testVeryLarge() throws OutOfMemoryException, MaxFileSizeExceededException{
+	public void testVeryLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException{
 		Filesystem fs = Filesystem.instance();
 		
 		String filename = new String("/home/smash/testVeryLarge");
 		FileOptions opts = new FileOptions();
-		Random rand = new Random(0);
+		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
+		Random rand = new Random(0);
 		int bufSize = 128*1024*1024;
 		long dataSize = (long)512*bufSize;
 		long appended = 0;
 		long read = 0;
-		
-		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
 		byte[] writeBuf = new byte[bufSize];
 		rand.nextBytes(writeBuf);
@@ -98,9 +95,6 @@ public class FSTest {
 			
 			assert Arrays.equals(readBuf, writeBuf);
 		}
-		
-		//System.out.println(Arrays.toString(dataBuffer));
-		//System.out.println(Arrays.toString(readBuf));
 		
 		assert appended == read;
 	}

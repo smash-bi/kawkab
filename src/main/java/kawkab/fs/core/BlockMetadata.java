@@ -7,6 +7,7 @@ public class BlockMetadata {
 	private long offsetInFile; //offset of the first data byte relative to the start of the file
 	private boolean closed;
 	private final long createTime;
+	private long lastAppendTime;
 	private BlockLocation location;
 	private DataBlock block;
 	
@@ -23,8 +24,17 @@ public class BlockMetadata {
 		createTime = System.currentTimeMillis();
 	}
 	
-	public int append(byte[] data, int offset, int length){
-		return block.append(data, offset, length);
+	public synchronized int append(byte[] data, int offset, int length){
+		if (closed())
+			return 0; //TODO: Make it DataBlockClosedException.
+		
+		int bytes =  block.append(data, offset, length);
+		lastAppendTime = System.currentTimeMillis();
+		
+		if (capacity() == 0)
+			close();
+		
+		return bytes;
 	}
 	
 	/**
@@ -50,7 +60,7 @@ public class BlockMetadata {
 		closed = true;
 	}
 	
-	public synchronized boolean closed(){
+	public boolean closed(){
 		return closed;
 	}
 	
@@ -62,8 +72,12 @@ public class BlockMetadata {
 		return block.size();
 	}
 	
-	public long createTime(){
+	public long creationTime(){
 		return createTime;
+	}
+	
+	public long lastAppendTime(){
+		return lastAppendTime;
 	}
 	
 	public boolean hasByte(long offsetInFile){

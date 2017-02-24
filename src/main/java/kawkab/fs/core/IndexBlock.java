@@ -13,7 +13,7 @@ public class IndexBlock {
 	private final BlockMetadata[] dataBlocks;
 	private final IndexBlock[] indexBlocks;
 	private int appendAt;
-	private long dataBlocksAdded = 0;
+	private long blocksCount = 0;
 	
 	//private final long maxDataSize;
 	private final long maxDataPerPointer;
@@ -52,7 +52,7 @@ public class IndexBlock {
 			return;
 		}
 		
-		if (dataBlocksAdded == 0){
+		if (blocksCount == 0){
 			indexBlocks[appendAt] = new IndexBlock(indexLevel-1);
 		}
 		
@@ -62,12 +62,12 @@ public class IndexBlock {
 			appendAt++;
 			indexBlocks[appendAt] = new IndexBlock(indexLevel-1);
 			indexBlocks[appendAt].addBlock(block);
-			if (dataBlocksAdded == 0){
+			if (blocksCount == 0){
 				firstBlock = block;
 			}
 		}
 		
-		dataBlocksAdded++;
+		blocksCount++;
 		lastBlock = block;
 	}
 	
@@ -81,7 +81,7 @@ public class IndexBlock {
 			firstBlock = block;
 		}
 		
-		dataBlocksAdded++;
+		blocksCount++;
 		lastBlock = block;
 	}
 	
@@ -101,15 +101,35 @@ public class IndexBlock {
 	}
 	
 	public synchronized boolean canAddBlock(){
-		return dataBlocksAdded < maxDataBlocks;
+		return blocksCount < maxDataBlocks;
 	}
 	
 	public long firstByteOffset(){
+		if (blocksCount == 0)
+			return -1;
+		
 		return firstBlock.offset();
 	}
 	
 	public long lastByteOffset(){
+		if (blocksCount == 0)
+			return -1;
+		
 		return lastBlock.offset()+lastBlock.size();
+	}
+	
+	public long firstBlockTime(){
+		if (blocksCount == 0)
+			return -1;
+		
+		return firstBlock.creationTime();
+	}
+	
+	public long lastBlockTime(){
+		if (blocksCount == 0)
+			return -1;
+		
+		return lastBlock.creationTime();
 	}
 	
 	public static long maxDataSize(int indexLevel){
