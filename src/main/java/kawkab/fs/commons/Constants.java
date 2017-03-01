@@ -24,5 +24,5 @@ public class Constants {
 	public static final int maxIndexLevels = 2;
 	public static final int maxDirectBlocks = 32;
 	public static final int numPointersInIndexBlock = 512;
-	public static final long fileSizeLimit = Long.MAX_VALUE;
+	public static final long fileSizeLimit = Long.MAX_VALUE; //The maximum file size depends on numPointersInIndexBlock and maxIndexLevels.
 }

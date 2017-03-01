@@ -3,6 +3,7 @@ package kawkab.fs.api;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.BlockMetadata;
 import kawkab.fs.core.FileIndex;
+import kawkab.fs.core.FileOffset;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
@@ -67,7 +68,7 @@ public final class FileHandle {
 	}
 	
 	/**
-	 * Seek the read pointer to the absolute bytes byteOffset in the file
+	 * Seek the read pointer to the byteOffset bytes in the file
 	 * @param byteOffset
 	 */
 	public void seekBytes(long byteOffset){
@@ -75,20 +76,38 @@ public final class FileHandle {
 	}
 	
 	/**
-	 * Seek the read pointer to the first byte of the data block that contains the timestamp.
+	 * Seek the read pointer to the first byte of the first data block that is at or before the time timestamp.
 	 * @param tiemstamp
+	 * @return Offset of the block where the read pointer is moved to, or null if the data block
+	 *          is not found.
 	 */
-	public void seekTime(long tiemstamp){
-		/*
-		  - How to perform the read operation using the timestamp?
-		  - Move the read pointer to the first byte of the block that contains the timestamp?
-		  - What if the pointer does not lies within any block?
-		    a) Move the read pointer to the first byte of the previous block?
-		    b) Or move the read pointer to the first byte of the next block?
-		    c) Or do not move the read pointer and return an error?
-		  - What if the timestamp is greater than the last append time?
-		    - Should return an error in the seekTime function?
-		 */
+	public FileOffset seekBeforeTime(long timestamp){
+		if (timestamp <= 0)
+			return null; //FIXME: Make it an exception.
+		
+		BlockMetadata block = fileIndex.getByTime(timestamp, true);
+		if (block == null)
+			return null;
+		
+		FileOffset offset = block.fileOffset();
+		readOffsetInFile = offset.offsetInFile();
+		return offset;
+	}
+	
+	/**
+	 * Seek the read pointer to the first byte of the first data block that is at or after the time timestamp.
+	 * @param tiemstamp
+	 * @return Offset of the block where the read pointer is moved to, or null if the data block
+	 *          is not found.
+	 */
+	public FileOffset seekAfterTime(long timestamp){
+		BlockMetadata block = fileIndex.getByTime(timestamp, false);
+		if (block == null)
+			return null;
+		
+		FileOffset offset = block.fileOffset();
+		readOffsetInFile = offset.offsetInFile();
+		return offset;
 	}
 	
 	/**

@@ -2,6 +2,7 @@ package kawkab.fs.core;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
+import kawkab.fs.commons.Constants;
 
 public class Filesystem {
 	public enum FileMode {
@@ -37,5 +38,9 @@ public class Filesystem {
 		//Save file handles
 		
 		return file;
+	}
+	
+	public static int BlockSize(){
+		return Constants.defaultBlockSize;
 	}
 }

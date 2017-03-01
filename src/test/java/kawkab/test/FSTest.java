@@ -11,11 +11,12 @@ import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 public class FSTest {
-	public static void main(String args[]) throws OutOfMemoryException, MaxFileSizeExceededException {
+	public static void main(String args[]) throws OutOfMemoryException, MaxFileSizeExceededException, InterruptedException {
 		FSTest tester = new FSTest();
 		//tester.testSmallReadWrite();
 		//tester.testLargeReadWrite();
-		tester.testVeryLargeReadWrite();
+		//tester.testVeryLargeReadWrite();
+		tester.testFileSeek();
 	}
 	
 	public void testSmallReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException{
@@ -63,7 +64,6 @@ public class FSTest {
 	
 	public void testVeryLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException{
 		Filesystem fs = Filesystem.instance();
-		
 		String filename = new String("/home/smash/testVeryLarge");
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
@@ -97,5 +97,78 @@ public class FSTest {
 		}
 		
 		assert appended == read;
+	}
+	
+	public void testFileSeek() throws OutOfMemoryException, MaxFileSizeExceededException, InterruptedException{
+		Filesystem fs = Filesystem.instance();
+		String filename = new String("/home/smash/testFileSeek");
+		FileOptions opts = new FileOptions();
+		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
+		
+		//When no block is available
+		assert file.seekAfterTime(0) == null;
+		
+		Random rand = new Random(0);
+		byte[] block1 = new byte[Filesystem.BlockSize()];
+		byte[] block2 = new byte[Filesystem.BlockSize()];
+		byte[] block3 = new byte[Filesystem.BlockSize()];
+		byte[] block4 = new byte[Filesystem.BlockSize()];
+		
+		long t1 = System.currentTimeMillis();
+		rand.nextBytes(block1);
+		file.append(block1, 0, block1.length);
+		
+		Thread.sleep(100);
+		long t2 = System.currentTimeMillis();
+		rand.nextBytes(block2);
+		file.append(block2, 0, block2.length);
+		
+		Thread.sleep(100);
+		long t3 = System.currentTimeMillis();
+		rand.nextBytes(block3);
+		file.append(block3, 0, block3.length);
+		
+		Thread.sleep(100);
+		long t4 = System.currentTimeMillis();
+		rand.nextBytes(block4);
+		file.append(block4, 0, block4.length);
+		
+		byte[] data = new byte[Filesystem.BlockSize()];
+		
+		//First block, regardless of the time.
+		file.seekAfterTime(0);
+		file.read(data, data.length);
+		assert Arrays.equals(data, block1);
+		
+		//Invalid block
+		assert file.seekBeforeTime(0) == null;
+		
+		//Invalid block
+		assert file.seekAfterTime(t4+10000) == null;
+		
+		//Last block regardless of the time.
+		file.seekBeforeTime(t4+10000);
+		file.read(data, data.length);
+		assert Arrays.equals(data, block4);
+		
+		//Block before time when no block contains the given time
+		file.seekBeforeTime(t2 - 10);
+		file.read(data, data.length);
+		assert Arrays.equals(data, block1);
+		
+		//Block after time when no block contains the given time
+		file.seekAfterTime(t2 - 10);
+		file.read(data, data.length);
+		assert Arrays.equals(data, block2);
+		
+		//Left block containing time
+		file.seekAfterTime(t2);
+		file.read(data, data.length);
+		assert Arrays.equals(data, block2);
+		
+		//Right block containing time
+		file.seekAfterTime(t3);
+		file.read(data, data.length);
+		assert Arrays.equals(data, block3);
 	}
 }

@@ -3,11 +3,12 @@ package kawkab.fs.core;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 
 public class BlockMetadata {
-	private long blockNumber; //starts from 0.
-	private long offsetInFile; //offset of the first data byte relative to the start of the file
-	private boolean closed;
+	private final long blockNumber; //starts from 0.
+	private final long offsetInFile; //offset of the first data byte relative to the start of the file
 	private final long createTime;
-	private long lastAppendTime;
+	private boolean closed;
+	private long firstAppendTime = -1;
+	private long lastAppendTime = -1;
 	private BlockLocation location;
 	private DataBlock block;
 	
@@ -28,8 +29,12 @@ public class BlockMetadata {
 		if (closed())
 			return 0; //TODO: Make it DataBlockClosedException.
 		
+		long time = System.currentTimeMillis();
 		int bytes =  block.append(data, offset, length);
-		lastAppendTime = System.currentTimeMillis();
+		lastAppendTime = time;
+		
+		if (size() == length)
+			firstAppendTime = time;
 		
 		if (capacity() == 0)
 			close();
@@ -64,6 +69,9 @@ public class BlockMetadata {
 		return closed;
 	}
 	
+	/**
+	 * @return Returns the file offset of the first byte in the block 
+	 */
 	public long offset(){
 		return offsetInFile;
 	}
@@ -76,11 +84,19 @@ public class BlockMetadata {
 		return createTime;
 	}
 	
+	public long firstAppendTime(){
+		return firstAppendTime;
+	}
+	
 	public long lastAppendTime(){
 		return lastAppendTime;
 	}
 	
 	public boolean hasByte(long offsetInFile){
 		return false;
+	}
+	
+	public FileOffset fileOffset(){
+		return new FileOffset(offsetInFile, firstAppendTime);
 	}
 }

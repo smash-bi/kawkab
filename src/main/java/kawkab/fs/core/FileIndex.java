@@ -27,7 +27,7 @@ public class FileIndex {
 		blockSize = Constants.defaultBlockSize;
 		directBlocksBytesLimit = (long)Constants.maxDirectBlocks*blockSize;
 		indirectBlockBytesLimit = directBlocksBytesLimit + IndexBlock.maxDataSize(1);
-		doubleIndirectBlockBytesLimit = Constants.fileSizeLimit;
+		doubleIndirectBlockBytesLimit = indirectBlockBytesLimit+IndexBlock.maxDataSize(2); //FIXME: What is its impact on the maximum file size limit?
 		maxDataBlocks = (long)Math.ceil(Constants.fileSizeLimit / blockSize);
 		
 		//To ensure that our index size do not overflow the "long" value, and at has at least one data block.
@@ -35,7 +35,6 @@ public class FileIndex {
 		assert directBlocksBytesLimit  < indirectBlockBytesLimit;
 		assert indirectBlockBytesLimit >= directBlocksBytesLimit + blockSize; 
 		assert indirectBlockBytesLimit < doubleIndirectBlockBytesLimit;
-		assert doubleIndirectBlockBytesLimit <= indirectBlockBytesLimit+IndexBlock.maxDataSize(2);
 	}
 	
 	public FileIndex(long indexID, String filename){
@@ -104,14 +103,16 @@ public class FileIndex {
 		return block;
 	}
 	
-	public BlockMetadata getByTime(long timestamp){
+	public BlockMetadata getByTime(long timestamp, boolean blockBeforeTime){
 		//if timestamp is out of range
-		if (blocksCount == 0 || timestamp <= 0 || timestamp > lastBlock.lastAppendTime())
+		if (blocksCount == 0 || timestamp < 0) // || timestamp > lastBlock.lastAppendTime())
 			return null;
 		
-		//if timestamp is within the last block
-		if (timestamp >= lastBlock.creationTime())
+		if (blockBeforeTime && timestamp >= lastBlock.firstAppendTime())
 			return lastBlock;
+		
+		if (!blockBeforeTime && timestamp > lastBlock.lastAppendTime())
+			return null;
 		
 		/*
 		 * This is a bad approach because we have to traverse the index tree several times. Instead,
@@ -134,6 +135,9 @@ public class FileIndex {
 		if (timestamp >= leftBlock.creationTime() && timestamp <= leftBlock.lastAppendTime())
 			return leftBlock;
 		
+		if (!blockBeforeTime && timestamp < leftBlock.firstAppendTime())
+			return leftBlock;
+		
 		long midBlockNum = 0;
 		while(leftBlock.index() < rightBlock.index()){
 			midBlockNum = leftBlock.index() + (rightBlock.index() - leftBlock.index())/2;
@@ -149,8 +153,12 @@ public class FileIndex {
 			if (timestamp >= midBlock.creationTime() && timestamp <= midBlock.lastAppendTime())
 				return midBlock;
 			
-			if (leftBlock == midBlock)
-				return rightBlock;
+			if (leftBlock == midBlock) {
+				if (blockBeforeTime)
+					return leftBlock;
+				else
+					return rightBlock;
+			}
 			
 			if (timestamp < midBlock.creationTime()){
 				rightBlock = midBlock;
