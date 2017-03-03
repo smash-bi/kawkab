@@ -11,18 +11,42 @@
 \usepackage{listings}
 \usepackage{siunitx}
 \usepackage[super]{nth}
-\usepackage{hyperref}
 
+\usepackage[sharp]{easylist}
 
 \usepackage{xcolor}
+
+\definecolor{NavyBlue}{cmyk}{0.94,0.54,0,0.5}
+\definecolor{BrickRed}{cmyk}{0.16,0.89,0.61,0.2}
+\usepackage{url}
+\usepackage{breakurl}
+
+\usepackage[
+        colorlinks=true,
+        urlcolor=NavyBlue, 
+        linkcolor=NavyBlue, 
+        bookmarksopen=true]{hyperref}
 \hypersetup{
-    colorlinks,
+    colorlinks,citecolor=NavyBlue,
     linkcolor={red!50!black},
     urlcolor={blue!90!black}
 }
 
+
 \newcommand{\us}{$\mu$s }
-\newcommand{\subtopic}[1]{\vspace{1.5pt} \noindent \textit{#1}}
+\newcommand{\subtopic}[1]{\vspace{1.5pt} \noindent \textbf{#1}}
+
+\definecolor{notecolor}{rgb}{0.75,0,0} % A darker red
+\newcommand{\todo}[1]{\textcolor{notecolor}{\textbf{TODO: #1}}}
+\newcommand{\hl}[1]{\textcolor{notecolor}{#1}}
+\newcommand{\fixit}[2][]{\textcolor{notecolor}{%
+     \ifthenelse{\isempty{#1}}{\textbf{[Fixit: %
+         #2]}}{\textbf{#2\footnote{\textcolor{notecolor}{Fixit: #1}}}}}}
+\newenvironment{highlight}{\par\color{notecolor}}{\par}
+
+
+
+
 
 \begin{document}
 
@@ -49,6 +73,22 @@ structures comprise the metadata of the filesystem.
 
 \subsection{Storage Space Design}
 
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.5\columnwidth]{{figures/linear-space.png}}
+    \caption{Filesystem is designed as a very large storage space organized in fixed size blocks.}
+   \label{fig:storage-space}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.5\columnwidth]{{figures/blocks-layout.png}}
+    \caption{Layout of different types of blocks.}
+   \label{fig:blocks-layout}
+\end{figure}
+
+
+
 The system is designed such that the files are stored in a very large linear
 storage space. The storage space is a collection of fixed size blocks $\{B_1,
 B_2, \ldots, B_N\}$.  Each block has a unique ID (UUID), and the blocks are
@@ -71,12 +111,11 @@ Moreover, an inode is a fixed size structure, and it is stored in an
 \textit{index-node block} of our linear storage device.
 
 \subtopic{Index-nodes blocks:} An index-nodes block, or \textit{inode block},
-is a fixed size block that contains a predefined number of \textit{index
-nodes}.  The number of inode blocks in the system controls the maximum number
-of files supported  in the system because the filesystem has a fixed number of
-inode blocks.
-%As the filesystem has fixed number of inode blocks, which also controls the
-%number of files supported by the system.
+is a fixed size block that contains a predefined number of \textit{inodes}.
+%The maximum number of inode blocks in the system controls the maximum number
+%of files supported in the system because the filesystem has a fixed number of
+%inode blocks.  As the filesystem has fixed number of inode blocks, which also
+%controls the number of files supported by the system.
 As each inode has a fixed size $S_I$ bytes, an inode block $B$ contains $N =
 S_{B} / S_I$ number of inodes, where $S_B$ is the size of an inodes block.
 Thus, the inode number $x$ is located in the inode block number $ x / N$. In
@@ -157,36 +196,80 @@ file size in Kawkab, which is $2^{63}-1$ bytes.
 
 \end{enumerate}
 
+\subsection{Data Blocks} Kawkab has fixed size data blocks. Each data block has
+a unique ID, generated as a UUID.  Each block is persistently stored as a file
+in the persistent storage of the system, e.g., local or remote disks, EB3, or
+S3.  The name of the persistent file is extracted from the UUID: the UUID is
+converted to an ASCII character string using Base64 encoding.  The ASCII name
+is then converted into a file path such that each two characters in the ASCII
+representation of the UUID become a directory name in the persistent storage.
+For example, a UUID \texttt{ABCDEFGH} is stored as a file
+\texttt{/storage/datablocks/AB/CD/EF/GH}.
 
-\subsection{Data Blocks}
-Kawkab has fixed size data blocks. Each data block has a unique ID, generated as a UUID.
-Each block is persistently stored as a file in the system. The name of the
-file is based on the UUID: the UUID is converted to an ASCII name using base64 encoding.
-The ASCII name is then divided into a file path -- each two characters become a directory
-name in the ASCII representation of the UUID. For example, a UUID \texttt{ABCDEFGH} is
-stored as a file \texttt{/AB/CD/EF/HI/ABCDEFGH}.
+
+\subsection{Persistence Layer}
+\hl{Note: This section is incomplete.}
+
+The persistence layer in Kawkab keeps track of the location of each file in the system.
+All the blocks are stored and retrieved from the persistence layer using the UUIDs
+of the blocks.
+
+The persistence layer has a caching sub-module. The caching module acts as an
+LRU cache and controls the memory of one machine.
 
 
-\subsection{File Indexing}
+\subsection{Block Metadata} In order to achieve faster data access, each block
+has an associated metadata that is stored along with the block's UUID. The
+metadata includes: first append time, last append time, and the additional
+data boundaries that allow fine grained indexing within a data block.
 
-  - How data is indexed
+\subsection{Data Access and Indexing}
+\hl{Note: This section is incomplete.}
 
-  - How data is retrieved given a byte offset
+Kawkab is an append-only system. Each append is performed at the end of the file.
+However, a file can be read from any location. When a client opens a file,
+it is returned a FileHandle. The FileHandle contains a read pointer that indicates
+the current position in the file from where the data will be read. The read
+pointer can be moved to any position in the file using any of the following
+ways: 
 
-  - How data is retrieved given a timestamp
+\begin{enumerate}
+  \item Move to an absolute byte offset in the file.
+  \item Give a timestamp T:
+  \begin{itemize}
+    \item Move to the first byte of the closest block that has the append time equal to
+          or \textit{before} T.
+    \item Move to the first byte of the closest block that has the append time equal to
+          or \textit{after} T.
+  \end{itemize}
+\end{enumerate}
+
+In order to find the data block that contains the given byte or timestamp, Kawkab
+performs binary search over the index in the inode.
+
+%  - How data is indexed
+% - How data is retrieved given a byte offset
+ % - How data is retrieved given a timestamp
+
+\subsection{Atomic Appends and Reading Unfinished Block}
 
 \section{Comparison with Existing Systems}
 
-- Comparison with Alluxio
+\begin{easylist}[itemize]
 
-- Comparison with Succinct
+ # Comparison with Alluxio
 
-- Comparison with HDFS and similar systems
+ # Comparison with Succinct
+
+ # Comparison with HDFS and similar systems
+
+\end{easylist}
 
 \begin{figure}[t]
+    \centering
     \includegraphics[width=0.9\columnwidth]{{figures/file-index-design.png}}
     \caption{File directory and file index.}
-   \label{fig:files-index}
+   \label{fig:data-structures}
 \end{figure}
 
 
