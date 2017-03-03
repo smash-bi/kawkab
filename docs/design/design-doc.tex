@@ -57,7 +57,16 @@
 \section{Introduction} Kawkab is a distributed filsesystem developed to
 efficiently manage large amounts of streaming data.
 
-\section{Architecture} Kawkab mainly follows the design approach of a standard
+\section{Architecture} 
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.5\columnwidth]{{figures/architecture.png}}
+    \caption{Kawkab single node architecture.}
+   \label{fig:architecture}
+\end{figure}
+
+Kawkab mainly follows the design approach of a standard
 Unix filesystem. The reasons to follow the Unix filesystem is to control the
 memory usage of the system and make the system memory efficient.
 
