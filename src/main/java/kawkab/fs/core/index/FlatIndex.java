@@ -20,7 +20,7 @@ public class FlatIndex {
 	public FlatIndex(){
 		timeToByteOffset = new ConcurrentHashMap<Long, Long>();
 		byteToDataBlock = new ConcurrentHashMap<Long, DataBlock>();
-		dataBlockSize = Constants.defaultBlockSize;
+		dataBlockSize = Constants.dataBlockSizeBytes;
 		dataIndex = new ArrayList<DataIndex>();
 		dataBlocks = new ArrayList<DataBlock>();
 	}

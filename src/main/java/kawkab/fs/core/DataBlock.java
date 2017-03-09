@@ -7,7 +7,7 @@ public class DataBlock {
 	private final long offsetInFile; //offset of the first data byte relative to the start of the file
 	private int  dataSize;
 	private byte[] data;
-	private final static int maxBlockSize = Constants.defaultBlockSize;
+	private final static int maxBlockSize = Constants.dataBlockSizeBytes;
 	
 	protected DataBlock(long offsetInFile){
 		this.offsetInFile = offsetInFile;

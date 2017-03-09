@@ -11,7 +11,7 @@ public class FileDirectory {
 	}
 	
 	public FileIndex add(String filename){
-		FileIndex metadata = new FileIndex(filesMap.size(), filename);
+		FileIndex metadata = new FileIndex(filesMap.size());
 		filesMap.put(filename, metadata);
 		
 		return metadata;

@@ -48,7 +48,7 @@ public final class FileHandle {
 				return read;
 			}*/
 			
-			long lastOffset = currentBlock.offset() + Constants.defaultBlockSize;
+			long lastOffset = currentBlock.offset() + Constants.dataBlockSizeBytes;
 			
 			int toRead = (int)(readOffsetInFile+remaining <= lastOffset ? remaining : lastOffset - readOffsetInFile);
 			int bytes;
@@ -108,6 +108,42 @@ public final class FileHandle {
 		FileOffset offset = block.fileOffset();
 		readOffsetInFile = offset.offsetInFile();
 		return offset;
+	}
+	
+	/**
+	 * Returns the offset and the number of bytes between two time index boundaries.
+	 * If time1 and time2 lie in blocks B1 and B2, the function returns the offset of B1 and the
+	 * size = B2.offset + B2.size - B1.offset. 
+	 * 
+	 * The function returns the offset at the start of the 
+	 * block B1 that contains T1 and the size of the data is from start of B1 to the end of the block
+	 * B2 that contains T2.
+	 * 
+	 * This function does not change the read position in file.
+	 * 
+	 * @param time1 The start of the boundary that is at or before time1
+	 * @param time2 The end of the boundary that is at or after time
+	 * @return DataOffset that contains the offset of the data relative to start of the file and
+	 *          the size of data. Returns null if data is not found within the given time boundaries.
+	 */
+	
+	public DataOffset offsetAndDataLength(long time1, long time2){
+		if (time1 < 0) time1 = 0;
+		if (time2 < 0) time2 = 0;
+			
+		if (time1 > time2){ //Swap times
+			time1 = time1 ^ time2;
+			time2 = time1 ^ time2;
+			time1 = time1 ^ time2;
+		}
+		
+		BlockMetadata blockLeft = fileIndex.getByTime(time1, true);
+		if (blockLeft == null) return null;
+		BlockMetadata blockRight = fileIndex.getByTime(time2, false);
+		if (blockRight == null) return null;
+		
+		long size = blockRight.offset() + blockRight.size() - blockLeft.offset();
+		return new DataOffset(blockLeft.offset(), size);
 	}
 	
 	/**

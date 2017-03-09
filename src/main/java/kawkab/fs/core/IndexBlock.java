@@ -29,13 +29,13 @@ public class IndexBlock {
 			dataBlocks  = new BlockMetadata[maxNumPointers];
 			indexBlocks = null;
 			
-			maxDataPerPointer = Constants.defaultBlockSize;
+			maxDataPerPointer = Constants.dataBlockSizeBytes;
 			//maxDataSize = maxNumPointers * Constants.defaultBlockSize;
 		} else {
 			dataBlocks = null;
 			indexBlocks = new IndexBlock[maxNumPointers];
 			
-			maxDataPerPointer = (long)Math.pow(maxNumPointers, indexLevel-1)*Constants.defaultBlockSize;
+			maxDataPerPointer = (long)Math.pow(maxNumPointers, indexLevel-1)*Constants.dataBlockSizeBytes;
 			//maxDataSize = maxDataBlocks * Constants.defaultBlockSize;
 		}
 		
@@ -133,7 +133,7 @@ public class IndexBlock {
 	}
 	
 	public static long maxDataSize(int indexLevel){
-		return (long)Math.pow(maxNumPointers, indexLevel) * Constants.defaultBlockSize;
+		return (long)Math.pow(maxNumPointers, indexLevel) * Constants.dataBlockSizeBytes;
 	}
 	
 }

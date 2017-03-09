@@ -8,38 +8,39 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 public class FileIndex {
 	private final long id;
-	private String filename;
 	private long blocksCount;
+	private long fileSize = 0;
 	private BlockMetadata lastBlock;
 	private BlockMetadata[] directBlocks;
 	private int directBlocksCreated;
 	private IndexBlock indirectBlock;
 	private IndexBlock doubleIndirectBlock;
-	private long fileSize = 0;
+	private IndexBlock tripleIndirectBlock;
 	
-	private static final long blockSize;
+	//private static final long blockSize;
 	private static final long directBlocksBytesLimit;
 	private static final long indirectBlockBytesLimit;
 	private static final long doubleIndirectBlockBytesLimit;
+	private static final long tripleIndirectBlockBytesLimit;
 	private static final long maxDataBlocks;
 	
 	static {
-		blockSize = Constants.defaultBlockSize;
-		directBlocksBytesLimit = (long)Constants.maxDirectBlocks*blockSize;
+		//blockSize = Constants.dataBlockSizeBytes;
+		directBlocksBytesLimit = (long)Constants.maxDirectBlocks*Constants.dataBlockSizeBytes;
 		indirectBlockBytesLimit = directBlocksBytesLimit + IndexBlock.maxDataSize(1);
 		doubleIndirectBlockBytesLimit = indirectBlockBytesLimit+IndexBlock.maxDataSize(2); //FIXME: What is its impact on the maximum file size limit?
-		maxDataBlocks = (long)Math.ceil(Constants.fileSizeLimit / blockSize);
+		tripleIndirectBlockBytesLimit = doubleIndirectBlockBytesLimit + IndexBlock.maxDataSize(3);
+		maxDataBlocks = (long)Math.ceil(Constants.fileSizeLimit / Constants.dataBlockSizeBytes);
 		
 		//To ensure that our index size do not overflow the "long" value, and at has at least one data block.
 		assert directBlocksBytesLimit > 0;
 		assert directBlocksBytesLimit  < indirectBlockBytesLimit;
-		assert indirectBlockBytesLimit >= directBlocksBytesLimit + blockSize; 
+		assert indirectBlockBytesLimit >= directBlocksBytesLimit + Constants.dataBlockSizeBytes; 
 		assert indirectBlockBytesLimit < doubleIndirectBlockBytesLimit;
 	}
 	
-	public FileIndex(long indexID, String filename){
+	public FileIndex(long indexID){
 		this.id = indexID;
-		this.filename = filename;
 		directBlocks = new BlockMetadata[Constants.maxDirectBlocks];
 		directBlocksCreated = 0;
 	}
@@ -49,10 +50,10 @@ public class FileIndex {
 			throw new MaxFileSizeExceededException();
 		}
 		
-		long fileSize = blocksCount*blockSize;
+		long fileSize = blocksCount*Constants.dataBlockSizeBytes;
 		BlockMetadata block = new BlockMetadata(blocksCount, fileSize);
 		
-		long newFileSize = (blocksCount + 1) * blockSize;
+		long newFileSize = (blocksCount + 1) * Constants.dataBlockSizeBytes;
 		
 		if (newFileSize <= directBlocksBytesLimit) {
 			assert directBlocksCreated < directBlocks.length;
@@ -72,6 +73,13 @@ public class FileIndex {
 			}
 			
 			doubleIndirectBlock.addBlock(block);
+		} else if (newFileSize <= tripleIndirectBlockBytesLimit){
+			if (tripleIndirectBlock == null){
+				tripleIndirectBlock = new IndexBlock(3);
+				System.out.println("Created triple indirect block.");
+			}
+			
+			tripleIndirectBlock.addBlock(block);
 		} else {
 			throw new MaxFileSizeExceededException();
 		}
@@ -92,12 +100,14 @@ public class FileIndex {
 		
 		BlockMetadata block = null;
 		if (byteOffset <= directBlocksBytesLimit){
-			int blockIdx = (int)(byteOffset/blockSize);
+			int blockIdx = (int)(byteOffset/Constants.dataBlockSizeBytes);
 			block = directBlocks[blockIdx];
 		} else if (byteOffset <= indirectBlockBytesLimit){
 			block = indirectBlock.getByByte(byteOffset);
-		}  else {
+		} else if (byteOffset <= doubleIndirectBlockBytesLimit){
 			block = doubleIndirectBlock.getByByte(byteOffset);
+		}  else {
+			block = tripleIndirectBlock.getByByte(byteOffset);
 		}
 		
 		return block;
@@ -141,7 +151,7 @@ public class FileIndex {
 		long midBlockNum = 0;
 		while(leftBlock.index() < rightBlock.index()){
 			midBlockNum = leftBlock.index() + (rightBlock.index() - leftBlock.index())/2;
-			long fileOffset = midBlockNum * blockSize;
+			long fileOffset = midBlockNum * Constants.dataBlockSizeBytes;
 			BlockMetadata midBlock = null;
 			try {
 				midBlock = getByFileOffset(fileOffset);

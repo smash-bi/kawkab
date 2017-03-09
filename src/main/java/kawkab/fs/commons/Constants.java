@@ -2,7 +2,10 @@ package kawkab.fs.commons;
 
 public class Constants {
 	//Default data block size in bytes
-	public static final int defaultBlockSize = 256 * 1024 * 1024; //256MB
+	public static final int dataBlockSizeBytes = 4 * 1024 * 1024; //4MB
+	public static final int ibmapBlockSizeBytes = 4 * 1024 * 1024;
+	public static final int inodeBlockSizeBytes = 4 * 1024 * 1024;
+	public static final int inodeSizeBytes = 256;
 	
 	/*
 	 * The maximum file size supported is 2^63-1. If a data block is 256MB, the file can have at most
@@ -21,7 +24,7 @@ public class Constants {
 	 * using 1024 direct data pointers to 256MB blocks. If the file
 	 * exceeds this size, we can create indirect blocks.
 	 */
-	public static final int maxIndexLevels = 2;
+	public static final int maxIndexLevels = 3;
 	public static final int maxDirectBlocks = 32;
 	public static final int numPointersInIndexBlock = 512;
 	public static final long fileSizeLimit = Long.MAX_VALUE; //The maximum file size depends on numPointersInIndexBlock and maxIndexLevels.

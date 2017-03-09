@@ -16,7 +16,7 @@ public class MappedIndex {
 	public MappedIndex(){
 		timeToByteOffset = new ConcurrentHashMap<Long, Long>();
 		byteToDataBlock = new ConcurrentHashMap<Long, DataBlock>();
-		dataBlockSize = Constants.defaultBlockSize;
+		dataBlockSize = Constants.dataBlockSizeBytes;
 	}
 	
 	public DataBlock getByByte(long byteOffset) throws InvalidFileOffsetException{

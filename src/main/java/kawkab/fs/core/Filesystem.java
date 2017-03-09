@@ -41,6 +41,6 @@ public class Filesystem {
 	}
 	
 	public static int BlockSize(){
-		return Constants.defaultBlockSize;
+		return Constants.dataBlockSizeBytes;
 	}
 }
