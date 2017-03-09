@@ -14,7 +14,7 @@
 
 \usepackage[sharp]{easylist}
 
-\usepackage{xcolor}
+\usepackage[table,xcdraw]{xcolor}
 
 \definecolor{NavyBlue}{cmyk}{0.94,0.54,0,0.5}
 \definecolor{BrickRed}{cmyk}{0.16,0.89,0.61,0.2}
@@ -52,7 +52,25 @@
 
 \title{Kawkab: A Distributed Filesystem for Fast Data}
 %\author{Sajjad Rizvi, Bernard Wong}
+\date{}
 \maketitle
+
+\bgroup
+\def\arraystretch{1.5}
+\begin{table}[!htb]
+\centering
+\caption{Change Log}
+\label{table:change-log}
+\begin{tabular}{|l|l|l|}
+\hline
+\rowcolor[HTML]{EFEFEF} 
+Date             & Description  & Participants  \\ \hline
+ March 09, 2017  & Added section 3: distributed design & Sajjad, Bernard  \\ \hline
+ March 03, 2017  & Kawkab single node design           & Sajjad, Bernard  \\ \hline
+\end{tabular}
+\end{table}
+\egroup
+
 
 \section{Introduction} Kawkab is a distributed filsesystem developed to
 efficiently manage large amounts of streaming data.
@@ -61,7 +79,7 @@ efficiently manage large amounts of streaming data.
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.5\columnwidth]{{figures/architecture.png}}
+    \includegraphics[width=0.55\columnwidth]{{figures/architecture.png}}
     \caption{Kawkab single node architecture.}
    \label{fig:architecture}
 \end{figure}
@@ -256,13 +274,136 @@ ways:
 In order to find the data block that contains the given byte or timestamp, Kawkab
 performs binary search over the index in the inode.
 
+Todo:
+
+\begin{itemize}
+  \item Indexing within a block
+  \item Time range queries
+\end{itemize}
+
 %  - How data is indexed
 % - How data is retrieved given a byte offset
  % - How data is retrieved given a timestamp
 
 \subsection{Atomic Appends and Reading Unfinished Block}
 
-\section{Comparison with Existing Systems}
+
+\section{Distributed Design of Kawkab}
+
+\subsection{Distributed Metadata and Namespace}
+
+In Kawkab, only the filesystem name space and metadata (file directory, ibmaps,
+and inode-blocks) is concurrently updated across the nodes. Data blocks are
+updated concurrently. Therefore, Kawkab uses a distributed key-value store to
+keep the metadata replicated and consistent.
+
+\subtopic{Consistency Requirements:} The basic requirement for metadata
+consistency is that all of the nodes in Kawkab observe the same sequence of
+updates to the file directory, the ibmaps, and the inode blocks.  
+%As Kawkab allows only one file writer at a time, the indirect blocks, which
+%contains the UUIDs of the data blocks and indirect blocks, do need to be made
+%consistent across the nodes.
+Therefore, the key-value store is required to provide at least sequential
+consistency.
+%The keys are file IDs and the values are the inode numbers in the key-value
+%store.
+We propose to use ZooKeeper because it allows conditional creation of the nodes:
+an error is generated if a client tries to create an already existing node. Moreover,
+ZooKeeper allows the clients to subscribe for notifications when a node is updated.
+These features can be used to consistently replicate metadata.
+
+
+\subsubsection{Ibmap and Inode Blocks} Kawkab partitions the ibmap and inode
+blocks across the nodes. Each node owns a specific number of ibmap-blocks and
+the corresponding inode blocks. For example, 5 ibmap blocks and the
+corresponding inode blocks are assigned to each node. The blocks are assigned
+in a sequential order. The information about these assignments can also be
+stored in ZooKeeper. This ensures that each node uses a unique inumber for
+the new files.
+
+Each node updates its own ibmap and inode-blocks. Moreover, each node
+subscribes to get notifications when an ibmap or inode block belonging
+to another node is updated.
+
+\hl{TODO: How an inode is updated? If an inode is updated frequently, it should not
+be in the ZooKeeper. Otherwise, the updates should be batched to reduce the load
+on ZooKeeper.}
+
+
+\subsubsection{File Directory} Kawkab uses ZooKeeper to maintain the file
+directory. To create a new file, a node first gets an inumber \texttt{N} from
+its ibmap. Then the node tries to create a new node in ZooKeeper with the path
+\texttt{kawkab/files/fileID} and with the node-value of \texttt{N}. If the node
+creation does not succeed due to an already existing node, it means that the
+file has been already created by another node.  In this way, all the nodes view
+the same file directory across the system.
+
+\subsubsection{Data Blocks and Indirect Blocks}
+Data blocks are stored locally on SSD and remotely in EBS. Data blocks
+are not replicated to other nodes. The file writer writes data locally on
+SSD. When a data block is closed, it is copied to EBS.
+
+Nodes read data blocks directly from EBS. If a data block does not exist
+in EBS, e.g., if it is the last block in file or not yet replicated block,
+the node fetches the desired block from the primary node of the file, i.e., 
+the distinguished writer of the file.
+
+Indirect blocks are treated same as data blocks. Indirect blocks
+contains UUIDs of data blocks and other indirect blocks. Only the file
+writer can update a data block or an indirect block. Therefore, indirect
+blocks are accessed the same was as the data blocks.
+
+\subsection{Scalability}
+
+\subsection{Fault-tolerance}
+
+\subsection{Consistency Guarantees}
+
+%\subtopic{Creating a New File:}
+%\begin{itemize}
+%  \item Get inumber \texttt{inum} from the ibmap
+%  \item Execute a multi-operation transaction in ZooKeeper:
+%  \begin{itemize}
+%    \item Create a persistent node with path \texttt{kawkab/inodes/inum}.
+%    \item Create a persistent node with path \texttt{kawkab/files/fileID} and the value equals to \texttt{inum}.
+%  \end{itemize}
+%  \item If the previous transaction succeeds, update the local file directory and the ibmap.
+%  \item If the transaction fails, it is because either (1) The inode is already consumed, or (2) the file already
+%        exists. If the file already exists, then the file creation operation returns with FileExists error. If the
+%        inode is already consumed, 
+%\end{itemize}
+
+
+%\subsection{Distributed Namespace:}
+%Kawkab partitions the namespace across all the nodes. Each node has a dedicated
+%namespace, and each node creates new files in its own namespace. The metadata
+%belonging to each namespace -- files directory, ibmaps, and inode blocks --
+%are kept consistent across all the nodes.
+
+%\section{File Read and Write Operations}
+
+\section{File Access Patterns}
+
+\subtopic{Write Access Pattern:} Kawkab allows only one writer at a time to
+write the file. The first client that opens the file becomes the distinguished
+writer of the file. Only the distinguished writer is then allowed to append to
+the file. If an existing writer fails, another client can become the
+distinguished writer by successfully opening the file for writing. If the write
+closes the file, another writer can open the file and become the distinguished
+writer\footnote{In the Smash's use case, files are never closed.}.
+
+Each append request consists of small number bytes, e.g., less than 100 bytes.
+
+\subtopic{Read Pattern:}
+Kawkab allows multiple readers to read at the same time. If the data block
+is not located locally in the system, the data block is fetched from S3/EBS if
+it is available. If the data block is not available in S3/EBS, the data block
+is fetched from the node where the file-writer is located.
+
+TODO: Data access frequency and size, number of readers per node, number of
+nodes where readers are located $\ldots$.
+
+\section{Related Work}
 
 \begin{easylist}[itemize]
 
