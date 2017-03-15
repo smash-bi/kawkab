@@ -9,12 +9,12 @@ public class DataBlock {
 	private byte[] data;
 	private final static int maxBlockSize = Constants.dataBlockSizeBytes;
 	
-	protected DataBlock(long offsetInFile){
+	private DataBlock(long offsetInFile){
 		this.offsetInFile = offsetInFile;
 		this.data = new byte[maxBlockSize];
 	}
 	
-	public synchronized int append(byte[] data, int offset, int length){
+	private synchronized int append(byte[] data, int offset, int length){
 		int capacity = capacity();
 		int appendSize = length <= capacity ? length : capacity;
 		

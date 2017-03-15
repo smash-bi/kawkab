@@ -19,12 +19,18 @@ public class Ibmap {
 	}
 	
 	/**
-	 * @return Returns next inumber
+	 * @return Returns next unused inumber, or -1 if the block is full.
 	 */
-	public int nextInode(){
-		int bitIdx = bitset.nextClearBit(0);
+	public long nextInode(){
+		int bitIdx = -1;
+		try{
+			bitIdx = bitset.nextClearBit(0);
+		}catch(IndexOutOfBoundsException e){
+			return -1;
+		}
+		
 		bitset.set(bitIdx);
-		return (blockIndex*Constants.ibmapBlockSizeBytes*8) + bitIdx;
+		return (8L*blockIndex*Constants.ibmapBlockSizeBytes) + bitIdx;
 	}
 	
 	public void unlinkInode(int inumber) throws InodeNumberOutOfRangeException{

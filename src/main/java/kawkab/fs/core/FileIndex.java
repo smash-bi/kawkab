@@ -1,79 +1,80 @@
 package kawkab.fs.core;
 
+import java.nio.ByteBuffer;
+
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
+import kawkab.fs.persistence.Cache;
 
 public class FileIndex {
-	private final long id;
+	private long id;
 	private long blocksCount;
-	private long fileSize = 0;
-	private BlockMetadata lastBlock;
-	private BlockMetadata[] directBlocks;
+	private long fileSize;
 	private int directBlocksCreated;
-	private IndexBlock indirectBlock;
-	private IndexBlock doubleIndirectBlock;
-	private IndexBlock tripleIndirectBlock;
+	private long directBlockUuidLow[];
+	private long directBlockUuidHigh[];
+	private long indirectBlockUuidLow;
+	private long indirectBlockUuidHigh;
+	private long doubleIndirectBlockUuidLow;
+	private long doubleIndirectBlockUuidHigh;
+	private long tripleIndirectBlockUuidLow;
+	private long tripleIndirectBlockUuidHigh;
+	private boolean dirty;
 	
-	//private static final long blockSize;
-	private static final long directBlocksBytesLimit;
-	private static final long indirectBlockBytesLimit;
-	private static final long doubleIndirectBlockBytesLimit;
-	private static final long tripleIndirectBlockBytesLimit;
-	private static final long maxDataBlocks;
-	
-	static {
-		//blockSize = Constants.dataBlockSizeBytes;
-		directBlocksBytesLimit = (long)Constants.maxDirectBlocks*Constants.dataBlockSizeBytes;
-		indirectBlockBytesLimit = directBlocksBytesLimit + IndexBlock.maxDataSize(1);
-		doubleIndirectBlockBytesLimit = indirectBlockBytesLimit+IndexBlock.maxDataSize(2); //FIXME: What is its impact on the maximum file size limit?
-		tripleIndirectBlockBytesLimit = doubleIndirectBlockBytesLimit + IndexBlock.maxDataSize(3);
-		maxDataBlocks = (long)Math.ceil(Constants.fileSizeLimit / Constants.dataBlockSizeBytes);
-		
-		//To ensure that our index size do not overflow the "long" value, and at has at least one data block.
-		assert directBlocksBytesLimit > 0;
-		assert directBlocksBytesLimit  < indirectBlockBytesLimit;
-		assert indirectBlockBytesLimit >= directBlocksBytesLimit + Constants.dataBlockSizeBytes; 
-		assert indirectBlockBytesLimit < doubleIndirectBlockBytesLimit;
-	}
+	private Cache cache;
 	
 	public FileIndex(long indexID){
 		this.id = indexID;
-		directBlocks = new BlockMetadata[Constants.maxDirectBlocks];
+		//directBlocks = new BlockMetadata[Constants.maxDirectBlocks];
+		directBlockUuidLow = new long[Constants.maxDirectBlocks];
+		directBlockUuidHigh = new long[Constants.maxDirectBlocks];
 		directBlocksCreated = 0;
+		
+		cache = Cache.instance();
 	}
 	
-	protected synchronized BlockMetadata createNewBlock() throws OutOfMemoryException, MaxFileSizeExceededException, IndexBlockFullException{
-		if (blocksCount >= maxDataBlocks){
+	private synchronized BlockMetadata createNewBlock() throws OutOfMemoryException, MaxFileSizeExceededException, IndexBlockFullException{
+		if (blocksCount >= (long)Math.ceil(Constants.fileSizeLimit / Constants.dataBlockSizeBytes)){
 			throw new MaxFileSizeExceededException();
 		}
 		
 		long fileSize = blocksCount*Constants.dataBlockSizeBytes;
-		BlockMetadata block = new BlockMetadata(blocksCount, fileSize);
+		BlockMetadata block = cache.newDataBlock();
 		
 		long newFileSize = (blocksCount + 1) * Constants.dataBlockSizeBytes;
+		long indirectBlocksLimit = Constants.maxDirectBlocks + IndexBlock.maxBlocksCount(1);
+		long doubleIndirectBlocksLimit = indirectBlocksLimit + IndexBlock.maxBlocksCount(2);
+		long tripleIndirectBlocksLimit = doubleIndirectBlocksLimit + IndexBlock.maxBlocksCount(3);
 		
-		if (newFileSize <= directBlocksBytesLimit) {
-			assert directBlocksCreated < directBlocks.length;
-			directBlocks[directBlocksCreated] = block;
+		if (blocksCount < Constants.maxDirectBlocks) {
+			assert blocksCount == directBlocksCreated;
+			directBlockUuidHigh[directBlocksCreated] = block.uuidHigh();
+			directBlockUuidLow[directBlocksCreated] = block.uuidLow();
 			directBlocksCreated++;
-		} else if (newFileSize <= indirectBlockBytesLimit){
-			if (indirectBlock == null) {
-				indirectBlock = new IndexBlock(1);
+		} else if (blocksCount < indirectBlocksLimit) {
+			assert directBlocksCreated == directBlockUuidLow.length;
+			if (indirectBlockUuidHigh == 0 && indirectBlockUuidLow == 0) {
+				IndexBlock indBlock = new IndexBlock(1);
+				
+				indirectBlockUuidHigh = indBlock.uuidHigh();
+				indirectBlockUuidLow = indBlock.uuidLow();
+				
 				System.out.println("Created indirect block.");
 			}
 			
-			indirectBlock.addBlock(block);
-		} else if (newFileSize <= doubleIndirectBlockBytesLimit){
+			IndexBlock indBlock = IndexBlock.fromDataBlock(indirectBlockUuidHigh, indirectBlockUuidLow, 1);
+			indBlock.addBlock(block);
+		} else if (blocksCount < doubleIndirectBlocksLimit){
 			if (doubleIndirectBlock == null){
 				doubleIndirectBlock = new IndexBlock(2);
 				System.out.println("Created double indirect block.");
 			}
 			
 			doubleIndirectBlock.addBlock(block);
-		} else if (newFileSize <= tripleIndirectBlockBytesLimit){
+		} else if (blocksCount < tripleIndirectBlocksLimit){
 			if (tripleIndirectBlock == null){
 				tripleIndirectBlock = new IndexBlock(3);
 				System.out.println("Created triple indirect block.");
@@ -85,7 +86,7 @@ public class FileIndex {
 		}
 		
 		blocksCount++;
-		lastBlock = block;
+		fileSize = newFileSize;
 		
 		System.out.println("Total file blocks: " + blocksCount);
 		
@@ -228,5 +229,81 @@ public class FileIndex {
 	
 	public long id(){
 		return id;
+	}
+	
+	public int toBuffer(ByteBuffer buffer){
+		int initPosition = buffer.position();
+		buffer.putLong(id);
+		
+		buffer.putLong(blocksCount);
+		buffer.putLong(fileSize);
+		buffer.putInt(directBlocksCreated);
+		
+		for(int i=0; i<directBlockUuidLow.length; i++){
+			buffer.putLong(directBlockUuidLow[i]);
+			buffer.putLong(directBlockUuidHigh[i]);
+		}
+		
+		buffer.putLong(indirectBlockUuidLow);
+		buffer.putLong(indirectBlockUuidHigh);
+		
+		buffer.putLong(doubleIndirectBlockUuidLow);
+		buffer.putLong(doubleIndirectBlockUuidHigh);
+		
+		buffer.putLong(tripleIndirectBlockUuidLow);
+		buffer.putLong(tripleIndirectBlockUuidHigh);
+		
+		int dataLength = buffer.position() - initPosition;
+		int padLength = Constants.inodeSizeBytes - dataLength;
+		
+		byte[] padding = new byte[padLength];
+		buffer.put(padding);
+		
+		return dataLength + padLength;
+	}
+	
+	public int fromBuffer(ByteBuffer buffer){
+		if (buffer.remaining() < Constants.inodeSizeBytes)
+			return 0;
+		
+		int initPosition = buffer.position();
+		
+		id = buffer.getLong();
+		
+		blocksCount = buffer.getLong();
+		fileSize = buffer.getLong();
+		directBlocksCreated = buffer.getInt();
+		
+		directBlockUuidLow = new long[Constants.maxDirectBlocks];
+		directBlockUuidHigh = new long[Constants.maxDirectBlocks];
+		for (int i=0; i<Constants.maxDirectBlocks; i++){
+			directBlockUuidLow[i] = buffer.getLong();
+			directBlockUuidHigh[i] = buffer.getLong();
+		}
+		
+		indirectBlockUuidLow = buffer.getLong();
+		indirectBlockUuidHigh = buffer.getLong();
+		
+		doubleIndirectBlockUuidLow = buffer.getLong();
+		doubleIndirectBlockUuidHigh = buffer.getLong();
+		
+		tripleIndirectBlockUuidLow = buffer.getLong();
+		tripleIndirectBlockUuidHigh = buffer.getLong();
+		
+		int dataLength = buffer.position() - initPosition;
+		int padLength = Constants.inodeSizeBytes - dataLength;
+		
+		byte[] padding = new byte[padLength];
+		buffer.get(padding);
+		
+		return dataLength + padLength;
+	}
+	
+	public boolean dirty(){
+		return dirty;
+	}
+	
+	public void clear(){
+		dirty = false;
 	}
 }

@@ -3,9 +3,16 @@ package kawkab.fs.commons;
 public class Constants {
 	//Default data block size in bytes
 	public static final int dataBlockSizeBytes = 4 * 1024 * 1024; //4MB
-	public static final int ibmapBlockSizeBytes = 4 * 1024 * 1024;
+	
 	public static final int inodeBlockSizeBytes = 4 * 1024 * 1024;
 	public static final int inodeSizeBytes = 256;
+	
+	//Ibmap blocks range for this machine
+	public static int ibmapBlocksRangeStart = 0; //TODO: Get these numbers from a configuration file or ZooKeeper
+	public static int ibmapBlocksRangeEnd = 10;
+	public static final int ibmapBlockSizeBytes = 4 * 1024 * 1024;
+	public static final int ibmapBlocksPerMachine = 10; //FIXME: Calculate this based on the maximum 
+	                                                            //number of files supported by a machine
 	
 	/*
 	 * The maximum file size supported is 2^63-1. If a data block is 256MB, the file can have at most
@@ -28,4 +35,8 @@ public class Constants {
 	public static final int maxDirectBlocks = 32;
 	public static final int numPointersInIndexBlock = 512;
 	public static final long fileSizeLimit = Long.MAX_VALUE; //The maximum file size depends on numPointersInIndexBlock and maxIndexLevels.
+	
+	public static final String fsBasePath = "/tmp/kawkab";
+	public static final String ibmapsPath = "ibmaps";
+	public static final String blocksPath = "blocks";
 }

@@ -1,23 +1,35 @@
 package kawkab.fs.core;
 
+import java.nio.ByteBuffer;
+
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
+import kawkab.fs.persistence.Cache;
 
 public class IndexBlock {
 	public static final int maxNumPointers = Constants.numPointersInIndexBlock;
 	
+	//private long uuidHigh;
+	//private long uuidLow;
 	private int indexLevel;
-	private BlockMetadata firstBlock;
-	private BlockMetadata lastBlock;
+	private int pointersAdded;
+	private long blocksCount = 0; //Total blocks added under this index.
+	private static int headerSize = 4+4+8; //indexLevel, pointersAdded, blocksCount.
 	
-	private final BlockMetadata[] dataBlocks;
-	private final IndexBlock[] indexBlocks;
-	private int appendAt;
-	private long blocksCount = 0;
+	//private BlockMetadata firstBlock;
+	//private BlockMetadata lastBlock;
+	
+	//private final BlockMetadata[] dataBlocks;
+	//private final IndexBlock[] indexBlocks;
+	//private int appendAt;
 	
 	//private final long maxDataSize;
-	private final long maxDataPerPointer;
-	private final long maxDataBlocks;
+	//private final long maxDataPerPointer;
+	//private final long maxDataBlocks;
+	
+	private Cache cache;
+	
+	private IndexBlock(){}
 	
 	public IndexBlock(int indexLevel){
 		assert indexLevel > 0;
@@ -25,7 +37,14 @@ public class IndexBlock {
 		
 		this.indexLevel = indexLevel;
 		
-		if (indexLevel == 1) {
+		cache = Cache.instance();
+		BlockMetadata block = cache.newDataBlock();
+		block.fill();
+		
+		this.uuidHigh = block.uuidHigh();
+		this.uuidLow = block.uuidLow();
+		
+		/*if (indexLevel == 1) {
 			dataBlocks  = new BlockMetadata[maxNumPointers];
 			indexBlocks = null;
 			
@@ -37,9 +56,27 @@ public class IndexBlock {
 			
 			maxDataPerPointer = (long)Math.pow(maxNumPointers, indexLevel-1)*Constants.dataBlockSizeBytes;
 			//maxDataSize = maxDataBlocks * Constants.defaultBlockSize;
-		}
+		}*/
 		
-		maxDataBlocks = (long)Math.pow(maxNumPointers, indexLevel);
+		//maxDataBlocks = (long)Math.pow(maxNumPointers, indexLevel);
+	}
+	
+	public static IndexBlock fromDataBlock(long dataBlockUuidHigh, long dataBlockUuidLow, int indexLevel){
+		assert indexLevel > 0;
+		assert indexLevel <= Constants.maxIndexLevels;
+		
+		IndexBlock block = new IndexBlock();
+		
+		block.indexLevel = indexLevel;
+		block.uuidHigh = dataBlockUuidHigh;
+		block.uuidLow = dataBlockUuidLow;
+		block.cache = Cache.instance();
+		BlockMetadata dataBlock = block.cache.getDataBlock(dataBlockUuidHigh, dataBlockUuidLow);
+		ByteBuffer buffer = ByteBuffer.wrap(dataBlock.data());
+		
+		block.
+		
+		return block;
 	}
 	
 	public synchronized void addBlock(BlockMetadata block) throws IndexBlockFullException{
@@ -51,6 +88,12 @@ public class IndexBlock {
 			appendDataBlock(block);
 			return;
 		}
+		
+		BlockMetadata indBlock = cache.getDataBlock(uuidHigh, uuidLow);
+		ByteBuffer data = ByteBuffer.wrap(indBlock.data());
+		data.position(headerSize);
+		
+		
 		
 		if (blocksCount == 0){
 			indexBlocks[appendAt] = new IndexBlock(indexLevel-1);
@@ -134,6 +177,18 @@ public class IndexBlock {
 	
 	public static long maxDataSize(int indexLevel){
 		return (long)Math.pow(maxNumPointers, indexLevel) * Constants.dataBlockSizeBytes;
+	}
+	
+	public static long maxBlocksCount(int indexLevel){
+		return (long)Math.pow(maxNumPointers, indexLevel);
+	}
+	
+	public long uuidHigh(){
+		return uuidHigh;
+	}
+	
+	public long uuidLow(){
+		return uuidLow;
 	}
 	
 }

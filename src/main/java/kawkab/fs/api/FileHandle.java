@@ -7,18 +7,22 @@ import kawkab.fs.core.FileOffset;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
+import kawkab.fs.persistence.Cache;
 
 public final class FileHandle {
 	private String filename;
 	private FileOptions options;
-	private FileIndex fileIndex;
-	private BlockMetadata currentBlock;
+	private long inumber;
+	private long curBlkUuidLow;
+	private long curBlkUuidHigh;
 	private long readOffsetInFile;
+	private Cache cache;
 	
-	public FileHandle(String filename, FileOptions options, FileIndex fileIndex){
+	public FileHandle(String filename, FileOptions options, long inumber){
 		this.filename = filename;
 		this.options = options;
-		this.fileIndex = fileIndex;
+		this.inumber = inumber;
+		cache = Cache.instance();
 	}
 	
 	/**
@@ -31,9 +35,12 @@ public final class FileHandle {
 		int remaining = length;
 		int read = 0;
 		
+		BlockMetadata currentBlock = cache.getDataBlock(curBlkUuidHigh, curBlkUuidLow);
+		
 		while(remaining > 0) {
 			if (currentBlock == null || !currentBlock.hasByte(readOffsetInFile)){
 				try {
+					FileIndex fileIndex = cache.getInode(curBlkUuidHigh, curBlkUuidLow);
 					currentBlock = fileIndex.getByFileOffset(readOffsetInFile);
 				} catch (InvalidFileOffsetException e) {
 					e.printStackTrace();
@@ -43,10 +50,6 @@ public final class FileHandle {
 			
 			if (currentBlock == null) //This means our byteOffset is out of the file region.
 				break;
-			
-			/*if (!currentBlock.closed()){
-				return read;
-			}*/
 			
 			long lastOffset = currentBlock.offset() + Constants.dataBlockSizeBytes;
 			

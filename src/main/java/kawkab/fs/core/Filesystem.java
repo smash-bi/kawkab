@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Constants;
+import kawkab.fs.core.exceptions.IbmapsFullException;
 
 public class Filesystem {
 	public enum FileMode {
@@ -10,30 +11,24 @@ public class Filesystem {
 	}
 	
 	private static Filesystem instance;
-	private FileDirectory directory;
+	private Namespace directory;
 	
 	private Filesystem(){
-		directory = new FileDirectory();
+		directory = Namespace.instance();
 	}
 	
 	public static Filesystem instance(){
 		if (instance == null) {
 			instance = new Filesystem();
 		}
-		
 		return instance;
 	}
 	
-	public FileHandle open(String filename, FileMode mode, FileOptions opts){
+	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException{
 		//TODO: Validate input
-		//TODO: Check if file already exists
+		long inumber = directory.openFile(filename);
 		
-		FileIndex fileIndex = directory.get(filename);
-		if (fileIndex == null){
-			fileIndex = directory.add(filename);
-		}
-		
-		FileHandle file = new FileHandle(filename, opts, fileIndex);
+		FileHandle file = new FileHandle(filename, opts, inumber);
 		
 		//Save file handles
 		
@@ -42,5 +37,9 @@ public class Filesystem {
 	
 	public static int BlockSize(){
 		return Constants.dataBlockSizeBytes;
+	}
+	
+	private void bootstrap(){
+		//TODO: Setup namespace, create ibmap and inode blocks
 	}
 }
