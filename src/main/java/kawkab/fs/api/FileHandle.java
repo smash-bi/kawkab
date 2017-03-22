@@ -1,28 +1,23 @@
 package kawkab.fs.api;
 
 import kawkab.fs.commons.Constants;
-import kawkab.fs.core.BlockMetadata;
-import kawkab.fs.core.FileIndex;
-import kawkab.fs.core.FileOffset;
+import kawkab.fs.core.Cache;
+import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.InodesBlock;
+import kawkab.fs.core.exceptions.InvalidArgumentsException;
+import kawkab.fs.core.exceptions.InvalidFileModeException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
-import kawkab.fs.persistence.Cache;
 
 public final class FileHandle {
-	private String filename;
-	private FileOptions options;
 	private long inumber;
-	private long curBlkUuidLow;
-	private long curBlkUuidHigh;
+	private FileMode fileMode;
 	private long readOffsetInFile;
-	private Cache cache;
 	
-	public FileHandle(String filename, FileOptions options, long inumber){
-		this.filename = filename;
-		this.options = options;
+	public FileHandle(long inumber, FileMode mode){
 		this.inumber = inumber;
-		cache = Cache.instance();
+		this.fileMode = mode;
 	}
 	
 	/**
@@ -32,42 +27,22 @@ public final class FileHandle {
 	 * @return Number of bytes read from the file
 	 */
 	public int read(byte[] buffer, int length){
-		int remaining = length;
-		int read = 0;
+		int inodesBlockNum = (int)(inumber / Constants.inodesPerBlock);
+		Cache cache = Cache.instance();
+		InodesBlock block = cache.getInodesBlock(inodesBlockNum);
 		
-		BlockMetadata currentBlock = cache.getDataBlock(curBlkUuidHigh, curBlkUuidLow);
-		
-		while(remaining > 0) {
-			if (currentBlock == null || !currentBlock.hasByte(readOffsetInFile)){
-				try {
-					FileIndex fileIndex = cache.getInode(curBlkUuidHigh, curBlkUuidLow);
-					currentBlock = fileIndex.getByFileOffset(readOffsetInFile);
-				} catch (InvalidFileOffsetException e) {
-					e.printStackTrace();
-					return read;
-				}
-			}
-			
-			if (currentBlock == null) //This means our byteOffset is out of the file region.
-				break;
-			
-			long lastOffset = currentBlock.offset() + Constants.dataBlockSizeBytes;
-			
-			int toRead = (int)(readOffsetInFile+remaining <= lastOffset ? remaining : lastOffset - readOffsetInFile);
-			int bytes;
-			try {
-				bytes = currentBlock.read(buffer, read, toRead, readOffsetInFile);
-			} catch (InvalidFileOffsetException e) {
-				e.printStackTrace();
-				return read;
-			}
-			
-			read += bytes;
-			remaining -= bytes;
-			readOffsetInFile += bytes;
+		int bytesRead = 0;
+		try {
+			bytesRead = block.read(inumber, buffer, length, readOffsetInFile);
+		} catch (InvalidFileOffsetException e) {
+			e.printStackTrace();
+		} catch (InvalidArgumentsException e) {
+			e.printStackTrace();
 		}
 		
-		return read;
+		readOffsetInFile += bytesRead;
+		
+		return bytesRead;
 	}
 	
 	/**
@@ -84,18 +59,18 @@ public final class FileHandle {
 	 * @return Offset of the block where the read pointer is moved to, or null if the data block
 	 *          is not found.
 	 */
-	public FileOffset seekBeforeTime(long timestamp){
+	/*public FileOffset seekBeforeTime(long timestamp){
 		if (timestamp <= 0)
 			return null; //FIXME: Make it an exception.
 		
-		BlockMetadata block = fileIndex.getByTime(timestamp, true);
+		DataBlock block = fileIndex.getByTime(timestamp, true);
 		if (block == null)
 			return null;
 		
 		FileOffset offset = block.fileOffset();
 		readOffsetInFile = offset.offsetInFile();
 		return offset;
-	}
+	}*/
 	
 	/**
 	 * Seek the read pointer to the first byte of the first data block that is at or after the time timestamp.
@@ -103,15 +78,15 @@ public final class FileHandle {
 	 * @return Offset of the block where the read pointer is moved to, or null if the data block
 	 *          is not found.
 	 */
-	public FileOffset seekAfterTime(long timestamp){
-		BlockMetadata block = fileIndex.getByTime(timestamp, false);
+	/*public FileOffset seekAfterTime(long timestamp){
+		DataBlock block = fileIndex.getByTime(timestamp, false);
 		if (block == null)
 			return null;
 		
 		FileOffset offset = block.fileOffset();
 		readOffsetInFile = offset.offsetInFile();
 		return offset;
-	}
+	}*/
 	
 	/**
 	 * Returns the offset and the number of bytes between two time index boundaries.
@@ -130,7 +105,7 @@ public final class FileHandle {
 	 *          the size of data. Returns null if data is not found within the given time boundaries.
 	 */
 	
-	public DataOffset offsetAndDataLength(long time1, long time2){
+	/*public DataOffset offsetAndDataLength(long time1, long time2){
 		if (time1 < 0) time1 = 0;
 		if (time2 < 0) time2 = 0;
 			
@@ -140,14 +115,14 @@ public final class FileHandle {
 			time1 = time1 ^ time2;
 		}
 		
-		BlockMetadata blockLeft = fileIndex.getByTime(time1, true);
+		DataBlock blockLeft = fileIndex.getByTime(time1, true);
 		if (blockLeft == null) return null;
-		BlockMetadata blockRight = fileIndex.getByTime(time2, false);
+		DataBlock blockRight = fileIndex.getByTime(time2, false);
 		if (blockRight == null) return null;
 		
 		long size = blockRight.offset() + blockRight.size() - blockLeft.offset();
 		return new DataOffset(blockLeft.offset(), size);
-	}
+	}*/
 	
 	/**
 	 * Move the read pointer to numBytes relative to its current position
@@ -165,8 +140,19 @@ public final class FileHandle {
 	 * @return Index of the data appended to the file. The caller can use 
 	 * dataIndex.timestamp() to refer to the data just written. 
 	 * @throws OutOfMemoryException 
+	 * @throws InvalidFileOffsetException 
+	 * @throws InvalidFileModeException 
 	 */
-	public int append(byte[] data, int offset, int length) throws OutOfMemoryException, MaxFileSizeExceededException{
-		return fileIndex.append(data, offset, length);
+	public int append(byte[] data, int offset, int length) throws OutOfMemoryException, 
+									MaxFileSizeExceededException, InvalidFileOffsetException, 
+									InvalidFileModeException{
+		if (fileMode != FileMode.APPEND){
+			throw new InvalidFileModeException();
+		}
+		
+		int inodesBlockNum = (int)(inumber / Constants.inodesPerBlock);
+		Cache cache = Cache.instance();
+		InodesBlock block = cache.getInodesBlock(inodesBlockNum);
+		return block.append(inumber, data, offset, length);
 	}
 }

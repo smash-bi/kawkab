@@ -5,8 +5,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.IbmapsFullException;
-import kawkab.fs.persistence.Cache;
-import kawkab.fs.persistence.Ibmap;
 
 public class Namespace {
 	private Map<String, Long> filesMap;

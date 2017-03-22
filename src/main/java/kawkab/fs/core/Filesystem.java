@@ -6,15 +6,17 @@ import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 
 public class Filesystem {
-	public enum FileMode {
-		READ, APPEND
-	}
+	private Cache cache;
+	private static boolean initialized;
+	public enum FileMode { READ, APPEND }
 	
 	private static Filesystem instance;
 	private Namespace directory;
 	
 	private Filesystem(){
 		directory = Namespace.instance();
+		cache = Cache.instance();
+		bootstrap();
 	}
 	
 	public static Filesystem instance(){
@@ -27,11 +29,7 @@ public class Filesystem {
 	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException{
 		//TODO: Validate input
 		long inumber = directory.openFile(filename);
-		
-		FileHandle file = new FileHandle(filename, opts, inumber);
-		
-		//Save file handles
-		
+		FileHandle file = new FileHandle(inumber, mode);
 		return file;
 	}
 	
@@ -39,7 +37,10 @@ public class Filesystem {
 		return Constants.dataBlockSizeBytes;
 	}
 	
-	private void bootstrap(){
-		//TODO: Setup namespace, create ibmap and inode blocks
+	void bootstrap(){
+		if (!initialized){
+			cache.bootstrap();
+			initialized = true;
+		}
 	}
 }

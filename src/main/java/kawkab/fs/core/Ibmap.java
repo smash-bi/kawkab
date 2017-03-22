@@ -1,4 +1,4 @@
-package kawkab.fs.persistence;
+package kawkab.fs.core;
 
 import java.nio.ByteBuffer;
 import java.util.BitSet;
@@ -12,16 +12,20 @@ public class Ibmap {
 	private BitSet bitset;
 	private boolean dirty;
 	
-	public Ibmap(int blockIndex){
-		this.blockIndex = blockIndex;
+	private Ibmap(){}
+	
+	static Ibmap bootstrap(int blockIndex){
+		Ibmap ibmap = new Ibmap();
+		ibmap.blockIndex = blockIndex;
 		//bytes = new byte[Constants.ibmapBlockSizeBytes];
-		bitset = new BitSet(Constants.ibmapBlockSizeBytes*8);
+		ibmap.bitset = new BitSet(Constants.ibmapBlockSizeBytes*8);
+		return ibmap;
 	}
 	
 	/**
 	 * @return Returns next unused inumber, or -1 if the block is full.
 	 */
-	public long nextInode(){
+	long nextInode(){
 		int bitIdx = -1;
 		try{
 			bitIdx = bitset.nextClearBit(0);
@@ -30,29 +34,40 @@ public class Ibmap {
 		}
 		
 		bitset.set(bitIdx);
+		
+		dirty = true;
 		return (8L*blockIndex*Constants.ibmapBlockSizeBytes) + bitIdx;
 	}
 	
-	public void unlinkInode(int inumber) throws InodeNumberOutOfRangeException{
+	void unlinkInode(int inumber) throws InodeNumberOutOfRangeException{
 		if (inumber < 0 || inumber > (blockIndex*Constants.ibmapBlockSizeBytes + Constants.ibmapBlockSizeBytes))
 			throw new InodeNumberOutOfRangeException();
 		
 		int bitIdx = inumber % (Constants.ibmapBlockSizeBytes*8);
 		bitset.clear(bitIdx);
+		
+		dirty = true;
 	}
 	
-	public void fromBuffer(ByteBuffer buffer){
+	static Ibmap fromBuffer(ByteBuffer buffer){
+		//TODO: check for bytes available in the buffer
+		Ibmap ibmap = new Ibmap();
+		ibmap.blockIndex = buffer.getInt();
 		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
 		buffer.get(bytes);
-		bitset = BitSet.valueOf(bytes); //TODO: Convert it to long array.
+		ibmap.bitset = BitSet.valueOf(bytes); //TODO: Convert it to long array.
+		return ibmap;
 	}
 	
-	public void toBuffer(ByteBuffer buffer){
+	void toBuffer(ByteBuffer buffer){
+		//TODO: check for buffer capacity
 		byte[] bytes = bitset.toByteArray(); //TODO: Convert it to long array.
+		
+		buffer.putInt(blockIndex);
 		buffer.put(bytes);
 	}
 	
-	/*public int consumeInode(){
+	/*int consumeInode(){
 		int byteIdx = 0;
 		for(byteIdx=0; byteIdx<bytes.length; byteIdx++){
 			if ((bytes[byteIdx] & 0xFF) != 0xFF)
@@ -77,7 +92,7 @@ public class Ibmap {
 		return (blockIndex*Constants.ibmapBlockSizeBytes) + (byteIdx*8) + bitIdx;
 	}
 	
-	public boolean unlinkInode(int inodeNumber) throws InodeNumberOutOfRangeException{
+	boolean unlinkInode(int inodeNumber) throws InodeNumberOutOfRangeException{
 		if (inodeNumber < 0 || inodeNumber > (blockIndex*Constants.ibmapBlockSizeBytes + Constants.ibmapBlockSizeBytes))
 			throw new InodeNumberOutOfRangeException();
 		
@@ -91,11 +106,11 @@ public class Ibmap {
 		return alreadyClear;
 	}*/
 	
-	public boolean dirty(){
+	boolean dirty(){
 		return dirty;
 	}
 	
-	public void clear() {
+	void clear() {
 		dirty = false;
 	}
 }
