@@ -21,3 +21,4 @@ public class Commons {
 		return Base64.getEncoder().encodeToString(uuid);
 	}
 }
+

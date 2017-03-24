@@ -1,22 +1,23 @@
 package kawkab.fs.core;
 
+import java.io.IOException;
+
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 
 public class Filesystem {
-	private Cache cache;
 	private static boolean initialized;
+	private static boolean closed;
+	
 	public enum FileMode { READ, APPEND }
 	
 	private static Filesystem instance;
-	private Namespace directory;
+	private Namespace namespace;
 	
 	private Filesystem(){
-		directory = Namespace.instance();
-		cache = Cache.instance();
-		bootstrap();
+		namespace = Namespace.instance();
 	}
 	
 	public static Filesystem instance(){
@@ -28,7 +29,7 @@ public class Filesystem {
 	
 	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException{
 		//TODO: Validate input
-		long inumber = directory.openFile(filename);
+		long inumber = namespace.openFile(filename);
 		FileHandle file = new FileHandle(inumber, mode);
 		return file;
 	}
@@ -37,10 +38,26 @@ public class Filesystem {
 		return Constants.dataBlockSizeBytes;
 	}
 	
-	void bootstrap(){
-		if (!initialized){
-			cache.bootstrap();
-			initialized = true;
-		}
+	public Filesystem bootstrap() throws IOException{
+		if (initialized)
+			return this;
+		
+		InodesBlock.bootstrap();
+		Ibmap.bootstrap();
+		namespace.bootstrap();
+		
+		initialized = true;
+		return this;
+	}
+	
+	public static void shutdown(){
+		if (closed)
+			return;
+		
+		Namespace.shutdown();
+		Ibmap.shutdown();
+		InodesBlock.shutdown();
+		
+		closed = true;
 	}
 }

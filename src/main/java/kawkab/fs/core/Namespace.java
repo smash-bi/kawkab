@@ -1,19 +1,19 @@
 package kawkab.fs.core;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.io.File;
+import java.io.IOException;
 
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.IbmapsFullException;
+import net.openhft.chronicle.map.ChronicleMap;
 
 public class Namespace {
-	private Map<String, Long> filesMap;
+	private ChronicleMap<String, Long> filesMap;
 	private Cache cache;
 	private int lastIbmapUsed;
 	private static Namespace instance;
 	
 	private Namespace(){
-		filesMap = new ConcurrentHashMap<String, Long>();
 		cache = Cache.instance();
 	}
 	
@@ -36,23 +36,53 @@ public class Namespace {
 			return inumber;
 		}
 		
-		int mapNum = lastIbmapUsed;
-		Ibmap ibmap = null;
-		while(true){
-			ibmap = cache.getIbmap(mapNum);
-			inumber = ibmap.nextInode();
-			if (inumber >=0)
-				break;
-			
-			mapNum = (mapNum + 1) % Constants.ibmapBlocksPerMachine;
-			if (mapNum == lastIbmapUsed){
-				throw new IbmapsFullException();
-			}
-		}
+		inumber = createNewFile();
 		
 		filesMap.put(filename, inumber);
 		
-		lastIbmapUsed = mapNum;
+		
 		return inumber;
+	}
+	
+	private long createNewFile() throws IbmapsFullException{
+		long inumber;
+		int mapNum = lastIbmapUsed;
+		while(true){
+			try(Ibmap ibmap = cache.getIbmap(mapNum)) {
+				inumber = ibmap.nextInode();
+				if (inumber >=0)
+					break;
+				
+				mapNum = (mapNum + 1) % Constants.ibmapBlocksPerMachine;
+				if (mapNum == lastIbmapUsed){
+					throw new IbmapsFullException();
+				}
+			}
+		}
+		
+		lastIbmapUsed = mapNum;
+		
+		return inumber;
+	}
+	
+	void bootstrap() throws IOException {
+		String path = Constants.namespacePath + "/" + "kawkab-namespace";
+		File file = new File(Constants.namespacePath);
+		if (!file.exists()){
+			file.mkdirs();
+		}
+		
+		filesMap = ChronicleMap
+				.of(String.class, Long.class)
+			    .name("Kawkab-namespace")
+			    .averageKeySize(32)
+			    .entries(1000000)
+			    .createPersistedTo(new File(path));
+		
+		System.out.println("Already existing files = " + filesMap.size());
+	}
+	
+	static void shutdown(){
+		//TODO: Stop new requests
 	}
 }

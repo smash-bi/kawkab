@@ -2,18 +2,16 @@ package kawkab.fs.core;
 
 import java.nio.ByteBuffer;
 
+import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
+import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 
-public class DataBlock {
-	private final long uuidLow;
-	private final long uuidHigh;
-	//private final long blockNumber; //starts from 0.
-	//private final long offsetInFile; //offset of the first data byte relative to the start of the file
-	private final long createTime;
-	private long firstAppendTime;
-	private long lastAppendTime;
-	//private int dataSize; //FIXME: This field should be removed.
+public class DataBlock extends Block {
+	private final long uuidLow; //Not stored persistently
+	private final long uuidHigh; //Not stored persistently
+	//private long firstAppendTime;
+	//private long lastAppendTime;
 	private boolean dirty;
 	
 	private byte[] data;
@@ -23,11 +21,10 @@ public class DataBlock {
 		this.uuidLow = uuidLow;
 		this.uuidHigh = uuidHigh;
 		
-		createTime = System.currentTimeMillis();
 		data = new byte[maxBlockSize];
 		
-		firstAppendTime = -1;
-		lastAppendTime = -1;
+		//firstAppendTime = -1;
+		//lastAppendTime = -1;
 	}
 	
 	/**
@@ -41,14 +38,9 @@ public class DataBlock {
 		assert offset >= 0;
 		assert offset < data.length;
 		
-		/*int capacity = capacity();
-		if (capacity == 0)
-			return 0;*/
-		
 		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
 		int capacity = Constants.dataBlockSizeBytes - offsetInBlock;
 		
-		long time = System.currentTimeMillis();
 		int bytes = length <= capacity ? length : capacity;
 		
 		for(int i=0; i<bytes; i++){
@@ -56,10 +48,11 @@ public class DataBlock {
 			offsetInBlock++;
 		}
 		
+		/*
+		long time = System.currentTimeMillis();
 		lastAppendTime = time;
-		
 		if (offsetInBlock == length || firstAppendTime == -1)
-			firstAppendTime = time;
+			firstAppendTime = time;*/
 		
 		dirty = true;
 		
@@ -78,10 +71,10 @@ public class DataBlock {
 		buffer.position(offsetInBlock);
 		buffer.putLong(data);
 		
-		long time = System.currentTimeMillis();
+		/*long time = System.currentTimeMillis();
 		lastAppendTime = time;
 		if (offsetInBlock == 0 || firstAppendTime == -1)
-			firstAppendTime = time;
+			firstAppendTime = time;*/
 		
 		dirty = true;
 		
@@ -115,10 +108,10 @@ public class DataBlock {
 		buffer.position(offsetInBlock);
 		buffer.putInt(data);
 		
-		long time = System.currentTimeMillis();
+		/*long time = System.currentTimeMillis();
 		lastAppendTime = time;
 		if (offsetInBlock == 0 || firstAppendTime == -1)
-			firstAppendTime = time;
+			firstAppendTime = time;*/
 		
 		dirty = true;
 		
@@ -169,39 +162,16 @@ public class DataBlock {
 		return readSize;
 	}
 	
-	/**
-	 * @return Returns the number of bytes appended in this block. 
-	 */
-	/*synchronized int size(){
-		return dataSize;
-	}*/
-	
-	/*synchronized int capacity(){
-		return maxBlockSize - dataSize;
-	}*/
-	
-	long creationTime(){
-		return createTime;
-	}
-	
-	long firstAppendTime(){
+	/*long firstAppendTime(){
 		return firstAppendTime;
 	}
 	
 	long lastAppendTime(){
 		return lastAppendTime;
-	}
+	}*/
 	
 	boolean hasByte(long offsetInFile){
 		return false;
-	}
-	
-	boolean dirty(){
-		return dirty;
-	}
-	
-	void clear(){
-		dirty = false;
 	}
 	
 	long uuidHigh(){
@@ -216,7 +186,66 @@ public class DataBlock {
 		return data;
 	}
 	
-	/*FileOffset fileOffset(){
-		return new FileOffset(offsetInFile, firstAppendTime);
-	}*/
+	@Override
+	boolean dirty(){
+		return dirty;
+	}
+	
+	@Override
+	void clearDirty(){
+		dirty = false;
+	}
+
+	@Override
+	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
+		int blockSize = Constants.dataBlockSizeBytes;
+		if (buffer.remaining() < blockSize)
+			throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
+					+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),blockSize));
+		
+		data = new byte[Constants.dataBlockSizeBytes];
+		buffer.get(data);
+	}
+
+	@Override
+	void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
+		int blockSize = Constants.dataBlockSizeBytes;
+		if (buffer.capacity() < blockSize)
+			throw new InsufficientResourcesException(String.format("Buffer capacity is less than "
+						+ "required: Capacity = %d bytes, required = %d bytes.",buffer.capacity(),blockSize));
+		
+		buffer.put(data);
+	}
+
+	@Override
+	String name() {
+		return Commons.uuidToString(uuidHigh, uuidLow);
+	}
+	
+	static String name(long uuidHigh, long uuidLow){
+		return Commons.uuidToString(uuidHigh, uuidLow);
+	}
+	
+	@Override
+	int blockSize(){
+		return Constants.dataBlockSizeBytes;
+	}
+
+	@Override
+	String localPath() {
+		String uuid = Commons.uuidToString(uuidHigh, uuidLow);
+		int uuidLen = uuid.length();
+		
+		assert uuidLen == 24;
+		int wordSize = 2;
+		int levels = uuidLen / wordSize;
+		
+		StringBuilder path = new StringBuilder(Constants.blocksPath.length()+uuidLen+levels);
+		path.append(Constants.blocksPath);
+		for (int i=0; i<levels; i+=wordSize){
+			path.append("/").append(uuid.substring(i, i+wordSize));
+		}
+		
+		return path.toString();
+	}
 }

@@ -1,27 +1,48 @@
 package kawkab.fs.commons;
 
 import kawkab.fs.core.IndexBlock;
+import kawkab.fs.core.Inode;
 
 public class Constants {
 	//Default data block size in bytes
-	public static final int dataBlockSizeBytes = 4 * 1024 * 1024; //4MB
-	public static final int maxDirectBlocks = 16;
+	public static final int dataBlockSizeBytes = 2 * 1024; //4MB
+	public static final int directBlocksPerInode = 16;
 	public static final int numPointersInIndexBlock = dataBlockSizeBytes/IndexBlock.pointerSizeBytes;
-	public static final long fileSizeLimit = Long.MAX_VALUE; //The maximum file size depends on numPointersInIndexBlock and maxIndexLevels.
-	
-	public static final int inodesBlockSizeBytes = 1024; //4 * 1024 * 1024;
-	public static final int inodeSizeBytes = maxDirectBlocks*IndexBlock.pointerSizeBytes + 3*IndexBlock.pointerSizeBytes + 32; //pointers + variables + reserved
-	public static final int inodesPerBlock = inodesBlockSizeBytes / inodeSizeBytes;
-	public static int inodesBlocksRangeStart = 0;
-	public static int inodesBlocksRangeEnd = 0; //10;
 	
 	//Ibmap blocks range for this machine
+	public static final int ibmapBlockSizeBytes = 10*1024; //4 * 1024 * 1024;
+	public static final int ibmapBlocksPerMachine = 1; //FIXME: Calculate this based on the maximum number of files supported per machine
 	public static int ibmapBlocksRangeStart = 0; //TODO: Get these numbers from a configuration file or ZooKeeper
-	public static int ibmapBlocksRangeEnd = 0; //10;
-	public static final int ibmapBlockSizeBytes = 1*1024*1024; //4 * 1024 * 1024;
-	public static final int ibmapBlocksPerMachine = 20; //10; //FIXME: Calculate this based on the maximum 
-	                                                            //number of files supported by a machine
-	public static final String fsBasePath = "/tmp/kawkab";
-	public static final String ibmapsPath = "ibmaps";
-	public static final String blocksPath = "blocks";
+
+	public static final int inodesBlockSizeBytes = dataBlockSizeBytes;
+	public static final int inodeSizeBytes = Inode.inodesSize();
+	public static final int inodesPerBlock = inodesBlockSizeBytes/inodeSizeBytes;
+	public static final int inodeBlocksPerMachine = ibmapBlockSizeBytes*ibmapBlocksPerMachine*8/inodesPerBlock; //FIXME: Calculate this based on the maximum number of files supported by a machine
+	public static int inodesBlocksRangeStart = 0;
+	
+	public static int maxBlocksInCache = 100;
+	
+	public static final String basePath = "/tmp/kawkab";
+	public static final String ibmapsPath = basePath+"/ibmaps";
+	public static final String inodeBlocksPath = basePath+"/inodes";
+	public static final String blocksPath = basePath+"/blocks";
+	public static final String namespacePath = basePath+"/namespace";
+	public static final int inodeBlocksPerDirectory = 1000;
+	
+	public static void printConfig(){
+		System.out.println(String.format("Data block size MB ....... = %d",dataBlockSizeBytes/1024/1024));
+		System.out.println(String.format("Direct blocks per inode .. = %d", directBlocksPerInode));
+		System.out.println(String.format("Pointers per index block . = %d", numPointersInIndexBlock));
+		System.out.println(String.format("Maximum file size MB ..... = %d", Inode.maxFileSize/1024/1024));
+		System.out.println();
+		System.out.println(String.format("Ibmap block size MB ...... = %d", ibmapBlockSizeBytes/1024/1024));
+		System.out.println(String.format("Ibmap blocks per machine . = %d",ibmapBlocksPerMachine));
+		System.out.println(String.format("Ibmaps total size MB ..... = %d", ibmapBlockSizeBytes*ibmapBlocksPerMachine/1024/1024));
+		System.out.println();
+		System.out.println(String.format("Inode block size MB ...... = %d", inodesBlockSizeBytes/1024/1024));
+		System.out.println(String.format("Inode size bytes ......... = %d", inodeSizeBytes));
+		System.out.println(String.format("Inodes per block ......... = %d", inodesPerBlock));
+		System.out.println(String.format("Inode blocks per machine . = %d", inodeBlocksPerMachine));
+		System.out.println(String.format("Inode blocks total size MB = %d", inodeBlocksPerMachine*inodesBlockSizeBytes/1024/1024));
+	}
 }

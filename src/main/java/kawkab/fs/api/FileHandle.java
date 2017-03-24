@@ -150,9 +150,23 @@ public final class FileHandle {
 			throw new InvalidFileModeException();
 		}
 		
+		int len = 0;
 		int inodesBlockNum = (int)(inumber / Constants.inodesPerBlock);
 		Cache cache = Cache.instance();
-		InodesBlock block = cache.getInodesBlock(inodesBlockNum);
-		return block.append(inumber, data, offset, length);
+		try(InodesBlock block = cache.getInodesBlock(inodesBlockNum)) {
+			len = block.append(inumber, data, offset, length);
+		}
+		return len;
 	}
+	
+	public long size(){
+		int inodesBlockNum = (int)(inumber / Constants.inodesPerBlock);
+		Cache cache = Cache.instance();
+		long size = 0;
+		try(InodesBlock block = cache.getInodesBlock(inodesBlockNum)) {
+			size = block.fileSize(inumber);
+		}
+		return size;
+	}
+	
 }

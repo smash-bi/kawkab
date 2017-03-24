@@ -3,11 +3,10 @@ package kawkab.fs.core;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
-import javax.naming.InsufficientResourcesException;
-
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
+import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidArgumentsException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
@@ -15,9 +14,7 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 public class Inode {
 	//private long inumber;
-	private long blocksCount;
 	private long fileSize;
-	private int directBlocksCreated;
 	private long directBlockUuidLow[];
 	private long directBlockUuidHigh[];
 	private long indirectBlockUuidLow;
@@ -30,6 +27,8 @@ public class Inode {
 	private long lastBlockUuidLow;
 	private boolean dirty;
 	
+	public static final long maxFileSize;
+	
 	/*public INode(){ //long inumber){
 		//this.inumber = inumber;
 		//directBlocks = new DataBlock[Constants.maxDirectBlocks];
@@ -38,15 +37,15 @@ public class Inode {
 		directBlocksCreated = 0;
 	}*/
 	
-	private Inode(){}
-	
-	static Inode bootstrap(){
-		Inode inode = new Inode();
-		inode.directBlockUuidLow = new long[Constants.maxDirectBlocks];
-		inode.directBlockUuidHigh = new long[Constants.maxDirectBlocks];
-		inode.directBlocksCreated = 0;
-		return inode;
+	static {
+		long blocks = Constants.directBlocksPerInode;
+		for(int i=1; i<=3; i++){
+			blocks += Commons.maxBlocksCount(i);
+		}
+		maxFileSize = blocks * Constants.dataBlockSizeBytes;
 	}
+	
+	private Inode(){}
 	
 	long[] getByFileOffset(long offsetInFile) throws InvalidFileOffsetException{
 		//FIXME: Do we want to throw an exception or return null if there is no data in the file yet?
@@ -55,13 +54,13 @@ public class Inode {
 		}
 		
 		long blockIdx = offsetInFile / Constants.dataBlockSizeBytes;
-		long indirectBlocksLimit = Constants.maxDirectBlocks + Commons.maxBlocksCount(1);
+		long indirectBlocksLimit = Constants.directBlocksPerInode + Commons.maxBlocksCount(1);
 		long doubleIndirectBlocksLimit = indirectBlocksLimit + Commons.maxBlocksCount(2);
 		
 		//System.out.println(String.format("Block=%d, offset=%d", blockIdx, 
 		//		offsetInFile, indirectBlocksLimit, doubleIndirectBlocksLimit));
 		
-		if (blockIdx < Constants.maxDirectBlocks){
+		if (blockIdx < Constants.directBlocksPerInode){
 			long uuidHigh = directBlockUuidHigh[(int)blockIdx];
 			long uuidLow = directBlockUuidLow[(int)blockIdx];
 			return new long[]{uuidHigh, uuidLow};
@@ -213,9 +212,11 @@ public class Inode {
 				}
 			}
 			
+			int bytes = 0;
 			int toAppend = remaining <= lastBlkCapacity ? remaining : lastBlkCapacity;
-			DataBlock block = cache.getDataBlock(lastBlockUuidHigh, lastBlockUuidLow);
-			int bytes = block.append(data, offset, toAppend, fileSize);
+			try(DataBlock block = cache.getDataBlock(lastBlockUuidHigh, lastBlockUuidLow)){
+				bytes = block.append(data, offset, toAppend, fileSize);
+			}
 			remaining -= bytes;
 			offset += bytes;
 			appended += bytes;
@@ -228,25 +229,23 @@ public class Inode {
 	
 	synchronized DataBlock createNewBlock() throws OutOfMemoryException, 
 					MaxFileSizeExceededException, IndexBlockFullException, InvalidFileOffsetException{
-		if (blocksCount >= (long)Math.ceil(Constants.fileSizeLimit / Constants.dataBlockSizeBytes)){
+		long blocksCount = (long)Math.ceil(1.0*fileSize / Constants.dataBlockSizeBytes);
+		if (fileSize + Constants.dataBlockSizeBytes > maxFileSize){
 			throw new MaxFileSizeExceededException();
 		}
 		
 		Cache cache = Cache.instance();
 		DataBlock dataBlock = cache.newDataBlock();
 		
-		long indirectBlocksLimit = Constants.maxDirectBlocks + Commons.maxBlocksCount(1);
+		long indirectBlocksLimit = Constants.directBlocksPerInode + Commons.maxBlocksCount(1);
 		long doubleIndirectBlocksLimit = indirectBlocksLimit + Commons.maxBlocksCount(2);
 		long tripleIndirectBlocksLimit = doubleIndirectBlocksLimit + Commons.maxBlocksCount(3);
 		
-		if (blocksCount < Constants.maxDirectBlocks) {
+		if (blocksCount < Constants.directBlocksPerInode) {
 			//System.out.println("1. Adding direct block "+directBlocksCreated);
-			assert blocksCount == directBlocksCreated;
-			directBlockUuidHigh[directBlocksCreated] = dataBlock.uuidHigh();
-			directBlockUuidLow[directBlocksCreated] = dataBlock.uuidLow();
-			directBlocksCreated++;
+			directBlockUuidHigh[(int)blocksCount] = dataBlock.uuidHigh();
+			directBlockUuidLow[(int)blocksCount] = dataBlock.uuidLow();
 		} else {
-			assert directBlocksCreated == directBlockUuidLow.length;
 			IndexBlock indBlock = null;
 			
 			if (blocksCount < indirectBlocksLimit) {
@@ -306,10 +305,6 @@ public class Inode {
 		return fileSize;
 	}
 	
-	long blocksCount(){
-		return blocksCount;
-	}
-	
 	/*public long id(){
 		return inumber;
 	}*/
@@ -323,9 +318,7 @@ public class Inode {
 		int initPosition = buffer.position();
 		//buffer.putLong(inumber);
 		
-		buffer.putLong(blocksCount);
 		buffer.putLong(fileSize);
-		buffer.putInt(directBlocksCreated);
 		
 		for(int i=0; i<directBlockUuidLow.length; i++){
 			buffer.putLong(directBlockUuidLow[i]);
@@ -345,10 +338,14 @@ public class Inode {
 		buffer.putLong(lastBlockUuidLow);
 		
 		int dataLength = buffer.position() - initPosition;
-		int padLength = Constants.inodeSizeBytes - dataLength;
+		int padLength = Math.max(0, Constants.inodeSizeBytes - dataLength);
 		
-		byte[] padding = new byte[padLength];
-		buffer.put(padding);
+		assert dataLength + padLength == Constants.inodeSizeBytes;
+		
+		if (padLength > 0) {
+			byte[] padding = new byte[padLength];
+			buffer.put(padding);
+		}
 	}
 	
 	static Inode fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
@@ -365,13 +362,11 @@ public class Inode {
 		int initPosition = buffer.position();
 		
 		Inode inode = new Inode();
-		inode.blocksCount = buffer.getLong();
 		inode.fileSize = buffer.getLong();
-		inode.directBlocksCreated = buffer.getInt();
 		
-		inode.directBlockUuidLow = new long[Constants.maxDirectBlocks];
-		inode.directBlockUuidHigh = new long[Constants.maxDirectBlocks];
-		for (int i=0; i<Constants.maxDirectBlocks; i++){
+		inode.directBlockUuidLow = new long[Constants.directBlocksPerInode];
+		inode.directBlockUuidHigh = new long[Constants.directBlocksPerInode];
+		for (int i=0; i<Constants.directBlocksPerInode; i++){
 			inode.directBlockUuidLow[i] = buffer.getLong();
 			inode.directBlockUuidHigh[i] = buffer.getLong();
 		}
@@ -393,6 +388,17 @@ public class Inode {
 		buffer.position(buffer.position()+padLength);
 		
 		return inode;
+	}
+	
+	static Inode bootstrap(){
+		Inode inode = new Inode();
+		inode.directBlockUuidLow = new long[Constants.directBlocksPerInode];
+		inode.directBlockUuidHigh = new long[Constants.directBlocksPerInode];
+		return inode;
+	}
+	
+	public static int inodesSize(){
+		return (Constants.directBlocksPerInode + 4) * 16 + 8 + 32;
 	}
 	
 	boolean dirty(){

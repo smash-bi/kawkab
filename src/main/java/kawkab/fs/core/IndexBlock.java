@@ -138,7 +138,7 @@ public class IndexBlock {
 	}
 	
 	private long adjustBlockNumber(long blockNumber){
-		long indirectBlocksLimit = Constants.maxDirectBlocks + Commons.maxBlocksCount(1);
+		long indirectBlocksLimit = Constants.directBlocksPerInode + Commons.maxBlocksCount(1);
 		long doubleIndirectBlocksLimit = indirectBlocksLimit + Commons.maxBlocksCount(2);
 		
 		if (blockNumber >= doubleIndirectBlocksLimit)
@@ -147,7 +147,7 @@ public class IndexBlock {
 		if (blockNumber >= indirectBlocksLimit)
 			return blockNumber - indirectBlocksLimit;
 		
-		return blockNumber - Constants.maxDirectBlocks;
+		return blockNumber - Constants.directBlocksPerInode;
 	}
 	
 	/*public synchronized boolean canAddBlock(){
@@ -189,5 +189,4 @@ public class IndexBlock {
 	long uuidLow(){
 		return uuidLow;
 	}
-	
 }

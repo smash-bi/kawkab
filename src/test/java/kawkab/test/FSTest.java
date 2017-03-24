@@ -1,10 +1,12 @@
 package kawkab.test;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Random;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
+import kawkab.fs.commons.Constants;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.IbmapsFullException;
@@ -25,9 +27,18 @@ public class FSTest {
 		//tester.testFileSeek();
 	}
 	
-	public void testBlocksCreation() throws IbmapsFullException, OutOfMemoryException, 
-				MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException{
+	public void testConfiguration(){
+		Constants.printConfig();
+	}
+	
+	public void testBootstrap() throws IOException{
 		Filesystem fs = Filesystem.instance();
+		fs.bootstrap();
+	}
+	
+	public void testBlocksCreation() throws IbmapsFullException, OutOfMemoryException, 
+				MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException{
+		Filesystem fs = Filesystem.instance().bootstrap();
 		String filename = "testFile";
 		FileHandle file = fs.open(filename, FileMode.APPEND, new FileOptions());
 		
@@ -36,8 +47,8 @@ public class FSTest {
 	}
 	
 	public void testSmallReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
-				InvalidFileOffsetException, InvalidFileModeException{
-		Filesystem fs = Filesystem.instance();
+				InvalidFileOffsetException, InvalidFileModeException, IOException{
+		Filesystem fs = Filesystem.instance().bootstrap();
 		
 		String filename = new String("/home/smash/testSmall");
 		FileOptions opts = new FileOptions();
@@ -47,6 +58,7 @@ public class FSTest {
 		byte[] dataBuffer = new byte[100];
 		new Random().nextBytes(dataBuffer);
 		
+		file.seekBytes(file.size());
 		int appended = file.append(dataBuffer, 0, dataBuffer.length);
 		
 		byte[] readBuf = new byte[dataBuffer.length];
@@ -57,17 +69,18 @@ public class FSTest {
 	}
 	
 	public void testLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
-				InvalidFileOffsetException, InvalidFileModeException{
-		Filesystem fs = Filesystem.instance();
+				InvalidFileOffsetException, InvalidFileModeException, IOException{
+		Filesystem fs = Filesystem.instance().bootstrap();
 		
 		String filename = new String("/home/smash/testLarge");
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
-		int dataSize = 32*48; //1*1024*1024*1024;
+		int dataSize = 1024*1024; //1*1024*1024*1024;
 		byte[] dataBuffer = new byte[dataSize];
 		new Random().nextBytes(dataBuffer);
 		
+		file.seekBytes(file.size());
 		int appended = file.append(dataBuffer, 0, dataBuffer.length);
 		
 		byte[] readBuf = new byte[dataBuffer.length];
@@ -80,9 +93,9 @@ public class FSTest {
 		assert Arrays.equals(dataBuffer, readBuf);
 	}
 	
-	public void testVeryLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, 
-			IbmapsFullException, InvalidFileOffsetException, InvalidFileModeException{
-		Filesystem fs = Filesystem.instance();
+	/*public void testVeryLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, 
+			IbmapsFullException, InvalidFileOffsetException, InvalidFileModeException, IOException{
+		Filesystem fs = Filesystem.instance().bootstrap();
 		String filename = new String("/home/smash/testVeryLarge");
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
@@ -121,7 +134,7 @@ public class FSTest {
 		}
 		
 		assert appended == read;
-	}
+	}*/
 	
 	/*public void testFileSeek() throws OutOfMemoryException, MaxFileSizeExceededException, InterruptedException{
 		Filesystem fs = Filesystem.instance();
@@ -195,4 +208,8 @@ public class FSTest {
 		file.read(data, data.length);
 		assert Arrays.equals(data, block3);
 	}*/
+	
+	void testShutdown(){
+		Filesystem.shutdown();
+	}
 }

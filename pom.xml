@@ -33,6 +33,11 @@
 	</build>
 
 	<dependencies>
+		<dependency>
+			<groupId>net.openhft</groupId>
+			<artifactId>chronicle-map</artifactId>
+			<version>3.13.0</version>
+		</dependency>
 		<!--dependency> <groupId>org.tinylog</groupId> <artifactId>tinylog</artifactId> 
 			<version>1.2</version> </dependency -->
 		<!--dependency> <groupId>junit</groupId> <artifactId>junit</artifactId> 
