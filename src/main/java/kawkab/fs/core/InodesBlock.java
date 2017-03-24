@@ -13,7 +13,6 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 public class InodesBlock extends Block {
 	private final int blockIndex; //Not saved persistently
-	private boolean dirty; //Not saved persistently
 	private Inode[] inodes;
 	private static boolean bootstraped; //Not saved persistently
 	
@@ -23,16 +22,32 @@ public class InodesBlock extends Block {
 	
 	public int append(long iNumber, byte[] data, int offset, int length) throws OutOfMemoryException, 
 								MaxFileSizeExceededException, InvalidFileOffsetException {
-		int inodeNumber = (int)(iNumber % Constants.inodesPerBlock);
-		int ret = inodes[inodeNumber].append(data, offset, length);
-		dirty = inodes[inodeNumber].dirty();
-		return ret;
+		int len;
+		try {
+			writeLock.lock();
+			int inodeNumber = (int)(iNumber % Constants.inodesPerBlock);
+			len = inodes[inodeNumber].append(data, offset, length);
+			dirty = inodes[inodeNumber].dirty();
+		} finally {
+			writeLock.unlock();
+		}
+		
+		return len;
 	}
 	
 	public int read(long iNumber, byte[] buffer, int length, long offsetInFile) throws 
 			InvalidFileOffsetException, InvalidArgumentsException {
 		int inodeNumber = (int)(iNumber % Constants.inodesPerBlock);
-		return inodes[inodeNumber].read(buffer, length, offsetInFile);
+		int len = 0;
+		
+		try {
+			readLock.lock();
+			len = inodes[inodeNumber].read(buffer, length, offsetInFile);
+		} finally {
+			readLock.unlock();
+		}
+		
+		return len;
 	}
 	
 	public long fileSize(long inumber){
@@ -42,39 +57,41 @@ public class InodesBlock extends Block {
 	
 	@Override
 	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		int blockSize = Constants.inodesBlockSizeBytes;
-		if (buffer.remaining() < blockSize)
-			throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
-					+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),blockSize));
-		
-		inodes = new Inode[Constants.inodesPerBlock];
-		for(int i=0; i<Constants.inodesPerBlock; i++){
-			inodes[i] = Inode.fromBuffer(buffer);
+		try {
+			writeLock.lock();
+			
+			int blockSize = Constants.inodesBlockSizeBytes;
+			if (buffer.remaining() < blockSize)
+				throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
+						+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),blockSize));
+			
+			inodes = new Inode[Constants.inodesPerBlock];
+			for(int i=0; i<Constants.inodesPerBlock; i++){
+				inodes[i] = Inode.fromBuffer(buffer);
+			}
+		}finally{
+			writeLock.unlock();
 		}
 	}
 	
 	@Override
 	void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		int blockSize = Constants.inodesBlockSizeBytes;
-		if (buffer.capacity() < blockSize)
-			throw new InsufficientResourcesException(String.format("Buffer capacity is less than "
-						+ "required: Capacity = %d bytes, required = %d bytes.",buffer.capacity(),blockSize));
-		
-		for(Inode inode : inodes) {
-			inode.toBuffer(buffer);
+		try {
+			writeLock.lock();
+			
+			int blockSize = Constants.inodesBlockSizeBytes;
+			if (buffer.capacity() < blockSize)
+				throw new InsufficientResourcesException(String.format("Buffer capacity is less than "
+							+ "required: Capacity = %d bytes, required = %d bytes.",buffer.capacity(),blockSize));
+			
+			for(Inode inode : inodes) {
+				inode.toBuffer(buffer);
+			}
+		} finally {
+			writeLock.unlock();
 		}
 	}
 	
-	@Override
-	boolean dirty(){
-		return dirty;
-	}
-	
-	@Override
-	void clearDirty() {
-		dirty = false;
-	}
-
 	@Override
 	String name() {
 		return name(blockIndex);

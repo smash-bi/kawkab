@@ -32,12 +32,20 @@ public class FSTest {
 	}
 	
 	public void testBootstrap() throws IOException{
+		System.out.println("---------------------------------------------");
+		System.out.println("            Bootstrap test");
+		System.out.println("---------------------------------------------");
+		
 		Filesystem fs = Filesystem.instance();
 		fs.bootstrap();
 	}
 	
 	public void testBlocksCreation() throws IbmapsFullException, OutOfMemoryException, 
 				MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException{
+		System.out.println("-------------------------------------------------");
+		System.out.println("            Blocks creation test");
+		System.out.println("-------------------------------------------------");
+		
 		Filesystem fs = Filesystem.instance().bootstrap();
 		String filename = "testFile";
 		FileHandle file = fs.open(filename, FileMode.APPEND, new FileOptions());
@@ -48,6 +56,10 @@ public class FSTest {
 	
 	public void testSmallReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
 				InvalidFileOffsetException, InvalidFileModeException, IOException{
+		System.out.println("--------------------------------------------");
+		System.out.println("            Small file test");
+		System.out.println("--------------------------------------------");
+		
 		Filesystem fs = Filesystem.instance().bootstrap();
 		
 		String filename = new String("/home/smash/testSmall");
@@ -55,11 +67,13 @@ public class FSTest {
 		
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
-		byte[] dataBuffer = new byte[100];
+		byte[] dataBuffer = new byte[8*1024];
 		new Random().nextBytes(dataBuffer);
 		
 		file.seekBytes(file.size());
 		int appended = file.append(dataBuffer, 0, dataBuffer.length);
+		
+		System.out.println(String.format("readOffset %d, file size %d", file.readOffset(), file.size()));
 		
 		byte[] readBuf = new byte[dataBuffer.length];
 		int read = file.read(readBuf, readBuf.length);
@@ -76,7 +90,7 @@ public class FSTest {
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
-		int dataSize = 1024*1024; //1*1024*1024*1024;
+		int dataSize = 100*1024*1024; //1*1024*1024*1024;
 		byte[] dataBuffer = new byte[dataSize];
 		new Random().nextBytes(dataBuffer);
 		
@@ -88,6 +102,8 @@ public class FSTest {
 		
 		//System.out.println(Arrays.toString(dataBuffer));
 		//System.out.println(Arrays.toString(readBuf));
+		
+		System.out.println("File " + filename + " size " + file.size());
 		
 		assert appended == read;
 		assert Arrays.equals(dataBuffer, readBuf);

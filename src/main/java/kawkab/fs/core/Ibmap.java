@@ -13,7 +13,6 @@ public class Ibmap extends Block{
 	//private byte[] bytes;
 	private final int blockIndex; //Not saved persistently
 	private BitSet bitset;
-	private boolean dirty;
 	private static boolean bootstraped;
 	
 	Ibmap(int blockIndex){
@@ -138,16 +137,6 @@ public class Ibmap extends Block{
 		return bootstraped;
 	}
 	
-	@Override
-	boolean dirty(){
-		return dirty;
-	}
-	
-	@Override
-	void clearDirty() {
-		dirty = false;
-	}
-
 	@Override
 	String name() {
 		return name(blockIndex);

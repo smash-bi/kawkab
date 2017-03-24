@@ -163,10 +163,14 @@ public final class FileHandle {
 		int inodesBlockNum = (int)(inumber / Constants.inodesPerBlock);
 		Cache cache = Cache.instance();
 		long size = 0;
-		try(InodesBlock block = cache.getInodesBlock(inodesBlockNum)) {
-			size = block.fileSize(inumber);
-		}
+		InodesBlock block = cache.getInodesBlock(inodesBlockNum);
+		size = block.fileSize(inumber);
+		
 		return size;
+	}
+	
+	public long readOffset(){
+		return readOffsetInFile;
 	}
 	
 }

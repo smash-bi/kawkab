@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.LinkedBlockingQueue;
 
 import kawkab.fs.commons.Constants;
 
@@ -12,15 +11,15 @@ public class Cache extends LinkedHashMap<String, Block> {
 	private static Cache instance;
 	//private Map<String, Block> cache;
 	private LocalStore store;
-	private LinkedBlockingQueue<Block> dirtyBlocks;
-	private Thread blocksWriter;
+	//private LinkedBlockingQueue<Block> dirtyBlocks;
+	//private Thread blocksWriter;
 	private volatile boolean stop;
 	
 	private Cache(){
 		super(Constants.maxBlocksInCache+1, 1.1f, true);
 		store = LocalStore.instance();
-		dirtyBlocks = new LinkedBlockingQueue<Block>();
-		runBlocksWriter();
+		//dirtyBlocks = new LinkedBlockingQueue<Block>();
+		//runBlocksWriter();
 	}
 	
 	public static Cache instance(){
@@ -78,24 +77,37 @@ public class Cache extends LinkedHashMap<String, Block> {
 	DataBlock newDataBlock(){
 		UUID uuid = UUID.randomUUID();
 		DataBlock block = new DataBlock(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
-		putInCache(block.name(), block);
 		
-		try {
+		/*try {
 			store.writeBlock(block);
 		} catch (IOException e) {
 			e.printStackTrace();
-		}
+		}*/
+		
+		putInCache(block.name(), block);
 		
 		//System.out.println("\t\t\t Created data block " + uuidStr);
 		return block;
 	}
 	
 	void addDirty(Block block){
-		dirtyBlocks.add(block);
+		//dirtyBlocks.add(block);
+		try {
+			block.acquireWriteLock();
+			try {
+				store.writeBlock(block);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			block.clearDirty();
+		} finally {
+			block.releaseWriteLock();
+		}
 	}
 	
 	private synchronized Block getFromCache(String id){
-		return get(id);
+		Block block = get(id);
+		return block;
 	}
 	
 	private synchronized void putInCache(String id, Block block){
@@ -104,17 +116,18 @@ public class Cache extends LinkedHashMap<String, Block> {
 	
 	@Override
 	protected boolean removeEldestEntry(Map.Entry<String, Block> eldest) {
-		boolean remove = size() > Constants.maxBlocksInCache;
-		if (remove && eldest.getValue().dirty()){
-			dirtyBlocks.add(eldest.getValue());
-			
-			System.out.println("\t\t Evicted block from cache: " + eldest.getValue().name());
+		boolean remove = super.size() > Constants.maxBlocksInCache;
+		Block block = eldest.getValue();
+		if (remove && block.dirty()){
+			//dirtyBlocks.add(eldest.getValue());
+			addDirty(block);
+			//TODO: if a block is dirty, do not evict.
 		}
 		
 		return remove;
 	}
 	
-	private void runBlocksWriter(){
+	/*private void runBlocksWriter(){
 		blocksWriter = new Thread(){
 			public void run(){
 				while(!stop){
@@ -137,19 +150,19 @@ public class Cache extends LinkedHashMap<String, Block> {
 			}
 		};
 		blocksWriter.start();
-	}
+	}*/
 	
 	void stop(){
 		System.out.println("Closing cache.");
 		stop = true;
-		if (blocksWriter != null){
+		/*if (blocksWriter != null){
 			blocksWriter.interrupt();
 			try {
 				blocksWriter.join();
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
-		}
+		}*/
 		
 		for (Block block : this.values()){
 			if (block.dirty()){
@@ -163,7 +176,7 @@ public class Cache extends LinkedHashMap<String, Block> {
 		
 		this.clear();
 		
-		Block block = null;
+		/*Block block = null;
 		while((block=dirtyBlocks.poll()) != null){
 			if (block.dirty()){
 				try {
@@ -172,6 +185,6 @@ public class Cache extends LinkedHashMap<String, Block> {
 					e.printStackTrace();
 				}
 			}
-		}
+		}*/
 	}
 }

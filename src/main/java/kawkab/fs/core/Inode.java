@@ -193,7 +193,7 @@ public class Inode {
 	 * @throws OutOfMemoryException 
 	 * @throws InvalidFileOffsetException 
 	 */
-	synchronized int append(byte[] data, int offset, int length) throws OutOfMemoryException, 
+	int append(byte[] data, int offset, int length) throws OutOfMemoryException, 
 					MaxFileSizeExceededException, InvalidFileOffsetException{
 		int remaining = length;
 		int appended = 0;
@@ -211,23 +211,29 @@ public class Inode {
 					return appended;
 				}
 			}
-			
-			int bytes = 0;
+
+			int bytes;
 			int toAppend = remaining <= lastBlkCapacity ? remaining : lastBlkCapacity;
-			try(DataBlock block = cache.getDataBlock(lastBlockUuidHigh, lastBlockUuidLow)){
-				bytes = block.append(data, offset, toAppend, fileSize);
+			try (DataBlock block = cache.getDataBlock(lastBlockUuidHigh, lastBlockUuidLow)) {
+				try {
+					block.acquireWriteLock();
+					bytes = block.append(data, offset, toAppend, fileSize);
+				} finally {
+					block.releaseWriteLock();
+				}
 			}
+			
 			remaining -= bytes;
 			offset += bytes;
 			appended += bytes;
 			fileSize += bytes;
+			dirty = true;
 		}
 		
-		dirty = true;
 		return appended;
 	}
 	
-	synchronized DataBlock createNewBlock() throws OutOfMemoryException, 
+	DataBlock createNewBlock() throws OutOfMemoryException, 
 					MaxFileSizeExceededException, IndexBlockFullException, InvalidFileOffsetException{
 		long blocksCount = (long)Math.ceil(1.0*fileSize / Constants.dataBlockSizeBytes);
 		if (fileSize + Constants.dataBlockSizeBytes > maxFileSize){
@@ -290,7 +296,6 @@ public class Inode {
 		}
 		
 		blocksCount++;
-		fileSize += Constants.dataBlockSizeBytes;;
 		dirty = true;
 		
 		lastBlockUuidHigh = dataBlock.uuidHigh();

@@ -12,7 +12,6 @@ public class DataBlock extends Block {
 	private final long uuidHigh; //Not stored persistently
 	//private long firstAppendTime;
 	//private long lastAppendTime;
-	private boolean dirty;
 	
 	private byte[] data;
 	private final static int maxBlockSize = Constants.dataBlockSizeBytes;
@@ -186,16 +185,6 @@ public class DataBlock extends Block {
 		return data;
 	}
 	
-	@Override
-	boolean dirty(){
-		return dirty;
-	}
-	
-	@Override
-	void clearDirty(){
-		dirty = false;
-	}
-
 	@Override
 	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
 		int blockSize = Constants.dataBlockSizeBytes;

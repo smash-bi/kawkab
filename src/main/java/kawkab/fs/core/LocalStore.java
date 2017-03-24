@@ -23,18 +23,27 @@ public class LocalStore {
 	
 	public void writeBlock(Block block) throws IOException {
 		System.out.println("\tWriting block: " + block.localPath());
-		File file = new File(block.localPath());
-		File parent = file.getParentFile();
-		if (!parent.exists()){
-			parent.mkdirs();
+		
+		//new Exception().printStackTrace();
+		
+		try {
+			block.acquireWriteLock();
+			
+			File file = new File(block.localPath());
+			File parent = file.getParentFile();
+			if (!parent.exists()){
+				parent.mkdirs();
+			}
+			
+			ByteBuffer buffer = ByteBuffer.allocate(block.blockSize());
+			block.toBuffer(buffer);
+			
+			try(BufferedOutputStream writer = new BufferedOutputStream(new FileOutputStream(file))) {
+				writer.write(buffer.array());
+			}
+		} finally {
+			block.acquireReadLock();
 		}
-		
-		ByteBuffer buffer = ByteBuffer.allocate(block.blockSize());
-		block.toBuffer(buffer);
-		
-		BufferedOutputStream writer = new BufferedOutputStream(new FileOutputStream(file));
-		writer.write(buffer.array());
-		writer.close();
 	}
 	
 	public void readBlock(Block block) throws IOException{
@@ -43,9 +52,9 @@ public class LocalStore {
 		File file = new File(block.localPath());
 		byte[] bytes = new byte[block.blockSize()];
 		
-		BufferedInputStream reader = new BufferedInputStream(new FileInputStream(file));
-		reader.read(bytes);
-		reader.close();
+		try (BufferedInputStream reader = new BufferedInputStream(new FileInputStream(file))) {
+			reader.read(bytes);
+		}
 		
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		block.fromBuffer(buffer);
