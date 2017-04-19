@@ -1,6 +1,8 @@
 package kawkab.fs.core;
 
+import java.io.File;
 import java.nio.ByteBuffer;
+import java.util.UUID;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
@@ -8,18 +10,14 @@ import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 
 public class DataBlock extends Block {
-	private final long uuidLow; //Not stored persistently
-	private final long uuidHigh; //Not stored persistently
 	//private long firstAppendTime;
 	//private long lastAppendTime;
 	
 	private byte[] data;
 	private final static int maxBlockSize = Constants.dataBlockSizeBytes;
 	
-	DataBlock(long uuidHigh, long uuidLow){
-		this.uuidLow = uuidLow;
-		this.uuidHigh = uuidHigh;
-		
+	DataBlock(BlockID uuid){
+		super(uuid);
 		data = new byte[maxBlockSize];
 		
 		//firstAppendTime = -1;
@@ -53,7 +51,10 @@ public class DataBlock extends Block {
 		if (offsetInBlock == length || firstAppendTime == -1)
 			firstAppendTime = time;*/
 		
+		//FIXME: Do we need to grab a lock to mark the data block as dirty???
+		lock.lock();
 		dirty = true;
+		lock.unlock();
 		
 		return bytes;
 	}
@@ -75,7 +76,10 @@ public class DataBlock extends Block {
 		if (offsetInBlock == 0 || firstAppendTime == -1)
 			firstAppendTime = time;*/
 		
+		//FIXME: Do we need to grab a lock to mark the data block as dirty???
+		lock.lock();
 		dirty = true;
+		lock.unlock();
 		
 		return 8;
 	}
@@ -112,7 +116,10 @@ public class DataBlock extends Block {
 		if (offsetInBlock == 0 || firstAppendTime == -1)
 			firstAppendTime = time;*/
 		
+		//FIXME: Do we need to grab a lock to mark the data block as dirty???
+		lock.lock();
 		dirty = true;
+		lock.unlock();
 		
 		return 4;
 	}
@@ -173,12 +180,8 @@ public class DataBlock extends Block {
 		return false;
 	}
 	
-	long uuidHigh(){
-		return uuidHigh;
-	}
-	
-	long uuidLow(){
-		return uuidLow;
+	BlockID uuid(){
+		return id;
 	}
 	
 	byte[] data(){
@@ -208,7 +211,7 @@ public class DataBlock extends Block {
 
 	@Override
 	String name() {
-		return Commons.uuidToString(uuidHigh, uuidLow);
+		return Commons.uuidToString(id.uuidHigh, id.uuidLow);
 	}
 	
 	static String name(long uuidHigh, long uuidLow){
@@ -222,19 +225,27 @@ public class DataBlock extends Block {
 
 	@Override
 	String localPath() {
-		String uuid = Commons.uuidToString(uuidHigh, uuidLow);
+		String uuid = Commons.uuidToString(id.uuidHigh, id.uuidLow);
 		int uuidLen = uuid.length();
 		
 		assert uuidLen == 24;
 		int wordSize = 2;
-		int levels = uuidLen / wordSize;
+		int levels = 3;
 		
 		StringBuilder path = new StringBuilder(Constants.blocksPath.length()+uuidLen+levels);
 		path.append(Constants.blocksPath);
-		for (int i=0; i<levels; i+=wordSize){
-			path.append("/").append(uuid.substring(i, i+wordSize));
+		for (int i=0; i<levels; i++){
+			path.append(File.separator).append(uuid.substring(i*wordSize, i*wordSize+wordSize));
 		}
+		path.append(File.separator).append(uuid.substring(levels*wordSize));
 		
 		return path.toString();
+	}
+	
+	public static BlockID randomID(){
+		UUID uuid = UUID.randomUUID();
+		long uuidHigh = uuid.getMostSignificantBits();
+		long uuidLow = uuid.getLeastSignificantBits();
+		return new BlockID(uuidHigh, uuidLow, DataBlock.name(uuidHigh, uuidLow), BlockType.DataBlock);
 	}
 }

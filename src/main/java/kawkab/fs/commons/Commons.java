@@ -13,12 +13,12 @@ public class Commons {
 	}
 	
 	public static String uuidToString(long uuidHigh, long uuidLow){
-		byte[] uuid = new byte[16];
-		ByteBuffer buffer = ByteBuffer.wrap(uuid);
+		byte[] id = new byte[16];
+		ByteBuffer buffer = ByteBuffer.wrap(id);
 		buffer.putLong(uuidHigh);
 		buffer.putLong(uuidLow);
 		buffer.clear();
-		return Base64.getEncoder().encodeToString(uuid);
+		return Base64.getEncoder().encodeToString(id);
 	}
 }
 

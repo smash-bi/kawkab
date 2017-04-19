@@ -6,7 +6,6 @@ import java.util.Random;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
-import kawkab.fs.commons.Constants;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.IbmapsFullException;
@@ -18,20 +17,28 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 public class FSTest {
 	public static void main(String args[]) throws OutOfMemoryException, 
 				MaxFileSizeExceededException, InterruptedException, IbmapsFullException, 
-				InvalidFileOffsetException, InvalidFileModeException {
-		//FSTest tester = new FSTest();
+				InvalidFileOffsetException, InvalidFileModeException, IOException {
+		FSTest tester = new FSTest();
+		tester.testBootstrap();
 		//tester.testBlocksCreation();
-		//tester.testSmallReadWrite();
-		//tester.testLargeReadWrite();
+		tester.testSmallReadWrite();
+		tester.testLargeReadWrite();
 		//tester.testVeryLargeReadWrite();
 		//tester.testFileSeek();
+		tester.testShutdown();
 	}
 	
-	public void testConfiguration(){
+	/*public void testConfiguration(){
 		Constants.printConfig();
+	}*/
+	
+	public void testMain() throws OutOfMemoryException, MaxFileSizeExceededException, 
+	InterruptedException, IbmapsFullException, InvalidFileOffsetException, 
+	InvalidFileModeException, IOException {
+		FSTest.main(null);
 	}
 	
-	public void testBootstrap() throws IOException{
+	private void testBootstrap() throws IOException{
 		System.out.println("---------------------------------------------");
 		System.out.println("            Bootstrap test");
 		System.out.println("---------------------------------------------");
@@ -40,7 +47,7 @@ public class FSTest {
 		fs.bootstrap();
 	}
 	
-	public void testBlocksCreation() throws IbmapsFullException, OutOfMemoryException, 
+	/*private void testBlocksCreation() throws IbmapsFullException, OutOfMemoryException, 
 				MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException{
 		System.out.println("-------------------------------------------------");
 		System.out.println("            Blocks creation test");
@@ -52,9 +59,9 @@ public class FSTest {
 		
 		byte[] data = new byte[10];
 		file.append(data, 0, data.length);
-	}
+	}*/
 	
-	public void testSmallReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
+	private void testSmallReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
 				InvalidFileOffsetException, InvalidFileModeException, IOException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Small file test");
@@ -70,6 +77,8 @@ public class FSTest {
 		byte[] dataBuffer = new byte[8*1024];
 		new Random().nextBytes(dataBuffer);
 		
+		System.out.println("Initial file size: " + file.size());
+		
 		file.seekBytes(file.size());
 		int appended = file.append(dataBuffer, 0, dataBuffer.length);
 		
@@ -82,8 +91,13 @@ public class FSTest {
 		assert Arrays.equals(dataBuffer, readBuf);
 	}
 	
-	public void testLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
+	private void testLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
 				InvalidFileOffsetException, InvalidFileModeException, IOException{
+		
+		System.out.println("--------------------------------------------");
+		System.out.println("            Large files test");
+		System.out.println("--------------------------------------------");
+		
 		Filesystem fs = Filesystem.instance().bootstrap();
 		
 		String filename = new String("/home/smash/testLarge");
@@ -109,7 +123,88 @@ public class FSTest {
 		assert Arrays.equals(dataBuffer, readBuf);
 	}
 	
-	/*public void testVeryLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, 
+	/*private void testMultipleReaders() throws IbmapsFullException, OutOfMemoryException, 
+	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException {
+		System.out.println("--------------------------------------------");
+		System.out.println("            Multiple Readers Test");
+		System.out.println("--------------------------------------------");
+		
+		Filesystem fs = Filesystem.instance().bootstrap();
+		String filename = new String("/home/smash/testVeryLarge");
+		FileOptions opts = new FileOptions();
+		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
+		final long offset = file.size();
+		
+		Random rand = new Random(0);
+		int bufSize = 8*1024*1024;
+		long dataSize = (long)(1*128*bufSize + 1)/32; //1GB + 1
+		long appended = 0;
+		
+		byte[] writeBuf = new byte[bufSize];
+		rand.nextBytes(writeBuf);
+		
+		while(appended < dataSize) {
+			int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
+			appended += file.append(writeBuf, 0, toWrite);
+			rand.nextBytes(writeBuf);
+		}
+		
+		int numReaders = 10;
+		final long dataAppended = appended;
+		
+		Thread[] readers = new Thread[numReaders];
+		for (int i=0; i<readers.length; i++){
+			readers[i] = new Thread() {
+				public void run() {
+					byte[] writeBuf = new byte[bufSize];
+					byte[] readBuf = new byte[bufSize];
+					Random rand = new Random(0);
+					Random waitRand = new Random();
+					
+					FileHandle file = null;
+					try {
+						file = fs.open(filename, FileMode.APPEND, opts);
+					} catch (IbmapsFullException | IOException e) {
+						e.printStackTrace();
+						return;
+					}
+					file.seekBytes(offset);
+
+					long read = 0;
+					while(read < dataSize) {
+						int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
+						int bytes = file.read(readBuf, toRead);
+						read += bytes;
+						
+						rand.nextBytes(writeBuf);
+						if (bytes< writeBuf.length){
+							for(int i=0; i<bytes; i++){
+								assert readBuf[i] == writeBuf[i];
+							}
+						} else {
+							assert Arrays.equals(readBuf, writeBuf);
+						}
+						
+						LockSupport.parkNanos(waitRand.nextInt(90000));
+					}
+					
+					assert dataAppended == read;
+				}
+			};
+			
+			readers[i].start();
+		}
+		
+		for (int i=0; i<readers.length; i++){
+			try {
+				readers[i].join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+	}*/
+	
+	/*private void testVeryLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, 
 			IbmapsFullException, InvalidFileOffsetException, InvalidFileModeException, IOException{
 		Filesystem fs = Filesystem.instance().bootstrap();
 		String filename = new String("/home/smash/testVeryLarge");
@@ -225,7 +320,11 @@ public class FSTest {
 		assert Arrays.equals(data, block3);
 	}*/
 	
-	void testShutdown(){
+	private void testShutdown(){
+		System.out.println("--------------------------------------------");
+		System.out.println("            Filesystem shutdown Test");
+		System.out.println("--------------------------------------------");
+		
 		Filesystem.shutdown();
 	}
 }

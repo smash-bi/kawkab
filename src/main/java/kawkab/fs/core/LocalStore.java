@@ -26,23 +26,18 @@ public class LocalStore {
 		
 		//new Exception().printStackTrace();
 		
-		try {
-			block.acquireWriteLock();
-			
-			File file = new File(block.localPath());
-			File parent = file.getParentFile();
-			if (!parent.exists()){
-				parent.mkdirs();
-			}
-			
-			ByteBuffer buffer = ByteBuffer.allocate(block.blockSize());
-			block.toBuffer(buffer);
-			
-			try(BufferedOutputStream writer = new BufferedOutputStream(new FileOutputStream(file))) {
-				writer.write(buffer.array());
-			}
-		} finally {
-			block.acquireReadLock();
+		//FIXME: Do we need to grab a lock here???
+		File file = new File(block.localPath());
+		File parent = file.getParentFile();
+		if (!parent.exists()){
+			parent.mkdirs();
+		}
+		
+		ByteBuffer buffer = ByteBuffer.allocate(block.blockSize());
+		block.toBuffer(buffer);
+		
+		try(BufferedOutputStream writer = new BufferedOutputStream(new FileOutputStream(file))) {
+			writer.write(buffer.array());
 		}
 	}
 	

@@ -10,104 +10,125 @@ import kawkab.fs.core.exceptions.InodeNumberOutOfRangeException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 
 public class Ibmap extends Block{
-	//private byte[] bytes;
+	private static final int bitsPerByte = 8;
+	
 	private final int blockIndex; //Not saved persistently
+	
+	/**
+	 * The size of BitSet is equal to the size of Consants.IbmapBlockSizeBytes.
+	 * It is initialized in the bootstrap function.
+	 */
 	private BitSet bitset;
+	
 	private static boolean bootstraped;
 	
+	/**
+	 * @param blockIndex Index of the Ibmap block for the current machine.
+	 */
 	Ibmap(int blockIndex){
+		super(new BlockID(Constants.ibmapUuidHigh, blockIndex, name(blockIndex), BlockType.IbmapBlock));
 		this.blockIndex = blockIndex;
+		
 	}
 	
 	/**
+	 * This function consumes the next unused inumber from the current Ibmap block.
 	 * @return Returns next unused inumber, or -1 if the block is full.
 	 */
 	long nextInode(){
 		int bitIdx = -1;
-		try{
-			bitIdx = bitset.nextClearBit(0);
-		}catch(IndexOutOfBoundsException e){
-			return -1;
+		
+		lock.lock();
+		try {
+			try{
+				bitIdx = bitset.nextClearBit(0);
+			}catch(IndexOutOfBoundsException e){
+				return -1;
+			}
+			
+			bitset.set(bitIdx);
+			dirty = true;
+		} finally {
+			lock.unlock();
 		}
 		
-		bitset.set(bitIdx);
+		long inumber = bitIndexToInumber(blockIndex, bitIdx); //Convert the bit index to inumber
 		
-		dirty = true;
-		return (8L*blockIndex*Constants.ibmapBlockSizeBytes) + bitIdx;
+		return inumber;
 	}
 	
-	void unlinkInode(int inumber) throws InodeNumberOutOfRangeException{
-		if (inumber < 0 || inumber > (blockIndex*Constants.ibmapBlockSizeBytes + Constants.ibmapBlockSizeBytes))
+	private long bitIndexToInumber(int blockIndex, int bitIndex){
+		return (8L*blockIndex*Constants.ibmapBlockSizeBytes) + bitIndex;
+	}
+	
+	private int inumberToBitIndex(long inumber){
+		return (int)(inumber % (Constants.ibmapBlockSizeBytes * bitsPerByte));
+	}
+	
+	/**
+	 * Marks the inode as unused, which is equivalent to deleting the file.
+	 * @param inumber Inode number associated with the file
+	 * @throws InodeNumberOutOfRangeException if the inumber is out of range of this ibmap block.
+	 */
+	void unlinkInode(long inumber) throws InodeNumberOutOfRangeException{
+		//The inumber associated with the last bit of this ibmap block.
+		long maxInumber = bitIndexToInumber(blockIndex, Constants.ibmapBlockSizeBytes*8 - 1);
+		if (inumber < 0 || inumber > maxInumber)
 			throw new InodeNumberOutOfRangeException();
 		
-		int bitIdx = inumber % (Constants.ibmapBlockSizeBytes*8);
-		bitset.clear(bitIdx);
+		//bitIdx associated with the given inumber
+		int bitIdx = inumberToBitIndex(inumber); //inumber % ibmapBlockSize in bits
 		
-		dirty = true;
+		lock.lock();
+		try{
+			bitset.clear(bitIdx);     //mark the bit as unused
+			dirty = true;
+		}finally{
+			lock.unlock();
+		}
+		
 	}
 	
 	@Override
 	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		int blockSize = Constants.ibmapBlockSizeBytes;
-		if (buffer.remaining() < blockSize)
-			throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
-					+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),blockSize));
-		
-		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
-		buffer.get(bytes);
-		bitset = BitSet.valueOf(bytes); //TODO: Convert it to long array.
+		lock.lock();
+		try {
+			int blockSize = Constants.ibmapBlockSizeBytes;
+			if (buffer.remaining() < blockSize)
+				throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
+						+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),blockSize));
+			
+			byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
+			buffer.get(bytes);
+			bitset = BitSet.valueOf(bytes); //TODO: Convert it to long array.
+		} finally {
+			lock.unlock();
+		}
 	}
 	
 	@Override
 	void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		int blockSize = Constants.ibmapBlockSizeBytes;
-		if (buffer.capacity() < blockSize)
-			throw new InsufficientResourcesException(String.format("Buffer capacity is less than "
-						+ "required: Capacity = %d bytes, required = %d bytes.",buffer.capacity(),blockSize));
-		
-		byte[] bytes = bitset.toByteArray(); //TODO: Convert it to long array.
-		buffer.put(bytes);
-	}
-	
-	/*int consumeInode(){
-		int byteIdx = 0;
-		for(byteIdx=0; byteIdx<bytes.length; byteIdx++){
-			if ((bytes[byteIdx] & 0xFF) != 0xFF)
-				break;
-		}
-		
-		if (byteIdx == bytes.length)
-			return -1;
-		
-		int bitIdx = 0;
-		int b = bytes[byteIdx];
-		for (bitIdx=0; bitIdx<8; bitIdx++){
-			if ((b & 0x01) == 0)
-				break;
+		lock.lock();
+		try {
+			int blockSize = Constants.ibmapBlockSizeBytes;
+			if (buffer.capacity() < blockSize)
+				throw new InsufficientResourcesException(String.format("Buffer capacity is less than "
+							+ "required: Capacity = %d bytes, required = %d bytes.",buffer.capacity(),blockSize));
 			
-			b = b << 1;
+			byte[] bytes = bitset.toByteArray();
+			buffer.put(bytes);
+		} finally {
+			lock.unlock();
 		}
-		
-		bytes[byteIdx] = (byte)((bytes[byteIdx] & 0xFF) | (1 << bitIdx));
-		dirty = true;
-		
-		return (blockIndex*Constants.ibmapBlockSizeBytes) + (byteIdx*8) + bitIdx;
 	}
 	
-	boolean unlinkInode(int inodeNumber) throws InodeNumberOutOfRangeException{
-		if (inodeNumber < 0 || inodeNumber > (blockIndex*Constants.ibmapBlockSizeBytes + Constants.ibmapBlockSizeBytes))
-			throw new InodeNumberOutOfRangeException();
-		
-		int bitNumber = inodeNumber % (Constants.ibmapBlockSizeBytes*8);
-		int byteIdx = bitNumber / 8;
-		int bitIdx = bitNumber % 8;
-		
-		boolean alreadyClear = ~(bytes[byteIdx] & 0xFF) == (1 << bitIdx);
-		bytes[byteIdx] = (byte)(~(1 << bitIdx) & bytes[byteIdx]);
-		
-		return alreadyClear;
-	}*/
-	
+	/**
+	 * Bootstraps the ibmap blocks for this machine. This should be called only once when the filesystem
+	 * is formatted for the first use. It creates ibmap block files in the local storage at the
+	 * path localPath().
+	 * 
+	 * @throws IOException
+	 */
 	static void bootstrap() throws IOException{
 		if (bootstraped)
 			return;
@@ -148,7 +169,7 @@ public class Ibmap extends Block{
 	
 	@Override
 	String localPath(){
-		return Constants.ibmapsPath + "/" + name(blockIndex);
+		return Constants.ibmapsPath +File.separator+ name(blockIndex);
 	}
 	
 	@Override

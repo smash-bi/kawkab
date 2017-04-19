@@ -1,9 +1,12 @@
 package kawkab.fs.api;
 
 import kawkab.fs.commons.Constants;
+import kawkab.fs.core.BlockID;
 import kawkab.fs.core.Cache;
 import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.Inode;
 import kawkab.fs.core.InodesBlock;
+import kawkab.fs.core.Block.BlockType;
 import kawkab.fs.core.exceptions.InvalidArgumentsException;
 import kawkab.fs.core.exceptions.InvalidFileModeException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
@@ -14,26 +17,56 @@ public final class FileHandle {
 	private long inumber;
 	private FileMode fileMode;
 	private long readOffsetInFile;
+	private Cache cache;
 	
 	public FileHandle(long inumber, FileMode mode){
 		this.inumber = inumber;
 		this.fileMode = mode;
+		this.cache = Cache.instance();
 	}
 	
 	/**
 	 * Reads data into the buffer
 	 * @param buffer
-	 * @param length Number of bytes to read from the file
+	 * @param length Number of bytes to read from the file.
 	 * @return Number of bytes read from the file
 	 */
-	public int read(byte[] buffer, int length){
-		int inodesBlockNum = (int)(inumber / Constants.inodesPerBlock);
-		Cache cache = Cache.instance();
-		InodesBlock block = cache.getInodesBlock(inodesBlockNum);
+	public synchronized int read(byte[] buffer, int length){
+		/*1. Borrow InodesBlock from cache
+		    2. Acquire InodesBlock lock
+		      3. Get the pointer to the dataBlock or the indirectBlock
+		      4. Get the current fileSize, which is the maximum byte that a read operation
+		         can serve.
+		    5. Release InodesBlock lock
+		  6. Return inodesBlock to the cache
+		  7. Borrow indirectBlock from the cache
+		    8. Get the pointer to the dataBlock
+		  9. Return the indirectBlock to the cache
+		  10. Borrow DataBlock from the cache
+		    11. Read data
+		  12. Return DataBlock to the cache*/
+		int blockIndex = (int)(inumber / Constants.inodesPerBlock);
+		
+		Inode inode = null;
+		long fileSize = 0;
+		
+		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, blockIndex, InodesBlock.name(blockIndex), BlockType.InodeBlock);
+		try (InodesBlock block = (InodesBlock)cache.acquireBlock(id)) {
+			block.lock();
+			try {
+				inode = block.getInode(inumber);
+				fileSize = inode.fileSize();
+			} finally {
+				block.unlock();
+			}
+		}
+		
+		if (readOffsetInFile + length >= fileSize)
+			length = (int)(fileSize - readOffsetInFile);
 		
 		int bytesRead = 0;
 		try {
-			bytesRead = block.read(inumber, buffer, length, readOffsetInFile);
+			bytesRead = inode.read(buffer, length, readOffsetInFile);
 		} catch (InvalidFileOffsetException e) {
 			e.printStackTrace();
 		} catch (InvalidArgumentsException e) {
@@ -49,7 +82,7 @@ public final class FileHandle {
 	 * Seek the read pointer to the byteOffset bytes in the file
 	 * @param byteOffset
 	 */
-	public void seekBytes(long byteOffset){
+	public synchronized void seekBytes(long byteOffset){
 		readOffsetInFile = byteOffset;
 	}
 	
@@ -128,7 +161,7 @@ public final class FileHandle {
 	 * Move the read pointer to numBytes relative to its current position
 	 * @param bytes number of bytes to move the read pointer
 	 */
-	public void relativeSeek(long numBytes){
+	public synchronized void relativeSeek(long numBytes){
 		readOffsetInFile = readOffsetInFile + numBytes;
 	}
 	
@@ -143,33 +176,86 @@ public final class FileHandle {
 	 * @throws InvalidFileOffsetException 
 	 * @throws InvalidFileModeException 
 	 */
-	public int append(byte[] data, int offset, int length) throws OutOfMemoryException, 
+	public synchronized int append(byte[] data, int offset, int length) throws OutOfMemoryException, 
 									MaxFileSizeExceededException, InvalidFileOffsetException, 
 									InvalidFileModeException{
-		if (fileMode != FileMode.APPEND){
+		/*- File Append
+		  1. Borrow InodesBlock from the cache
+		    2. Acquire InodesBlock lock
+		      3. If file is currently being updated, wait on an updateCondition
+		      4. Otherwise, mark the file as being updated
+		    5. Release InodesBlock lock
+		    6. Allocate and borrow necessary indirectBlocks from the cache
+		    7. Allocate and borrow dataBlocks from the cache
+		      8. update data
+		      9. Mark datablock as dirty
+		    10. Return DataBlock to the cache
+		    11. Mark indirectBlocks dirty as required
+		    12. Return indirectBlocks to the cache
+		    13. Acquire InodesBlock lock
+		      14. Update fileSize and other information
+		    16. Mark inodesBlock as dirty
+		    15. Release InodesBlock lock
+		  17. Return inodesBlock to the cache*/
+		if (fileMode != FileMode.APPEND) {
 			throw new InvalidFileModeException();
 		}
 		
-		int len = 0;
+		/*int len = 0;
 		int inodesBlockNum = (int)(inumber / Constants.inodesPerBlock);
-		Cache cache = Cache.instance();
-		try(InodesBlock block = cache.getInodesBlock(inodesBlockNum)) {
+		try (InodesBlock block = cache.getInodesBlock(inodesBlockNum)) {
 			len = block.append(inumber, data, offset, length);
 		}
-		return len;
+		return len;*/
+		
+		int appendedBytes = 0;
+		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
+		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, inodesBlockIdx, InodesBlock.name(inodesBlockIdx), BlockType.InodeBlock);
+		try (InodesBlock block = (InodesBlock)cache.acquireBlock(id)) {
+			block.lock();
+			try {
+				//TODO: 3. If file is currently being updated, wait on an updateCondition
+			    //TODO: 4. Otherwise, mark the file as being updated
+			} finally {
+				block.unlock();
+			}
+			
+			Inode inode = block.getInode(inumber);
+			appendedBytes = inode.append(data, offset, length);
+			
+			if (appendedBytes > 0) {
+				block.lock();
+				try {
+					inode.updateSize(appendedBytes);
+					block.markDirty();
+				} finally {
+					block.unlock();
+				}
+			}
+		}
+		
+		return appendedBytes;
 	}
 	
-	public long size(){
-		int inodesBlockNum = (int)(inumber / Constants.inodesPerBlock);
-		Cache cache = Cache.instance();
+	/**
+	 * @return Returns file size in bytes.
+	 */
+	public synchronized long size(){
+		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
 		long size = 0;
-		InodesBlock block = cache.getInodesBlock(inodesBlockNum);
-		size = block.fileSize(inumber);
+		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, inodesBlockIdx, InodesBlock.name(inodesBlockIdx), BlockType.InodeBlock);
+		try(InodesBlock block = (InodesBlock) cache.acquireBlock(id)) {
+			size = block.fileSize(inumber);
+		}
 		
 		return size;
 	}
 	
-	public long readOffset(){
+	/**
+	 * @return Returns the current value of the read pointer; the file offset in bytes from where 
+	 * the read function starts reading. 
+	 */
+	public synchronized long readOffset(){
 		return readOffsetInFile;
 	}
 	

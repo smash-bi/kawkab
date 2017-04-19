@@ -27,7 +27,7 @@ public class Filesystem {
 		return instance;
 	}
 	
-	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException{
+	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException, IOException{
 		//TODO: Validate input
 		long inumber = namespace.openFile(filename);
 		FileHandle file = new FileHandle(inumber, mode);
@@ -57,6 +57,7 @@ public class Filesystem {
 		Namespace.shutdown();
 		Ibmap.shutdown();
 		InodesBlock.shutdown();
+		Cache.instance().shutdown();
 		
 		closed = true;
 	}

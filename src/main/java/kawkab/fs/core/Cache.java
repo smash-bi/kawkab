@@ -1,23 +1,25 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.Deque;
+import java.util.LinkedList;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
-import kawkab.fs.commons.Constants;
-
-public class Cache extends LinkedHashMap<String, Block> {
+public class Cache{
 	private static Cache instance;
-	//private Map<String, Block> cache;
 	private LocalStore store;
-	//private LinkedBlockingQueue<Block> dirtyBlocks;
-	//private Thread blocksWriter;
 	private volatile boolean stop;
+	private LRUCache cache;
+	private Lock cacheLock;
+	private Deque<CachedItem> evictedItems;
 	
 	private Cache(){
-		super(Constants.maxBlocksInCache+1, 1.1f, true);
 		store = LocalStore.instance();
+		evictedItems = new LinkedList<CachedItem>();
+		cache = new LRUCache(evictedItems);
+		cacheLock = new ReentrantLock();
+		
 		//dirtyBlocks = new LinkedBlockingQueue<Block>();
 		//runBlocksWriter();
 	}
@@ -30,151 +32,135 @@ public class Cache extends LinkedHashMap<String, Block> {
 		return instance;
 	}
 	
-	public InodesBlock getInodesBlock(int blockNumber){
-		InodesBlock block = (InodesBlock)getFromCache(InodesBlock.name(blockNumber));
-		
-		if (block == null){
-			try {
-				block = new InodesBlock(blockNumber);
-				store.readBlock(block);
-				putInCache(block.name(), block);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-		
-		return block;
+	public DataBlock newDataBlock(){
+		return (DataBlock)acquireBlock(null, true);
 	}
 	
-	Ibmap getIbmap(int blockIndex){
-		Ibmap block = (Ibmap)getFromCache(Ibmap.name(blockIndex));
-		if (block == null){
-			try {
-				block = new Ibmap(blockIndex);
-				store.readBlock(block);
-				putInCache(block.name(), block);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-		return block;
+//	private DataBlock createDataBlock(){
+//		UUID uuid = UUID.randomUUID();
+//		long uuidHigh = uuid.getMostSignificantBits();
+//		long uuidLow = uuid.getLeastSignificantBits();
+//		DataBlock block = new DataBlock(new BlockID(uuidHigh, uuidLow, DataBlock.name(uuidHigh, uuidLow), BlockType.DataBlock));
+//		
+//		//We should add the block in cache and skip writing to L2 cache here.
+//		/*try {
+//			store.writeBlock(block);
+//		} catch (IOException e) {
+//			e.printStackTrace();
+//		}*/
+//		
+//		return block;
+//	}
+	
+	
+	/**
+	 * Pre-condition: The block must already exist in the system. This function does not create a 
+	 * new block. If the block is not in cache, this function reads the block from next level
+	 * storate and puts the block in the cache.
+	 * 
+	 * @param blockID
+	 * @param type
+	 * @return
+	 */
+	public Block acquireBlock(BlockID blockID){
+		return acquireBlock(blockID, false);
 	}
 	
-	DataBlock getDataBlock(long uuidHigh, long uuidLow){
-		DataBlock block = (DataBlock)getFromCache(DataBlock.name(uuidHigh, uuidLow));
-		if (block == null){
-			try {
-				block = new DataBlock(uuidHigh, uuidLow);
-				store.readBlock(block);
-				putInCache(block.name(), block);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-		return block;
-	}
-	
-	DataBlock newDataBlock(){
-		UUID uuid = UUID.randomUUID();
-		DataBlock block = new DataBlock(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+	private Block acquireBlock(BlockID blockID, boolean newDataBlock){
+		CachedItem cached = null;
+		boolean wasCached = true;
 		
-		/*try {
-			store.writeBlock(block);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}*/
-		
-		putInCache(block.name(), block);
-		
-		//System.out.println("\t\t\t Created data block " + uuidStr);
-		return block;
-	}
-	
-	void addDirty(Block block){
-		//dirtyBlocks.add(block);
+		cacheLock.lock();
 		try {
-			block.acquireWriteLock();
-			try {
-				store.writeBlock(block);
-			} catch (IOException e) {
-				e.printStackTrace();
+			if (!newDataBlock) {
+				cached = cache.get(blockID.key);
 			}
-			block.clearDirty();
-		} finally {
-			block.releaseWriteLock();
-		}
-	}
-	
-	private synchronized Block getFromCache(String id){
-		Block block = get(id);
-		return block;
-	}
-	
-	private synchronized void putInCache(String id, Block block){
-		put(id, block);
-	}
-	
-	@Override
-	protected boolean removeEldestEntry(Map.Entry<String, Block> eldest) {
-		boolean remove = super.size() > Constants.maxBlocksInCache;
-		Block block = eldest.getValue();
-		if (remove && block.dirty()){
-			//dirtyBlocks.add(eldest.getValue());
-			addDirty(block);
-			//TODO: if a block is dirty, do not evict.
-		}
-		
-		return remove;
-	}
-	
-	/*private void runBlocksWriter(){
-		blocksWriter = new Thread(){
-			public void run(){
-				while(!stop){
-					Block block = null;
-					try {
-						block = dirtyBlocks.take();
-					} catch (InterruptedException e) {
-						break;
-					}
-					
-					try {
-						if (block.dirty()) {
-							store.writeBlock(block);
-							block.clearDirty();
-						}
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
+			
+			//If the block is not cached
+			if (cached == null){
+				wasCached = false;
+				if (newDataBlock){
+					blockID = DataBlock.randomID();
 				}
+				
+				Block block = Block.newBlock(blockID);
+				cached = new CachedItem(block);
+				cache.put(block.name(), cached);
 			}
-		};
-		blocksWriter.start();
-	}*/
-	
-	void stop(){
-		System.out.println("Closing cache.");
-		stop = true;
-		/*if (blocksWriter != null){
-			blocksWriter.interrupt();
-			try {
-				blocksWriter.join();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-		}*/
+			cached.lock();
+		} finally {
+			cacheLock.unlock();
+		}
 		
-		for (Block block : this.values()){
-			if (block.dirty()){
+		cached.incrementRefCnt();
+		
+		if (wasCached) {
+			cached.unlock(); //FIXME: Should it  not be in the finally block???
+			return cached.block();
+		}
+		
+		CachedItem toEvict = evictedItems.poll(); //FIXME: We need a dedicated evictor that writes to L2 if the evicted block is dirty
+		
+		if (toEvict != null && toEvict.block().dirty()) {
+			try {
+				//FIXME: This should be done by another thread.
+				store.writeBlock(toEvict.block());
+			} catch (IOException e) {
+				e.printStackTrace(); //FIXME: How to handle this exception? Should throw or what???
+			}
+		}
+		
+		if (!newDataBlock) {
+			try {
+				store.readBlock(cached.block());
+			} catch (IOException e) {
+				e.printStackTrace(); //FIXME: How to handle this exception? Should throw or what???
+			}
+		}
+		
+		cached.unlock(); //FIXME: Should it  not be in the finally block???
+		
+		return cached.block();
+	}
+	
+	public void releaseBlock(BlockID blockID){
+		CachedItem cached = null;
+		
+		cacheLock.lock();
+		try {
+			cached = cache.get(blockID.key);
+			assert cached != null;
+			cached.lock();
+			cached.decrementRefCnt();
+			cached.unlock();
+		} finally {
+			cacheLock.unlock();
+		}
+	}
+	
+	public void flush(){
+		cacheLock.lock();
+		for (CachedItem cached : cache.values()){
+			if (cached.block().dirty()){
 				try {
-					store.writeBlock(block);
+					store.writeBlock(cached.block());
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
 			}
 		}
+		cacheLock.unlock();
+	}
+	
+	public void shutdown(){
+		System.out.println("Closing cache.");
+		stop = true;
 		
-		this.clear();
+		flush();
+		
+		cacheLock.lock();
+		cache.clear();
+		cacheLock.unlock();
 		
 		/*Block block = null;
 		while((block=dirtyBlocks.poll()) != null){

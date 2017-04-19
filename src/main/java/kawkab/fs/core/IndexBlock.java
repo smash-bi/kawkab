@@ -2,6 +2,7 @@ package kawkab.fs.core;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
+import kawkab.fs.core.Block.BlockType;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 
@@ -11,8 +12,7 @@ public class IndexBlock {
 	//private long uuidHigh;
 	//private long uuidLow;
 	private final int indexLevel;
-	private final long uuidHigh; //UUID of the dataBlock of this index
-	private final long uuidLow;
+	private final BlockID uuid; //UUID of the dataBlock of this index
 	//private int pointersAdded;
 	//private long blocksCount = 0; //Total blocks added under this index.
 	//private static int headerSize = 4+4+8; //indexLevel, pointersAdded, blocksCount.
@@ -30,11 +30,9 @@ public class IndexBlock {
 	
 	//private Cache cache;
 	
-	IndexBlock(long dataBlockUuidHigh, long dataBlockUuidLow, int indexLevel){
+	IndexBlock(BlockID uuid, int indexLevel){
 		assert indexLevel > 0;
-		
-		this.uuidHigh = dataBlockUuidHigh;
-		this.uuidLow = dataBlockUuidLow;
+		this.uuid = uuid;
 		this.indexLevel = indexLevel;
 	}
 	
@@ -55,12 +53,12 @@ public class IndexBlock {
 		}
 		
 		//Convert block number according to this index level.
-		long blockInThisIndex = adjustBlockNumber(blockNumber) % Commons.maxBlocksCount(indexLevel);
+		long blockInThisIndex = blockInSubtree(blockNumber) % Commons.maxBlocksCount(indexLevel);
 		long blocksPerPointer = Commons.maxBlocksCount(indexLevel-1);
 		long indexPointer = blockInThisIndex / blocksPerPointer;
 		
 		Cache cache = Cache.instance();
-		try(DataBlock thisIndexBlock = cache.getDataBlock(uuidHigh, uuidLow)) { //Every index block closes its own data block and flushes to disk.
+		try(DataBlock thisIndexBlock = (DataBlock)cache.acquireBlock(uuid)) { //Every index block closes its own data block and flushes to disk.
 			int offsetInBlock = (int)indexPointer * pointerSizeBytes;
 			long pointerUuidHigh = thisIndexBlock.readLong(offsetInBlock);
 			long pointerUuidLow = thisIndexBlock.readLong(offsetInBlock+8);
@@ -68,11 +66,12 @@ public class IndexBlock {
 			IndexBlock nextIndexBlock = null;
 			if (pointerUuidHigh == 0 && pointerUuidLow == 0){
 				DataBlock indexBlock = cache.newDataBlock();
-				nextIndexBlock = new IndexBlock(indexBlock.uuidHigh(), indexBlock.uuidLow(), indexLevel-1);
-				thisIndexBlock.appendLong(nextIndexBlock.uuidHigh, offsetInBlock);
-				thisIndexBlock.appendLong(nextIndexBlock.uuidLow, offsetInBlock+8);
+				nextIndexBlock = new IndexBlock(indexBlock.uuid(), indexLevel-1);
+				thisIndexBlock.appendLong(nextIndexBlock.uuid.uuidHigh, offsetInBlock);
+				thisIndexBlock.appendLong(nextIndexBlock.uuid.uuidLow, offsetInBlock+8);
 			}else{
-				nextIndexBlock = new IndexBlock(pointerUuidHigh, pointerUuidLow, indexLevel-1);
+				BlockID pointerBlockID = new BlockID(pointerUuidHigh, pointerUuidLow, DataBlock.name(pointerUuidHigh, pointerUuidLow), BlockType.DataBlock);
+				nextIndexBlock = new IndexBlock(pointerBlockID, indexLevel-1);
 			}
 			
 			//System.out.println(String.format("\t\t\t %d => Adding block %d->%d, indexPointer %d, next uuid %s", 
@@ -85,36 +84,39 @@ public class IndexBlock {
 	synchronized void appendDataBlock(DataBlock dataBlock, long globalBlockNumber) throws IndexBlockFullException{
 		assert indexLevel == 1;
 		
-		int blockNumber = (int)(adjustBlockNumber(globalBlockNumber) % Commons.maxBlocksCount(1));
+		int blockNumber = (int)(blockInSubtree(globalBlockNumber) % Commons.maxBlocksCount(1));
 		int offsetInIdxBlock = (int)(blockNumber) * pointerSizeBytes;
 		
 		//System.out.println(String.format("\t\t\t\t 1 => Adding block %d->%d:%s at offset %d", 
 		//		globalBlockNumber, blockNumber,Commons.uuidToString(dataBlock.uuidHigh(), dataBlock.uuidLow()), offsetInIdxBlock));
 		
 		Cache cache = Cache.instance();
-		try (DataBlock thisIndexBlock = cache.getDataBlock(uuidHigh, uuidLow)) {
-			thisIndexBlock.appendLong(dataBlock.uuidHigh(), offsetInIdxBlock);
-			thisIndexBlock.appendLong(dataBlock.uuidLow(), offsetInIdxBlock + 8);
+		try (DataBlock thisIndexBlock = (DataBlock)cache.acquireBlock(uuid)) {
+			thisIndexBlock.appendLong(dataBlock.uuid().uuidHigh, offsetInIdxBlock);
+			thisIndexBlock.appendLong(dataBlock.uuid().uuidLow, offsetInIdxBlock + 8);
 		}
 	}
 	
-	long[] getBlockIDByByte(long offsetInFile) throws InvalidFileOffsetException{
+	BlockID getBlockIDByByte(long offsetInFile) throws InvalidFileOffsetException{
 		//TODO: Convert this recursive process in an iterative loop in the INode function.
 		
 		long blockInFile = offsetInFile / Constants.dataBlockSizeBytes;
-		long blockInThisIndex = adjustBlockNumber(blockInFile) % Commons.maxBlocksCount(indexLevel);
+		long blockInThisIndex = blockInSubtree(blockInFile) % Commons.maxBlocksCount(indexLevel);
 		
 		if (indexLevel == 1){
 			int offsetInIndexBlock = (int)(blockInThisIndex) * pointerSizeBytes;
 			Cache cache = Cache.instance();
-			DataBlock thisIndexBlock = cache.getDataBlock(uuidHigh, uuidLow);
-			long uuidHigh = thisIndexBlock.readLong(offsetInIndexBlock);
-			long uuidLow = thisIndexBlock.readLong(offsetInIndexBlock+8);
+			long uuidHigh = 0;
+			long uuidLow = 0;
+			try(DataBlock thisIndexBlock = (DataBlock)cache.acquireBlock(uuid)) {
+				uuidHigh = thisIndexBlock.readLong(offsetInIndexBlock);
+				uuidLow = thisIndexBlock.readLong(offsetInIndexBlock+8);
+			}
 			
 			//System.out.println(String.format("\t\t\t\t %d <== %d : %d->%d, block uuid %s", indexLevel, offsetInFile, 
 			//		blockInFile, blockInThisIndex, Commons.uuidToString(uuidHigh, uuidLow)));
 			
-			return new long[]{uuidHigh, uuidLow};
+			return new BlockID(uuidHigh, uuidLow, DataBlock.name(uuidHigh, uuidLow), BlockType.DataBlock);
 		}
 		
 		//Convert block number according to this index level.
@@ -122,11 +124,14 @@ public class IndexBlock {
 		long indexPointerOffset = blockInThisIndex / blocksPerPointer * pointerSizeBytes;
 		
 		Cache cache = Cache.instance();
-		DataBlock thisIndexBlock = cache.getDataBlock(uuidHigh, uuidLow);
-		
-		long pointerUuidHigh = thisIndexBlock.readLong(indexPointerOffset);
-		long pointerUuidLow = thisIndexBlock.readLong(indexPointerOffset+8);
-		IndexBlock nextIndexBlock = new IndexBlock(pointerUuidHigh, pointerUuidLow, indexLevel-1);
+		long pointerUuidHigh = 0;
+		long pointerUuidLow = 0;
+		try (DataBlock thisIndexBlock = (DataBlock)cache.acquireBlock(uuid)) {
+			pointerUuidHigh = thisIndexBlock.readLong(indexPointerOffset);
+			pointerUuidLow = thisIndexBlock.readLong(indexPointerOffset+8);
+		}
+		BlockID pointerBlockID = new BlockID(pointerUuidHigh, pointerUuidLow, DataBlock.name(pointerUuidHigh, pointerUuidLow), BlockType.DataBlock);
+		IndexBlock nextIndexBlock = new IndexBlock(pointerBlockID, indexLevel-1);
 		
 		//System.out.println(String.format("\t\t\t\t\t %d <== %d : %d->%d, next uuid %s", indexLevel, offsetInFile, 
 		//		blockInFile, blockInThisIndex, Commons.uuidToString(pointerUuidHigh, pointerUuidLow)));
@@ -138,7 +143,7 @@ public class IndexBlock {
 		return null;
 	}
 	
-	private long adjustBlockNumber(long blockNumber){
+	private long blockInSubtree(long blockNumber){
 		long indirectBlocksLimit = Constants.directBlocksPerInode + Commons.maxBlocksCount(1);
 		long doubleIndirectBlocksLimit = indirectBlocksLimit + Commons.maxBlocksCount(2);
 		
@@ -183,11 +188,7 @@ public class IndexBlock {
 		return lastBlock.creationTime();
 	}*/
 	
-	long uuidHigh(){
-		return uuidHigh;
-	}
-	
-	long uuidLow(){
-		return uuidLow;
+	BlockID uuid(){
+		return uuid;
 	}
 }

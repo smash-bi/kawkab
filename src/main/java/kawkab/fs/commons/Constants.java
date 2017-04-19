@@ -22,12 +22,15 @@ public class Constants {
 	
 	public static int maxBlocksInCache = 1000;
 	
-	public static final String basePath = "/tmp/kawkab";
+	public static final String basePath = "/ssd1/sajjad/kawkab";
 	public static final String ibmapsPath = basePath+"/ibmaps";
 	public static final String inodeBlocksPath = basePath+"/inodes";
 	public static final String blocksPath = basePath+"/blocks";
 	public static final String namespacePath = basePath+"/namespace";
 	public static final int inodeBlocksPerDirectory = 1000;
+	
+	public static final long ibmapUuidHigh = 1; //High bits of uuid for ibmap. The low bits are the blockIndex
+	public static final long inodesBlocksUuidHigh = 2;  //High bits of uuid for inodesBlock. The low bits are the blockIndex
 	
 	public static void printConfig(){
 		System.out.println(String.format("Data block size MB ....... = %d",dataBlockSizeBytes/1024/1024));
