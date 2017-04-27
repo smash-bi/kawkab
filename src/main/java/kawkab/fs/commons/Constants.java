@@ -20,7 +20,7 @@ public class Constants {
 	public static final int inodeBlocksPerMachine = ibmapBlockSizeBytes*ibmapBlocksPerMachine*8/inodesPerBlock; //FIXME: Calculate this based on the maximum number of files supported by a machine
 	public static int inodesBlocksRangeStart = 0;
 	
-	public static int maxBlocksInCache = 1000;
+	public static int maxBlocksInCache = 100;
 	
 	public static final String basePath = "/ssd1/sajjad/kawkab";
 	public static final String ibmapsPath = basePath+"/ibmaps";

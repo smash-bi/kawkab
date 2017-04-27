@@ -1,39 +1,53 @@
 package kawkab.fs.core;
 
-import java.util.Deque;
 import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Queue;
 
 import kawkab.fs.commons.Constants;
 
+@SuppressWarnings("serial")
 public class LRUCache extends LinkedHashMap<String, CachedItem> {
-	private Deque<CachedItem> evictedItems;
+	private Queue<CachedItem> evictedItems;
 	
-	public LRUCache(Deque<CachedItem> evictedItems){
+	public LRUCache(Queue<CachedItem> evictedItems){
 		super(Constants.maxBlocksInCache+1, 1.1f, true);
 		this.evictedItems = evictedItems;
 	}
 	
 	@Override
-	protected boolean removeEldestEntry(Map.Entry<String, CachedItem> eldest) {
-		boolean remove = super.size() > Constants.maxBlocksInCache;
-		if (!remove)
-			return remove;
+	protected boolean removeEldestEntry(Entry<String, CachedItem> eldest) {
+		if (!(super.size() >= Constants.maxBlocksInCache))
+			return false;
 		
 		CachedItem toEvict = eldest.getValue();
 		
-		
-		//FIXME: What if the refCount of the toEvict is not zero??? We should not evict in that case, and search the next LRU where refCount is zero.
-		
-		//TODO: check if the refCount of toEvict is zero or not. If not, search and evict the next LRU item that has refCount == 0.
-		if (remove){
-			//addDirty(block);
-			evictedItems.add(toEvict);
-			if (toEvict.refCount() > 0) {
-				System.out.println(" ============> Ref cnt " + toEvict.refCount() + " for " + toEvict.block().name());
+		//addDirty(block);
+		if (toEvict.refCount() > 0) {
+			super.replace(eldest.getKey(), eldest.getValue()); //FIXME: This is not a good approach.
+			//System.out.println(" ============> Ref cnt " + toEvict.refCount() + " for " + toEvict.block().name());
+			
+			int count = 0;
+			int size = super.size();
+			for (Entry<String, CachedItem> entry : super.entrySet()) {
+				count++;
+				CachedItem cached = entry.getValue();
+				if (cached.refCount() == 0) {
+					if (count == size) {//FIXME: We just added the time. We should not remove this item.
+						System.out.println("\t\t\t ---> Evicting just added block.");
+					}
+					super.remove(entry.getKey());
+					evictedItems.add(cached);
+					
+					return false;
+				}
 			}
+			
+			//FIXME: What should we do in this situation? We don't have any block that can be evicted. All the blocks have ref-count > 0.
 		}
 		
-		return remove;
+		evictedItems.add(toEvict);
+		
+		return true;
 	}
 }

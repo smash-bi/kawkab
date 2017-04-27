@@ -22,7 +22,7 @@ public class LocalStore {
 	}
 	
 	public void writeBlock(Block block) throws IOException {
-		System.out.println("\tWriting block: " + block.localPath());
+		System.out.println("\tWriting block to disk: " + block + " - " + block.type());
 		
 		//new Exception().printStackTrace();
 		
@@ -42,7 +42,7 @@ public class LocalStore {
 	}
 	
 	public void readBlock(Block block) throws IOException{
-		System.out.println("\tReading block: " + block.localPath());
+		System.out.println("\tReading block from disk: " + block + " - " + block.type());
 		
 		File file = new File(block.localPath());
 		byte[] bytes = new byte[block.blockSize()];

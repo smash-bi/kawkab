@@ -1,24 +1,28 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
-import java.util.Deque;
-import java.util.LinkedList;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class Cache{
+public class Cache {
 	private static Cache instance;
 	private LocalStore store;
 	private volatile boolean stop;
 	private LRUCache cache;
 	private Lock cacheLock;
-	private Deque<CachedItem> evictedItems;
+	private BlockingQueue<CachedItem> evictedItems;
+	private Thread evictor;
+	//private GuavaCache gcache;
 	
 	private Cache(){
 		store = LocalStore.instance();
-		evictedItems = new LinkedList<CachedItem>();
+		evictedItems = new LinkedBlockingQueue<CachedItem>();
 		cache = new LRUCache(evictedItems);
 		cacheLock = new ReentrantLock();
+		
+		//gcache = GuavaCache.instance();
 		
 		//dirtyBlocks = new LinkedBlockingQueue<Block>();
 		//runBlocksWriter();
@@ -54,10 +58,6 @@ public class Cache{
 	
 	
 	/**
-	 * Pre-condition: The block must already exist in the system. This function does not create a 
-	 * new block. If the block is not in cache, this function reads the block from next level
-	 * storate and puts the block in the cache.
-	 * 
 	 * @param blockID
 	 * @param type
 	 * @return
@@ -67,6 +67,8 @@ public class Cache{
 	}
 	
 	private Block acquireBlock(BlockID blockID, boolean newDataBlock){
+		//long time = System.nanoTime();
+		
 		CachedItem cached = null;
 		boolean wasCached = true;
 		
@@ -85,14 +87,17 @@ public class Cache{
 				
 				Block block = Block.newBlock(blockID);
 				cached = new CachedItem(block);
-				cache.put(block.name(), cached);
-			}
+				cache.put(cached.block().name(), cached);
+			} 
+			
 			cached.lock();
 		} finally {
 			cacheLock.unlock();
 		}
 		
-		cached.incrementRefCnt();
+		if (!newDataBlock) {
+			cached.incrementRefCnt();
+		}
 		
 		if (wasCached) {
 			cached.unlock(); //FIXME: Should it  not be in the finally block???
@@ -120,6 +125,9 @@ public class Cache{
 		
 		cached.unlock(); //FIXME: Should it  not be in the finally block???
 		
+		//time = System.nanoTime() - time;
+		//System.out.println(time/1000);
+		
 		return cached.block();
 	}
 	
@@ -129,9 +137,16 @@ public class Cache{
 		cacheLock.lock();
 		try {
 			cached = cache.get(blockID.key);
+			
+			if (cached == null) {
+				System.out.println(" Releasing non-existing block: " + blockID);
+				new Exception().printStackTrace();
+			}
+			
 			assert cached != null;
 			cached.lock();
 			cached.decrementRefCnt();
+			
 			cached.unlock();
 		} finally {
 			cacheLock.unlock();
@@ -161,16 +176,24 @@ public class Cache{
 		cacheLock.lock();
 		cache.clear();
 		cacheLock.unlock();
-		
-		/*Block block = null;
-		while((block=dirtyBlocks.poll()) != null){
-			if (block.dirty()){
-				try {
-					store.writeBlock(block);
-				} catch (IOException e) {
-					e.printStackTrace();
+	}
+	
+	/*public void runEvictor(){
+		evictor = new Thread(){
+			public void run(){
+				while(!stop) {
+					try {
+						CachedItem item = evictedItems.take();
+						if (item.block().dirty()){
+							store.writeBlock(block);
+						}
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
 				}
 			}
-		}*/
-	}
+		};
+		
+		evictor.start();
+	}*/
 }

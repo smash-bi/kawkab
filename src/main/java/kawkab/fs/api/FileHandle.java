@@ -212,13 +212,13 @@ public final class FileHandle {
 		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
 		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, inodesBlockIdx, InodesBlock.name(inodesBlockIdx), BlockType.InodeBlock);
 		try (InodesBlock block = (InodesBlock)cache.acquireBlock(id)) {
-			block.lock();
-			try {
+			//block.lock();
+			//try {
 				//TODO: 3. If file is currently being updated, wait on an updateCondition
 			    //TODO: 4. Otherwise, mark the file as being updated
-			} finally {
-				block.unlock();
-			}
+			//} finally {
+			//	block.unlock();
+			//}
 			
 			Inode inode = block.getInode(inumber);
 			appendedBytes = inode.append(data, offset, length);

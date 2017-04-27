@@ -15,9 +15,10 @@ public class DataBlock extends Block {
 	
 	private byte[] data;
 	private final static int maxBlockSize = Constants.dataBlockSizeBytes;
+	public long blockNumber; //FIXME: Used for debugging only.
 	
 	DataBlock(BlockID uuid){
-		super(uuid);
+		super(uuid, BlockType.DataBlock);
 		data = new byte[maxBlockSize];
 		
 		//firstAppendTime = -1;
@@ -247,5 +248,10 @@ public class DataBlock extends Block {
 		long uuidHigh = uuid.getMostSignificantBits();
 		long uuidLow = uuid.getLeastSignificantBits();
 		return new BlockID(uuidHigh, uuidLow, DataBlock.name(uuidHigh, uuidLow), BlockType.DataBlock);
+	}
+	
+	@Override
+	public String toString(){
+		return blockNumber+"-"+name();
 	}
 }

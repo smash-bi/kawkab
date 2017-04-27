@@ -15,6 +15,7 @@ public abstract class Block implements AutoCloseable {
 	protected boolean dirty;
 	protected final BlockID id;
 	protected Cache cache = Cache.instance();
+	protected BlockType type; //Used for debugging only.
 	
 	/**
 	 * Acquire the values of this block from the given Buffer. This function loads values of the
@@ -69,9 +70,10 @@ public abstract class Block implements AutoCloseable {
 		return block;
 	}
 	
-	protected Block(BlockID id) {
+	protected Block(BlockID id, BlockType type) {
 		this.id = id;
 		lock = new ReentrantLock();
+		this.type = type;
 	}
 	
 	/**
@@ -112,5 +114,14 @@ public abstract class Block implements AutoCloseable {
 	@Override
 	public void close(){
 		cache.releaseBlock(this.id());
+	}
+	
+	@Override
+	public String toString(){
+		return name();
+	}
+	
+	public BlockType type(){
+		return type;
 	}
 }

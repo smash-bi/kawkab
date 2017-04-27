@@ -30,4 +30,26 @@ public class BlockID {
 	public String toString(){
 		return uuidHigh+"-"+uuidLow+"-"+key;
 	}
+	
+	@Override
+	public boolean equals(Object blockID){
+		System.out.println("===== Block ID equals method ======");
+		
+		if (blockID == null)
+			return false;
+		
+		BlockID id;
+		try {
+			id = (BlockID) blockID;
+		}catch(Exception e){
+			return false;
+		}
+		
+		System.out.println("Comparing " + this + " and " + id);
+		
+		return uuidHigh == id.uuidHigh &&
+				uuidLow == id.uuidLow &&
+				key.equals(id.key) &&
+				type == id.type;
+	}
 }

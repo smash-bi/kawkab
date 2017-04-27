@@ -93,7 +93,7 @@ public class Inode {
 			//System.out.println("  Read at offset: " + offsetInFile);
 			BlockID curBlkUuid = getByFileOffset(offsetInFile);
 			
-			System.out.println("Reading block at offset " + offsetInFile + ": " + curBlkUuid.key);
+			//System.out.println("Reading block at offset " + offsetInFile + ": " + curBlkUuid.key);
 			
 			long blockNumber = offsetInFile/Constants.dataBlockSizeBytes;
 			long nextBlockStart = (blockNumber + 1) * Constants.dataBlockSizeBytes;
@@ -244,6 +244,7 @@ public class Inode {
 		
 		Cache cache = Cache.instance();
 		DataBlock dataBlock = cache.newDataBlock();
+		dataBlock.blockNumber = blocksCount+1;
 		
 		long indirectBlocksLimit = Constants.directBlocksPerInode + Commons.maxBlocksCount(1);
 		long doubleIndirectBlocksLimit = indirectBlocksLimit + Commons.maxBlocksCount(2);
@@ -296,7 +297,7 @@ public class Inode {
 		blocksCount++;
 		lastBlockUuid = dataBlock.uuid();
 		
-		System.out.println("Total file blocks: " + blocksCount);
+		//System.out.println("Total file blocks: " + blocksCount);
 		
 		return dataBlock;
 	}

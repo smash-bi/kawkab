@@ -26,9 +26,8 @@ public class Ibmap extends Block{
 	 * @param blockIndex Index of the Ibmap block for the current machine.
 	 */
 	Ibmap(int blockIndex){
-		super(new BlockID(Constants.ibmapUuidHigh, blockIndex, name(blockIndex), BlockType.IbmapBlock));
+		super(new BlockID(Constants.ibmapUuidHigh, blockIndex, name(blockIndex), BlockType.IbmapBlock), BlockType.IbmapBlock);
 		this.blockIndex = blockIndex;
-		
 	}
 	
 	/**

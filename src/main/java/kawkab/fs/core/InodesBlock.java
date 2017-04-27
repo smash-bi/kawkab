@@ -24,8 +24,9 @@ public class InodesBlock extends Block {
 	 *         system, not relative to this machine.
 	 */
 	InodesBlock(int blockIndex){
-		super(new BlockID(Constants.inodesBlocksUuidHigh, blockIndex, InodesBlock.name(blockIndex), BlockType.InodeBlock));
+		super(new BlockID(Constants.inodesBlocksUuidHigh, blockIndex, InodesBlock.name(blockIndex), BlockType.InodeBlock), BlockType.InodeBlock);
 		this.blockIndex = blockIndex;
+		type = BlockType.InodeBlock;
 		//Must not initialize inodes array in any constructor.
 	}
 	
