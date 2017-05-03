@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.UUID;
 
@@ -17,7 +18,7 @@ public class DataBlock extends Block {
 	//private long lastAppendTime;
 	
 	private RandomAccessFile file;
-	//private MappedByteBuffer buffer;
+	private MappedByteBuffer buffer;
 	private FileChannel channel;
 	//private byte[] data;
 	private final static int maxBlockSize = Constants.dataBlockSizeBytes;
@@ -31,7 +32,7 @@ public class DataBlock extends Block {
 			createIfNotExist();
 			file = new RandomAccessFile(localPath(), "rw");
 			channel = file.getChannel();
-			//buffer = channel.map(FileChannel.MapMode.READ_WRITE, 0, maxBlockSize);
+			buffer = channel.map(FileChannel.MapMode.READ_WRITE, 0, maxBlockSize);
 			//data = buffer.array();
 		} catch (IOException e) { //FIXME: How should we handle this exception?
 			e.printStackTrace();
@@ -59,15 +60,16 @@ public class DataBlock extends Block {
 		
 		int toAppend = length <= capacity ? length : capacity;
 		
-		try {
+		buffer.position(offsetInBlock);
+		buffer.put(data, offset, toAppend);
+		
+		/*try {
 			file.seek(offsetInBlock);
-			
 			//System.out.println(String.format("%d, %d, %d, %d, %d, %d, %d", offset, length, capacity, toAppend, offsetInBlock, file.length(), file.getFilePointer()));
-			
 			file.write(data, offset, toAppend);
 		} catch (IOException e) { //FIXME: Handle exception.
 			e.printStackTrace();
-		}
+		}*/
 		
 		/*for(int i=0; i<toAppend; i++){
 			this.data[offsetInBlock] = data[i+offset];
@@ -95,12 +97,14 @@ public class DataBlock extends Block {
 		buffer.position(offsetInBlock);
 		buffer.putLong(data);*/
 		
-		try {
+		/*try {
 			file.seek(offsetInBlock);
 			file.writeLong(data);
 		} catch (IOException e) { //FIXME: Handle exception.
 			e.printStackTrace();
-		}
+		}*/
+		
+		buffer.putLong(offsetInBlock, data);
 		
 		//FIXME: Do we need to grab a lock to mark the data block as dirty???
 		//lock.lock();
@@ -126,8 +130,10 @@ public class DataBlock extends Block {
 		buffer.position(offsetInBlock);
 		return buffer.getLong();*/
 		
-		file.seek(offsetInBlock);
-		return file.readLong();
+		//file.seek(offsetInBlock);
+		//return file.readLong();
+		
+		return buffer.getLong(offsetInBlock);
 	}
 	
 	synchronized int appendInt(int data, long offsetInFile){
@@ -141,12 +147,14 @@ public class DataBlock extends Block {
 		buffer.position(offsetInBlock);
 		buffer.putInt(data);*/
 		
-		try {
+		/*try {
 			file.seek(offsetInBlock);
 			file.writeInt(data);
 		} catch (IOException e) { //FIXME: Exception
 			e.printStackTrace();
-		}
+		}*/
+		
+		buffer.putInt(offsetInBlock, data);
 		
 		//FIXME: Do we need to grab a lock to mark the data block as dirty???
 		//lock.lock();
@@ -172,8 +180,10 @@ public class DataBlock extends Block {
 		buffer.position(offsetInBlock);
 		return buffer.getInt();*/
 		
-		file.seek(offsetInBlock);
-		return file.readInt();
+		//file.seek(offsetInBlock);
+		//return file.readInt();
+		
+		return buffer.getInt(offsetInBlock);
 	}
 	
 	/**
@@ -201,8 +211,11 @@ public class DataBlock extends Block {
 			dstBuffer[bufferOffset+i] = this.data[offsetInBlock+i];
 		}*/
 		
-		file.seek(offsetInBlock);
-		file.read(dstBuffer, dstBufferOffset, readSize);
+		//file.seek(offsetInBlock);
+		//file.read(dstBuffer, dstBufferOffset, readSize);
+		
+		buffer.position(offsetInBlock);
+		buffer.get(dstBuffer, dstBufferOffset, readSize);
 		
 		return readSize;
 	}
@@ -307,11 +320,6 @@ public class DataBlock extends Block {
 	@Override
 	public String toString(){
 		return blockNumber+"-"+name();
-	}
-	
-	@Override
-	public void close(){
-		super.close();
 	}
 	
 	private void createIfNotExist(){

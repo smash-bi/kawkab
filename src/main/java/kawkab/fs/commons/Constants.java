@@ -5,7 +5,7 @@ import kawkab.fs.core.Inode;
 
 public class Constants {
 	//Default data block size in bytes
-	public static final int dataBlockSizeBytes = 2 * 1024;
+	public static final int dataBlockSizeBytes = 4 * 1024 * 1024;
 	public static final int directBlocksPerInode = 16;
 	public static final int numPointersInIndexBlock = dataBlockSizeBytes/IndexBlock.pointerSizeBytes;
 	
@@ -20,7 +20,7 @@ public class Constants {
 	public static final int inodeBlocksPerMachine = ibmapBlockSizeBytes*ibmapBlocksPerMachine*8/inodesPerBlock; //FIXME: Calculate this based on the maximum number of files supported by a machine
 	public static int inodesBlocksRangeStart = 0;
 	
-	public static int maxBlocksInCache = 100;
+	public static int maxBlocksInCache = 1000;
 	
 	public static final String basePath = "/ssd1/sajjad/kawkab";
 	public static final String ibmapsPath = basePath+"/ibmaps";

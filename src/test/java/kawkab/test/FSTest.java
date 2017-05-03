@@ -27,6 +27,7 @@ public class FSTest {
 		//tester.testMultipleReaders();
 		//tester.testMultipleFiles();
 		tester.testWritePerformance();
+		//tester.testWritePerformanceConcurrentFiles();
 		//tester.testVeryLargeReadWrite();
 		//tester.testFileSeek();
 		tester.testShutdown();
@@ -310,7 +311,7 @@ public class FSTest {
 		
 		Random rand = new Random(0);
 		int bufSize = 8*1024*1024;
-		long dataSize = 16L*bufSize + 3;
+		long dataSize = 64L*bufSize + 3;
 		long appended = 0;
 		
 		byte[] writeBuf = new byte[bufSize];
@@ -326,6 +327,74 @@ public class FSTest {
 		long speed = (long)((dataSize/1024/1024)/(elapsed/1000.0));
 		
 		System.out.println("Write speed = " + speed + " MB/s");
+	}
+	
+	private void testWritePerformanceConcurrentFiles() throws IbmapsFullException, OutOfMemoryException, 
+	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException {
+		System.out.println("----------------------------------------------------------------");
+		System.out.println("            Write Perofrmance Test - Concurrent Files");
+		System.out.println("----------------------------------------------------------------");
+		
+		Filesystem fs = Filesystem.instance().bootstrap();
+		
+		int numFiles = 20;
+		Thread[] workers = new Thread[numFiles];
+		final int bufSize = 8*1024*1024;
+		final long dataSize = 256L*bufSize;
+		
+		long startTime = System.currentTimeMillis();
+		for (int i=0; i<numFiles; i++) {
+			final int id = i;
+			workers[i] = new Thread(){
+				public void run(){
+					try {
+						String filename = new String("/home/smash/testMultipleFiles-"+id);
+						FileOptions opts = new FileOptions();
+						FileHandle file = fs.open(filename, FileMode.APPEND, opts);
+						
+						System.out.println("Opening file: " + filename + ", current size="+file.size());
+						
+						Random rand = new Random(0);
+						long appended = 0;
+						
+						byte[] writeBuf = new byte[bufSize];
+						rand.nextBytes(writeBuf);
+						
+						long startTime = System.currentTimeMillis();
+						
+						while(appended < dataSize) {
+							int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
+							appended += file.append(writeBuf, 0, toWrite);
+							rand.nextBytes(writeBuf);
+						}
+						
+						long elapsed = System.currentTimeMillis() - startTime;
+						long speed = (long)((dataSize/1024/1024)/(elapsed/1000.0));
+						
+						System.out.println("Write speed = " + speed + " MB/s");
+					} catch (Exception e){
+						e.printStackTrace();
+						return;
+					}
+				}
+			};
+			
+			workers[i].start();
+		}
+		
+		for (int i=0; i<workers.length; i++) {
+			try {
+				workers[i].join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		long elapsed = System.currentTimeMillis() - startTime;
+		int speed = (int)((dataSize/1024.0/1024*numFiles)/(elapsed/1000.0));
+		
+		System.out.println("Total Write speed = " + speed + " MB/s");
+		
 	}
 	
 	/*private void testVeryLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, 
