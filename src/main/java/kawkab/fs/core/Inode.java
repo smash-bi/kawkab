@@ -1,5 +1,6 @@
 package kawkab.fs.core;
 
+import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
@@ -25,6 +26,7 @@ public class Inode {
 	private BlockID lastBlockUuid;
 	private boolean dirty; //not saved persistently
 	private long blocksCount; //not saved persistently; blocksCount should be recalculated in fromBuffer().
+	private Cache cache = Cache.instance();
 	
 	public static final long maxFileSize;
 	static {
@@ -49,7 +51,7 @@ public class Inode {
 		lastBlockUuid = new BlockID(0, 0, DataBlock.name(0, 0), BlockType.DataBlock);
 	}
 	
-	BlockID getByFileOffset(long offsetInFile) throws InvalidFileOffsetException {
+	BlockID getByFileOffset(long offsetInFile) throws InvalidFileOffsetException, IOException {
 		if (offsetInFile < 0 || offsetInFile > fileSize) {
 			throw new InvalidFileOffsetException(String.format("Invalid file offset %d. File size is %d bytes.",offsetInFile,fileSize));
 		}
@@ -75,7 +77,7 @@ public class Inode {
 		return tripleIndirectBlock.getBlockIDByByte(offsetInFile);
 	}
 	
-	public int read(byte[] buffer, int length, long offsetInFile) throws InvalidFileOffsetException, InvalidArgumentsException{
+	public int read(byte[] buffer, int length, long offsetInFile) throws InvalidFileOffsetException, InvalidArgumentsException, IOException{
 		//TODO: Check for input bounds
 		if (length <= 0)
 			return 0;
@@ -83,8 +85,6 @@ public class Inode {
 		if (offsetInFile + length > fileSize)
 			throw new InvalidArgumentsException(String.format("File offset + read length is greater "
 					+ "than file size: %d + %d > %d", offsetInFile,length,fileSize));
-		
-		Cache cache = Cache.instance();
 		
 		int bufferOffset = 0;
 		int remaining = length;
@@ -191,28 +191,28 @@ public class Inode {
 	 * @param length Number of bytes to write from the data array
 	 * @return number of bytes appended
 	 * @throws InvalidFileOffsetException 
+	 * @throws IOException 
 	 */
-	public int append(byte[] data, int offset, int length) throws MaxFileSizeExceededException, InvalidFileOffsetException{
+	public int append(byte[] data, int offset, int length) throws MaxFileSizeExceededException, InvalidFileOffsetException, IOException{
 		int remaining = length;
 		int appended = 0;
 		long fileSize = this.fileSize;
 		
-		Cache cache = Cache.instance();
-		
 		while(remaining > 0){
-			int lastBlkCapacity = (int)(fileSize % Constants.dataBlockSizeBytes);
-			if (lastBlkCapacity == 0){
+			int lastBlkCapacity = Constants.dataBlockSizeBytes - (int)(fileSize % Constants.dataBlockSizeBytes);
+			if (fileSize % Constants.dataBlockSizeBytes == 0){
 				try {
-					createNewBlock();
+					createNewBlock(fileSize);
 					lastBlkCapacity = Constants.dataBlockSizeBytes;
 				} catch (IndexBlockFullException e) {
 					e.printStackTrace();
 					return appended;
 				}
 			}
-
+			
 			int bytes;
 			int toAppend = remaining <= lastBlkCapacity ? remaining : lastBlkCapacity;
+			
 			try (DataBlock block = (DataBlock)cache.acquireBlock(lastBlockUuid)) {
 				bytes = block.append(data, offset, toAppend, fileSize);
 			}
@@ -236,13 +236,21 @@ public class Inode {
 		dirty = true;
 	}
 	
-	DataBlock createNewBlock() throws MaxFileSizeExceededException, IndexBlockFullException, InvalidFileOffsetException{
+	/**
+	 * @param fileSize The current fileSize during the last append operation. Note that the
+	 * fileSize instance variable is updated as the last step in the append operation.
+	 * @return Returns the newly created data block.
+	 * @throws MaxFileSizeExceededException
+	 * @throws IndexBlockFullException
+	 * @throws InvalidFileOffsetException
+	 * @throws IOException
+	 */
+	DataBlock createNewBlock(long fileSize) throws MaxFileSizeExceededException, IndexBlockFullException, InvalidFileOffsetException, IOException{
 		//long blocksCount = (long)Math.ceil(1.0*fileSize / Constants.dataBlockSizeBytes);
 		if (fileSize + Constants.dataBlockSizeBytes > maxFileSize){
 			throw new MaxFileSizeExceededException();
 		}
 		
-		Cache cache = Cache.instance();
 		DataBlock dataBlock = cache.newDataBlock();
 		dataBlock.blockNumber = blocksCount+1;
 		
@@ -297,8 +305,6 @@ public class Inode {
 		blocksCount++;
 		lastBlockUuid = dataBlock.uuid();
 		
-		//System.out.println("Total file blocks: " + blocksCount);
-		
 		return dataBlock;
 	}
 	
@@ -315,8 +321,6 @@ public class Inode {
 	 * is being written to the buffer.
 	 */
 	void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		
-		
 		int inodeSize = Constants.inodeSizeBytes;
 		if (buffer.capacity() < inodeSize)
 			throw new InsufficientResourcesException(String.format("Buffer capacity is less than "
@@ -398,7 +402,7 @@ public class Inode {
 		int padLength = Constants.inodeSizeBytes - dataLength;
 		buffer.position(buffer.position()+padLength);
 		
-		inode.blocksCount = inode.fileSize / Constants.dataBlockSizeBytes;
+		inode.blocksCount = (long)Math.ceil(1.0 * inode.fileSize / Constants.dataBlockSizeBytes);
 		
 		return inode;
 	}

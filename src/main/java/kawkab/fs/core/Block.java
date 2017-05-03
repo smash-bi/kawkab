@@ -1,5 +1,6 @@
 package kawkab.fs.core;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -74,6 +75,7 @@ public abstract class Block implements AutoCloseable {
 		this.id = id;
 		lock = new ReentrantLock();
 		this.type = type;
+		dirty = false;
 	}
 	
 	/**
@@ -123,5 +125,23 @@ public abstract class Block implements AutoCloseable {
 	
 	public BlockType type(){
 		return type;
+	}
+	
+	public void loadFromDisk(){
+		LocalStore store = LocalStore.instance();
+		try {
+			store.readBlock(this);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void storeToDisk(){
+		LocalStore store = LocalStore.instance();
+		try {
+			store.writeBlock(this);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 }

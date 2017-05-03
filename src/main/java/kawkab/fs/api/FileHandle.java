@@ -1,5 +1,7 @@
 package kawkab.fs.api;
 
+import java.io.IOException;
+
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.BlockID;
 import kawkab.fs.core.Cache;
@@ -30,8 +32,9 @@ public final class FileHandle {
 	 * @param buffer
 	 * @param length Number of bytes to read from the file.
 	 * @return Number of bytes read from the file
+	 * @throws IOException 
 	 */
-	public synchronized int read(byte[] buffer, int length){
+	public synchronized int read(byte[] buffer, int length) throws IOException{
 		/*1. Borrow InodesBlock from cache
 		    2. Acquire InodesBlock lock
 		      3. Get the pointer to the dataBlock or the indirectBlock
@@ -175,10 +178,11 @@ public final class FileHandle {
 	 * @throws OutOfMemoryException 
 	 * @throws InvalidFileOffsetException 
 	 * @throws InvalidFileModeException 
+	 * @throws IOException 
 	 */
 	public synchronized int append(byte[] data, int offset, int length) throws OutOfMemoryException, 
 									MaxFileSizeExceededException, InvalidFileOffsetException, 
-									InvalidFileModeException{
+									InvalidFileModeException, IOException{
 		/*- File Append
 		  1. Borrow InodesBlock from the cache
 		    2. Acquire InodesBlock lock

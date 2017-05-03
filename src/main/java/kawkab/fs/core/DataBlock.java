@@ -1,7 +1,10 @@
 package kawkab.fs.core;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.UUID;
 
 import kawkab.fs.commons.Commons;
@@ -13,16 +16,31 @@ public class DataBlock extends Block {
 	//private long firstAppendTime;
 	//private long lastAppendTime;
 	
-	private byte[] data;
+	private RandomAccessFile file;
+	//private MappedByteBuffer buffer;
+	private FileChannel channel;
+	//private byte[] data;
 	private final static int maxBlockSize = Constants.dataBlockSizeBytes;
 	public long blockNumber; //FIXME: Used for debugging only.
 	
 	DataBlock(BlockID uuid){
 		super(uuid, BlockType.DataBlock);
-		data = new byte[maxBlockSize];
+		//data = new byte[maxBlockSize];
+		
+		try {
+			createIfNotExist();
+			file = new RandomAccessFile(localPath(), "rw");
+			channel = file.getChannel();
+			//buffer = channel.map(FileChannel.MapMode.READ_WRITE, 0, maxBlockSize);
+			//data = buffer.array();
+		} catch (IOException e) { //FIXME: How should we handle this exception?
+			e.printStackTrace();
+		}
 		
 		//firstAppendTime = -1;
 		//lastAppendTime = -1;
+		
+		//System.out.println(" Opened block: " + name());
 	}
 	
 	/**
@@ -39,93 +57,106 @@ public class DataBlock extends Block {
 		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
 		int capacity = Constants.dataBlockSizeBytes - offsetInBlock;
 		
-		int bytes = length <= capacity ? length : capacity;
+		int toAppend = length <= capacity ? length : capacity;
 		
-		for(int i=0; i<bytes; i++){
-			this.data[offsetInBlock] = data[i+offset];
-			offsetInBlock++;
+		try {
+			file.seek(offsetInBlock);
+			
+			//System.out.println(String.format("%d, %d, %d, %d, %d, %d, %d", offset, length, capacity, toAppend, offsetInBlock, file.length(), file.getFilePointer()));
+			
+			file.write(data, offset, toAppend);
+		} catch (IOException e) { //FIXME: Handle exception.
+			e.printStackTrace();
 		}
 		
-		/*
-		long time = System.currentTimeMillis();
-		lastAppendTime = time;
-		if (offsetInBlock == length || firstAppendTime == -1)
-			firstAppendTime = time;*/
+		/*for(int i=0; i<toAppend; i++){
+			this.data[offsetInBlock] = data[i+offset];
+			offsetInBlock++;
+		}*/
 		
 		//FIXME: Do we need to grab a lock to mark the data block as dirty???
-		lock.lock();
+		//lock.lock();
 		dirty = true;
-		lock.unlock();
+		//lock.unlock();
 		
-		return bytes;
+		//System.out.println("  Append: " + name() + " - " + toAppend);
+		
+		return toAppend;
 	}
 	
 	synchronized int appendLong(long data, long offsetInFile){
-		//TODO: check input bounds
-		
 		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
 		int capacity = Constants.dataBlockSizeBytes - offsetInBlock;
-		if (capacity < 8)
+		int longSize = Long.BYTES;
+		if (capacity < longSize)
 			return 0;
 		
-		ByteBuffer buffer = ByteBuffer.wrap(this.data);
+		/*ByteBuffer buffer = ByteBuffer.wrap(this.data);
 		buffer.position(offsetInBlock);
-		buffer.putLong(data);
+		buffer.putLong(data);*/
 		
-		/*long time = System.currentTimeMillis();
-		lastAppendTime = time;
-		if (offsetInBlock == 0 || firstAppendTime == -1)
-			firstAppendTime = time;*/
+		try {
+			file.seek(offsetInBlock);
+			file.writeLong(data);
+		} catch (IOException e) { //FIXME: Handle exception.
+			e.printStackTrace();
+		}
 		
 		//FIXME: Do we need to grab a lock to mark the data block as dirty???
-		lock.lock();
+		//lock.lock();
 		dirty = true;
-		lock.unlock();
+		//lock.unlock();
 		
-		return 8;
+		return longSize;
 	}
 	
-	synchronized long readLong(long offsetInFile) throws InvalidFileOffsetException{
+	synchronized long readLong(long offsetInFile) throws InvalidFileOffsetException, IOException{
 		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
 		
 		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
 		int blockSize = Constants.dataBlockSizeBytes;
 		
 		if (offsetInBlock >= blockSize || 
-				offsetInBlock+8 > blockSize || offsetInBlock < 0)
+				offsetInBlock+Long.BYTES > blockSize || offsetInBlock < 0)
 			throw new InvalidFileOffsetException(
 					String.format("File Offset %d is invalid. Data block size = %d bytes.", 
 							offsetInBlock, blockSize));
 		
-		ByteBuffer buffer = ByteBuffer.wrap(this.data);
+		/*ByteBuffer buffer = ByteBuffer.wrap(this.data);
 		buffer.position(offsetInBlock);
-		return buffer.getLong();
+		return buffer.getLong();*/
+		
+		file.seek(offsetInBlock);
+		return file.readLong();
 	}
 	
 	synchronized int appendInt(int data, long offsetInFile){
 		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
 		int capacity = Constants.dataBlockSizeBytes - offsetInBlock;
-		if (capacity < 4)
+		int intSize = Integer.BYTES;
+		if (capacity < intSize)
 			return 0;
 		
-		ByteBuffer buffer = ByteBuffer.wrap(this.data);
+		/*ByteBuffer buffer = ByteBuffer.wrap(this.data);
 		buffer.position(offsetInBlock);
-		buffer.putInt(data);
+		buffer.putInt(data);*/
 		
-		/*long time = System.currentTimeMillis();
-		lastAppendTime = time;
-		if (offsetInBlock == 0 || firstAppendTime == -1)
-			firstAppendTime = time;*/
+		try {
+			file.seek(offsetInBlock);
+			file.writeInt(data);
+		} catch (IOException e) { //FIXME: Exception
+			e.printStackTrace();
+		}
 		
 		//FIXME: Do we need to grab a lock to mark the data block as dirty???
-		lock.lock();
+		//lock.lock();
 		dirty = true;
-		lock.unlock();
+		//lock.unlock();
 		
-		return 4;
+		return intSize;
 	}
 	
-	synchronized int readInt(long offsetInFile) throws InvalidFileOffsetException{
+	synchronized int readInt(long offsetInFile) throws InvalidFileOffsetException, IOException{
 		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
 		
 		int blockSize = Constants.dataBlockSizeBytes;
@@ -137,20 +168,24 @@ public class DataBlock extends Block {
 							offsetInBlock, blockSize));
 		}
 		
-		ByteBuffer buffer = ByteBuffer.wrap(this.data);
+		/*ByteBuffer buffer = ByteBuffer.wrap(this.data);
 		buffer.position(offsetInBlock);
-		return buffer.getInt();
+		return buffer.getInt();*/
+		
+		file.seek(offsetInBlock);
+		return file.readInt();
 	}
 	
 	/**
-	 * @param buffer output buffer
-	 * @param bufferOffset offset in the buffer to where data will be copied
+	 * @param dstBuffer output buffer
+	 * @param dstBufferOffset offset in the buffer to where data will be copied
 	 * @param length length of data to be read
 	 * @param offsetInBlock offset in this block from where to read data, offset starts from zero.
 	 * @return number of bytes read
+	 * @throws IOException 
 	 * @throws IncorrectOffsetException 
 	 */
-	synchronized int read(byte[] buffer, int bufferOffset, int length, long offsetInFile) throws InvalidFileOffsetException{
+	synchronized int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile) throws InvalidFileOffsetException, IOException{
 		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
 		
 		int blockSize = Constants.dataBlockSizeBytes;
@@ -162,9 +197,12 @@ public class DataBlock extends Block {
 		}
 		
 		int readSize = offsetInBlock+length <= blockSize ? length : blockSize-offsetInBlock;
-		for(int i=0; i<readSize; i++){
-			buffer[bufferOffset+i] = this.data[offsetInBlock+i];
-		}
+		/*for(int i=0; i<readSize; i++){
+			dstBuffer[bufferOffset+i] = this.data[offsetInBlock+i];
+		}*/
+		
+		file.seek(offsetInBlock);
+		file.read(dstBuffer, dstBufferOffset, readSize);
 		
 		return readSize;
 	}
@@ -177,37 +215,53 @@ public class DataBlock extends Block {
 		return lastAppendTime;
 	}*/
 	
-	boolean hasByte(long offsetInFile){
+	/*boolean hasByte(long offsetInFile){
 		return false;
-	}
+	}*/
 	
 	BlockID uuid(){
 		return id;
 	}
 	
-	byte[] data(){
+	/*byte[] data(){
 		return data;
-	}
+	}*/
 	
 	@Override
 	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
-		int blockSize = Constants.dataBlockSizeBytes;
+		/*int blockSize = Constants.dataBlockSizeBytes;
 		if (buffer.remaining() < blockSize)
 			throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
 					+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),blockSize));
 		
 		data = new byte[Constants.dataBlockSizeBytes];
-		buffer.get(data);
+		buffer.get(data);*/
 	}
 
 	@Override
 	void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
-		int blockSize = Constants.dataBlockSizeBytes;
+		/*int blockSize = Constants.dataBlockSizeBytes;
 		if (buffer.capacity() < blockSize)
 			throw new InsufficientResourcesException(String.format("Buffer capacity is less than "
 						+ "required: Capacity = %d bytes, required = %d bytes.",buffer.capacity(),blockSize));
 		
-		buffer.put(data);
+		buffer.put(data);*/
+	}
+	
+	@Override
+	public void loadFromDisk(){
+		//We don't need to do anything here because the constructor opens and creates the file
+		//if it does not exist.
+	}
+	
+	@Override
+	public void storeToDisk(){
+		try {
+			file.close();
+			//System.out.println("\tClosed block: " + name());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Override
@@ -253,5 +307,26 @@ public class DataBlock extends Block {
 	@Override
 	public String toString(){
 		return blockNumber+"-"+name();
+	}
+	
+	@Override
+	public void close(){
+		super.close();
+	}
+	
+	private void createIfNotExist(){
+		File file = new File(localPath());
+		if (!file.exists()) {
+			file.getParentFile().mkdirs();
+			try {
+				file.createNewFile();
+				RandomAccessFile raf= new RandomAccessFile(file, "rw");
+				raf.setLength(Constants.dataBlockSizeBytes);
+				raf.close();
+				//System.out.println("  Created block: " + name());
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 }

@@ -1,5 +1,7 @@
 package kawkab.fs.core;
 
+import java.io.IOException;
+
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.Block.BlockType;
@@ -41,8 +43,9 @@ public class IndexBlock {
 	 * @param blockNumber zero based block number of the new block
 	 * @throws IndexBlockFullException
 	 * @throws InvalidFileOffsetException 
+	 * @throws IOException 
 	 */
-	synchronized void addBlock(DataBlock dataBlock, long blockNumber) throws IndexBlockFullException, InvalidFileOffsetException{
+	synchronized void addBlock(DataBlock dataBlock, long blockNumber) throws IndexBlockFullException, InvalidFileOffsetException, IOException{
 		/*if (!canAddBlock()){
 			throw new IndexBlockFullException("Cannot add a new block.");
 		}*/
@@ -97,7 +100,7 @@ public class IndexBlock {
 		}
 	}
 	
-	BlockID getBlockIDByByte(long offsetInFile) throws InvalidFileOffsetException{
+	BlockID getBlockIDByByte(long offsetInFile) throws InvalidFileOffsetException, IOException{
 		//TODO: Convert this recursive process in an iterative loop in the INode function.
 		
 		long blockInFile = offsetInFile / Constants.dataBlockSizeBytes;

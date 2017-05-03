@@ -6,20 +6,18 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class Cache {
+public class Cache implements BlockEvictionListener {
 	private static Cache instance;
-	private LocalStore store;
 	private volatile boolean stop;
 	private LRUCache cache;
 	private Lock cacheLock;
-	private BlockingQueue<CachedItem> evictedItems;
+	//private BlockingQueue<CachedItem> evictedItems;
 	private Thread evictor;
 	//private GuavaCache gcache;
 	
 	private Cache(){
-		store = LocalStore.instance();
-		evictedItems = new LinkedBlockingQueue<CachedItem>();
-		cache = new LRUCache(evictedItems);
+		//evictedItems = new LinkedBlockingQueue<CachedItem>();
+		cache = new LRUCache(this);
 		cacheLock = new ReentrantLock();
 		
 		//gcache = GuavaCache.instance();
@@ -81,7 +79,7 @@ public class Cache {
 			//If the block is not cached
 			if (cached == null){
 				wasCached = false;
-				if (newDataBlock){
+				if (newDataBlock) {
 					blockID = DataBlock.randomID();
 				}
 				
@@ -89,14 +87,13 @@ public class Cache {
 				cached = new CachedItem(block);
 				cache.put(cached.block().name(), cached);
 			} 
-			
 			cached.lock();
+			
+			if (!newDataBlock) {
+				cached.incrementRefCnt();
+			}
 		} finally {
 			cacheLock.unlock();
-		}
-		
-		if (!newDataBlock) {
-			cached.incrementRefCnt();
 		}
 		
 		if (wasCached) {
@@ -104,8 +101,7 @@ public class Cache {
 			return cached.block();
 		}
 		
-		CachedItem toEvict = evictedItems.poll(); //FIXME: We need a dedicated evictor that writes to L2 if the evicted block is dirty
-		
+		/*CachedItem toEvict = evictedItems.poll(); //FIXME: We need a dedicated evictor that writes to L2 if the evicted block is dirty
 		if (toEvict != null && toEvict.block().dirty()) {
 			try {
 				//FIXME: This should be done by another thread.
@@ -113,14 +109,18 @@ public class Cache {
 			} catch (IOException e) {
 				e.printStackTrace(); //FIXME: How to handle this exception? Should throw or what???
 			}
-		}
+		}*/
 		
 		if (!newDataBlock) {
-			try {
+			cached.block().loadFromDisk();
+			
+			/*try {
 				store.readBlock(cached.block());
 			} catch (IOException e) {
 				e.printStackTrace(); //FIXME: How to handle this exception? Should throw or what???
-			}
+			}*/
+		} else {
+			//Create new file.
 		}
 		
 		cached.unlock(); //FIXME: Should it  not be in the finally block???
@@ -139,14 +139,13 @@ public class Cache {
 			cached = cache.get(blockID.key);
 			
 			if (cached == null) {
-				System.out.println(" Releasing non-existing block: " + blockID);
+				System.out.println(" Releasing non-existing block: " + blockID.key);
 				new Exception().printStackTrace();
 			}
 			
 			assert cached != null;
 			cached.lock();
 			cached.decrementRefCnt();
-			
 			cached.unlock();
 		} finally {
 			cacheLock.unlock();
@@ -157,11 +156,13 @@ public class Cache {
 		cacheLock.lock();
 		for (CachedItem cached : cache.values()){
 			if (cached.block().dirty()){
-				try {
+				cached.block().storeToDisk();
+				
+				/*try {
 					store.writeBlock(cached.block());
 				} catch (IOException e) {
 					e.printStackTrace();
-				}
+				}*/
 			}
 		}
 		cacheLock.unlock();
@@ -176,6 +177,14 @@ public class Cache {
 		cacheLock.lock();
 		cache.clear();
 		cacheLock.unlock();
+	}
+
+	@Override
+	public void beforeEviction(CachedItem cachedItem) {
+		Block block = cachedItem.block();
+		if (block.dirty()){
+			block.storeToDisk();
+		}
 	}
 	
 	/*public void runEvictor(){

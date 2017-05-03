@@ -52,4 +52,8 @@ public class BlockID {
 				key.equals(id.key) &&
 				type == id.type;
 	}
+
+	public boolean isValid() {
+		return uuidHigh != 0 && uuidLow != 0;
+	}
 }

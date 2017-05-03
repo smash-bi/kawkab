@@ -28,6 +28,7 @@ public class CachedItem {
 	
 	public void decrementRefCnt() {
 		refCount--;
+		assert refCount >= 0;
 	}
 	
 	public int refCount(){
