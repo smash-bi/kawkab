@@ -8,40 +8,42 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.UUID;
 
+import org.agrona.IoUtil;
+
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 
 public class DataBlock extends Block {
-	//private long firstAppendTime;
-	//private long lastAppendTime;
-	
-	private RandomAccessFile file;
 	private MappedByteBuffer buffer;
-	private FileChannel channel;
-	//private byte[] data;
-	private final static int maxBlockSize = Constants.dataBlockSizeBytes;
+	
 	public long blockNumber; //FIXME: Used for debugging only.
 	
+	
+	/**
+	 * The constructor should not create a new file in the underlying filesystem. This constructor
+	 * does not reads data from the underlying file. Instead, use fromBuffer() function for that
+	 * purpose. 
+	 * @param uuid
+	 */
 	DataBlock(BlockID uuid){
 		super(uuid, BlockType.DataBlock);
-		//data = new byte[maxBlockSize];
-		
-		try {
-			createIfNotExist();
-			file = new RandomAccessFile(localPath(), "rw");
-			channel = file.getChannel();
-			buffer = channel.map(FileChannel.MapMode.READ_WRITE, 0, maxBlockSize);
-			//data = buffer.array();
-		} catch (IOException e) { //FIXME: How should we handle this exception?
-			e.printStackTrace();
-		}
-		
-		//firstAppendTime = -1;
-		//lastAppendTime = -1;
-		
 		//System.out.println(" Opened block: " + name());
+	}
+	
+	/**
+	 * This function creates a new block ID and the new file, if required, in the underlying
+	 * filesystem. This function should not use a block of memory as this memory competes with
+	 * the cache memroy.
+	 * @return
+	 */
+	static BlockID createNewBlock() {
+		BlockID id = randomID();
+		File file = new File(localPath(id));
+		IoUtil.createEmptyFile(file, Constants.dataBlockSizeBytes, false);
+		
+		return id;
 	}
 	
 	/**
@@ -262,19 +264,15 @@ public class DataBlock extends Block {
 	}
 	
 	@Override
-	public void loadFromDisk(){
-		//We don't need to do anything here because the constructor opens and creates the file
-		//if it does not exist.
+	public void loadFromDisk() {
+		File location = new File(localPath());
+		buffer = IoUtil.mapExistingFile(location, id.key, 0, Constants.dataBlockSizeBytes);
 	}
 	
 	@Override
 	public void storeToDisk(){
-		try {
-			file.close();
-			//System.out.println("\tClosed block: " + name());
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		IoUtil.unmap(buffer);
+		//System.out.println("\tClosed block: " + name());
 	}
 
 	@Override
@@ -290,15 +288,18 @@ public class DataBlock extends Block {
 	int blockSize(){
 		return Constants.dataBlockSizeBytes;
 	}
-
+	
 	@Override
 	String localPath() {
+		return localPath(id);
+	}
+
+	private static String localPath(BlockID id) {
 		String uuid = Commons.uuidToString(id.uuidHigh, id.uuidLow);
 		int uuidLen = uuid.length();
 		
-		assert uuidLen == 24;
-		int wordSize = 2;
-		int levels = 3;
+		int wordSize = 2; //Number of characters of the Base64 encoding that make a directory
+		int levels = 3; //Number of directory levels
 		
 		StringBuilder path = new StringBuilder(Constants.blocksPath.length()+uuidLen+levels);
 		path.append(Constants.blocksPath);

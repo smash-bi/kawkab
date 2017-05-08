@@ -245,14 +245,20 @@ public class Inode {
 	 * @throws InvalidFileOffsetException
 	 * @throws IOException
 	 */
-	DataBlock createNewBlock(long fileSize) throws MaxFileSizeExceededException, IndexBlockFullException, InvalidFileOffsetException, IOException{
+	void createNewBlock(final long fileSize) throws MaxFileSizeExceededException, IndexBlockFullException, InvalidFileOffsetException, IOException{
 		//long blocksCount = (long)Math.ceil(1.0*fileSize / Constants.dataBlockSizeBytes);
 		if (fileSize + Constants.dataBlockSizeBytes > maxFileSize){
 			throw new MaxFileSizeExceededException();
 		}
 		
-		DataBlock dataBlock = cache.newDataBlock();
-		dataBlock.blockNumber = blocksCount+1;
+		BlockID dataBlockID = DataBlock.createNewBlock();
+		//-------------------------------------------------------------------------
+		//FIXME: This is for debugging only. 
+		try ( DataBlock dataBlock = (DataBlock)(cache.acquireBlock(dataBlockID))) {
+			dataBlock.blockNumber = blocksCount+1;
+		}
+		//-------------------------------------------------------------------------
+		
 		
 		long indirectBlocksLimit = Constants.directBlocksPerInode + Commons.maxBlocksCount(1);
 		long doubleIndirectBlocksLimit = indirectBlocksLimit + Commons.maxBlocksCount(2);
@@ -260,15 +266,16 @@ public class Inode {
 		
 		if (blocksCount < Constants.directBlocksPerInode) {
 			//System.out.println("1. Adding direct block "+directBlocksCreated);
-			directBlockUuid[(int)blocksCount] = dataBlock.uuid();
+			directBlockUuid[(int)blocksCount] = dataBlockID;
 		} else {
 			IndexBlock indBlock = null;
 			
 			if (blocksCount < indirectBlocksLimit) {
 				//System.out.println("1. Adding indirect block "+blocksCount);
 				if (indirectBlockUuid.uuidHigh == 0 && indirectBlockUuid.uuidLow == 0) {
-					DataBlock indDataBlock = cache.newDataBlock();
-					indBlock = new IndexBlock(indDataBlock.uuid(), 1); //IndexBlock is like a wrapper on DataBlock
+					//DataBlock indDataBlock = cache.newDataBlock();
+					BlockID indDataBlockID = DataBlock.createNewBlock();
+					indBlock = new IndexBlock(indDataBlockID, 1); //IndexBlock is like a wrapper on DataBlock
 					indirectBlockUuid = indBlock.uuid();
 					System.out.println("\t\tCreated indirect block: " + Commons.uuidToString(indirectBlockUuid.uuidHigh, indirectBlockUuid.uuidLow));
 				} else {
@@ -277,8 +284,9 @@ public class Inode {
 			} else if (blocksCount < doubleIndirectBlocksLimit){
 				if (doubleIndirectBlockUuid.uuidHigh == 0 && doubleIndirectBlockUuid.uuidLow == 0) {
 					//System.out.println("1. Adding doubleIndirect block "+blocksCount);
-					DataBlock indDataBlock = cache.newDataBlock();
-					indBlock = new IndexBlock(indDataBlock.uuid(), 2);
+					//DataBlock indDataBlock = cache.newDataBlock();
+					BlockID indDataBlockID = DataBlock.createNewBlock();
+					indBlock = new IndexBlock(indDataBlockID, 2);
 					doubleIndirectBlockUuid = indBlock.uuid();
 					System.out.println("\t\tCreated double indirect block.");
 				} else {
@@ -288,8 +296,9 @@ public class Inode {
 			} else if (blocksCount < tripleIndirectBlocksLimit){
 				if (tripleIndirectBlockUuid.uuidHigh == 0 && tripleIndirectBlockUuid.uuidLow == 0) {
 					//System.out.println("1. Adding tripleIndirect block "+blocksCount);
-					DataBlock indDataBlock = cache.newDataBlock();
-					indBlock = new IndexBlock(indDataBlock.uuid(), 3);
+					//DataBlock indDataBlock = cache.newDataBlock();
+					BlockID indDataBlockID = DataBlock.createNewBlock();
+					indBlock = new IndexBlock(indDataBlockID, 3);
 					tripleIndirectBlockUuid = indBlock.uuid();
 					System.out.println("\t\tCreated triple indirect block.");
 				} else {
@@ -299,13 +308,11 @@ public class Inode {
 				throw new MaxFileSizeExceededException();
 			}
 			
-			indBlock.addBlock(dataBlock, blocksCount);
+			indBlock.addBlock(dataBlockID, blocksCount);
 		}
 		
 		blocksCount++;
-		lastBlockUuid = dataBlock.uuid();
-		
-		return dataBlock;
+		lastBlockUuid = dataBlockID;
 	}
 	
 	public long fileSize(){

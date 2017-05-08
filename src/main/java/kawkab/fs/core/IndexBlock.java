@@ -45,13 +45,13 @@ public class IndexBlock {
 	 * @throws InvalidFileOffsetException 
 	 * @throws IOException 
 	 */
-	synchronized void addBlock(DataBlock dataBlock, long blockNumber) throws IndexBlockFullException, InvalidFileOffsetException, IOException{
+	synchronized void addBlock(BlockID dataBlockID, long blockNumber) throws IndexBlockFullException, InvalidFileOffsetException, IOException{
 		/*if (!canAddBlock()){
 			throw new IndexBlockFullException("Cannot add a new block.");
 		}*/
 		
 		if (indexLevel == 1) {
-			appendDataBlock(dataBlock, blockNumber);
+			appendDataBlock(dataBlockID, blockNumber);
 			return;
 		}
 		
@@ -68,8 +68,9 @@ public class IndexBlock {
 			
 			IndexBlock nextIndexBlock = null;
 			if (pointerUuidHigh == 0 && pointerUuidLow == 0){
-				DataBlock indexBlock = cache.newDataBlock();
-				nextIndexBlock = new IndexBlock(indexBlock.uuid(), indexLevel-1);
+				//DataBlock indexBlock = cache.newDataBlock();
+				BlockID indexBlockID = DataBlock.createNewBlock();
+				nextIndexBlock = new IndexBlock(indexBlockID, indexLevel-1);
 				thisIndexBlock.appendLong(nextIndexBlock.uuid.uuidHigh, offsetInBlock);
 				thisIndexBlock.appendLong(nextIndexBlock.uuid.uuidLow, offsetInBlock+8);
 			}else{
@@ -80,11 +81,11 @@ public class IndexBlock {
 			//System.out.println(String.format("\t\t\t %d => Adding block %d->%d, indexPointer %d, next uuid %s", 
 			//		indexLevel, blockNumber, blockInThisIndex, indexPointer, Commons.uuidToString(nextIndexBlock.uuidHigh, nextIndexBlock.uuidLow)));
 			
-			nextIndexBlock.addBlock(dataBlock, blockNumber);
+			nextIndexBlock.addBlock(dataBlockID, blockNumber);
 		}
 	}
 	
-	synchronized void appendDataBlock(DataBlock dataBlock, long globalBlockNumber) throws IndexBlockFullException{
+	synchronized void appendDataBlock(BlockID dataBlockID, long globalBlockNumber) throws IndexBlockFullException{
 		assert indexLevel == 1;
 		
 		int blockNumber = (int)(blockInSubtree(globalBlockNumber) % Commons.maxBlocksCount(1));
@@ -95,8 +96,8 @@ public class IndexBlock {
 		
 		Cache cache = Cache.instance();
 		try (DataBlock thisIndexBlock = (DataBlock)cache.acquireBlock(uuid)) {
-			thisIndexBlock.appendLong(dataBlock.uuid().uuidHigh, offsetInIdxBlock);
-			thisIndexBlock.appendLong(dataBlock.uuid().uuidLow, offsetInIdxBlock + 8);
+			thisIndexBlock.appendLong(dataBlockID.uuidHigh, offsetInIdxBlock);
+			thisIndexBlock.appendLong(dataBlockID.uuidLow, offsetInIdxBlock + 8);
 		}
 	}
 	

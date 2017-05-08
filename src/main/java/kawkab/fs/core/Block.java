@@ -53,28 +53,10 @@ public abstract class Block implements AutoCloseable {
 	 */
 	abstract int blockSize();
 	
-	//FIXME: There must be some better mechanism to achieve this. 
-	public static Block newBlock(BlockID blockID) {
-		//FIXME: Should we use visitor pattern here? This code is not different than using instanceof
-		Block block;
-		BlockType type = blockID.type;
-		if (type == BlockType.IbmapBlock) {
-			block = new Ibmap((int)blockID.uuidLow);
-		} else if (type == BlockType.InodeBlock) {
-			block = new InodesBlock((int)blockID.uuidLow);
-		} else if (type == BlockType.DataBlock) {
-			block = new DataBlock(blockID);
-		} else {
-			throw new IllegalArgumentException("Block type is invalid: " + type);
-		}
-		
-		return block;
-	}
-	
 	protected Block(BlockID id, BlockType type) {
 		this.id = id;
-		lock = new ReentrantLock();
 		this.type = type;
+		lock = new ReentrantLock();
 		dirty = false;
 	}
 	

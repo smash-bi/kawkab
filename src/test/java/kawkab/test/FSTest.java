@@ -21,13 +21,13 @@ public class FSTest {
 				InvalidFileOffsetException, InvalidFileModeException, IOException {
 		FSTest tester = new FSTest();
 		tester.testBootstrap();
-		//tester.testBlocksCreation();
-		//tester.testSmallReadWrite();
-		//tester.testLargeReadWrite();
-		//tester.testMultipleReaders();
-		//tester.testMultipleFiles();
+		tester.testBlocksCreation();
+		tester.testSmallReadWrite();
+		tester.testLargeReadWrite();
+		tester.testMultipleReaders();
+		tester.testMultipleFiles();
 		tester.testWritePerformance();
-		//tester.testWritePerformanceConcurrentFiles();
+		tester.testWritePerformanceConcurrentFiles();
 		//tester.testVeryLargeReadWrite();
 		//tester.testFileSeek();
 		tester.testShutdown();
@@ -79,7 +79,7 @@ public class FSTest {
 		
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
-		byte[] dataBuffer = new byte[3048];
+		byte[] dataBuffer = new byte[3*16*1024*1024+111];
 		new Random().nextBytes(dataBuffer);
 		
 		System.out.println("Initial file size: " + file.size());
@@ -229,7 +229,7 @@ public class FSTest {
 		
 		Filesystem fs = Filesystem.instance().bootstrap();
 		
-		int numFiles = 20;
+		int numFiles = 12;
 		Thread[] workers = new Thread[numFiles];
 		
 		for (int i=0; i<numFiles; i++) {
@@ -240,12 +240,13 @@ public class FSTest {
 						String filename = new String("/home/smash/testMultipleFiles-"+id);
 						FileOptions opts = new FileOptions();
 						FileHandle file = fs.open(filename, FileMode.APPEND, opts);
+						long initialSize = file.size();
 						
-						System.out.println("Opening file: " + filename + ", current size="+file.size());
+						System.out.println("Opening file: " + filename + ", current size="+initialSize);
 						
 						Random rand = new Random(0);
 						int bufSize = 8*1024*1024;
-						long dataSize = 2L*bufSize;
+						long dataSize = 4L*bufSize + 17;
 						long appended = 0;
 						
 						byte[] writeBuf = new byte[bufSize];
@@ -253,15 +254,15 @@ public class FSTest {
 						
 						while(appended < dataSize) {
 							int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
-							appended += file.append(writeBuf, 0, toWrite);
+							int bytes = file.append(writeBuf, 0, toWrite);
+							appended += bytes;
 							rand.nextBytes(writeBuf);
 						}
 						
-						System.out.println("File: " + filename + ", current size="+file.size());
-						
 						byte[] readBuf = new byte[bufSize];
 						rand = new Random(0);
-	
+						
+						file.seekBytes(initialSize);
 						long read = 0;
 						while(read < dataSize) {
 							int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
@@ -269,7 +270,7 @@ public class FSTest {
 							read += bytes;
 							
 							rand.nextBytes(writeBuf);
-							if (bytes< writeBuf.length){
+							if (bytes < bufSize){
 								for(int i=0; i<bytes; i++){
 									assert readBuf[i] == writeBuf[i];
 								}
@@ -337,10 +338,10 @@ public class FSTest {
 		
 		Filesystem fs = Filesystem.instance().bootstrap();
 		
-		int numFiles = 20;
+		int numFiles = 6;
 		Thread[] workers = new Thread[numFiles];
 		final int bufSize = 8*1024*1024;
-		final long dataSize = 256L*bufSize;
+		final long dataSize = 128L*bufSize;
 		
 		long startTime = System.currentTimeMillis();
 		for (int i=0; i<numFiles; i++) {
@@ -371,7 +372,7 @@ public class FSTest {
 						long elapsed = System.currentTimeMillis() - startTime;
 						long speed = (long)((dataSize/1024/1024)/(elapsed/1000.0));
 						
-						System.out.println("Write speed = " + speed + " MB/s");
+						System.out.println("File " + id + " write speed = " + speed + " MB/s");
 					} catch (Exception e){
 						e.printStackTrace();
 						return;

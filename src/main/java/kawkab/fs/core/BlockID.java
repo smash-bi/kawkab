@@ -56,4 +56,19 @@ public class BlockID {
 	public boolean isValid() {
 		return uuidHigh != 0 && uuidLow != 0;
 	}
+	
+	public Block newBlock() {
+		Block block;
+		if (type == BlockType.IbmapBlock) {
+			block = new Ibmap((int)uuidLow);
+		} else if (type == BlockType.InodeBlock) {
+			block = new InodesBlock((int)uuidLow);
+		} else if (type == BlockType.DataBlock) {
+			block = new DataBlock(this);
+		} else {
+			throw new IllegalArgumentException("Block type is invalid: " + type);
+		}
+		
+		return block;
+	}
 }
