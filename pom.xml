@@ -38,6 +38,13 @@
 			<artifactId>chronicle-map</artifactId>
 			<version>3.13.0</version>
 		</dependency>
+
+		<dependency>
+	   <groupId>org.agrona</groupId>
+	   <artifactId>agrona</artifactId>
+	   <version>0.9.5</version>
+		</dependency>
+
 		<!--dependency>
 			<groupId>com.google.guava</groupId>
 			<artifactId>guava</artifactId>
