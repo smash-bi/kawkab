@@ -7,6 +7,7 @@ import java.util.concurrent.locks.LockSupport;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
+import kawkab.fs.commons.Constants;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.IbmapsFullException;
@@ -21,7 +22,7 @@ public class FSTest {
 				InvalidFileOffsetException, InvalidFileModeException, IOException {
 		FSTest tester = new FSTest();
 		tester.testBootstrap();
-		tester.testBlocksCreation();
+		//tester.testBlocksCreation();
 		tester.testSmallReadWrite();
 		tester.testLargeReadWrite();
 		tester.testMultipleReaders();
@@ -79,7 +80,8 @@ public class FSTest {
 		
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
-		byte[] dataBuffer = new byte[3*16*1024*1024+111];
+		int dataSize = Constants.dataBlockSizeBytes + 1;
+		byte[] dataBuffer = new byte[dataSize];
 		new Random().nextBytes(dataBuffer);
 		
 		System.out.println("Initial file size: " + file.size());
@@ -113,7 +115,7 @@ public class FSTest {
 		
 		System.out.println("Initial file size: " + file.size());
 		
-		int dataSize = 100*1024*1024 + 3; //1*1024*1024*1024;
+		int dataSize = 8*Constants.dataBlockSizeBytes + 1; //1*1024*1024*1024;
 		byte[] dataBuffer = new byte[dataSize];
 		new Random().nextBytes(dataBuffer);
 		
@@ -147,8 +149,8 @@ public class FSTest {
 		final long offset = file.size();
 		
 		Random rand = new Random(0);
-		int bufSize = 500*1024*1024;
-		long dataSize = (1L*128*bufSize + 1)/32; //1GB + 1
+		int bufSize = 8*1024*1024;
+		long dataSize = (1L*128*bufSize + 1);
 		long appended = 0;
 		
 		byte[] writeBuf = new byte[bufSize];

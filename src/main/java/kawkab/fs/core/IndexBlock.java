@@ -69,10 +69,10 @@ public class IndexBlock {
 			IndexBlock nextIndexBlock = null;
 			if (pointerUuidHigh == 0 && pointerUuidLow == 0){
 				//DataBlock indexBlock = cache.newDataBlock();
-				BlockID indexBlockID = DataBlock.createNewBlock();
+				BlockID indexBlockID = null; //DataBlock.createNewBlock(); //FIXME: Commented temporarily for testing without index blocks.
 				nextIndexBlock = new IndexBlock(indexBlockID, indexLevel-1);
-				thisIndexBlock.appendLong(nextIndexBlock.uuid.uuidHigh, offsetInBlock);
-				thisIndexBlock.appendLong(nextIndexBlock.uuid.uuidLow, offsetInBlock+8);
+				thisIndexBlock.appendLong(nextIndexBlock.uuid.highBits, offsetInBlock);
+				thisIndexBlock.appendLong(nextIndexBlock.uuid.lowBits, offsetInBlock+8);
 			}else{
 				BlockID pointerBlockID = new BlockID(pointerUuidHigh, pointerUuidLow, DataBlock.name(pointerUuidHigh, pointerUuidLow), BlockType.DataBlock);
 				nextIndexBlock = new IndexBlock(pointerBlockID, indexLevel-1);
@@ -96,8 +96,8 @@ public class IndexBlock {
 		
 		Cache cache = Cache.instance();
 		try (DataBlock thisIndexBlock = (DataBlock)cache.acquireBlock(uuid)) {
-			thisIndexBlock.appendLong(dataBlockID.uuidHigh, offsetInIdxBlock);
-			thisIndexBlock.appendLong(dataBlockID.uuidLow, offsetInIdxBlock + 8);
+			thisIndexBlock.appendLong(dataBlockID.highBits, offsetInIdxBlock);
+			thisIndexBlock.appendLong(dataBlockID.lowBits, offsetInIdxBlock + 8);
 		}
 	}
 	

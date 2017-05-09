@@ -5,12 +5,12 @@ import kawkab.fs.core.Inode;
 
 public class Constants {
 	//Default data block size in bytes
-	public static final int dataBlockSizeBytes = 16 * 1024 * 1024;
+	public static final int dataBlockSizeBytes = 16*1024*1024;
 	public static final int directBlocksPerInode = 16;
 	public static final int numPointersInIndexBlock = dataBlockSizeBytes/IndexBlock.pointerSizeBytes;
 	
 	//Ibmap blocks range for this machine
-	public static final int ibmapBlockSizeBytes = 10*1024; //4 * 1024 * 1024;
+	public static final int ibmapBlockSizeBytes = 16*1024; //FIXME: using a small number for testing
 	public static final int ibmapBlocksPerMachine = 1; //FIXME: Calculate this based on the maximum number of files supported per machine
 	public static int ibmapBlocksRangeStart = 0; //TODO: Get these numbers from a configuration file or ZooKeeper
 

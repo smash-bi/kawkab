@@ -62,7 +62,7 @@ public class InodesBlock extends Block {
 		
 		lock.lock();
 		try {
-			inodes[inodeNumber] = new Inode();
+			inodes[inodeNumber] = new Inode(inumber);
 		}finally {
 			lock.unlock();
 		}
@@ -148,7 +148,8 @@ public class InodesBlock extends Block {
 			InodesBlock block = new InodesBlock(offset+i);
 			block.inodes = new Inode[Constants.inodesPerBlock];
 			for (int j=0; j<Constants.inodesPerBlock; j++) {
-				block.inodes[j] = new Inode();
+				long inumber = i*Constants.inodesPerBlock + j;
+				block.inodes[j] = new Inode(inumber);
 			}
 			
 			File file = new File(block.localPath());

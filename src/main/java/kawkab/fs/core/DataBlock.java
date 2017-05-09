@@ -2,11 +2,8 @@ package kawkab.fs.core;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.util.UUID;
 
 import org.agrona.IoUtil;
 
@@ -23,8 +20,8 @@ public class DataBlock extends Block {
 	
 	/**
 	 * The constructor should not create a new file in the underlying filesystem. This constructor
-	 * does not reads data from the underlying file. Instead, use fromBuffer() function for that
-	 * purpose. 
+	 * does not reads data from the underlying file. Instead, use fromBuffer() or laodFromDisk() 
+	 * function for that purpose. 
 	 * @param uuid
 	 */
 	DataBlock(BlockID uuid){
@@ -38,8 +35,8 @@ public class DataBlock extends Block {
 	 * the cache memroy.
 	 * @return
 	 */
-	static BlockID createNewBlock() {
-		BlockID id = randomID();
+	static BlockID createNewBlock(long inumber, long blockNumber) {
+		BlockID id = newID(inumber, blockNumber);
 		File file = new File(localPath(id));
 		IoUtil.createEmptyFile(file, Constants.dataBlockSizeBytes, false);
 		
@@ -65,19 +62,6 @@ public class DataBlock extends Block {
 		buffer.position(offsetInBlock);
 		buffer.put(data, offset, toAppend);
 		
-		/*try {
-			file.seek(offsetInBlock);
-			//System.out.println(String.format("%d, %d, %d, %d, %d, %d, %d", offset, length, capacity, toAppend, offsetInBlock, file.length(), file.getFilePointer()));
-			file.write(data, offset, toAppend);
-		} catch (IOException e) { //FIXME: Handle exception.
-			e.printStackTrace();
-		}*/
-		
-		/*for(int i=0; i<toAppend; i++){
-			this.data[offsetInBlock] = data[i+offset];
-			offsetInBlock++;
-		}*/
-		
 		//FIXME: Do we need to grab a lock to mark the data block as dirty???
 		//lock.lock();
 		dirty = true;
@@ -94,17 +78,6 @@ public class DataBlock extends Block {
 		int longSize = Long.BYTES;
 		if (capacity < longSize)
 			return 0;
-		
-		/*ByteBuffer buffer = ByteBuffer.wrap(this.data);
-		buffer.position(offsetInBlock);
-		buffer.putLong(data);*/
-		
-		/*try {
-			file.seek(offsetInBlock);
-			file.writeLong(data);
-		} catch (IOException e) { //FIXME: Handle exception.
-			e.printStackTrace();
-		}*/
 		
 		buffer.putLong(offsetInBlock, data);
 		
@@ -128,10 +101,6 @@ public class DataBlock extends Block {
 					String.format("File Offset %d is invalid. Data block size = %d bytes.", 
 							offsetInBlock, blockSize));
 		
-		/*ByteBuffer buffer = ByteBuffer.wrap(this.data);
-		buffer.position(offsetInBlock);
-		return buffer.getLong();*/
-		
 		//file.seek(offsetInBlock);
 		//return file.readLong();
 		
@@ -144,17 +113,6 @@ public class DataBlock extends Block {
 		int intSize = Integer.BYTES;
 		if (capacity < intSize)
 			return 0;
-		
-		/*ByteBuffer buffer = ByteBuffer.wrap(this.data);
-		buffer.position(offsetInBlock);
-		buffer.putInt(data);*/
-		
-		/*try {
-			file.seek(offsetInBlock);
-			file.writeInt(data);
-		} catch (IOException e) { //FIXME: Exception
-			e.printStackTrace();
-		}*/
 		
 		buffer.putInt(offsetInBlock, data);
 		
@@ -177,10 +135,6 @@ public class DataBlock extends Block {
 					String.format("File Offset %d is invalid. Data block size = %d bytes.", 
 							offsetInBlock, blockSize));
 		}
-		
-		/*ByteBuffer buffer = ByteBuffer.wrap(this.data);
-		buffer.position(offsetInBlock);
-		return buffer.getInt();*/
 		
 		//file.seek(offsetInBlock);
 		//return file.readInt();
@@ -209,9 +163,6 @@ public class DataBlock extends Block {
 		}
 		
 		int readSize = offsetInBlock+length <= blockSize ? length : blockSize-offsetInBlock;
-		/*for(int i=0; i<readSize; i++){
-			dstBuffer[bufferOffset+i] = this.data[offsetInBlock+i];
-		}*/
 		
 		//file.seek(offsetInBlock);
 		//file.read(dstBuffer, dstBufferOffset, readSize);
@@ -222,66 +173,43 @@ public class DataBlock extends Block {
 		return readSize;
 	}
 	
-	/*long firstAppendTime(){
-		return firstAppendTime;
-	}
-	
-	long lastAppendTime(){
-		return lastAppendTime;
-	}*/
-	
-	/*boolean hasByte(long offsetInFile){
-		return false;
-	}*/
-	
 	BlockID uuid(){
 		return id;
 	}
 	
-	/*byte[] data(){
-		return data;
-	}*/
-	
 	@Override
 	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
-		/*int blockSize = Constants.dataBlockSizeBytes;
-		if (buffer.remaining() < blockSize)
-			throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
-					+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),blockSize));
-		
-		data = new byte[Constants.dataBlockSizeBytes];
-		buffer.get(data);*/
+		//We don't need this because we are now using memory mapped files.
 	}
 
 	@Override
 	void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
-		/*int blockSize = Constants.dataBlockSizeBytes;
-		if (buffer.capacity() < blockSize)
-			throw new InsufficientResourcesException(String.format("Buffer capacity is less than "
-						+ "required: Capacity = %d bytes, required = %d bytes.",buffer.capacity(),blockSize));
-		
-		buffer.put(data);*/
+		//We don't need this because we are now using memory mapped files.
 	}
 	
 	@Override
 	public void loadFromDisk() {
+		//System.out.println("Opening block: " + id);
 		File location = new File(localPath());
 		buffer = IoUtil.mapExistingFile(location, id.key, 0, Constants.dataBlockSizeBytes);
 	}
 	
 	@Override
 	public void storeToDisk(){
+		//System.out.println("Closing block: " + id);
 		IoUtil.unmap(buffer);
 		//System.out.println("\tClosed block: " + name());
 	}
 
 	@Override
 	String name() {
-		return Commons.uuidToString(id.uuidHigh, id.uuidLow);
+		//return Commons.uuidToString(id.uuidHigh, id.uuidLow);
+		return name(id.highBits, id.lowBits);
 	}
 	
 	static String name(long uuidHigh, long uuidLow){
-		return Commons.uuidToString(uuidHigh, uuidLow);
+		//return Commons.uuidToString(uuidHigh, uuidLow);
+		return String.format("%016x-%016x", uuidHigh, uuidLow);
 	}
 	
 	@Override
@@ -293,49 +221,42 @@ public class DataBlock extends Block {
 	String localPath() {
 		return localPath(id);
 	}
-
+	
 	private static String localPath(BlockID id) {
-		String uuid = Commons.uuidToString(id.uuidHigh, id.uuidLow);
+		//String uuid = String.format("%016x%016x", id.highBits, id.lowBits);
+		String uuid = Commons.uuidToString(id.highBits, id.lowBits);
 		int uuidLen = uuid.length();
 		
-		int wordSize = 2; //Number of characters of the Base64 encoding that make a directory
-		int levels = 3; //Number of directory levels
+		int wordSize = 3; //Number of characters of the Base64 encoding that make a directory
+		int levels = 6; //Number of directory levels //FIXME: we will have 64^3 files in a directory, which is 262144. This may slow down the underlying filesystem.
+		
+		assert wordSize * levels < uuidLen-1;
 		
 		StringBuilder path = new StringBuilder(Constants.blocksPath.length()+uuidLen+levels);
-		path.append(Constants.blocksPath);
+		path.append(Constants.blocksPath + File.separator);
+		int rootLen = uuidLen - levels*wordSize;
+		path.append(uuid.substring(0, rootLen));
+		
 		for (int i=0; i<levels; i++){
-			path.append(File.separator).append(uuid.substring(i*wordSize, i*wordSize+wordSize));
+			path.append(File.separator).append(uuid.substring(rootLen+i*wordSize, rootLen+i*wordSize+wordSize));
 		}
-		path.append(File.separator).append(uuid.substring(levels*wordSize));
+		//path.append(File.separator).append(uuid.substring(levels*wordSize));
 		
 		return path.toString();
 	}
-	
-	public static BlockID randomID(){
-		UUID uuid = UUID.randomUUID();
-		long uuidHigh = uuid.getMostSignificantBits();
-		long uuidLow = uuid.getLeastSignificantBits();
+
+	public static BlockID newID(long inumber, long blockNumber){
+		//Block ID is a 128 bit number: high order 64 bit are the inode number and the lower order
+		//64 bit is the block number.
+		
+		long uuidHigh = inumber;
+		long uuidLow = blockNumber;
+		
 		return new BlockID(uuidHigh, uuidLow, DataBlock.name(uuidHigh, uuidLow), BlockType.DataBlock);
 	}
 	
 	@Override
 	public String toString(){
-		return blockNumber+"-"+name();
-	}
-	
-	private void createIfNotExist(){
-		File file = new File(localPath());
-		if (!file.exists()) {
-			file.getParentFile().mkdirs();
-			try {
-				file.createNewFile();
-				RandomAccessFile raf= new RandomAccessFile(file, "rw");
-				raf.setLength(Constants.dataBlockSizeBytes);
-				raf.close();
-				//System.out.println("  Created block: " + name());
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
+		return id.highBits+"-"+id.lowBits+"-"+name();
 	}
 }

@@ -9,7 +9,7 @@ import kawkab.fs.core.exceptions.IbmapsFullException;
 import net.openhft.chronicle.map.ChronicleMap;
 
 public class Namespace {
-	private ChronicleMap<String, Long> filesMap;
+	private PersistentMap filesMap;
 	private Cache cache;
 	private int lastIbmapUsed;
 	private KeyedLock locks;
@@ -108,19 +108,7 @@ public class Namespace {
 	}
 	
 	void bootstrap() throws IOException {
-		String path = Constants.namespacePath + "/" + "kawkab-namespace";
-		File file = new File(Constants.namespacePath);
-		if (!file.exists()){
-			file.mkdirs();
-		}
-		
-		filesMap = ChronicleMap
-				.of(String.class, Long.class)
-			    .name("Kawkab-namespace")
-			    .averageKeySize(32)
-			    .entries(1000000)
-			    .createPersistedTo(new File(path));
-		
+		filesMap = PersistentMap.instance();
 		System.out.println("Already existing files = " + filesMap.size());
 	}
 	

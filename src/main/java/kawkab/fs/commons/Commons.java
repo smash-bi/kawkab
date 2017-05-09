@@ -18,7 +18,7 @@ public class Commons {
 		buffer.putLong(uuidHigh);
 		buffer.putLong(uuidLow);
 		buffer.clear();
-		return Base64.getEncoder().encodeToString(id);
+		return Base64.getUrlEncoder().withoutPadding().encodeToString(id);
 	}
 }
 
