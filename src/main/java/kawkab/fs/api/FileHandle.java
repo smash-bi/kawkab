@@ -250,6 +250,8 @@ public final class FileHandle {
 		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, inodesBlockIdx, InodesBlock.name(inodesBlockIdx), BlockType.InodeBlock);
 		try(InodesBlock block = (InodesBlock) cache.acquireBlock(id)) {
 			size = block.fileSize(inumber);
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 		
 		return size;

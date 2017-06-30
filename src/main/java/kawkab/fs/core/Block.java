@@ -100,6 +100,11 @@ public abstract class Block implements AutoCloseable {
 		cache.releaseBlock(this.id());
 	}
 	
+	/**
+	 * Releases any acquired resources such as file channels
+	 */
+	public void cleanup() throws IOException {}
+	
 	@Override
 	public String toString(){
 		return name();
@@ -109,7 +114,7 @@ public abstract class Block implements AutoCloseable {
 		return type;
 	}
 	
-	public void loadFromDisk(){
+	public void loadFromDisk() throws IOException {
 		LocalStore store = LocalStore.instance();
 		try {
 			store.readBlock(this);
@@ -118,7 +123,7 @@ public abstract class Block implements AutoCloseable {
 		}
 	}
 	
-	public void storeToDisk(){
+	public void storeToDisk() throws IOException {
 		LocalStore store = LocalStore.instance();
 		try {
 			store.writeBlock(this);

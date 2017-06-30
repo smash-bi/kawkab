@@ -143,10 +143,13 @@ public class Inode {
 		
 		BlockID lastBlockID = null;
 		
+		//long t = System.nanoTime();
+		
 		while(remaining > 0){
 			int lastBlkCapacity = Constants.dataBlockSizeBytes - (int)(fileSize % Constants.dataBlockSizeBytes);
 			
-			if (fileSize % Constants.dataBlockSizeBytes == 0) {
+			//if (fileSize % Constants.dataBlockSizeBytes == 0) {
+			if (lastBlkCapacity == Constants.dataBlockSizeBytes) { // if last block is full
 				try {
 					lastBlockID = createNewBlock(fileSize);
 					lastBlkCapacity = Constants.dataBlockSizeBytes;
@@ -161,6 +164,8 @@ public class Inode {
 			int bytes;
 			int toAppend = remaining <= lastBlkCapacity ? remaining : lastBlkCapacity;
 			
+			//TODO: Delete the newly created block if append fails. Also add condition in the DataBlock.createNewBlock()
+			// to throw an exception if the file already exists.
 			try (DataBlock block = (DataBlock)cache.acquireBlock(lastBlockID)) {
 				bytes = block.append(data, offset, toAppend, fileSize);
 			}
@@ -171,6 +176,9 @@ public class Inode {
 			fileSize += bytes;
 			//dirty = true;
 		}
+		
+		//long elapsed = (System.nanoTime() - t)/1000;
+		//System.out.println("elaped: " + elapsed);
 		
 		return appended;
 	}

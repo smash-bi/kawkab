@@ -1,12 +1,10 @@
 package kawkab.fs.core;
 
-import java.io.File;
 import java.io.IOException;
 
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.Block.BlockType;
 import kawkab.fs.core.exceptions.IbmapsFullException;
-import net.openhft.chronicle.map.ChronicleMap;
 
 public class Namespace {
 	private PersistentMap filesMap;
@@ -65,8 +63,9 @@ public class Namespace {
 	 * This must be called with the lock on the file that is being created.
 	 * @return returns the inumber of the new file.
 	 * @throws IbmapsFullException
+	 * @throws IOException 
 	 */
-	private long getNewInumber() throws IbmapsFullException{
+	private long getNewInumber() throws IbmapsFullException, IOException {
 		long inumber;
 		int mapNum = lastIbmapUsed;
 		while(true){ //Iterate over the ibmap blocks.
@@ -94,8 +93,9 @@ public class Namespace {
 	 * This function must be called with the lock on the file that is being created.
 	 * @return the inumber of the new file
 	 * @throws IbmapsFullException
+	 * @throws IOException 
 	 */
-	private long createNewFile() throws IbmapsFullException{
+	private long createNewFile() throws IbmapsFullException, IOException{
 		long inumber = getNewInumber();
 		
 		int blockIndex = InodesBlock.blockIndexFromInumber(inumber);

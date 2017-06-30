@@ -71,8 +71,8 @@ public class IndexBlock {
 				//DataBlock indexBlock = cache.newDataBlock();
 				BlockID indexBlockID = null; //DataBlock.createNewBlock(); //FIXME: Commented temporarily for testing without index blocks.
 				nextIndexBlock = new IndexBlock(indexBlockID, indexLevel-1);
-				thisIndexBlock.appendLong(nextIndexBlock.uuid.highBits, offsetInBlock);
-				thisIndexBlock.appendLong(nextIndexBlock.uuid.lowBits, offsetInBlock+8);
+				thisIndexBlock.writeLong(nextIndexBlock.uuid.highBits, offsetInBlock);
+				thisIndexBlock.writeLong(nextIndexBlock.uuid.lowBits, offsetInBlock+8);
 			}else{
 				BlockID pointerBlockID = new BlockID(pointerUuidHigh, pointerUuidLow, DataBlock.name(pointerUuidHigh, pointerUuidLow), BlockType.DataBlock);
 				nextIndexBlock = new IndexBlock(pointerBlockID, indexLevel-1);
@@ -85,7 +85,7 @@ public class IndexBlock {
 		}
 	}
 	
-	synchronized void appendDataBlock(BlockID dataBlockID, long globalBlockNumber) throws IndexBlockFullException{
+	synchronized void appendDataBlock(BlockID dataBlockID, long globalBlockNumber) throws IndexBlockFullException, IOException{
 		assert indexLevel == 1;
 		
 		int blockNumber = (int)(blockInSubtree(globalBlockNumber) % Commons.maxBlocksCount(1));
@@ -96,8 +96,8 @@ public class IndexBlock {
 		
 		Cache cache = Cache.instance();
 		try (DataBlock thisIndexBlock = (DataBlock)cache.acquireBlock(uuid)) {
-			thisIndexBlock.appendLong(dataBlockID.highBits, offsetInIdxBlock);
-			thisIndexBlock.appendLong(dataBlockID.lowBits, offsetInIdxBlock + 8);
+			thisIndexBlock.writeLong(dataBlockID.highBits, offsetInIdxBlock);
+			thisIndexBlock.writeLong(dataBlockID.lowBits, offsetInIdxBlock + 8);
 		}
 	}
 	

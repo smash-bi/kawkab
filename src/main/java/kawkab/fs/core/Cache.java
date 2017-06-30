@@ -1,5 +1,6 @@
 package kawkab.fs.core;
 
+import java.io.IOException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -25,44 +26,49 @@ public class Cache implements BlockEvictionListener {
 	 * @param blockID
 	 * @param type
 	 * @return
+	 * @throws IOException 
 	 */
-	public Block acquireBlock(BlockID blockID){
+	public Block acquireBlock(BlockID blockID) throws IOException {
 		CachedItem cached = null;
 		boolean wasCached = true;
 		
 		cacheLock.lock();
-		try {
-			cached = cache.get(blockID.key);
-			
-			//If the block is not cached
-			if (cached == null){
-				wasCached = false;
-				Block block = blockID.newBlock();
-				cached = new CachedItem(block);
-				cache.put(cached.block().name(), cached);
+		try { //For cached.lock()
+			try { //For cacheLock.lock()
+				cached = cache.get(blockID.key);
+				
+				//If the block is not cached
+				if (cached == null){
+					wasCached = false;
+					Block block = blockID.newBlock();
+					cached = new CachedItem(block);
+					cache.put(cached.block().name(), cached);
+				}
+				
+				//FIXME: This can stall all other threads. For example, two readers read data at the same time. 
+				//The first reader gets the lock and then performs IO on the line "cached.block().loadFromDisk()". 
+				//Now the other reader has the lock of cache and waiting for the first reader to unlock the cached block.
+				cached.lock();  
+				cached.incrementRefCnt();
+			} finally {
+				cacheLock.unlock();
+			}
+		
+			if (wasCached) {
+				return cached.block();
 			}
 			
-			//FIXME: This can stall all other threads. For example, two readers read data at the same time. 
-			//The first reader gets the lock and then performs IO on line "cached.block().loadFromDisk()". 
-			//Now the other reader has the lock of cache and waiting for the first reader to unlock the cached block.
-			cached.lock();  
-			cached.incrementRefCnt();
+			cached.block().loadFromDisk();
 		} finally {
-			cacheLock.unlock();
+			if (cached != null) {
+				cached.unlock();
+			}
 		}
-		
-		if (wasCached) {
-			cached.unlock(); //FIXME: Should it  not be in the finally block???
-			return cached.block();
-		}
-		
-		cached.block().loadFromDisk();
-		cached.unlock(); //FIXME: It should be in the finally block???
 		
 		return cached.block();
 	}
 	
-	public void releaseBlock(BlockID blockID){
+	public void releaseBlock(BlockID blockID) {
 		CachedItem cached = null;
 		cacheLock.lock();
 		try {
@@ -82,21 +88,23 @@ public class Cache implements BlockEvictionListener {
 		}
 	}
 	
-	public void flush(){
+	public void flush() {
 		cacheLock.lock();
 		for (CachedItem cached : cache.values()) {
 			if (cached.block().dirty()) {
-				cached.block().storeToDisk();
+				try {
+					cached.block().storeToDisk();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 			}
 		}
 		cacheLock.unlock();
 	}
 	
-	public void shutdown(){
+	public void shutdown() {
 		System.out.println("Closing cache.");
-		
 		flush();
-		
 		cacheLock.lock();
 		cache.clear();
 		cacheLock.unlock();
@@ -105,8 +113,12 @@ public class Cache implements BlockEvictionListener {
 	@Override
 	public void beforeEviction(CachedItem cachedItem) {
 		Block block = cachedItem.block();
-		if (block.dirty()){
-			block.storeToDisk();
+		if (block.dirty()) {
+			try {
+				block.storeToDisk();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 }

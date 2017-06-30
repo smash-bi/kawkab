@@ -59,6 +59,8 @@ public class BlockID {
 	}
 	
 	public Block newBlock() {
+		//TODO: Use an alternate solution where BlockIDs are of different types and they
+		//create only one type of blocks.
 		Block block;
 		if (type == BlockType.IbmapBlock) {
 			block = new Ibmap((int)lowBits);

@@ -3,9 +3,13 @@ package kawkab.fs.core;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
-
-import org.agrona.IoUtil;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.file.Files;
+import java.nio.file.OpenOption;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.HashSet;
+import java.util.Set;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
@@ -13,7 +17,8 @@ import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 
 public class DataBlock extends Block {
-	private MappedByteBuffer buffer;
+	//private MappedByteBuffer buffer;
+	private SeekableByteChannel channel;
 	
 	public long blockNumber; //FIXME: Used for debugging only.
 	
@@ -32,13 +37,32 @@ public class DataBlock extends Block {
 	/**
 	 * This function creates a new block ID and the new file, if required, in the underlying
 	 * filesystem. This function should not use a block of memory as this memory competes with
-	 * the cache memroy.
-	 * @return
+	 * the cache memory.
+	 * 
+	 * @return ID of the newly created block.
+	 * @throws IOException 
 	 */
-	static BlockID createNewBlock(long inumber, long blockNumber) {
+	static BlockID createNewBlock(long inumber, long blockNumber) throws IOException {
+		//Todo: Acquire a block from disk
+		
 		BlockID id = newID(inumber, blockNumber);
 		File file = new File(localPath(id));
-		IoUtil.createEmptyFile(file, Constants.dataBlockSizeBytes, false);
+		
+		if (file.exists()) {
+			//throw new IOException("Block file already exists: " + file.getAbsolutePath()); //FIXME: Throw exception if the file already exists.
+			return id;
+		}
+		
+		File parent = file.getParentFile();
+		if (!parent.exists()) {
+			if (!parent.mkdirs()) {
+				throw new IOException("Unable to create directories: "+parent.getAbsolutePath());
+			}
+		}
+		
+		if (!file.createNewFile()) {
+			throw new IOException("Unable to create block file: "+file.getAbsolutePath());
+		}
 		
 		return id;
 	}
@@ -49,8 +73,9 @@ public class DataBlock extends Block {
 	 * @param length  Number of bytes to append: data[offset] to data[offset+length-1] inclusive.
 	 * @param offsetInFile  
 	 * @return number of bytes appended
+	 * @throws IOException 
 	 */
-	synchronized int append(byte[] data, int offset, int length, long offsetInFile){
+	synchronized int append(byte[] data, int offset, int length, long offsetInFile) throws IOException {
 		assert offset >= 0;
 		assert offset < data.length;
 		
@@ -59,8 +84,19 @@ public class DataBlock extends Block {
 		
 		int toAppend = length <= capacity ? length : capacity;
 		
-		buffer.position(offsetInBlock);
-		buffer.put(data, offset, toAppend);
+		//buffer.position(offsetInBlock);
+		//buffer.put(data, offset, toAppend);
+		
+		ByteBuffer buffer = ByteBuffer.wrap(data, offset, toAppend);
+		
+		channel.position(offsetInBlock);
+		
+		//long t = System.nanoTime();
+		
+		int written = channel.write(buffer);
+		
+		//long elapsed = (System.nanoTime() - t)/1000;
+		//System.out.println("elaped: " + elapsed);
 		
 		//FIXME: Do we need to grab a lock to mark the data block as dirty???
 		//lock.lock();
@@ -69,24 +105,29 @@ public class DataBlock extends Block {
 		
 		//System.out.println("  Append: " + name() + " - " + toAppend);
 		
-		return toAppend;
+		return written;
 	}
 	
-	synchronized int appendLong(long data, long offsetInFile){
+	synchronized int writeLong(long data, long offsetInFile) throws IOException{
 		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
 		int capacity = Constants.dataBlockSizeBytes - offsetInBlock;
 		int longSize = Long.BYTES;
 		if (capacity < longSize)
 			return 0;
 		
-		buffer.putLong(offsetInBlock, data);
+		ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
+		buffer.putLong(data);
+		buffer.flip();
+		
+		channel.position(offsetInFile);
+		int written = channel.write(buffer);
 		
 		//FIXME: Do we need to grab a lock to mark the data block as dirty???
 		//lock.lock();
 		dirty = true;
 		//lock.unlock();
 		
-		return longSize;
+		return written;
 	}
 	
 	synchronized long readLong(long offsetInFile) throws InvalidFileOffsetException, IOException{
@@ -101,27 +142,35 @@ public class DataBlock extends Block {
 					String.format("File Offset %d is invalid. Data block size = %d bytes.", 
 							offsetInBlock, blockSize));
 		
-		//file.seek(offsetInBlock);
-		//return file.readLong();
-		
-		return buffer.getLong(offsetInBlock);
+		ByteBuffer dst = ByteBuffer.allocate(Long.BYTES);
+		channel.position(offsetInBlock);
+		channel.read(dst);
+		dst.flip();
+		return dst.getLong();
+		//return buffer.getLong(offsetInBlock);
 	}
 	
-	synchronized int appendInt(int data, long offsetInFile){
+	synchronized int writeInt(int data, long offsetInFile) throws IOException{
 		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
 		int capacity = Constants.dataBlockSizeBytes - offsetInBlock;
 		int intSize = Integer.BYTES;
 		if (capacity < intSize)
 			return 0;
 		
-		buffer.putInt(offsetInBlock, data);
+		//buffer.putInt(offsetInBlock, data);
+		
+		ByteBuffer src = ByteBuffer.allocate(Integer.BYTES);
+		src.putInt(data);
+		src.flip();
+		channel.position(offsetInBlock);
+		int written = channel.write(src);
 		
 		//FIXME: Do we need to grab a lock to mark the data block as dirty???
 		//lock.lock();
 		dirty = true;
 		//lock.unlock();
 		
-		return intSize;
+		return written;
 	}
 	
 	synchronized int readInt(long offsetInFile) throws InvalidFileOffsetException, IOException{
@@ -139,7 +188,11 @@ public class DataBlock extends Block {
 		//file.seek(offsetInBlock);
 		//return file.readInt();
 		
-		return buffer.getInt(offsetInBlock);
+		ByteBuffer dst = ByteBuffer.allocate(Integer.BYTES);
+		channel.position(offsetInBlock);
+		channel.read(dst);
+		dst.flip();
+		return dst.getInt();
 	}
 	
 	/**
@@ -152,8 +205,6 @@ public class DataBlock extends Block {
 	 * @throws IncorrectOffsetException 
 	 */
 	synchronized int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile) throws InvalidFileOffsetException, IOException{
-		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
-		
 		int blockSize = Constants.dataBlockSizeBytes;
 		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
 		if (offsetInBlock >= blockSize || offsetInBlock < 0) {
@@ -162,15 +213,18 @@ public class DataBlock extends Block {
 					offsetInBlock, blockSize));
 		}
 		
+		
+		
 		int readSize = offsetInBlock+length <= blockSize ? length : blockSize-offsetInBlock;
+		ByteBuffer dst = ByteBuffer.wrap(dstBuffer);
+		dst.position(dstBufferOffset);
+		dst.mark();
+		dst.limit(dstBufferOffset+readSize);
+		channel.position(offsetInBlock);
 		
-		//file.seek(offsetInBlock);
-		//file.read(dstBuffer, dstBufferOffset, readSize);
+		int readBytes = channel.read(dst);
 		
-		buffer.position(offsetInBlock);
-		buffer.get(dstBuffer, dstBufferOffset, readSize);
-		
-		return readSize;
+		return readBytes;
 	}
 	
 	BlockID uuid(){
@@ -179,26 +233,47 @@ public class DataBlock extends Block {
 	
 	@Override
 	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
-		//We don't need this because we are now using memory mapped files.
+		//We don't have to anything here because the loadFromDisk function implemented in this class does not call fromBuffer method. 
 	}
 
 	@Override
 	void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
-		//We don't need this because we are now using memory mapped files.
+		//We don't have to anything here because the storeToDisk function implemented in this class does not call toBuffer method.
 	}
 	
 	@Override
-	public void loadFromDisk() {
+	public void loadFromDisk() throws IOException {
 		//System.out.println("Opening block: " + id);
-		File location = new File(localPath());
-		buffer = IoUtil.mapExistingFile(location, id.key, 0, Constants.dataBlockSizeBytes);
+		Path path = new File(localPath()).toPath();
+		//buffer = IoUtil.mapExistingFile(location, id.key, 0, Constants.dataBlockSizeBytes);
+		Set<OpenOption> options = new HashSet<OpenOption>();
+	    options.add(StandardOpenOption.WRITE);
+	    options.add(StandardOpenOption.READ);
+		channel = Files.newByteChannel(path, options);
+	}
+	
+	
+	/**
+	 * This is the last function called before releasing memory from cache. Therefore, we should also perform
+	 * cleanup operations here.
+	 */
+	@Override
+	public void storeToDisk() throws IOException{
+		//System.out.println("Closing block: " + id);
+		//IoUtil.unmap(buffer);
+		//System.out.println("\tClosed block: " + name());
+		cleanup();
 	}
 	
 	@Override
-	public void storeToDisk(){
-		//System.out.println("Closing block: " + id);
-		IoUtil.unmap(buffer);
-		//System.out.println("\tClosed block: " + name());
+	public void cleanup() throws IOException {
+		if (channel == null)
+			return;
+		
+		if (channel.isOpen())			
+			channel.close();
+		
+		channel = null;
 	}
 
 	@Override
@@ -223,12 +298,17 @@ public class DataBlock extends Block {
 	}
 	
 	private static String localPath(BlockID id) {
+		//TODO: May be a better approach is to use Base64 encoding for the inumber and use hex values
+		//for the block number! Currently it is implemented as the encoding of both values.
+		
 		//String uuid = String.format("%016x%016x", id.highBits, id.lowBits);
+		
 		String uuid = Commons.uuidToString(id.highBits, id.lowBits);
 		int uuidLen = uuid.length();
 		
 		int wordSize = 3; //Number of characters of the Base64 encoding that make a directory
-		int levels = 6; //Number of directory levels //FIXME: we will have 64^3 files in a directory, which is 262144. This may slow down the underlying filesystem.
+		int levels = 6; //Number of directory levels //FIXME: we will have 64^3 files in a directory, 
+						//which is 262144. This may slow down the underlying filesystem.
 		
 		assert wordSize * levels < uuidLen-1;
 		

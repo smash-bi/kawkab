@@ -1,5 +1,6 @@
 package kawkab.fs.commons;
 
+import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.Base64;
 
@@ -20,5 +21,24 @@ public class Commons {
 		buffer.clear();
 		return Base64.getUrlEncoder().withoutPadding().encodeToString(id);
 	}
+	
+	/**
+	 * Copied from Agrona library.
+	 * 
+     * Create a directory if it doesn't already exist.
+     *
+     * @param directory        the directory which definitely exists after this method call.
+     * @param descriptionLabel to associate with the directory for any exceptions.
+     */
+    public static void ensureDirectoryExists(final File directory, final String descriptionLabel)
+    {
+        if (!directory.exists())
+        {
+            if (!directory.mkdirs())
+            {
+                throw new IllegalArgumentException("could not create " + descriptionLabel + " directory: " + directory);
+            }
+        }
+    }
 }
 
