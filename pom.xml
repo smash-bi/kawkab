@@ -40,9 +40,15 @@
 		</dependency>
 
 		<dependency>
-	   <groupId>org.agrona</groupId>
-	   <artifactId>agrona</artifactId>
-	   <version>0.9.5</version>
+	   		<groupId>org.agrona</groupId>
+	   		<artifactId>agrona</artifactId>
+	   		<version>0.9.5</version>
+		</dependency>
+
+		<dependency>
+			<groupID>org.fusesource.leveldbjni</groupID>
+			<artifactID>leveldbjni-all</artifactID>
+			<version>1.8</version>
 		</dependency>
 
 		<!--dependency>
