@@ -2,7 +2,6 @@ package kawkab.fs.core;
 
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
-import java.util.Queue;
 
 import kawkab.fs.commons.Constants;
 

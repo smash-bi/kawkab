@@ -1,8 +1,8 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ByteChannel;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
@@ -105,13 +105,17 @@ public class Inode {
 			long nextBlockStart = (blockNumber + 1) * Constants.dataBlockSizeBytes;
 			int toRead = (int)(offsetInFile+remaining <= nextBlockStart ? remaining : nextBlockStart - offsetInFile);
 			int bytes = 0;
-			try(DataBlock currentBlock = (DataBlock)cache.acquireBlock(curBlkUuid)) {
-				try {
-					//System.out.println("  Reading block " + Commons.uuidToString(curBlkUuidHigh, curBlkUuidLow));
-					bytes = currentBlock.read(buffer, bufferOffset, toRead, offsetInFile);
-				} catch (InvalidFileOffsetException e) {
-					e.printStackTrace();
-					return bufferOffset;
+			
+			DataBlock currentBlock = null;
+			try {
+				currentBlock = (DataBlock)cache.acquireBlock(curBlkUuid);
+				bytes = currentBlock.read(buffer, bufferOffset, toRead, offsetInFile);
+			} catch (InvalidFileOffsetException e) {
+				e.printStackTrace();
+				return bufferOffset;
+			} finally {
+				if (currentBlock != null) {
+					cache.releaseBlock(currentBlock.id());
 				}
 			}
 			
@@ -166,8 +170,14 @@ public class Inode {
 			
 			//TODO: Delete the newly created block if append fails. Also add condition in the DataBlock.createNewBlock()
 			// to throw an exception if the file already exists.
-			try (DataBlock block = (DataBlock)cache.acquireBlock(lastBlockID)) {
+			DataBlock block = null;
+			try {
+				block = (DataBlock)cache.acquireBlock(lastBlockID);
 				bytes = block.append(data, offset, toAppend, fileSize);
+			} finally {
+				if (block != null) {
+					cache.releaseBlock(block.id());
+				}
 			}
 			
 			remaining -= bytes;
@@ -208,7 +218,10 @@ public class Inode {
 		}
 		
 		long blockNumber = fileSize/Constants.dataBlockSizeBytes; //Zero based block number;
-		BlockID dataBlockID = DataBlock.createNewBlock(inumber, blockNumber);
+		BlockID dataBlockID = DataBlock.newID(inumber, blockNumber);
+		DataBlock block = new DataBlock(dataBlockID);
+		cache.createBlock(block);
+		//BlockID dataBlockID = DataBlock.createNewBlock(inumber, blockNumber);
 		
 		//System.out.println(String.format("Created blk: %d, fileSize=%d", blockNumber, fileSize));
 		
@@ -285,38 +298,75 @@ public class Inode {
 		return inumber;
 	}*/
 	
+	void loadFrom(ByteChannel channel) throws IOException {
+		int inodeSizeBytes = Constants.inodeSizeBytes;
+		ByteBuffer buffer = ByteBuffer.allocate(inodeSizeBytes);
+		
+		int bytesRead = Commons.readFrom(channel, buffer);
+		
+		if (bytesRead < inodeSizeBytes) {
+			throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
+					+ "%d bytes out of %d.",bytesRead,inodeSizeBytes));
+		}
+		
+		buffer.flip();
+		inumber = buffer.getLong();
+		fileSize = buffer.getLong();
+	}
+	
+	void storeTo(ByteChannel channel) throws IOException {
+		ByteBuffer buffer = ByteBuffer.allocate(Constants.inodeSizeBytes);
+		buffer.putLong(inumber);
+		buffer.putLong(fileSize);
+		buffer.flip();
+		buffer.limit(buffer.capacity());
+		
+		int bytesWritten = Commons.writeTo(channel, buffer);
+		
+		if (bytesWritten < Constants.inodeSizeBytes) {
+			throw new InsufficientResourcesException(String.format("Full block is not strored. Stored "
+					+ "%d bytes out of %d.",bytesWritten, Constants.inodeSizeBytes));
+		}
+		
+	}
+	
+	
+	/*static Inode fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
+		int inodeSize = Constants.inodeSizeBytes;
+		if (buffer.remaining() < inodeSize)
+			throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
+					+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),inodeSize));
+		
+		if (buffer.remaining() < Constants.inodeSizeBytes)
+			throw new BufferUnderflowException();
+		
+		int initPosition = buffer.position();
+		
+		Inode inode = new Inode(0);
+		inode.inumber = buffer.getLong();
+		inode.fileSize = buffer.getLong();
+		
+		int dataLength = buffer.position() - initPosition;
+		int padLength = Constants.inodeSizeBytes - dataLength;
+		buffer.position(buffer.position()+padLength);
+		
+		return inode;
+	}*/
+	
 	/*
 	 * We need a way to ensure that the concurrent threads do not update this Inode while the block
 	 * is being written to the buffer.
 	 */
-	void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
+	/*void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
 		int inodeSize = Constants.inodeSizeBytes;
 		if (buffer.capacity() < inodeSize)
 			throw new InsufficientResourcesException(String.format("Buffer capacity is less than "
 					+ "required: Capacity = %d bytes, required = %d bytes.",buffer.capacity(),inodeSize));
 		
 		int initPosition = buffer.position();
-		//buffer.putLong(inumber);
 		
 		buffer.putLong(inumber);
 		buffer.putLong(fileSize);
-		
-		//for(int i=0; i<directBlockUuid.length; i++){
-		//	buffer.putLong(directBlockUuid[i].uuidHigh);
-		//	buffer.putLong(directBlockUuid[i].uuidLow);
-		//}
-		
-		//buffer.putLong(indirectBlockUuid.uuidHigh);
-		//buffer.putLong(indirectBlockUuid.uuidLow);
-		
-		//buffer.putLong(doubleIndirectBlockUuid.uuidHigh);
-		//buffer.putLong(doubleIndirectBlockUuid.uuidLow);
-		
-		//buffer.putLong(tripleIndirectBlockUuid.uuidHigh);
-		//buffer.putLong(tripleIndirectBlockUuid.uuidLow);
-		
-		//buffer.putLong(lastBlockUuid.highBits);
-		//buffer.putLong(lastBlockUuid.lowBits);
 		
 		int dataLength = buffer.position() - initPosition;
 		int padLength = Math.max(0, Constants.inodeSizeBytes - dataLength);
@@ -327,59 +377,17 @@ public class Inode {
 			byte[] padding = new byte[padLength];
 			buffer.put(padding);
 		}
-	}
-	
-	static Inode fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		int inodeSize = Constants.inodeSizeBytes;
-		if (buffer.remaining() < inodeSize)
-			throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
-					+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),inodeSize));
-		
-		if (buffer.remaining() < Constants.inodeSizeBytes)
-			throw new BufferUnderflowException();
-		
-		//inumber = buffer.getLong();
-		
-		int initPosition = buffer.position();
-		
-		Inode inode = new Inode(0);
-		inode.inumber = buffer.getLong();
-		inode.fileSize = buffer.getLong();
-		
-		//inode.directBlockUuid = new BlockID[Constants.directBlocksPerInode];
-		//for (int i=0; i<Constants.directBlocksPerInode; i++){
-		//	long uuidHigh = buffer.getLong();
-		//	long uuidLow = buffer.getLong();
-		//	inode.directBlockUuid[i] = new BlockID(uuidHigh, uuidLow, DataBlock.name(uuidHigh, uuidLow), BlockType.DataBlock);
-		//}
-		
-		//long high = buffer.getLong();
-		//long low = buffer.getLong();
-		//inode.indirectBlockUuid = new BlockID(high, low, DataBlock.name(high, low), BlockType.DataBlock);
-		
-		//high = buffer.getLong();
-		//low = buffer.getLong();
-		//inode.doubleIndirectBlockUuid = new BlockID(high, low, DataBlock.name(high, low), BlockType.DataBlock);
-		
-		//high = buffer.getLong();
-		//low = buffer.getLong();
-		//inode.tripleIndirectBlockUuid = new BlockID(high, low, DataBlock.name(high, low), BlockType.DataBlock);
-		
-		//high = buffer.getLong();
-		//low = buffer.getLong();
-		//inode.lastBlockUuid = new BlockID(high, low, DataBlock.name(high, low), BlockType.DataBlock);
-		
-		int dataLength = buffer.position() - initPosition;
-		int padLength = Constants.inodeSizeBytes - dataLength;
-		buffer.position(buffer.position()+padLength);
-		
-		//inode.blocksCount = (long)Math.ceil(1.0 * inode.fileSize / Constants.dataBlockSizeBytes);
-		
-		return inode;
-	}
+	}*/
 	
 	public static int inodesSize(){
-		return (Constants.directBlocksPerInode + 4) * 16 + 8 + 32;
+		//FIXME: Make it such that inodesBlockSizeBytes % inodeSizeBytes == 0
+		//This can be achieved if size is rounded to 32, 64, 128, ...
+		
+		//Direct and indirect pointers + filesize + inumber + reserved.
+		int size = (Constants.directBlocksPerInode + 3)*16 + 8 + 0;
+		size = size + (64 % size);
+		
+		return size; 
 	}
 	
 	boolean dirty(){

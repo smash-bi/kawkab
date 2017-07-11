@@ -1,13 +1,8 @@
 package kawkab.fs.core;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-
+/**
+ * This class need to be deleted.
+ */
 public class LocalStore {
 	private static LocalStore instance;
 	
@@ -21,7 +16,7 @@ public class LocalStore {
 		return instance;
 	}
 	
-	public void writeBlock(Block block) throws IOException {
+	/*public void writeBlock(Block block) throws IOException {
 		System.out.println("\tWriting block to disk: " + block + " - " + block.type());
 		
 		//new Exception().printStackTrace();
@@ -53,5 +48,5 @@ public class LocalStore {
 		
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		block.fromBuffer(buffer);
-	}
+	}*/
 }

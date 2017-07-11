@@ -2,10 +2,9 @@ package kawkab.fs.core;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.nio.channels.ByteChannel;
 
 import kawkab.fs.commons.Constants;
-import kawkab.fs.core.exceptions.InsufficientResourcesException;
 
 public class InodesBlock extends Block {
 	private final static String namePrefix = "inb";
@@ -38,13 +37,6 @@ public class InodesBlock extends Block {
 		return inodes[inodeIdxFromInumber(inumber)];
 	}
 	
-	/*
-	 * The caller should lock this inodesBlock before calling this funciton. 
-	 */
-	public void markDirty(){
-		dirty = true;
-	}
-	
 	/**
 	 * Returns the current size of the file, in bytes, that is associated with the given inumber.
 	 * @param inumber the inode number associated with the file. The caller of this function must
@@ -60,17 +52,41 @@ public class InodesBlock extends Block {
 	void initInode(long inumber){
 		int inodeNumber = inodeIdxFromInumber(inumber);
 		
-		lock.lock();
+		lock();
+		inodes[inodeNumber] = new Inode(inumber);
+		unlock();
+	}
+	
+	@Override
+	public void loadFrom(ByteChannel channel) throws IOException {
+		lock();
 		try {
-			inodes[inodeNumber] = new Inode(inumber);
-		}finally {
-			lock.unlock();
+			inodes = new Inode[Constants.inodesPerBlock];
+			for(int i=0; i<Constants.inodesPerBlock; i++){
+				inodes[i] = new Inode(0);
+				inodes[i].loadFrom(channel);
+			}
+		} finally {
+			unlock();
 		}
 	}
 	
 	@Override
+	public void storeTo(ByteChannel channel) throws IOException {
+		lock();
+		try {
+			for(Inode inode : inodes) {
+				inode.storeTo(channel);
+			}
+		} finally {
+			unlock();
+		}
+	}
+	
+	
+	/*@Override
 	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		lock.lock();
+		lock();
 		try {
 			int blockSize = Constants.inodesBlockSizeBytes;
 			
@@ -84,16 +100,16 @@ public class InodesBlock extends Block {
 			for(int i=0; i<Constants.inodesPerBlock; i++){
 				inodes[i] = Inode.fromBuffer(buffer);
 			}
-		}finally{
-			lock.unlock();
+		} finally {
+			unlock();
 		}
-	}
+	}*/
 	
 	/*
 	 * (non-Javadoc)
 	 * @see kawkab.fs.core.Block#toBuffer(java.nio.ByteBuffer)
 	 */
-	@Override
+	/*@Override
 	void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
 		//FIXME: Do we need to acquire the lock here??? We should not! Otherwise, we will have a high performance hit.
 		
@@ -105,7 +121,7 @@ public class InodesBlock extends Block {
 		for(Inode inode : inodes) {
 			inode.toBuffer(buffer);
 		}
-	}
+	}*/
 	
 	@Override
 	String name() {
@@ -142,7 +158,8 @@ public class InodesBlock extends Block {
 			folder.mkdirs();
 		}
 		
-		LocalStore storage = LocalStore.instance();
+		//LocalStore storage = LocalStore.instance();
+		Cache cache = Cache.instance();
 		int offset = Constants.inodesBlocksRangeStart;
 		for(int i=0; i<Constants.inodeBlocksPerMachine; i++){
 			InodesBlock block = new InodesBlock(offset+i);
@@ -153,8 +170,9 @@ public class InodesBlock extends Block {
 			}
 			
 			File file = new File(block.localPath());
-			if (!file.exists()){
-				storage.writeBlock(block);
+			if (!file.exists()) {
+				//storage.writeBlock(block);
+				cache.createBlock(block);
 			}
 		}
 		

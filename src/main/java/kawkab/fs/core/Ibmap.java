@@ -3,8 +3,10 @@ package kawkab.fs.core;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ByteChannel;
 import java.util.BitSet;
 
+import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.InodeNumberOutOfRangeException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
@@ -37,18 +39,15 @@ public class Ibmap extends Block{
 	long nextInode(){
 		int bitIdx = -1;
 		
-		lock.lock();
+		lock();
 		try {
-			try{
-				bitIdx = bitset.nextClearBit(0);
-			}catch(IndexOutOfBoundsException e){
-				return -1;
-			}
-			
+			bitIdx = bitset.nextClearBit(0);
 			bitset.set(bitIdx);
-			dirty = true;
+			markDirty();
+		} catch(IndexOutOfBoundsException e){
+			return -1;
 		} finally {
-			lock.unlock();
+			unlock();
 		}
 		
 		long inumber = bitIndexToInumber(blockIndex, bitIdx); //Convert the bit index to inumber
@@ -78,46 +77,38 @@ public class Ibmap extends Block{
 		//bitIdx associated with the given inumber
 		int bitIdx = inumberToBitIndex(inumber); //inumber % ibmapBlockSize in bits
 		
-		lock.lock();
+		lock();
 		try{
 			bitset.clear(bitIdx);     //mark the bit as unused
-			dirty = true;
+			markDirty();
 		}finally{
-			lock.unlock();
+			unlock();
 		}
+	}
+	
+	@Override
+	public void loadFrom(ByteChannel channel) throws IOException {
+		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
+		ByteBuffer buffer = ByteBuffer.wrap(bytes);
+		int bytesRead = Commons.readFrom(channel, buffer);
+		if (bytesRead < bytes.length)
+			throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
+					+ "%d bytes out of %d.",bytesRead,bytes.length));
 		
+		bitset = BitSet.valueOf(bytes);
 	}
 	
 	@Override
-	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		lock.lock();
-		try {
-			int blockSize = Constants.ibmapBlockSizeBytes;
-			if (buffer.remaining() < blockSize)
-				throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
-						+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),blockSize));
-			
-			byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
-			buffer.get(bytes);
-			bitset = BitSet.valueOf(bytes); //TODO: Convert it to long array.
-		} finally {
-			lock.unlock();
-		}
-	}
-	
-	@Override
-	void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		lock.lock();
-		try {
-			int blockSize = Constants.ibmapBlockSizeBytes;
-			if (buffer.capacity() < blockSize)
-				throw new InsufficientResourcesException(String.format("Buffer capacity is less than "
-							+ "required: Capacity = %d bytes, required = %d bytes.",buffer.capacity(),blockSize));
-			
-			byte[] bytes = bitset.toByteArray();
-			buffer.put(bytes);
-		} finally {
-			lock.unlock();
+	public void storeTo(ByteChannel channel) throws IOException {
+		ByteBuffer buffer = ByteBuffer.allocate(Constants.ibmapBlockSizeBytes);
+		buffer.put(bitset.toByteArray());
+		buffer.flip();
+		buffer.limit(buffer.capacity());
+		
+		int bytesWritten = Commons.writeTo(channel, buffer);
+		if (bytesWritten < buffer.capacity()) {
+			throw new InsufficientResourcesException(String.format("Full block is not strored. Stored "
+					+ "%d bytes out of %d.",bytesWritten, buffer.capacity()));
 		}
 	}
 	
@@ -133,20 +124,22 @@ public class Ibmap extends Block{
 			return;
 		
 		File folder = new File(Constants.ibmapsPath);
-		if (!folder.exists()){
+		if (!folder.exists()) {
 			System.out.println("  Creating folder: " + folder.getAbsolutePath());
 			folder.mkdirs();
 		}
 		
-		LocalStore storage = LocalStore.instance();
+		//LocalStore storage = LocalStore.instance();
+		Cache cache = Cache.instance();
 		int offset = Constants.ibmapBlocksRangeStart;
 		for(int i=0; i<Constants.ibmapBlocksPerMachine; i++){
 			Ibmap ibmap = new Ibmap(offset+i);
 			ibmap.bitset = new BitSet(Constants.ibmapBlockSizeBytes*8);
 			
 			File file = new File(ibmap.localPath());
-			if (!file.exists()){
-				storage.writeBlock(ibmap);
+			if (!file.exists()) {
+				//storage.writeBlock(ibmap);
+				cache.createBlock(ibmap);
 			}
 		}
 		

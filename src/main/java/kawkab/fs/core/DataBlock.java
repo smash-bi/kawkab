@@ -3,13 +3,7 @@ package kawkab.fs.core;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.SeekableByteChannel;
-import java.nio.file.Files;
-import java.nio.file.OpenOption;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.util.HashSet;
-import java.util.Set;
+import java.nio.channels.ByteChannel;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
@@ -18,7 +12,8 @@ import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 
 public class DataBlock extends Block {
 	//private MappedByteBuffer buffer;
-	private SeekableByteChannel channel;
+	//private SeekableByteChannel channel;
+	private byte[] bytes;
 	
 	public long blockNumber; //FIXME: Used for debugging only.
 	
@@ -29,8 +24,9 @@ public class DataBlock extends Block {
 	 * function for that purpose. 
 	 * @param uuid
 	 */
-	DataBlock(BlockID uuid){
+	DataBlock(BlockID uuid) {
 		super(uuid, BlockType.DataBlock);
+		bytes = new byte[0];
 		//System.out.println(" Opened block: " + name());
 	}
 	
@@ -43,7 +39,7 @@ public class DataBlock extends Block {
 	 * @throws IOException 
 	 */
 	static BlockID createNewBlock(long inumber, long blockNumber) throws IOException {
-		//Todo: Acquire a block from disk
+		//TODO: Create new block using Cache
 		
 		BlockID id = newID(inumber, blockNumber);
 		File file = new File(localPath(id));
@@ -84,28 +80,23 @@ public class DataBlock extends Block {
 		
 		int toAppend = length <= capacity ? length : capacity;
 		
-		//buffer.position(offsetInBlock);
-		//buffer.put(data, offset, toAppend);
-		
-		ByteBuffer buffer = ByteBuffer.wrap(data, offset, toAppend);
-		
-		channel.position(offsetInBlock);
-		
 		//long t = System.nanoTime();
-		
-		int written = channel.write(buffer);
-		
+		System.arraycopy(data, offset, bytes, offsetInBlock, toAppend);
 		//long elapsed = (System.nanoTime() - t)/1000;
 		//System.out.println("elaped: " + elapsed);
 		
-		//FIXME: Do we need to grab a lock to mark the data block as dirty???
-		//lock.lock();
-		dirty = true;
-		//lock.unlock();
+		//buffer.position(offsetInBlock);
+		//buffer.put(data, offset, toAppend);
+		
+		/*ByteBuffer buffer = ByteBuffer.wrap(data, offset, toAppend);
+		channel.position(offsetInBlock);
+		int written = channel.write(buffer);*/
+		
+		markDirty();
 		
 		//System.out.println("  Append: " + name() + " - " + toAppend);
 		
-		return written;
+		return toAppend;
 	}
 	
 	synchronized int writeLong(long data, long offsetInFile) throws IOException{
@@ -115,19 +106,12 @@ public class DataBlock extends Block {
 		if (capacity < longSize)
 			return 0;
 		
-		ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
-		buffer.putLong(data);
-		buffer.flip();
+		ByteBuffer buffer = ByteBuffer.wrap(bytes);
+		buffer.putLong(offsetInBlock, data);
 		
-		channel.position(offsetInFile);
-		int written = channel.write(buffer);
+		markDirty();
 		
-		//FIXME: Do we need to grab a lock to mark the data block as dirty???
-		//lock.lock();
-		dirty = true;
-		//lock.unlock();
-		
-		return written;
+		return longSize;
 	}
 	
 	synchronized long readLong(long offsetInFile) throws InvalidFileOffsetException, IOException{
@@ -142,12 +126,8 @@ public class DataBlock extends Block {
 					String.format("File Offset %d is invalid. Data block size = %d bytes.", 
 							offsetInBlock, blockSize));
 		
-		ByteBuffer dst = ByteBuffer.allocate(Long.BYTES);
-		channel.position(offsetInBlock);
-		channel.read(dst);
-		dst.flip();
-		return dst.getLong();
-		//return buffer.getLong(offsetInBlock);
+		ByteBuffer buffer = ByteBuffer.wrap(bytes);
+		return buffer.getLong(offsetInBlock);
 	}
 	
 	synchronized int writeInt(int data, long offsetInFile) throws IOException{
@@ -159,18 +139,11 @@ public class DataBlock extends Block {
 		
 		//buffer.putInt(offsetInBlock, data);
 		
-		ByteBuffer src = ByteBuffer.allocate(Integer.BYTES);
-		src.putInt(data);
-		src.flip();
-		channel.position(offsetInBlock);
-		int written = channel.write(src);
+		ByteBuffer buffer = ByteBuffer.wrap(bytes);
+		buffer.putInt(offsetInBlock, data);
+		markDirty();
 		
-		//FIXME: Do we need to grab a lock to mark the data block as dirty???
-		//lock.lock();
-		dirty = true;
-		//lock.unlock();
-		
-		return written;
+		return intSize;
 	}
 	
 	synchronized int readInt(long offsetInFile) throws InvalidFileOffsetException, IOException{
@@ -188,11 +161,8 @@ public class DataBlock extends Block {
 		//file.seek(offsetInBlock);
 		//return file.readInt();
 		
-		ByteBuffer dst = ByteBuffer.allocate(Integer.BYTES);
-		channel.position(offsetInBlock);
-		channel.read(dst);
-		dst.flip();
-		return dst.getInt();
+		ByteBuffer buffer = ByteBuffer.wrap(bytes);
+		return buffer.getInt(offsetInBlock);
 	}
 	
 	/**
@@ -204,7 +174,8 @@ public class DataBlock extends Block {
 	 * @throws IOException 
 	 * @throws IncorrectOffsetException 
 	 */
-	synchronized int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile) throws InvalidFileOffsetException, IOException{
+	synchronized int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile) 
+			throws InvalidFileOffsetException, IOException{
 		int blockSize = Constants.dataBlockSizeBytes;
 		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
 		if (offsetInBlock >= blockSize || offsetInBlock < 0) {
@@ -213,18 +184,9 @@ public class DataBlock extends Block {
 					offsetInBlock, blockSize));
 		}
 		
-		
-		
 		int readSize = offsetInBlock+length <= blockSize ? length : blockSize-offsetInBlock;
-		ByteBuffer dst = ByteBuffer.wrap(dstBuffer);
-		dst.position(dstBufferOffset);
-		dst.mark();
-		dst.limit(dstBufferOffset+readSize);
-		channel.position(offsetInBlock);
-		
-		int readBytes = channel.read(dst);
-		
-		return readBytes;
+		System.arraycopy(bytes, offsetInBlock, dstBuffer, dstBufferOffset, readSize);
+		return readSize;
 	}
 	
 	BlockID uuid(){
@@ -232,6 +194,40 @@ public class DataBlock extends Block {
 	}
 	
 	@Override
+	public void loadFrom(ByteChannel channel) throws IOException {
+		lock();
+		try {
+			bytes = new byte[Constants.dataBlockSizeBytes];
+			ByteBuffer buffer = ByteBuffer.wrap(bytes);
+			
+			int bytesRead = Commons.readFrom(channel, buffer); //FIXME: What if the number of bytes read is less than the block size?
+			//if (bytesRead < bytes.length)
+			//	throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
+			//			+ "%d bytes out of %d.",bytesRead,bytes.length));
+		} finally {
+			unlock();
+		}
+	}
+	
+	@Override
+	public void storeTo(ByteChannel channel) throws IOException {
+		lock();
+		try {
+			ByteBuffer buffer = ByteBuffer.wrap(bytes);
+			int capacity = buffer.capacity();
+			int bytesWritten = Commons.writeTo(channel, buffer);
+			
+			if (bytesWritten < capacity) {
+				throw new InsufficientResourcesException(String.format("Full block is not strored. Stored "
+						+ "%d bytes out of %d.",bytesWritten, capacity));
+			}
+		} finally {
+			unlock();
+		}
+	}
+	
+	
+	/*@Override
 	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
 		//We don't have to anything here because the loadFromDisk function implemented in this class does not call fromBuffer method. 
 	}
@@ -242,7 +238,7 @@ public class DataBlock extends Block {
 	}
 	
 	@Override
-	public void loadFromDisk() throws IOException {
+	public void load() throws IOException {
 		//System.out.println("Opening block: " + id);
 		Path path = new File(localPath()).toPath();
 		//buffer = IoUtil.mapExistingFile(location, id.key, 0, Constants.dataBlockSizeBytes);
@@ -250,30 +246,24 @@ public class DataBlock extends Block {
 	    options.add(StandardOpenOption.WRITE);
 	    options.add(StandardOpenOption.READ);
 		channel = Files.newByteChannel(path, options);
-	}
+	}*/
 	
 	
 	/**
 	 * This is the last function called before releasing memory from cache. Therefore, we should also perform
 	 * cleanup operations here.
 	 */
-	@Override
-	public void storeToDisk() throws IOException{
+	/*@Override
+	public void store() throws IOException{
 		//System.out.println("Closing block: " + id);
 		//IoUtil.unmap(buffer);
 		//System.out.println("\tClosed block: " + name());
 		cleanup();
-	}
+	}*/
 	
 	@Override
 	public void cleanup() throws IOException {
-		if (channel == null)
-			return;
-		
-		if (channel.isOpen())			
-			channel.close();
-		
-		channel = null;
+		bytes = null;
 	}
 
 	@Override

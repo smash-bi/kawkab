@@ -1,7 +1,9 @@
 package kawkab.fs.commons;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ByteChannel;
 import java.util.Base64;
 
 public class Commons {
@@ -39,6 +41,46 @@ public class Commons {
                 throw new IllegalArgumentException("could not create " + descriptionLabel + " directory: " + directory);
             }
         }
+    }
+    
+    /**
+     * Reads toBuffer.remaining() bytes from the channel into the toBuffer.
+     * 
+     * @param channel Read from the channel
+     * @param toBuffer Read into the buffer
+     * @param size Number of bytes to read
+     * @return Total number of bytes read from the channel.
+     * @throws IOException
+     */
+    public static int readFrom(ByteChannel channel, ByteBuffer toBuffer) throws IOException {
+    	int readNow = 0;
+    	int totalRead = 0;
+    	int size = toBuffer.remaining();
+    	
+    	while(readNow >= 0 && totalRead < size) {
+    		readNow = channel.read(toBuffer);
+    		totalRead += readNow;
+    	}
+    	
+    	return totalRead;
+    }
+    
+    /**
+     * Writes fromBuffer.remaining() bytes from fromBuffer into toChannel.
+     * @param toChannel
+     * @param fromBuffer
+     * @param size
+     * @return The number of bytes written into the channel.
+     * @throws IOException
+     */
+    public static int writeTo(ByteChannel toChannel, ByteBuffer fromBuffer) throws IOException {
+    	int bytesWritten = 0;
+    	int size = fromBuffer.remaining();
+    	while(bytesWritten < size) {
+    		bytesWritten += toChannel.write(fromBuffer);
+    	}
+    	
+    	return bytesWritten;
     }
 }
 

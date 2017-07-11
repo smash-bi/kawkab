@@ -54,13 +54,17 @@ public final class FileHandle {
 		long fileSize = 0;
 		
 		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, blockIndex, InodesBlock.name(blockIndex), BlockType.InodeBlock);
-		try (InodesBlock block = (InodesBlock)cache.acquireBlock(id)) {
+		
+		InodesBlock block = null;
+		try {
+			block = (InodesBlock)cache.acquireBlock(id);
 			block.lock();
-			try {
-				inode = block.getInode(inumber);
-				fileSize = inode.fileSize();
-			} finally {
+			inode = block.getInode(inumber);
+			fileSize = inode.fileSize();
+		} finally {
+			if (block != null) {
 				block.unlock();
+				cache.releaseBlock(block.id());
 			}
 		}
 		
@@ -215,7 +219,10 @@ public final class FileHandle {
 		int appendedBytes = 0;
 		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
 		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, inodesBlockIdx, InodesBlock.name(inodesBlockIdx), BlockType.InodeBlock);
-		try (InodesBlock block = (InodesBlock)cache.acquireBlock(id)) {
+		
+		InodesBlock block = null;
+		try {
+			block = (InodesBlock)cache.acquireBlock(id);
 			//block.lock();
 			//try {
 				//TODO: 3. If file is currently being updated, wait on an updateCondition
@@ -229,12 +236,13 @@ public final class FileHandle {
 			
 			if (appendedBytes > 0) {
 				block.lock();
-				try {
-					inode.updateSize(appendedBytes);
-					block.markDirty();
-				} finally {
-					block.unlock();
-				}
+				inode.updateSize(appendedBytes);
+				block.markDirty();
+			}
+		} finally {
+			if (block != null) {
+				block.unlock();
+				cache.releaseBlock(block.id());
 			}
 		}
 		
@@ -248,10 +256,17 @@ public final class FileHandle {
 		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
 		long size = 0;
 		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, inodesBlockIdx, InodesBlock.name(inodesBlockIdx), BlockType.InodeBlock);
-		try(InodesBlock block = (InodesBlock) cache.acquireBlock(id)) {
+		
+		InodesBlock block = null;
+		try {
+			block = (InodesBlock) cache.acquireBlock(id);
 			size = block.fileSize(inumber);
 		} catch (IOException e) {
 			e.printStackTrace();
+		} finally {
+			if (block != null) {
+				cache.releaseBlock(block.id());
+			}
 		}
 		
 		return size;

@@ -20,14 +20,15 @@ public class FSTest {
 				MaxFileSizeExceededException, InterruptedException, IbmapsFullException, 
 				InvalidFileOffsetException, InvalidFileModeException, IOException {
 		FSTest tester = new FSTest();
+		Constants.printConfig();
 		tester.testBootstrap();
-		//tester.testBlocksCreation();
-		//tester.testSmallReadWrite();
+		tester.testBlocksCreation();
+		tester.testSmallReadWrite();
 		//tester.testLargeReadWrite();
 		//tester.testMultipleReaders();
 		//tester.testMultipleFiles();
 		//tester.testWritePerformance();
-		tester.testWritePerformanceConcurrentFiles();
+		//tester.testWritePerformanceConcurrentFiles();
 		//tester.testReadPerformance();
 		//tester.testReadPerfMultiReadersSameFile();
 		

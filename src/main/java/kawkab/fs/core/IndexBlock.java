@@ -61,7 +61,10 @@ public class IndexBlock {
 		long indexPointer = blockInThisIndex / blocksPerPointer;
 		
 		Cache cache = Cache.instance();
-		try(DataBlock thisIndexBlock = (DataBlock)cache.acquireBlock(uuid)) { //Every index block closes its own data block and flushes to disk.
+		
+		DataBlock thisIndexBlock = null;
+		try {
+			thisIndexBlock = (DataBlock)cache.acquireBlock(uuid); //Every index block closes its own data block and flushes to disk.
 			int offsetInBlock = (int)indexPointer * pointerSizeBytes;
 			long pointerUuidHigh = thisIndexBlock.readLong(offsetInBlock);
 			long pointerUuidLow = thisIndexBlock.readLong(offsetInBlock+8);
@@ -82,6 +85,10 @@ public class IndexBlock {
 			//		indexLevel, blockNumber, blockInThisIndex, indexPointer, Commons.uuidToString(nextIndexBlock.uuidHigh, nextIndexBlock.uuidLow)));
 			
 			nextIndexBlock.addBlock(dataBlockID, blockNumber);
+		} finally {
+			if (thisIndexBlock != null) {
+				cache.releaseBlock(thisIndexBlock.id());
+			}
 		}
 	}
 	
@@ -95,9 +102,15 @@ public class IndexBlock {
 		//		globalBlockNumber, blockNumber,Commons.uuidToString(dataBlock.uuidHigh(), dataBlock.uuidLow()), offsetInIdxBlock));
 		
 		Cache cache = Cache.instance();
-		try (DataBlock thisIndexBlock = (DataBlock)cache.acquireBlock(uuid)) {
+		DataBlock thisIndexBlock = null;
+		try {
+			thisIndexBlock = (DataBlock)cache.acquireBlock(uuid);
 			thisIndexBlock.writeLong(dataBlockID.highBits, offsetInIdxBlock);
 			thisIndexBlock.writeLong(dataBlockID.lowBits, offsetInIdxBlock + 8);
+		} finally {
+			if (thisIndexBlock != null) {
+				cache.releaseBlock(thisIndexBlock.id());
+			}
 		}
 	}
 	
@@ -112,9 +125,15 @@ public class IndexBlock {
 			Cache cache = Cache.instance();
 			long uuidHigh = 0;
 			long uuidLow = 0;
-			try(DataBlock thisIndexBlock = (DataBlock)cache.acquireBlock(uuid)) {
+			DataBlock thisIndexBlock = null;
+			try {
+				thisIndexBlock = (DataBlock)cache.acquireBlock(uuid);
 				uuidHigh = thisIndexBlock.readLong(offsetInIndexBlock);
 				uuidLow = thisIndexBlock.readLong(offsetInIndexBlock+8);
+			} finally {
+				if (thisIndexBlock != null) {
+					cache.releaseBlock(thisIndexBlock.id());
+				}
 			}
 			
 			//System.out.println(String.format("\t\t\t\t %d <== %d : %d->%d, block uuid %s", indexLevel, offsetInFile, 
@@ -130,9 +149,17 @@ public class IndexBlock {
 		Cache cache = Cache.instance();
 		long pointerUuidHigh = 0;
 		long pointerUuidLow = 0;
-		try (DataBlock thisIndexBlock = (DataBlock)cache.acquireBlock(uuid)) {
+		
+		
+		DataBlock thisIndexBlock = null;
+		try {
+			thisIndexBlock = (DataBlock)cache.acquireBlock(uuid);
 			pointerUuidHigh = thisIndexBlock.readLong(indexPointerOffset);
 			pointerUuidLow = thisIndexBlock.readLong(indexPointerOffset+8);
+		} finally {
+			if (thisIndexBlock != null) {
+				cache.releaseBlock(thisIndexBlock.id());
+			}
 		}
 		BlockID pointerBlockID = new BlockID(pointerUuidHigh, pointerUuidLow, DataBlock.name(pointerUuidHigh, pointerUuidLow), BlockType.DataBlock);
 		IndexBlock nextIndexBlock = new IndexBlock(pointerBlockID, indexLevel-1);

@@ -1,22 +1,30 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.nio.channels.ByteChannel;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import kawkab.fs.core.exceptions.InsufficientResourcesException;
-
-public abstract class Block implements AutoCloseable {
+public abstract class Block /*implements AutoCloseable*/ {
 	public enum BlockType {
 		DataBlock, InodeBlock, IbmapBlock
 	}
 	
-	protected Lock lock;
-	protected boolean dirty;
+	private final Lock lock;
+	private final Condition syncWait;
+	private int dirtyCount;
+	
 	protected final BlockID id;
-	protected Cache cache = Cache.instance();
+	//protected Cache cache = Cache.instance(); //FIXME: This creates circular dependencies, which can lead to deadlocks
 	protected BlockType type; //Used for debugging only.
+	
+	protected Block(BlockID id, BlockType type) {
+		this.id = id;
+		this.type = type;
+		lock = new ReentrantLock();
+		syncWait = lock.newCondition();
+	}
 	
 	/**
 	 * Acquire the values of this block from the given Buffer. This function loads values of the
@@ -25,14 +33,14 @@ public abstract class Block implements AutoCloseable {
 	 * @param buffer
 	 * @throws InsufficientResourcesException
 	 */
-	abstract void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException;
+	//abstract void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException;
 	
 	/**
 	 * Serializes this block in the given buffer.
 	 * @param buffer
 	 * @throws InsufficientResourcesException
 	 */
-	abstract void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException;
+	//abstract void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException;
 	
 	/**
 	 * @return Returns the name of the current block, which can be used as a unique key.
@@ -53,29 +61,80 @@ public abstract class Block implements AutoCloseable {
 	 */
 	abstract int blockSize();
 	
-	protected Block(BlockID id, BlockType type) {
-		this.id = id;
-		this.type = type;
-		lock = new ReentrantLock();
-		dirty = false;
+	abstract public void loadFrom(ByteChannel channel)  throws IOException;
+	
+	abstract public void storeTo(ByteChannel channel)  throws IOException;
+	
+	
+	@Override
+	public String toString(){
+		return name();
 	}
 	
-	/**
-	 * Clears the dirty bit of this block.
-	 */
-	void clearDirty(){
-		dirty = false;
+	public BlockType type(){
+		return type;
 	}
+	
+	/*public void loadFrom() throws IOException {
+		LocalStore store = LocalStore.instance();
+		try {
+			store.readBlock(this);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void storeTo() throws IOException {
+		LocalStore store = LocalStore.instance();
+		try {
+			store.writeBlock(this);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}*/
+	
+	
+	
 	
 	/**
 	 * @return Returns whether this block has been modified until now or not.
 	 */
 	boolean dirty(){
-		return dirty;
+		boolean isDirty = false;
+		lock();
+			if (dirtyCount > 0)
+				isDirty = true;
+		unlock();
+		
+		return isDirty;
 	}
 	
-	void markDirty(){
-		dirty = true;
+	public void markDirty() {
+		lock();
+		dirtyCount++;
+		unlock();
+	}
+	
+	public int dirtyCount() {
+		return dirtyCount;
+	}
+	
+	/**
+	 * Clears the dirty bit of this block.
+	 */
+	public void clearDirty(int count) {
+		lock();
+		try {
+			dirtyCount -= count;
+			if (dirtyCount == 0) {
+				syncWait.signal();
+			}
+			
+			assert dirtyCount >= 0;
+			
+		} finally {
+			unlock();
+		}
 	}
 	
 	public void lock(){
@@ -91,44 +150,32 @@ public abstract class Block implements AutoCloseable {
 	}
 	
 	/**
-	 * This function causes the cache to flush this block if the block is dirty. This function
-	 * does not closes this block from writing. It overrides the close function in the AutoCloseable
-	 * interface.
-	 */
-	@Override
-	public void close(){
-		cache.releaseBlock(this.id());
-	}
-	
-	/**
 	 * Releases any acquired resources such as file channels
 	 */
 	public void cleanup() throws IOException {}
 	
-	@Override
-	public String toString(){
-		return name();
-	}
+	/**
+	 * This function causes the cache to flush this block if the block is dirty. This function
+	 * does not closes this block from writing. It overrides the close function in the AutoCloseable
+	 * interface.
+	 */
+	/*@Override
+	public void close(){
+		cache.releaseBlock(this.id());
+	}*/
 	
-	public BlockType type(){
-		return type;
-	}
-	
-	public void loadFromDisk() throws IOException {
-		LocalStore store = LocalStore.instance();
+	/**
+	 * The caller thread blocks until this block is synced to the storage medium.
+	 * @throws InterruptedException 
+	 */
+	public void waitUntilSynced() throws InterruptedException {
+		lock();
 		try {
-			store.readBlock(this);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-	
-	public void storeToDisk() throws IOException {
-		LocalStore store = LocalStore.instance();
-		try {
-			store.writeBlock(this);
-		} catch (IOException e) {
-			e.printStackTrace();
+			while (dirtyCount > 0) {
+				syncWait.await();
+			}
+		} finally {
+			unlock();
 		}
 	}
 }

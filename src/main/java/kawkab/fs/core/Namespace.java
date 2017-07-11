@@ -71,7 +71,10 @@ public class Namespace {
 		while(true){ //Iterate over the ibmap blocks.
 			//try(Ibmap ibmap = cache.getIbmap(mapNum)) {
 			BlockID id = new BlockID(Constants.ibmapUuidHigh, mapNum, Ibmap.name(mapNum), BlockType.IbmapBlock);
-			try(Ibmap ibmap = (Ibmap)(cache.acquireBlock(id))) {
+			Ibmap ibmap = null;
+			
+			try {
+				ibmap = (Ibmap)(cache.acquireBlock(id));
 				inumber = ibmap.nextInode();
 				if (inumber >=0)
 					break;
@@ -79,6 +82,10 @@ public class Namespace {
 				mapNum = (mapNum + 1) % Constants.ibmapBlocksPerMachine;
 				if (mapNum == lastIbmapUsed){
 					throw new IbmapsFullException();
+				}
+			} finally {
+				if (ibmap != null) {
+					cache.releaseBlock(ibmap.id());
 				}
 			}
 		}
@@ -100,8 +107,14 @@ public class Namespace {
 		
 		int blockIndex = InodesBlock.blockIndexFromInumber(inumber);
 		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, blockIndex, InodesBlock.name(blockIndex), BlockType.InodeBlock);
-		try (InodesBlock inodes = (InodesBlock)cache.acquireBlock(id)){
+		InodesBlock inodes = null;
+		try {
+			inodes = (InodesBlock)cache.acquireBlock(id);
 			inodes.initInode(inumber);
+		} finally {
+			if (inodes != null) {
+				cache.releaseBlock(inodes.id());
+			}
 		}
 		
 		return inumber;

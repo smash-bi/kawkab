@@ -4,14 +4,19 @@ import java.io.IOException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import kawkab.fs.commons.Constants;
+
 public class Cache implements BlockEvictionListener {
 	private static Cache instance;
 	private LRUCache cache;
 	private Lock cacheLock;
+	private SyncProcessor syncProc;
+	private volatile boolean closing = false;
 	
 	private Cache(){
 		cache = new LRUCache(this);
 		cacheLock = new ReentrantLock();
+		syncProc = new SyncProcessor(Constants.syncThreadsPerDevice);
 	}
 	
 	public static Cache instance(){
@@ -22,6 +27,10 @@ public class Cache implements BlockEvictionListener {
 		return instance;
 	}
 	
+	public void createBlock(Block block) throws IOException {
+		syncProc.storeSynced(block);
+	}
+	
 	/**
 	 * @param blockID
 	 * @param type
@@ -29,6 +38,9 @@ public class Cache implements BlockEvictionListener {
 	 * @throws IOException 
 	 */
 	public Block acquireBlock(BlockID blockID) throws IOException {
+		if (closing)
+			return null;
+		
 		CachedItem cached = null;
 		boolean wasCached = true;
 		
@@ -58,7 +70,8 @@ public class Cache implements BlockEvictionListener {
 				return cached.block();
 			}
 			
-			cached.block().loadFromDisk();
+			//cached.block().loadFromDisk(); //TODO: Make to load from the syncProc
+			syncProc.load(cached.block());
 		} finally {
 			if (cached != null) {
 				cached.unlock();
@@ -82,24 +95,24 @@ public class Cache implements BlockEvictionListener {
 			assert cached != null;
 			cached.lock(); //FIXME: We lock the cached object only to increment and decrement reference count. Why not to use AtomicInteger for that purpose?
 			cached.decrementRefCnt();
+			if (cached.block().dirty()) {
+				syncProc.store(cached.block());
+			}
 			cached.unlock();
 		} finally {
 			cacheLock.unlock();
 		}
 	}
 	
-	public void flush() {
-		cacheLock.lock();
+	public void flush() { //
 		for (CachedItem cached : cache.values()) {
+			//We need to close all the readers and writers before we can empty the cache.
+			//TODO: Wait until the reference count for the cached object becomes zero.
 			if (cached.block().dirty()) {
-				try {
-					cached.block().storeToDisk();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
+				//cached.block().storeToDisk();
+				syncProc.store(cached.block());
 			}
 		}
-		cacheLock.unlock();
 	}
 	
 	public void shutdown() {
@@ -108,17 +121,24 @@ public class Cache implements BlockEvictionListener {
 		cacheLock.lock();
 		cache.clear();
 		cacheLock.unlock();
+		syncProc.stop();
 	}
 
 	@Override
 	public void beforeEviction(CachedItem cachedItem) {
 		Block block = cachedItem.block();
-		if (block.dirty()) {
+		try {
+			block.waitUntilSynced();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		/*if (block.dirty()) {
 			try {
 				block.storeToDisk();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-		}
+		}*/
 	}
+	
 }
