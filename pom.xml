@@ -46,8 +46,8 @@
 		</dependency>
 
 		<dependency>
-			<groupID>org.fusesource.leveldbjni</groupID>
-			<artifactID>leveldbjni-all</artifactID>
+			<groupId>org.fusesource.leveldbjni</groupId>
+			<artifactId>leveldbjni-all</artifactId>
 			<version>1.8</version>
 		</dependency>
 

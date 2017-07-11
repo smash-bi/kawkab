@@ -9,6 +9,7 @@ import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.BackendStore;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.InvalidFileModeException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
@@ -33,6 +34,7 @@ public class FSTest {
 		
 		//tester.testVeryLargeReadWrite();
 		//tester.testFileSeek();
+		tester.testBackendStore();
 		tester.testShutdown();
 	}
 	
@@ -639,6 +641,37 @@ public class FSTest {
 		file.read(data, data.length);
 		assert Arrays.equals(data, block3);
 	}*/
+
+	private void testBackendStore(){
+		System.out.println("--------------------------------------------");
+		System.out.println("            Backend Store Test");
+		System.out.println("--------------------------------------------");
+
+		//Arbitrary value. Should probably change this to something meaningful;
+		//TODO: Change this to something meaningful.
+		int bytesSize = 1024;
+
+		Random rand = new Random(0);
+
+		BackendStore bes = new BackendStore("/home/smash/leveldb");
+
+		byte[] stringBytes = new byte[bytesSize];
+		rand.nextBytes(stringBytes);
+		String blockID = new String(stringBytes);
+
+		byte[] bytes = new byte[bytesSize];
+		rand.nextBytes(bytes);
+		
+		try{
+			bes.put(blockID, bytes);
+			byte[] readBytes = bes.get(blockID);
+			assert bytes == readBytes;
+		}
+		catch(IOException e){
+			e.printStackTrace();
+		}
+	}
+
 	
 	private void testShutdown(){
 		System.out.println("--------------------------------------------");
