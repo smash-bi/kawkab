@@ -36,7 +36,7 @@ public class MappedIndex {
 	}
 	
 	public DataBlock getByTime(long time){
-		int numBlocks = byteToDataBlock.size();
+		//int numBlocks = byteToDataBlock.size();
 		
 		return null;
 	}

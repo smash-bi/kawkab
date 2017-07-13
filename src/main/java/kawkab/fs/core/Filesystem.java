@@ -1,46 +1,64 @@
 package kawkab.fs.core;
 
+import java.io.IOException;
+
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Constants;
+import kawkab.fs.core.exceptions.IbmapsFullException;
 
 public class Filesystem {
-	public enum FileMode {
-		READ, APPEND
-	}
+	private static boolean initialized;
+	private static boolean closed;
+	
+	public enum FileMode { READ, APPEND }
 	
 	private static Filesystem instance;
-	private FileDirectory directory;
+	private Namespace namespace;
 	
 	private Filesystem(){
-		directory = new FileDirectory();
+		namespace = Namespace.instance();
 	}
 	
 	public static Filesystem instance(){
 		if (instance == null) {
 			instance = new Filesystem();
 		}
-		
 		return instance;
 	}
 	
-	public FileHandle open(String filename, FileMode mode, FileOptions opts){
+	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException, IOException{
 		//TODO: Validate input
-		//TODO: Check if file already exists
-		
-		FileIndex fileIndex = directory.get(filename);
-		if (fileIndex == null){
-			fileIndex = directory.add(filename);
-		}
-		
-		FileHandle file = new FileHandle(filename, opts, fileIndex);
-		
-		//Save file handles
-		
+		long inumber = namespace.openFile(filename);
+		FileHandle file = new FileHandle(inumber, mode);
 		return file;
 	}
 	
 	public static int BlockSize(){
 		return Constants.dataBlockSizeBytes;
+	}
+	
+	public Filesystem bootstrap() throws IOException{
+		if (initialized)
+			return this;
+		
+		InodesBlock.bootstrap();
+		Ibmap.bootstrap();
+		namespace.bootstrap();
+		
+		initialized = true;
+		return this;
+	}
+	
+	public static void shutdown(){
+		if (closed)
+			return;
+		
+		Namespace.shutdown();
+		Ibmap.shutdown();
+		InodesBlock.shutdown();
+		Cache.instance().shutdown();
+		
+		closed = true;
 	}
 }

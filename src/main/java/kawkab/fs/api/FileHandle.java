@@ -1,77 +1,95 @@
 package kawkab.fs.api;
 
+import java.io.IOException;
+
 import kawkab.fs.commons.Constants;
-import kawkab.fs.core.BlockMetadata;
-import kawkab.fs.core.FileIndex;
-import kawkab.fs.core.FileOffset;
+import kawkab.fs.core.BlockID;
+import kawkab.fs.core.Cache;
+import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.Inode;
+import kawkab.fs.core.InodesBlock;
+import kawkab.fs.core.Block.BlockType;
+import kawkab.fs.core.exceptions.InvalidArgumentsException;
+import kawkab.fs.core.exceptions.InvalidFileModeException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 public final class FileHandle {
-	private String filename;
-	private FileOptions options;
-	private FileIndex fileIndex;
-	private BlockMetadata currentBlock;
+	private long inumber;
+	private FileMode fileMode;
 	private long readOffsetInFile;
+	private Cache cache;
 	
-	public FileHandle(String filename, FileOptions options, FileIndex fileIndex){
-		this.filename = filename;
-		this.options = options;
-		this.fileIndex = fileIndex;
+	public FileHandle(long inumber, FileMode mode){
+		this.inumber = inumber;
+		this.fileMode = mode;
+		this.cache = Cache.instance();
 	}
 	
 	/**
 	 * Reads data into the buffer
 	 * @param buffer
-	 * @param length Number of bytes to read from the file
+	 * @param length Number of bytes to read from the file.
 	 * @return Number of bytes read from the file
+	 * @throws IOException 
 	 */
-	public int read(byte[] buffer, int length){
-		int remaining = length;
-		int read = 0;
+	public synchronized int read(byte[] buffer, int length) throws IOException{
+		/*1. Borrow InodesBlock from cache
+		    2. Acquire InodesBlock lock
+		      3. Get the pointer to the dataBlock or the indirectBlock
+		      4. Get the current fileSize, which is the maximum byte that a read operation
+		         can serve.
+		    5. Release InodesBlock lock
+		  6. Return inodesBlock to the cache
+		  7. Borrow indirectBlock from the cache
+		    8. Get the pointer to the dataBlock
+		  9. Return the indirectBlock to the cache
+		  10. Borrow DataBlock from the cache
+		    11. Read data
+		  12. Return DataBlock to the cache*/
+		int blockIndex = (int)(inumber / Constants.inodesPerBlock);
 		
-		while(remaining > 0) {
-			if (currentBlock == null || !currentBlock.hasByte(readOffsetInFile)){
-				try {
-					currentBlock = fileIndex.getByFileOffset(readOffsetInFile);
-				} catch (InvalidFileOffsetException e) {
-					e.printStackTrace();
-					return read;
-				}
+		Inode inode = null;
+		long fileSize = 0;
+		
+		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, blockIndex, InodesBlock.name(blockIndex), BlockType.InodeBlock);
+		
+		InodesBlock block = null;
+		try {
+			block = (InodesBlock)cache.acquireBlock(id);
+			block.lock();
+			inode = block.getInode(inumber);
+			fileSize = inode.fileSize();
+		} finally {
+			if (block != null) {
+				block.unlock();
+				cache.releaseBlock(block.id());
 			}
-			
-			if (currentBlock == null) //This means our byteOffset is out of the file region.
-				break;
-			
-			/*if (!currentBlock.closed()){
-				return read;
-			}*/
-			
-			long lastOffset = currentBlock.offset() + Constants.dataBlockSizeBytes;
-			
-			int toRead = (int)(readOffsetInFile+remaining <= lastOffset ? remaining : lastOffset - readOffsetInFile);
-			int bytes;
-			try {
-				bytes = currentBlock.read(buffer, read, toRead, readOffsetInFile);
-			} catch (InvalidFileOffsetException e) {
-				e.printStackTrace();
-				return read;
-			}
-			
-			read += bytes;
-			remaining -= bytes;
-			readOffsetInFile += bytes;
 		}
 		
-		return read;
+		if (readOffsetInFile + length >= fileSize)
+			length = (int)(fileSize - readOffsetInFile);
+		
+		int bytesRead = 0;
+		try {
+			bytesRead = inode.read(buffer, length, readOffsetInFile);
+		} catch (InvalidFileOffsetException e) {
+			e.printStackTrace();
+		} catch (InvalidArgumentsException e) {
+			e.printStackTrace();
+		}
+		
+		readOffsetInFile += bytesRead;
+		
+		return bytesRead;
 	}
 	
 	/**
 	 * Seek the read pointer to the byteOffset bytes in the file
 	 * @param byteOffset
 	 */
-	public void seekBytes(long byteOffset){
+	public synchronized void seekBytes(long byteOffset){
 		readOffsetInFile = byteOffset;
 	}
 	
@@ -81,18 +99,18 @@ public final class FileHandle {
 	 * @return Offset of the block where the read pointer is moved to, or null if the data block
 	 *          is not found.
 	 */
-	public FileOffset seekBeforeTime(long timestamp){
+	/*public FileOffset seekBeforeTime(long timestamp){
 		if (timestamp <= 0)
 			return null; //FIXME: Make it an exception.
 		
-		BlockMetadata block = fileIndex.getByTime(timestamp, true);
+		DataBlock block = fileIndex.getByTime(timestamp, true);
 		if (block == null)
 			return null;
 		
 		FileOffset offset = block.fileOffset();
 		readOffsetInFile = offset.offsetInFile();
 		return offset;
-	}
+	}*/
 	
 	/**
 	 * Seek the read pointer to the first byte of the first data block that is at or after the time timestamp.
@@ -100,15 +118,15 @@ public final class FileHandle {
 	 * @return Offset of the block where the read pointer is moved to, or null if the data block
 	 *          is not found.
 	 */
-	public FileOffset seekAfterTime(long timestamp){
-		BlockMetadata block = fileIndex.getByTime(timestamp, false);
+	/*public FileOffset seekAfterTime(long timestamp){
+		DataBlock block = fileIndex.getByTime(timestamp, false);
 		if (block == null)
 			return null;
 		
 		FileOffset offset = block.fileOffset();
 		readOffsetInFile = offset.offsetInFile();
 		return offset;
-	}
+	}*/
 	
 	/**
 	 * Returns the offset and the number of bytes between two time index boundaries.
@@ -127,7 +145,7 @@ public final class FileHandle {
 	 *          the size of data. Returns null if data is not found within the given time boundaries.
 	 */
 	
-	public DataOffset offsetAndDataLength(long time1, long time2){
+	/*public DataOffset offsetAndDataLength(long time1, long time2){
 		if (time1 < 0) time1 = 0;
 		if (time2 < 0) time2 = 0;
 			
@@ -137,20 +155,20 @@ public final class FileHandle {
 			time1 = time1 ^ time2;
 		}
 		
-		BlockMetadata blockLeft = fileIndex.getByTime(time1, true);
+		DataBlock blockLeft = fileIndex.getByTime(time1, true);
 		if (blockLeft == null) return null;
-		BlockMetadata blockRight = fileIndex.getByTime(time2, false);
+		DataBlock blockRight = fileIndex.getByTime(time2, false);
 		if (blockRight == null) return null;
 		
 		long size = blockRight.offset() + blockRight.size() - blockLeft.offset();
 		return new DataOffset(blockLeft.offset(), size);
-	}
+	}*/
 	
 	/**
 	 * Move the read pointer to numBytes relative to its current position
 	 * @param bytes number of bytes to move the read pointer
 	 */
-	public void relativeSeek(long numBytes){
+	public synchronized void relativeSeek(long numBytes){
 		readOffsetInFile = readOffsetInFile + numBytes;
 	}
 	
@@ -162,8 +180,104 @@ public final class FileHandle {
 	 * @return Index of the data appended to the file. The caller can use 
 	 * dataIndex.timestamp() to refer to the data just written. 
 	 * @throws OutOfMemoryException 
+	 * @throws InvalidFileOffsetException 
+	 * @throws InvalidFileModeException 
+	 * @throws IOException 
 	 */
-	public int append(byte[] data, int offset, int length) throws OutOfMemoryException, MaxFileSizeExceededException{
-		return fileIndex.append(data, offset, length);
+	public synchronized int append(byte[] data, int offset, int length) throws OutOfMemoryException, 
+									MaxFileSizeExceededException, InvalidFileOffsetException, 
+									InvalidFileModeException, IOException{
+		/*- File Append
+		  1. Borrow InodesBlock from the cache
+		    2. Acquire InodesBlock lock
+		      3. If file is currently being updated, wait on an updateCondition
+		      4. Otherwise, mark the file as being updated
+		    5. Release InodesBlock lock
+		    6. Allocate and borrow necessary indirectBlocks from the cache
+		    7. Allocate and borrow dataBlocks from the cache
+		      8. update data
+		      9. Mark datablock as dirty
+		    10. Return DataBlock to the cache
+		    11. Mark indirectBlocks dirty as required
+		    12. Return indirectBlocks to the cache
+		    13. Acquire InodesBlock lock
+		      14. Update fileSize and other information
+		    16. Mark inodesBlock as dirty
+		    15. Release InodesBlock lock
+		  17. Return inodesBlock to the cache*/
+		if (fileMode != FileMode.APPEND) {
+			throw new InvalidFileModeException();
+		}
+		
+		/*int len = 0;
+		int inodesBlockNum = (int)(inumber / Constants.inodesPerBlock);
+		try (InodesBlock block = cache.getInodesBlock(inodesBlockNum)) {
+			len = block.append(inumber, data, offset, length);
+		}
+		return len;*/
+		
+		int appendedBytes = 0;
+		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
+		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, inodesBlockIdx, InodesBlock.name(inodesBlockIdx), BlockType.InodeBlock);
+		
+		InodesBlock block = null;
+		try {
+			block = (InodesBlock)cache.acquireBlock(id);
+			//block.lock();
+			//try {
+				//TODO: 3. If file is currently being updated, wait on an updateCondition
+			    //TODO: 4. Otherwise, mark the file as being updated
+			//} finally {
+			//	block.unlock();
+			//}
+			
+			Inode inode = block.getInode(inumber);
+			appendedBytes = inode.append(data, offset, length);
+			
+			if (appendedBytes > 0) {
+				block.lock();
+				inode.updateSize(appendedBytes);
+				block.markDirty();
+			}
+		} finally {
+			if (block != null) {
+				block.unlock();
+				cache.releaseBlock(block.id());
+			}
+		}
+		
+		return appendedBytes;
 	}
+	
+	/**
+	 * @return Returns file size in bytes.
+	 */
+	public synchronized long size(){
+		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
+		long size = 0;
+		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, inodesBlockIdx, InodesBlock.name(inodesBlockIdx), BlockType.InodeBlock);
+		
+		InodesBlock block = null;
+		try {
+			block = (InodesBlock) cache.acquireBlock(id);
+			size = block.fileSize(inumber);
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			if (block != null) {
+				cache.releaseBlock(block.id());
+			}
+		}
+		
+		return size;
+	}
+	
+	/**
+	 * @return Returns the current value of the read pointer; the file offset in bytes from where 
+	 * the read function starts reading. 
+	 */
+	public synchronized long readOffset(){
+		return readOffsetInFile;
+	}
+	
 }
