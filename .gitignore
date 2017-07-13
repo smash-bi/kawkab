@@ -1,4 +1,7 @@
 bin
 .classpath
 .project
-/target/
+target
+.settings
+~*
+Thumbs.db
