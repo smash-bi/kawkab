@@ -10,13 +10,13 @@ public class Cache implements BlockEvictionListener {
 	private static Cache instance;
 	private LRUCache cache;
 	private Lock cacheLock;
-	private SyncProcessor syncProc;
+	private LocalProcessor syncProc;
 	private volatile boolean closing = false;
 	
 	private Cache(){
 		cache = new LRUCache(this);
 		cacheLock = new ReentrantLock();
-		syncProc = new SyncProcessor(Constants.syncThreadsPerDevice);
+		syncProc = new LocalProcessor(Constants.syncThreadsPerDevice);
 	}
 	
 	public static Cache instance(){
@@ -28,7 +28,7 @@ public class Cache implements BlockEvictionListener {
 	}
 	
 	public void createBlock(Block block) throws IOException {
-		syncProc.storeSynced(block);
+		syncProc.storeLocally(block);
 	}
 	
 	/**
@@ -96,7 +96,11 @@ public class Cache implements BlockEvictionListener {
 			cached.lock(); //FIXME: We lock the cached object only to increment and decrement reference count. Why not to use AtomicInteger for that purpose?
 			cached.decrementRefCnt();
 			if (cached.block().dirty()) {
-				syncProc.store(cached.block());
+				try {
+					syncProc.store(cached.block()); //FIXME: What to do with the exception?
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 			}
 			cached.unlock();
 		} finally {
@@ -110,7 +114,11 @@ public class Cache implements BlockEvictionListener {
 			//TODO: Wait until the reference count for the cached object becomes zero.
 			if (cached.block().dirty()) {
 				//cached.block().storeToDisk();
-				syncProc.store(cached.block());
+				try {
+					syncProc.store(cached.block());
+				} catch (IOException e) {
+					e.printStackTrace(); //FIXME: What to do with the exception?
+				}
 			}
 		}
 	}

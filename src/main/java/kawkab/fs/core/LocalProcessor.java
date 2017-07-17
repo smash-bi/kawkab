@@ -8,17 +8,21 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-public class SyncProcessor {
+public class LocalProcessor implements SyncProcessor {
 	private ExecutorService workers;
+	private SyncProcessor globalProc;
 	
-	public SyncProcessor(int numWorkers) {
+	public LocalProcessor(int numWorkers) {
 		workers = Executors.newFixedThreadPool(numWorkers);
+		globalProc = new GlobalProcessor();
 	}
 	
-	public void store(Block block) {
+	@Override
+	public void store(Block block) throws IOException {
 		workers.submit(() -> { runWorker(block); });
 	}
 	
+	@Override
 	public void load(Block block) throws IOException {
 		loadBlock(block);
 	}
@@ -34,6 +38,8 @@ public class SyncProcessor {
 		
 		try {
 			storeBlock(block);
+			
+			globalProc.store(block);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -62,7 +68,7 @@ public class SyncProcessor {
 		}
 	}
 	
-	public void storeSynced(Block block) throws IOException {
+	public void storeLocally(Block block) throws IOException {
 		File file = new File(block.localPath());
 		File parent = file.getParentFile();
 		if (!parent.exists()){
