@@ -23,9 +23,9 @@ public class InodesBlock extends Block {
 	 *         system, not relative to this machine.
 	 */
 	InodesBlock(int blockIndex){
-		super(new BlockID(Constants.inodesBlocksUuidHigh, blockIndex, InodesBlock.name(blockIndex), BlockType.InodeBlock), BlockType.InodeBlock);
+		super(new InodesBlockID(blockIndex));
 		this.blockIndex = blockIndex;
-		type = BlockType.InodeBlock;
+		//type = BlockType.InodeBlock;
 		//Must not initialize inodes array in any constructor.
 	}
 	
@@ -81,6 +81,11 @@ public class InodesBlock extends Block {
 		} finally {
 			unlock();
 		}
+	}
+	
+	@Override
+	public int channelOffset() {
+		return 0;
 	}
 	
 	

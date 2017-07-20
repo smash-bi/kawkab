@@ -10,13 +10,10 @@ import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 
-public class DataBlock extends Block {
+public class DataSegment extends Block {
 	//private MappedByteBuffer buffer;
 	//private SeekableByteChannel channel;
 	private byte[] bytes;
-	
-	public long blockNumber; //FIXME: Used for debugging only.
-	
 	
 	/**
 	 * The constructor should not create a new file in the underlying filesystem. This constructor
@@ -24,43 +21,10 @@ public class DataBlock extends Block {
 	 * function for that purpose. 
 	 * @param uuid
 	 */
-	DataBlock(BlockID uuid) {
-		super(uuid, BlockType.DataBlock);
+	DataSegment(DataSegmentID uuid) {
+		super(uuid);
 		bytes = new byte[0];
 		//System.out.println(" Opened block: " + name());
-	}
-	
-	/**
-	 * This function creates a new block ID and the new file, if required, in the underlying
-	 * filesystem. This function should not use a block of memory as this memory competes with
-	 * the cache memory.
-	 * 
-	 * @return ID of the newly created block.
-	 * @throws IOException 
-	 */
-	static BlockID createNewBlock(long inumber, long blockNumber) throws IOException {
-		//TODO: Create new block using Cache
-		
-		BlockID id = newID(inumber, blockNumber);
-		File file = new File(localPath(id));
-		
-		if (file.exists()) {
-			//throw new IOException("Block file already exists: " + file.getAbsolutePath()); //FIXME: Throw exception if the file already exists.
-			return id;
-		}
-		
-		File parent = file.getParentFile();
-		if (!parent.exists()) {
-			if (!parent.mkdirs()) {
-				throw new IOException("Unable to create directories: "+parent.getAbsolutePath());
-			}
-		}
-		
-		if (!file.createNewFile()) {
-			throw new IOException("Unable to create block file: "+file.getAbsolutePath());
-		}
-		
-		return id;
 	}
 	
 	/**
@@ -75,8 +39,8 @@ public class DataBlock extends Block {
 		assert offset >= 0;
 		assert offset < data.length;
 		
-		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
-		int capacity = Constants.dataBlockSizeBytes - offsetInBlock;
+		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		int capacity = Constants.segmentSizeBytes - offsetInBlock;
 		
 		int toAppend = length <= capacity ? length : capacity;
 		
@@ -100,8 +64,8 @@ public class DataBlock extends Block {
 	}
 	
 	synchronized int writeLong(long data, long offsetInFile) throws IOException{
-		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
-		int capacity = Constants.dataBlockSizeBytes - offsetInBlock;
+		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		int capacity = Constants.segmentSizeBytes - offsetInBlock;
 		int longSize = Long.BYTES;
 		if (capacity < longSize)
 			return 0;
@@ -117,8 +81,8 @@ public class DataBlock extends Block {
 	synchronized long readLong(long offsetInFile) throws InvalidFileOffsetException, IOException{
 		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
 		
-		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
-		int blockSize = Constants.dataBlockSizeBytes;
+		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		int blockSize = Constants.segmentSizeBytes;
 		
 		if (offsetInBlock >= blockSize || 
 				offsetInBlock+Long.BYTES > blockSize || offsetInBlock < 0)
@@ -131,8 +95,8 @@ public class DataBlock extends Block {
 	}
 	
 	synchronized int writeInt(int data, long offsetInFile) throws IOException{
-		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
-		int capacity = Constants.dataBlockSizeBytes - offsetInBlock;
+		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		int capacity = Constants.segmentSizeBytes - offsetInBlock;
 		int intSize = Integer.BYTES;
 		if (capacity < intSize)
 			return 0;
@@ -149,8 +113,8 @@ public class DataBlock extends Block {
 	synchronized int readInt(long offsetInFile) throws InvalidFileOffsetException, IOException{
 		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
 		
-		int blockSize = Constants.dataBlockSizeBytes;
-		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
+		int blockSize = Constants.segmentSizeBytes;
+		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
 		if (offsetInBlock >= blockSize || 
 				offsetInBlock+4 >= blockSize || offsetInBlock < 0) {
 			throw new InvalidFileOffsetException(
@@ -176,8 +140,8 @@ public class DataBlock extends Block {
 	 */
 	synchronized int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile) 
 			throws InvalidFileOffsetException, IOException{
-		int blockSize = Constants.dataBlockSizeBytes;
-		int offsetInBlock = (int)(offsetInFile % Constants.dataBlockSizeBytes);
+		int blockSize = Constants.segmentSizeBytes;
+		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
 		if (offsetInBlock >= blockSize || offsetInBlock < 0) {
 			throw new InvalidFileOffsetException(
 					String.format("Given file offset %d is outside of the block. Block size = %d bytes.",
@@ -197,10 +161,12 @@ public class DataBlock extends Block {
 	public void loadFrom(ByteChannel channel) throws IOException {
 		lock();
 		try {
-			bytes = new byte[Constants.dataBlockSizeBytes];
+			bytes = new byte[Constants.segmentSizeBytes];
 			ByteBuffer buffer = ByteBuffer.wrap(bytes);
 			
-			int bytesRead = Commons.readFrom(channel, buffer); //FIXME: What if the number of bytes read is less than the block size?
+			int bytesRead = Commons.readFrom(channel, buffer); 
+			
+			//FIXME: What if the number of bytes read is less than the block size?
 			//if (bytesRead < bytes.length)
 			//	throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
 			//			+ "%d bytes out of %d.",bytesRead,bytes.length));
@@ -224,6 +190,13 @@ public class DataBlock extends Block {
 		} finally {
 			unlock();
 		}
+	}
+	
+	@Override
+	public int channelOffset() {
+		int offset = ((DataSegmentID)this.id).segmentInBlock * Constants.segmentSizeBytes;
+		assert offset <= Constants.dataBlockSizeBytes;
+		return offset;
 	}
 	
 	
@@ -269,17 +242,18 @@ public class DataBlock extends Block {
 	@Override
 	String name() {
 		//return Commons.uuidToString(id.uuidHigh, id.uuidLow);
-		return name(id.highBits, id.lowBits);
+		DataSegmentID id = (DataSegmentID)id();
+		return name(id.highBits, id.lowBits, id.segmentInBlock);
 	}
 	
-	static String name(long uuidHigh, long uuidLow){
+	static String name(long inumber, long blockNumber, int segmentNumber){
 		//return Commons.uuidToString(uuidHigh, uuidLow);
-		return String.format("%016x-%016x", uuidHigh, uuidLow);
+		return String.format("%016x-%016x-%08x", inumber, blockNumber, segmentNumber);
 	}
 	
 	@Override
 	int blockSize(){
-		return Constants.dataBlockSizeBytes;
+		return Constants.segmentSizeBytes;
 	}
 	
 	@Override
@@ -315,18 +289,41 @@ public class DataBlock extends Block {
 		return path.toString();
 	}
 
-	public static BlockID newID(long inumber, long blockNumber){
-		//Block ID is a 128 bit number: high order 64 bit are the inode number and the lower order
-		//64 bit is the block number.
-		
-		long uuidHigh = inumber;
-		long uuidLow = blockNumber;
-		
-		return new BlockID(uuidHigh, uuidLow, DataBlock.name(uuidHigh, uuidLow), BlockType.DataBlock);
-	}
-	
 	@Override
 	public String toString(){
 		return id.highBits+"-"+id.lowBits+"-"+name();
+	}
+	
+	public static int recordsPerSegment(int recordSize) {
+		return Constants.segmentSizeBytes / recordSize;
+	}
+	
+	public static long segmentInFile(long offsetInFile, int recordSize) {
+		// segmentInFile = recordInFile / recordsPerSegment
+		return (offsetInFile/recordSize) / recordsPerSegment(recordSize); 
+	}
+	
+	public static long blockInFile(long offsetInFile, int recordSize) {
+		// blockInFile = segmentInFile * segmentSize / blockSize
+		return segmentInFile(offsetInFile, recordSize) * Constants.segmentSizeBytes / Constants.dataBlockSizeBytes;
+	}
+	
+	public static int segmentInBlock(long offsetInFile, int recordSize) {
+		// segmentInBlock = segmentInFile % segmentsPerBlock
+		return (int)(segmentInFile(offsetInFile, recordSize) % Constants.segmentsPerBlock);
+	}
+	
+	public static int recordInSegment(long offsetInFile, int recordSize) {
+		return (int)(offsetInFile/recordSize) % recordsPerSegment(recordSize);
+	}
+	
+	public static int offsetInSegment(long offsetInFile, int recordSize) {
+		// offsetInSegment = recordInSegment + offsetInRecord
+		return (int)(recordInSegment(offsetInFile, recordSize) + (offsetInFile % recordSize));
+	}
+	
+	private static int offsetInBlock(long offsetInFile, int recordSize) {
+		// offsetInBlock = segmentInBlock + recordInSegment + offsetInRecord
+		return (int)(segmentInBlock(offsetInFile, recordSize) + recordInSegment(offsetInFile, recordSize) + (offsetInFile % recordSize));
 	}
 }

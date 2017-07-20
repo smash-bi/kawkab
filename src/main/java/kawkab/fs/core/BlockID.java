@@ -2,7 +2,10 @@ package kawkab.fs.core;
 
 import kawkab.fs.core.Block.BlockType;
 
-public class BlockID {
+/**
+ * This class and its subclasses should be immutable.
+ */
+public abstract class BlockID {
 	//All the public fields in this class must be made immutable.
 	public final long highBits;
 	public final long lowBits;
@@ -34,8 +37,6 @@ public class BlockID {
 	
 	@Override
 	public boolean equals(Object blockID){
-		System.out.println("===== Block ID equals method ======");
-		
 		if (blockID == null)
 			return false;
 		
@@ -46,19 +47,15 @@ public class BlockID {
 			return false;
 		}
 		
-		System.out.println("Comparing " + this + " and " + id);
-		
 		return highBits == id.highBits &&
 				lowBits == id.lowBits &&
 				key.equals(id.key) &&
 				type == id.type;
 	}
 
-	public boolean isValid() {
-		return highBits != 0 && lowBits != 0;
-	}
+	abstract public Block newBlock();
 	
-	public Block newBlock() {
+	/*public Block newBlock() {
 		//TODO: Use an alternate solution where BlockIDs are of different types and they
 		//create only one type of blocks.
 		Block block;
@@ -73,5 +70,5 @@ public class BlockID {
 		}
 		
 		return block;
-	}
+	}*/
 }

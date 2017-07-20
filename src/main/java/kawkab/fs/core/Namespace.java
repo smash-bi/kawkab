@@ -3,7 +3,6 @@ package kawkab.fs.core;
 import java.io.IOException;
 
 import kawkab.fs.commons.Constants;
-import kawkab.fs.core.Block.BlockType;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 
 public class Namespace {
@@ -70,7 +69,7 @@ public class Namespace {
 		int mapNum = lastIbmapUsed;
 		while(true){ //Iterate over the ibmap blocks.
 			//try(Ibmap ibmap = cache.getIbmap(mapNum)) {
-			BlockID id = new BlockID(Constants.ibmapUuidHigh, mapNum, Ibmap.name(mapNum), BlockType.IbmapBlock);
+			BlockID id = new IbmapBlockID(mapNum);
 			Ibmap ibmap = null;
 			
 			try {
@@ -106,7 +105,7 @@ public class Namespace {
 		long inumber = getNewInumber();
 		
 		int blockIndex = InodesBlock.blockIndexFromInumber(inumber);
-		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, blockIndex, InodesBlock.name(blockIndex), BlockType.InodeBlock);
+		BlockID id = new InodesBlockID(blockIndex);
 		InodesBlock inodes = null;
 		try {
 			inodes = (InodesBlock)cache.acquireBlock(id);

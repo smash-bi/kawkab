@@ -22,15 +22,15 @@ public class FSTest {
 		FSTest tester = new FSTest();
 		Constants.printConfig();
 		tester.testBootstrap();
-		tester.testBlocksCreation();
-		tester.testSmallReadWrite();
+		//tester.testBlocksCreation();
+		//tester.testSmallReadWrite();
 		//tester.testLargeReadWrite();
 		//tester.testMultipleReaders();
 		//tester.testMultipleFiles();
 		//tester.testWritePerformance();
 		//tester.testWritePerformanceConcurrentFiles();
-		//tester.testReadPerformance();
-		//tester.testReadPerfMultiReadersSameFile();
+		tester.testReadPerformance();
+		tester.testReadPerfMultiReadersSameFile();
 		
 		//tester.testVeryLargeReadWrite();
 		//tester.testFileSeek();
@@ -153,8 +153,8 @@ public class FSTest {
 		final long offset = file.size();
 		
 		Random rand = new Random(0);
-		int bufSize = Constants.dataBlockSizeBytes;//8*1024*1024;
-		long dataSize = (1L*128*bufSize + 1);
+		int bufSize = Constants.segmentSizeBytes;//8*1024*1024;
+		long dataSize = 1L*20*Constants.dataBlockSizeBytes + 1;
 		long appended = file.size();
 		
 		byte[] writeBuf = new byte[bufSize];
@@ -237,7 +237,7 @@ public class FSTest {
 		
 		Filesystem fs = Filesystem.instance().bootstrap();
 		
-		int numFiles = 12;
+		int numFiles = 100;
 		Thread[] workers = new Thread[numFiles];
 		
 		for (int i=0; i<numFiles; i++) {
@@ -253,8 +253,8 @@ public class FSTest {
 						System.out.println("Opening file: " + filename + ", current size="+initialSize);
 						
 						Random rand = new Random(0);
-						int bufSize = Constants.dataBlockSizeBytes;//8*1024*1024;
-						long dataSize = 4L*bufSize + 17;
+						int bufSize = Constants.segmentSizeBytes;//8*1024*1024;
+						long dataSize = 4L*Constants.dataBlockSizeBytes + 17;
 						long appended = 0;
 						
 						byte[] writeBuf = new byte[bufSize];
@@ -319,7 +319,7 @@ public class FSTest {
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
 		Random rand = new Random(0);
-		int bufSize = Constants.dataBlockSizeBytes;
+		int bufSize = Constants.segmentSizeBytes;
 		long dataSize = 1L*2*1024*1024*1024;//1000*1000L*64L*bufSize + 3;
 		long appended = 0;
 		
@@ -349,7 +349,7 @@ public class FSTest {
 		
 		int numFiles = 6;
 		Thread[] workers = new Thread[numFiles];
-		final int bufSize = Constants.dataBlockSizeBytes;//8*1024*1024;
+		final int bufSize = Constants.segmentSizeBytes;//8*1024*1024;
 		final long dataSize = 1L*2*1024*1024*1024;
 		
 		long startTime = System.currentTimeMillis();
@@ -418,7 +418,7 @@ public class FSTest {
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
 		Random rand = new Random(0);
-		int bufSize = Constants.dataBlockSizeBytes;
+		int bufSize = Constants.segmentSizeBytes;
 		long dataSize = 2L*1024*1024*1024;//1000*1000L*64L*bufSize + 3;
 		byte[] buffer = new byte[bufSize];
 		long appended = file.size();
@@ -461,8 +461,8 @@ public class FSTest {
 		final long offset = file.size();
 		
 		Random rand = new Random(0);
-		int bufSize = Constants.dataBlockSizeBytes;//8*1024*1024;
-		long dataSize = (1L*128*bufSize + 1);
+		int bufSize = Constants.segmentSizeBytes;//8*1024*1024;
+		long dataSize = 2L*1024*1024*1024;//1000*1000L*64L*bufSize + 3;
 		long appended = file.size();
 		
 		byte[] writeBuf = new byte[bufSize];

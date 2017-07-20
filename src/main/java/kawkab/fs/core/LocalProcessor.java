@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
+import java.nio.channels.SeekableByteChannel;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -19,7 +20,9 @@ public class LocalProcessor implements SyncProcessor {
 	
 	@Override
 	public void store(Block block) throws IOException {
-		workers.submit(() -> { runWorker(block); });
+		//FIXME: Assign same worker to the blocks of the same file. Otherwise two or mroe workers can write same data
+		//to the same file concurrently.
+		workers.submit(() -> { runWorker(block); });  
 	}
 	
 	@Override
@@ -50,7 +53,9 @@ public class LocalProcessor implements SyncProcessor {
 	private void loadBlock(Block block) throws IOException {
 		try(RandomAccessFile file = 
                 new RandomAccessFile(block.localPath(), "r")) {
-			try (FileChannel channel = file.getChannel()) {
+			try (SeekableByteChannel channel = file.getChannel()) {
+				channel.position(block.channelOffset());
+				//System.out.println("Load: "+block.localPath() + ": " + channel.position());
 				block.loadFrom(channel);
 			}
 		}
@@ -62,7 +67,9 @@ public class LocalProcessor implements SyncProcessor {
 		
 		try(RandomAccessFile rwFile = 
                 new RandomAccessFile(block.localPath(), "rw")) {
-			try (FileChannel channel = rwFile.getChannel()) {
+			try (SeekableByteChannel channel = rwFile.getChannel()) {
+				channel.position(block.channelOffset());
+				//System.out.println("Store: "+block.id() + ": " + channel.position());
 				block.storeTo(channel);
 			}
 		}

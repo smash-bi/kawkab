@@ -17,76 +17,44 @@ public class Inode {
 	// The FileHandle first calls append and then calls updateSize to update the fileSize. Ideally, 
 	// We should update the fileSize immediately after adding a new block. The fileSize is not being
 	// updated immediately to allow concurrent reading and writing to the same dataBlock.
-	private long fileSize; 
 	private long inumber;
-	//private BlockID directBlockUuid[];
-	//private BlockID indirectBlockUuid;
-	//private BlockID doubleIndirectBlockUuid;
-	//private BlockID tripleIndirectBlockUuid;
-	//private BlockID lastBlockUuid;
+	private volatile long fileSize;
+	private int recordSize = 1; //Temporarily set to 1 until we implement reading/writing records
 	private boolean dirty; //not saved persistently
-	//private long blocksCount; //not saved persistently; blocksCount should be recalculated in fromBuffer().
 	private Cache cache = Cache.instance();
 	
 	public static final long maxFileSize;
 	static {
 		//Calculate the maximum number of blocks that a file can span.
-		long blocks = Constants.directBlocksPerInode;
-		for(int i=1; i<=3; i++){ //Add the number of blocks for each index levels of 1, 2, and 3.
-			blocks += Commons.maxBlocksCount(i);
-		}
-		maxFileSize = blocks * Constants.dataBlockSizeBytes;
+		//long blocks = Constants.directBlocksPerInode;
+		//for(int i=1; i<=3; i++){ //Add the number of blocks for each index levels of 1, 2, and 3.
+		//	blocks += Commons.maxBlocksCount(i);
+		//}
+		maxFileSize = Long.MAX_VALUE;//blocks * Constants.blockSegmentSizeBytes;
 	}
 	
 	//The constructor is private to disable creating the object externally.
-	Inode(long inumber){
+	Inode(long inumber/*, int recordSize*/){
 		this.inumber = inumber;
-		
-		//directBlockUuid = new BlockID[Constants.directBlocksPerInode];
-		//for (int i=0; i<directBlockUuid.length; i++){
-		//	directBlockUuid[i] = new BlockID(0, 0, DataBlock.name(0, 0), BlockType.DataBlock);
-		//}
-		
-		//indirectBlockUuid = new BlockID(0, 0, DataBlock.name(0, 0), BlockType.DataBlock);
-		//doubleIndirectBlockUuid = new BlockID(0, 0, DataBlock.name(0, 0), BlockType.DataBlock);
-		//tripleIndirectBlockUuid = new BlockID(0, 0, DataBlock.name(0, 0), BlockType.DataBlock);
-		//lastBlockUuid = new BlockID(0, 0, DataBlock.name(0, 0), BlockType.DataBlock);
+		//this.recordSize = recordSize;
 	}
 	
-	BlockID getByFileOffset(long offsetInFile) throws InvalidFileOffsetException, IOException {
-		if (offsetInFile < 0 || offsetInFile > fileSize) {
-			throw new InvalidFileOffsetException(String.format("Invalid file offset %d. File size is %d bytes.",offsetInFile,fileSize));
-		}
+	/**
+	 * @param offsetInFile
+	 * @return The ID of the segment that contains the given offsetInFile
+	 * @throws IOException
+	 */
+	private BlockID getByFileOffset(long offsetInFile) throws IOException {
+		long blockNumber = DataSegment.blockInFile(offsetInFile, recordSize);
+		int segmentInBlock = DataSegment.segmentInBlock(offsetInFile, recordSize);
 		
-		long blockNumber = offsetInFile/Constants.dataBlockSizeBytes;
-		
-		//long blockIdx = offsetInFile / Constants.dataBlockSizeBytes;
-		//long indirectBlocksLimit = Constants.directBlocksPerInode + Commons.maxBlocksCount(1);
-		//long doubleIndirectBlocksLimit = indirectBlocksLimit + Commons.maxBlocksCount(2);
-		
-		//System.out.println(String.format("Block=%d, offset=%d", blockIdx, 
-		//		offsetInFile, indirectBlocksLimit, doubleIndirectBlocksLimit));
-		
-		/*if (blockIdx < Constants.directBlocksPerInode){
-			return directBlockUuid[(int)blockIdx];
-		} else if (blockIdx < indirectBlocksLimit){
-			IndexBlock indirectBlock = new IndexBlock(indirectBlockUuid, 1);
-			return indirectBlock.getBlockIDByByte(offsetInFile);
-		} else if (blockIdx < doubleIndirectBlocksLimit){
-			IndexBlock doubleIndirectBlock = new IndexBlock(doubleIndirectBlockUuid, 2);
-			return doubleIndirectBlock.getBlockIDByByte(offsetInFile);
-		}
-		
-		IndexBlock tripleIndirectBlock = new IndexBlock(tripleIndirectBlockUuid, 3);
-		return tripleIndirectBlock.getBlockIDByByte(offsetInFile);*/
-		
-		return DataBlock.newID(inumber, blockNumber);
+		return new DataSegmentID(inumber, blockNumber, segmentInBlock);
 	}
 	
-	public int read(byte[] buffer, int length, long offsetInFile) throws InvalidFileOffsetException, InvalidArgumentsException, IOException{
+	public int read(final byte[] buffer, final int length, final long offsetInFile) throws InvalidFileOffsetException, InvalidArgumentsException, IOException{
 		//TODO: Check for input bounds
 		if (length <= 0)
-			return 0;
+			throw new InvalidArgumentsException("Given length is 0.");
 		
 		if (offsetInFile + length > fileSize)
 			throw new InvalidArgumentsException(String.format("File offset + read length is greater "
@@ -94,94 +62,101 @@ public class Inode {
 		
 		int bufferOffset = 0;
 		int remaining = length;
+		long curOffsetInFile = offsetInFile;
 		
-		while(remaining > 0 && offsetInFile < fileSize) {
+		while(remaining > 0 && curOffsetInFile < fileSize) {
 			//System.out.println("  Read at offset: " + offsetInFile);
-			BlockID curBlkUuid = getByFileOffset(offsetInFile);
+			BlockID curSegId = getByFileOffset(curOffsetInFile);
 			
 			//System.out.println("Reading block at offset " + offsetInFile + ": " + curBlkUuid.key);
 			
-			long blockNumber = offsetInFile/Constants.dataBlockSizeBytes;
-			long nextBlockStart = (blockNumber + 1) * Constants.dataBlockSizeBytes;
-			int toRead = (int)(offsetInFile+remaining <= nextBlockStart ? remaining : nextBlockStart - offsetInFile);
+			long segNumber = DataSegment.segmentInFile(curOffsetInFile, recordSize);
+			long nextSegStart = (segNumber + 1) * Constants.segmentSizeBytes;
+			int toRead = (int)(curOffsetInFile+remaining <= nextSegStart ? remaining : nextSegStart - curOffsetInFile);
 			int bytes = 0;
 			
-			DataBlock currentBlock = null;
+			//System.out.println(String.format("Seg=%d, bufOffset=%d, toRead=%d, offInFile=%d",segNumber, bufferOffset, toRead, curOffsetInFile));
+			
+			DataSegment curSegment = null;
 			try {
-				currentBlock = (DataBlock)cache.acquireBlock(curBlkUuid);
-				bytes = currentBlock.read(buffer, bufferOffset, toRead, offsetInFile);
+				curSegment = (DataSegment)cache.acquireBlock(curSegId);
+				bytes = curSegment.read(buffer, bufferOffset, toRead, curOffsetInFile);
 			} catch (InvalidFileOffsetException e) {
 				e.printStackTrace();
 				return bufferOffset;
 			} finally {
-				if (currentBlock != null) {
-					cache.releaseBlock(currentBlock.id());
+				if (curSegment != null) {
+					cache.releaseBlock(curSegment.id());
 				}
 			}
 			
 			bufferOffset += bytes;
 			remaining -= bytes;
-			offsetInFile += bytes;
+			curOffsetInFile += bytes;
 		}
 		
 		return bufferOffset;
 	}
 	
-	DataBlock getByTime(long timestamp, boolean blockBeforeTime){
+	DataSegment getByTime(long timestamp, boolean blockBeforeTime){
 		return null;
 	}
 	
 	/**
 	 * Append data at the end of the file
 	 * @param data Data to append
-	 * @param offset Offset in the data array
+	 * @param curOffset Offset in the data array
 	 * @param length Number of bytes to write from the data array
 	 * @return number of bytes appended
 	 * @throws InvalidFileOffsetException 
 	 * @throws IOException 
 	 */
-	public int append(byte[] data, int offset, int length) throws MaxFileSizeExceededException, InvalidFileOffsetException, IOException{
+	public int append(final byte[] data, int offset, final int length) throws MaxFileSizeExceededException, InvalidFileOffsetException, IOException{
 		int remaining = length;
 		int appended = 0;
 		long fileSize = this.fileSize;
 		
-		BlockID lastBlockID = null;
+		BlockID lastSegID = null;
+		int curOffset = offset;
+		
+		//FIXME: What happens if an exception occurs? What append size is returned? We need to do some cleanup work
+		//to rollback any data changes.
 		
 		//long t = System.nanoTime();
 		
-		while(remaining > 0){
-			int lastBlkCapacity = Constants.dataBlockSizeBytes - (int)(fileSize % Constants.dataBlockSizeBytes);
+		while(remaining > 0) {
+			int lastSegCapacity = Constants.segmentSizeBytes - (int)(fileSize % Constants.segmentSizeBytes);
 			
 			//if (fileSize % Constants.dataBlockSizeBytes == 0) {
-			if (lastBlkCapacity == Constants.dataBlockSizeBytes) { // if last block is full
+			if ((int)(fileSize % Constants.dataBlockSizeBytes) == 0) { // if last block is full
 				try {
-					lastBlockID = createNewBlock(fileSize);
-					lastBlkCapacity = Constants.dataBlockSizeBytes;
+					lastSegID = createNewBlock(fileSize);
+					lastSegCapacity = Constants.segmentSizeBytes;
 				} catch (IndexBlockFullException e) {
 					e.printStackTrace();
 					return appended;
 				}
-			} else {
-				lastBlockID = getByFileOffset(this.fileSize);
 			}
 			
+			lastSegID = getByFileOffset(fileSize);
+			
 			int bytes;
-			int toAppend = remaining <= lastBlkCapacity ? remaining : lastBlkCapacity;
+			int toAppend = remaining <= lastSegCapacity ? remaining : lastSegCapacity;
 			
 			//TODO: Delete the newly created block if append fails. Also add condition in the DataBlock.createNewBlock()
 			// to throw an exception if the file already exists.
-			DataBlock block = null;
+			DataSegment seg = null;
 			try {
-				block = (DataBlock)cache.acquireBlock(lastBlockID);
-				bytes = block.append(data, offset, toAppend, fileSize);
+				seg = (DataSegment)cache.acquireBlock(lastSegID);
+				bytes = seg.append(data, curOffset, toAppend, fileSize);
 			} finally {
-				if (block != null) {
-					cache.releaseBlock(block.id());
+				if (seg != null) {
+					cache.releaseBlock(seg.id());
 				}
 			}
 			
 			remaining -= bytes;
-			offset += bytes;
+			curOffset += bytes;
 			appended += bytes;
 			fileSize += bytes;
 			//dirty = true;
@@ -194,18 +169,20 @@ public class Inode {
 	}
 	
 	/**
-	 * The caller should get a lock on the inodesBlock before calling this function.
+	 * The caller must lock the InodesBlock before calling this function.
 	 * @param appendLength The number of bytes by which the file size is being increased.
 	 */
-	public void updateSize(int appendLength){
+	public void updateSize(final int appendLength) {
+		//FIXME: This function should be part of the append function and should be called atomically with append.
 		fileSize += appendLength;
 		dirty = true;
 	}
 	
 	/**
+	 * Creates a new block in the virtual file.
 	 * @param fileSize The current fileSize during the last append operation. Note that the
 	 * fileSize instance variable is updated as the last step in the append operation.
-	 * @return Returns the newly created data block.
+	 * @return Returns the ID of the first segment in the block.
 	 * @throws MaxFileSizeExceededException
 	 * @throws IndexBlockFullException
 	 * @throws InvalidFileOffsetException
@@ -213,92 +190,31 @@ public class Inode {
 	 */
 	BlockID createNewBlock(final long fileSize) throws MaxFileSizeExceededException, IndexBlockFullException, InvalidFileOffsetException, IOException{
 		//long blocksCount = (long)Math.ceil(1.0*fileSize / Constants.dataBlockSizeBytes);
-		if (fileSize + Constants.dataBlockSizeBytes > maxFileSize){
+		if (fileSize + Constants.segmentSizeBytes > maxFileSize){
 			throw new MaxFileSizeExceededException();
 		}
 		
-		long blockNumber = fileSize/Constants.dataBlockSizeBytes; //Zero based block number;
-		BlockID dataBlockID = DataBlock.newID(inumber, blockNumber);
-		DataBlock block = new DataBlock(dataBlockID);
+		//long blockNumber = fileSize/Constants.blockSegmentSizeBytes; //Zero based block number;
+		
+		long blockNumber = DataSegment.blockInFile(fileSize, recordSize);
+		int segmentInBlock = DataSegment.segmentInBlock(fileSize, recordSize);
+		
+		assert segmentInBlock == 0;
+		
+		DataSegmentID dataSegmentID = new DataSegmentID(inumber, blockNumber, segmentInBlock);
+		DataSegment block = new DataSegment(dataSegmentID);
 		cache.createBlock(block);
-		//BlockID dataBlockID = DataBlock.createNewBlock(inumber, blockNumber);
 		
 		//System.out.println(String.format("Created blk: %d, fileSize=%d", blockNumber, fileSize));
 		
-		return dataBlockID;
-		
-		//-------------------------------------------------------------------------
-		//FIXME: This is for debugging only. 
-		//try ( DataBlock dataBlock = (DataBlock)(cache.acquireBlock(dataBlockID))) {
-		//	dataBlock.blockNumber = blocksCount+1;
-		//}
-		//-------------------------------------------------------------------------
-		
-		
-		/*long indirectBlocksLimit = Constants.directBlocksPerInode + Commons.maxBlocksCount(1);
-		long doubleIndirectBlocksLimit = indirectBlocksLimit + Commons.maxBlocksCount(2);
-		long tripleIndirectBlocksLimit = doubleIndirectBlocksLimit + Commons.maxBlocksCount(3);
-		
-		if (blocksCount < Constants.directBlocksPerInode) {
-			//System.out.println("1. Adding direct block "+directBlocksCreated);
-			directBlockUuid[(int)blocksCount] = dataBlockID;
-		} else {
-			IndexBlock indBlock = null;
-			
-			if (blocksCount < indirectBlocksLimit) {
-				//System.out.println("1. Adding indirect block "+blocksCount);
-				if (indirectBlockUuid.uuidHigh == 0 && indirectBlockUuid.uuidLow == 0) {
-					//DataBlock indDataBlock = cache.newDataBlock();
-					BlockID indDataBlockID = DataBlock.createNewBlock();
-					indBlock = new IndexBlock(indDataBlockID, 1); //IndexBlock is like a wrapper on DataBlock
-					indirectBlockUuid = indBlock.uuid();
-					System.out.println("\t\tCreated indirect block: " + Commons.uuidToString(indirectBlockUuid.uuidHigh, indirectBlockUuid.uuidLow));
-				} else {
-					indBlock = new IndexBlock(indirectBlockUuid, 1);
-				}
-			} else if (blocksCount < doubleIndirectBlocksLimit){
-				if (doubleIndirectBlockUuid.uuidHigh == 0 && doubleIndirectBlockUuid.uuidLow == 0) {
-					//System.out.println("1. Adding doubleIndirect block "+blocksCount);
-					//DataBlock indDataBlock = cache.newDataBlock();
-					BlockID indDataBlockID = DataBlock.createNewBlock();
-					indBlock = new IndexBlock(indDataBlockID, 2);
-					doubleIndirectBlockUuid = indBlock.uuid();
-					System.out.println("\t\tCreated double indirect block.");
-				} else {
-					indBlock = new IndexBlock(doubleIndirectBlockUuid, 2);
-				}
-				
-			} else if (blocksCount < tripleIndirectBlocksLimit){
-				if (tripleIndirectBlockUuid.uuidHigh == 0 && tripleIndirectBlockUuid.uuidLow == 0) {
-					//System.out.println("1. Adding tripleIndirect block "+blocksCount);
-					//DataBlock indDataBlock = cache.newDataBlock();
-					BlockID indDataBlockID = DataBlock.createNewBlock();
-					indBlock = new IndexBlock(indDataBlockID, 3);
-					tripleIndirectBlockUuid = indBlock.uuid();
-					System.out.println("\t\tCreated triple indirect block.");
-				} else {
-					indBlock = new IndexBlock(tripleIndirectBlockUuid, 3);
-				}
-			} else {
-				throw new MaxFileSizeExceededException();
-			}
-			
-			indBlock.addBlock(dataBlockID, blocksCount);
-		}*/
-		
-		//blocksCount++;
-		//lastBlockUuid = dataBlockID;
+		return dataSegmentID;
 	}
 	
 	public long fileSize(){
 		return fileSize;
 	}
 	
-	/*public long id(){
-		return inumber;
-	}*/
-	
-	void loadFrom(ByteChannel channel) throws IOException {
+	void loadFrom(final ByteChannel channel) throws IOException {
 		int inodeSizeBytes = Constants.inodeSizeBytes;
 		ByteBuffer buffer = ByteBuffer.allocate(inodeSizeBytes);
 		
@@ -312,12 +228,14 @@ public class Inode {
 		buffer.flip();
 		inumber = buffer.getLong();
 		fileSize = buffer.getLong();
+		recordSize = buffer.getInt();
 	}
 	
-	void storeTo(ByteChannel channel) throws IOException {
+	void storeTo(final ByteChannel channel) throws IOException {
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.inodeSizeBytes);
 		buffer.putLong(inumber);
 		buffer.putLong(fileSize);
+		buffer.putInt(recordSize);
 		buffer.flip();
 		buffer.limit(buffer.capacity());
 		
@@ -329,55 +247,6 @@ public class Inode {
 		}
 		
 	}
-	
-	
-	/*static Inode fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		int inodeSize = Constants.inodeSizeBytes;
-		if (buffer.remaining() < inodeSize)
-			throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
-					+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),inodeSize));
-		
-		if (buffer.remaining() < Constants.inodeSizeBytes)
-			throw new BufferUnderflowException();
-		
-		int initPosition = buffer.position();
-		
-		Inode inode = new Inode(0);
-		inode.inumber = buffer.getLong();
-		inode.fileSize = buffer.getLong();
-		
-		int dataLength = buffer.position() - initPosition;
-		int padLength = Constants.inodeSizeBytes - dataLength;
-		buffer.position(buffer.position()+padLength);
-		
-		return inode;
-	}*/
-	
-	/*
-	 * We need a way to ensure that the concurrent threads do not update this Inode while the block
-	 * is being written to the buffer.
-	 */
-	/*void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		int inodeSize = Constants.inodeSizeBytes;
-		if (buffer.capacity() < inodeSize)
-			throw new InsufficientResourcesException(String.format("Buffer capacity is less than "
-					+ "required: Capacity = %d bytes, required = %d bytes.",buffer.capacity(),inodeSize));
-		
-		int initPosition = buffer.position();
-		
-		buffer.putLong(inumber);
-		buffer.putLong(fileSize);
-		
-		int dataLength = buffer.position() - initPosition;
-		int padLength = Math.max(0, Constants.inodeSizeBytes - dataLength);
-		
-		assert dataLength + padLength == Constants.inodeSizeBytes;
-		
-		if (padLength > 0) {
-			byte[] padding = new byte[padLength];
-			buffer.put(padding);
-		}
-	}*/
 	
 	public static int inodesSize(){
 		//FIXME: Make it such that inodesBlockSizeBytes % inodeSizeBytes == 0

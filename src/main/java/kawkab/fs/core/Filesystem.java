@@ -35,7 +35,7 @@ public class Filesystem {
 	}
 	
 	public static int BlockSize(){
-		return Constants.dataBlockSizeBytes;
+		return Constants.segmentSizeBytes;
 	}
 	
 	public Filesystem bootstrap() throws IOException{
