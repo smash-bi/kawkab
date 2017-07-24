@@ -7,15 +7,16 @@ import java.io.*;
 public class BackendStore{
 
 	private final String dbPath;
+	private final Options options;
 
 	public BackendStore(String dbPath){
 		this.dbPath = dbPath;
+		options = new Options();
+		options.createIfMissing(true);
+
 	}
 	
 	public void put(String blockID, byte[] block) throws IOException{
-		Options options = new Options();
-		options.createIfMissing(true);
-
 		DB db = factory.open(new File(dbPath), options);
 		
 		try{
@@ -26,9 +27,6 @@ public class BackendStore{
 	}
 
 	public byte[] get(String blockID) throws IOException{
-		Options options = new Options();
-		options.createIfMissing(true);
-
 		DB db = factory.open(new File(dbPath), options);
 		
 		try{

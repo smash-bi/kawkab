@@ -654,7 +654,7 @@ public class FSTest {
 
 		Random rand = new Random(0);
 
-		BackendStore bes = new BackendStore("/home/smash/leveldb");
+		BackendStore bes = new BackendStore("fs/leveldb");
 
 		byte[] stringBytes = new byte[bytesSize];
 		rand.nextBytes(stringBytes);
@@ -666,7 +666,7 @@ public class FSTest {
 		try{
 			bes.put(blockID, bytes);
 			byte[] readBytes = bes.get(blockID);
-			assert bytes == readBytes;
+			assert Arrays.equals(readBytes, bytes);
 		}
 		catch(IOException e){
 			e.printStackTrace();
