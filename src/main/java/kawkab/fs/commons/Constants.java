@@ -30,6 +30,7 @@ public class Constants {
 	public static final String inodeBlocksPath = basePath+"/inodes";
 	public static final String blocksPath = basePath+"/blocks";
 	public static final String namespacePath = basePath+"/namespace";
+	public static final String backendStorePath = basePath+"/leveldb";
 	public static final int inodeBlocksPerDirectory = 1000;
 	
 	public static final long ibmapUuidHigh = 1; //High bits of uuid for ibmap. The low bits are the blockIndex

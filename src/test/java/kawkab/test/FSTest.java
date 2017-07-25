@@ -654,7 +654,7 @@ public class FSTest {
 
 		Random rand = new Random(0);
 
-		BackendStore bes = new BackendStore("fs/leveldb");
+		BackendStore bes = new BackendStore(Constants.backendStorePath);
 
 		byte[] stringBytes = new byte[bytesSize];
 		rand.nextBytes(stringBytes);
@@ -673,7 +673,6 @@ public class FSTest {
 		}
 	}
 
-	
 	private void testShutdown(){
 		System.out.println("--------------------------------------------");
 		System.out.println("            Filesystem shutdown Test");
