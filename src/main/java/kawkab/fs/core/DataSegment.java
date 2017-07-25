@@ -17,8 +17,10 @@ public class DataSegment extends Block {
 	
 	/**
 	 * The constructor should not create a new file in the underlying filesystem. This constructor
-	 * does not reads data from the underlying file. Instead, use fromBuffer() or laodFromDisk() 
-	 * function for that purpose. 
+	 * does not reads data from the underlying file. Instead, use loadFrom and storeTo 
+	 * functions for that purpose.
+	 * 
+	 * This constructor should not create the bytes array. It is created in loadFrom function.
 	 * @param uuid
 	 */
 	DataSegment(DataSegmentID uuid) {
@@ -197,6 +199,11 @@ public class DataSegment extends Block {
 		int offset = ((DataSegmentID)this.id).segmentInBlock * Constants.segmentSizeBytes;
 		assert offset <= Constants.dataBlockSizeBytes;
 		return offset;
+	}
+	
+	@Override
+	int memorySizeBytes() {
+		return Constants.segmentSizeBytes + 8; //FIXME: Get the exact number
 	}
 	
 	

@@ -6,7 +6,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import kawkab.fs.commons.Constants;
 
-public class Cache implements BlockEvictionListener {
+public class Cache implements BlockEvictionListener{
 	private static Cache instance;
 	private LRUCache cache;
 	private Lock cacheLock;
@@ -41,71 +41,77 @@ public class Cache implements BlockEvictionListener {
 		if (closing)
 			return null;
 		
-		CachedItem cached = null;
+		CachedItem cachedItem = null;
 		boolean wasCached = true;
 		
 		cacheLock.lock();
-		try { //For cached.lock()
+		try { //For cachedItem.lock()
 			try { //For cacheLock.lock()
-				cached = cache.get(blockID.key);
+				cachedItem = cache.get(blockID.key);
 				
 				//If the block is not cached
-				if (cached == null){
+				if (cachedItem == null){
 					wasCached = false;
 					Block block = blockID.newBlock();
-					cached = new CachedItem(block);
-					cache.put(cached.block().name(), cached);
+					cachedItem = new CachedItem(block);
+					cache.put(cachedItem.block().name(), cachedItem);
 				}
 				
 				//FIXME: This can stall all other threads. For example, two readers read data at the same time. 
-				//The first reader gets the lock and then performs IO on the line "cached.block().loadFromDisk()". 
+				//The first reader gets the lock and then performs IO on the line "csyncProc.load(cachedItem.block())". 
 				//Now the other reader has the lock of cache and waiting for the first reader to unlock the cached block.
-				cached.lock();  
-				cached.incrementRefCnt();
+				cachedItem.incrementRefCnt();
 			} finally {
 				cacheLock.unlock();
 			}
+			
+			cachedItem.lock(); //TODO: Don't acquire this lock if the cachedItem is already loaded in memory
 		
 			if (wasCached) {
-				return cached.block();
+				//TODO: Wait for the item to get loaded if it is not already loaded
+				return cachedItem.block();
 			}
 			
-			//cached.block().loadFromDisk(); //TODO: Make to load from the syncProc
-			syncProc.load(cached.block());
+			syncProc.load(cachedItem.block());
+			
+			//TODO: Signal any thread that is waiting for the block to get loaded
 		} finally {
-			if (cached != null) {
-				cached.unlock();
+			if (cachedItem != null) {
+				cachedItem.unlock();
 			}
 		}
 		
-		return cached.block();
+		return cachedItem.block();
 	}
 	
 	public void releaseBlock(BlockID blockID) {
-		CachedItem cached = null;
+		CachedItem cachedItem = null;
 		cacheLock.lock();
-		try {
-			cached = cache.get(blockID.key);
-			
-			if (cached == null) {
-				System.out.println(" Releasing non-existing block: " + blockID.key);
-				new Exception().printStackTrace();
+		//try { //For cachedItem.lock()
+			try { //For cacheLock.lock()
+				cachedItem = cache.get(blockID.key);
+				
+				if (cachedItem == null) {
+					System.out.println(" Releasing non-existing block: " + blockID.key);
+				}
+				
+				assert cachedItem != null;
+				cachedItem.decrementRefCnt();
+			} finally {
+				cacheLock.unlock();
 			}
 			
-			assert cached != null;
-			cached.lock(); //FIXME: We lock the cached object only to increment and decrement reference count. Why not to use AtomicInteger for that purpose?
-			cached.decrementRefCnt();
-			if (cached.block().dirty()) {
+			//cachedItem.lock(); //FIXME: Do we need a lock here???
+			if (cachedItem.block().dirty()) {
 				try {
-					syncProc.store(cached.block()); //FIXME: What to do with the exception?
+					syncProc.store(cachedItem.block()); //FIXME: What to do with the exception?
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
 			}
-			cached.unlock();
-		} finally {
-			cacheLock.unlock();
-		}
+		//} finally {
+		//	cachedItem.unlock();
+		//}
 	}
 	
 	public void flush() { //
@@ -136,17 +142,9 @@ public class Cache implements BlockEvictionListener {
 	public void beforeEviction(CachedItem cachedItem) {
 		Block block = cachedItem.block();
 		try {
-			block.waitUntilSynced();
+			block.waitUntilSynced(); //FIXME: This is called while holding the cacheLock and the thread may sleep while holding the lock.
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-		/*if (block.dirty()) {
-			try {
-				block.storeToDisk();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}*/
 	}
-	
 }

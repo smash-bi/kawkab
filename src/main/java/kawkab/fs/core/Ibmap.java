@@ -117,6 +117,11 @@ public class Ibmap extends Block{
 		return 0;
 	}
 	
+	@Override
+	int memorySizeBytes() {
+		return Constants.ibmapBlockSizeBytes + 16; //FIXME: Get the exact number
+	}
+	
 	/**
 	 * Bootstraps the ibmap blocks for this machine. This should be called only once when the filesystem
 	 * is formatted for the first use. It creates ibmap block files in the local storage at the

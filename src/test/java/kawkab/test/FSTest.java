@@ -23,13 +23,13 @@ public class FSTest {
 		Constants.printConfig();
 		tester.testBootstrap();
 		//tester.testBlocksCreation();
-		//tester.testSmallReadWrite();
+		tester.testSmallReadWrite();
 		//tester.testLargeReadWrite();
 		//tester.testMultipleReaders();
 		//tester.testMultipleFiles();
 		//tester.testWritePerformance();
-		//tester.testWritePerformanceConcurrentFiles();
-		tester.testReadPerformance();
+		tester.testWritePerformanceConcurrentFiles();
+		//tester.testReadPerformance();
 		tester.testReadPerfMultiReadersSameFile();
 		
 		//tester.testVeryLargeReadWrite();

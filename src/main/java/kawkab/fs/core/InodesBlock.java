@@ -88,6 +88,11 @@ public class InodesBlock extends Block {
 		return 0;
 	}
 	
+	@Override
+	int memorySizeBytes() {
+		return Constants.inodesBlockSizeBytes + 8; //FIXME: Get the exact number
+	}
+	
 	
 	/*@Override
 	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException{

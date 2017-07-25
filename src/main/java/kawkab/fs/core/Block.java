@@ -14,12 +14,15 @@ public abstract class Block /*implements AutoCloseable*/ {
 	private final Lock lock;
 	private final Condition syncWait;
 	private int dirtyCount;
+	int initialFilledBytes;
+	int currentFilledBytes;
+	boolean storedGlobally;
 	
-	protected final BlockID id;
+	final BlockID id;
 	//protected Cache cache = Cache.instance(); //FIXME: This creates circular dependencies, which can lead to deadlocks
 	//protected BlockType type; //Used for debugging only.
 	
-	protected Block(BlockID id) {
+	Block(BlockID id) {
 		this.id = id;
 		//this.type = type;
 		lock = new ReentrantLock();
@@ -61,12 +64,17 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 */
 	abstract int blockSize();
 	
-	abstract public void loadFrom(ByteChannel channel)  throws IOException;
+	abstract void loadFrom(ByteChannel channel)  throws IOException;
 	
-	abstract public void storeTo(ByteChannel channel)  throws IOException;
+	abstract void storeTo(ByteChannel channel)  throws IOException;
 	
 	abstract int channelOffset();
 	
+	abstract int memorySizeBytes();
+	
+	final int usedMemoryBytes() {
+		return 30 + memorySizeBytes(); //FIXME: Get the exact number
+	}
 	
 	@Override
 	public String toString(){
@@ -104,27 +112,27 @@ public abstract class Block /*implements AutoCloseable*/ {
 	boolean dirty(){
 		boolean isDirty = false;
 		lock();
-			if (dirtyCount > 0)
+			if (dirtyCount > 0) //TODO: Make the dirtyCount as atomicInteger
 				isDirty = true;
 		unlock();
 		
 		return isDirty;
 	}
 	
-	public void markDirty() {
+	void markDirty() {
 		lock();
 		dirtyCount++;
 		unlock();
 	}
 	
-	public int dirtyCount() {
+	int dirtyCount() {
 		return dirtyCount;
 	}
 	
 	/**
 	 * Clears the dirty bit of this block.
 	 */
-	public void clearDirty(int count) {
+	void clearDirty(int count) {
 		lock();
 		try {
 			dirtyCount -= count;
@@ -139,22 +147,22 @@ public abstract class Block /*implements AutoCloseable*/ {
 		}
 	}
 	
-	public void lock(){
+	void lock(){
 		lock.lock();
 	}
 	
-	public void unlock(){
+	void unlock(){
 		lock.unlock();
 	}
 	
-	public BlockID id(){
+	BlockID id(){
 		return id;
 	}
 	
 	/**
 	 * Releases any acquired resources such as file channels
 	 */
-	public void cleanup() throws IOException {}
+	void cleanup() throws IOException {}
 	
 	/**
 	 * This function causes the cache to flush this block if the block is dirty. This function
@@ -162,7 +170,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * interface.
 	 */
 	/*@Override
-	public void close(){
+	void close(){
 		cache.releaseBlock(this.id());
 	}*/
 	
@@ -170,11 +178,11 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * The caller thread blocks until this block is synced to the storage medium.
 	 * @throws InterruptedException 
 	 */
-	public void waitUntilSynced() throws InterruptedException {
+	void waitUntilSynced() throws InterruptedException {
 		lock();
 		try {
 			while (dirtyCount > 0) {
-				syncWait.await();
+				syncWait.await(); //FIXME: This should be the wait condition from the Cache.cacheLock. 
 			}
 		} finally {
 			unlock();

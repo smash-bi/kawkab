@@ -3,6 +3,8 @@ package kawkab.fs.commons;
 import kawkab.fs.core.Inode;
 
 public class Constants {
+	public static final long maxBlocksPerLocalDevice = 1000;
+	
 	//Default data block size in bytes
 	public static final int dataBlockSizeBytes    = 16*1024*1024;
 	public static final int segmentsPerBlock      = 16;
@@ -23,7 +25,7 @@ public class Constants {
 	public static final int inodeBlocksPerMachine = (int)Math.ceil(ibmapBlockSizeBytes*ibmapBlocksPerMachine*8.0/inodesPerBlock); //FIXME: Calculate this based on the maximum number of files supported by a machine
 	public static int inodesBlocksRangeStart = 0; //TODO: Get these numbers from a configuration file or ZooKeeper
 	
-	public static int maxBlocksInCache = 1000;
+	public static int maxBlocksInCache = 100;
 	public static final int syncThreadsPerDevice = 2;
 	
 	public static final String basePath = "/ssd1/sm3rizvi/kawkab";
@@ -39,6 +41,9 @@ public class Constants {
 	static {
 		assert inodesBlockSizeBytes % inodesPerBlock == 0;
 		assert dataBlockSizeBytes == segmentsPerBlock*segmentSizeBytes;
+		
+		assert ibmapBlockSizeBytes <= segmentSizeBytes;
+		assert inodesBlockSizeBytes <= segmentSizeBytes;
 	}
 	
 	public static void printConfig(){

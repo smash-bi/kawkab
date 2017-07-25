@@ -3,26 +3,35 @@ package kawkab.fs.core;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.nio.channels.FileChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+import kawkab.fs.commons.Constants;
 
 public class LocalProcessor implements SyncProcessor {
 	private ExecutorService workers;
 	private SyncProcessor globalProc;
 	
+	private final long maxBlocks = Constants.maxBlocksPerLocalDevice;
+	private long usedBlocks;
+	private Lock lock;
+	
+	
 	public LocalProcessor(int numWorkers) {
 		workers = Executors.newFixedThreadPool(numWorkers);
 		globalProc = new GlobalProcessor();
+		lock = new ReentrantLock();
 	}
 	
 	@Override
 	public void store(Block block) throws IOException {
-		//FIXME: Assign same worker to the blocks of the same file. Otherwise two or mroe workers can write same data
-		//to the same file concurrently.
-		workers.submit(() -> { runWorker(block); });  
+		//FIXME: Assign same worker to the same block. Otherwise two or more workers can write same data
+		//to the same file concurrently and then the dirtyCount will be wrong.
+		workers.submit(() -> { runWorker(block); });
 	}
 	
 	@Override
@@ -65,6 +74,8 @@ public class LocalProcessor implements SyncProcessor {
 		//FIXME: This creates a new file if it does not already exist. We should prevent that in order to make sure that
 		//first we create a file and do proper accounting for the file.
 		
+		useBlock();
+		
 		try(RandomAccessFile rwFile = 
                 new RandomAccessFile(block.localPath(), "rw")) {
 			try (SeekableByteChannel channel = rwFile.getChannel()) {
@@ -100,5 +111,21 @@ public class LocalProcessor implements SyncProcessor {
 		} finally {
 			workers.shutdownNow();
 		}
+	}
+	
+	private void useBlock() {
+		lock.lock();
+		
+		if (usedBlocks == maxBlocks) {
+			evictBlocks();
+		}
+		
+		usedBlocks += 1;
+		
+		lock.unlock();
+	}
+	
+	private void evictBlocks() {
+		usedBlocks -= 1;
 	}
 }
