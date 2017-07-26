@@ -1,4 +1,4 @@
-package kawkab.test;
+package kawkab.fs.core;
 
 import java.io.IOException;
 import java.util.Arrays;

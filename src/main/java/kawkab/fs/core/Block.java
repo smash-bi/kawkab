@@ -1,7 +1,8 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
-import java.nio.channels.ByteChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -64,9 +65,9 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 */
 	abstract int blockSize();
 	
-	abstract void loadFrom(ByteChannel channel)  throws IOException;
+	abstract void loadFrom(ReadableByteChannel channel)  throws IOException;
 	
-	abstract void storeTo(ByteChannel channel)  throws IOException;
+	abstract void storeTo(WritableByteChannel channel)  throws IOException;
 	
 	abstract int channelOffset();
 	
@@ -119,7 +120,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 		return isDirty;
 	}
 	
-	void markDirty() {
+	public void markDirty() {
 		lock();
 		dirtyCount++;
 		unlock();
@@ -147,15 +148,15 @@ public abstract class Block /*implements AutoCloseable*/ {
 		}
 	}
 	
-	void lock(){
+	public void lock(){
 		lock.lock();
 	}
 	
-	void unlock(){
+	public void unlock(){
 		lock.unlock();
 	}
 	
-	BlockID id(){
+	public BlockID id(){
 		return id;
 	}
 	

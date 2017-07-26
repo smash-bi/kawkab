@@ -3,7 +3,8 @@ package kawkab.fs.core;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ByteChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
@@ -160,7 +161,7 @@ public class DataSegment extends Block {
 	}
 	
 	@Override
-	public void loadFrom(ByteChannel channel) throws IOException {
+	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		lock();
 		try {
 			bytes = new byte[Constants.segmentSizeBytes];
@@ -178,7 +179,7 @@ public class DataSegment extends Block {
 	}
 	
 	@Override
-	public void storeTo(ByteChannel channel) throws IOException {
+	public void storeTo(WritableByteChannel channel) throws IOException {
 		lock();
 		try {
 			ByteBuffer buffer = ByteBuffer.wrap(bytes);

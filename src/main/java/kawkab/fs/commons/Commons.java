@@ -3,7 +3,8 @@ package kawkab.fs.commons;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ByteChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.util.Base64;
 
 public class Commons {
@@ -44,7 +45,7 @@ public class Commons {
      * @return Total number of bytes read from the channel.
      * @throws IOException
      */
-    public static int readFrom(ByteChannel channel, ByteBuffer toBuffer) throws IOException {
+    public static int readFrom(ReadableByteChannel channel, ByteBuffer toBuffer) throws IOException {
     	int readNow = 0;
     	int totalRead = 0;
     	int size = toBuffer.remaining();
@@ -65,7 +66,7 @@ public class Commons {
      * @return The number of bytes written into the channel.
      * @throws IOException
      */
-    public static int writeTo(ByteChannel toChannel, ByteBuffer fromBuffer) throws IOException {
+    public static int writeTo(WritableByteChannel toChannel, ByteBuffer fromBuffer) throws IOException {
     	int bytesWritten = 0;
     	int size = fromBuffer.remaining();
     	while(bytesWritten < size) {

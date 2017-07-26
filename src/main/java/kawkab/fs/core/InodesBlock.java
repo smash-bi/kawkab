@@ -2,7 +2,8 @@ package kawkab.fs.core;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.channels.ByteChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 
 import kawkab.fs.commons.Constants;
 
@@ -58,7 +59,7 @@ public class InodesBlock extends Block {
 	}
 	
 	@Override
-	public void loadFrom(ByteChannel channel) throws IOException {
+	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		lock();
 		try {
 			inodes = new Inode[Constants.inodesPerBlock];
@@ -72,7 +73,7 @@ public class InodesBlock extends Block {
 	}
 	
 	@Override
-	public void storeTo(ByteChannel channel) throws IOException {
+	public void storeTo(WritableByteChannel channel) throws IOException {
 		lock();
 		try {
 			for(Inode inode : inodes) {
