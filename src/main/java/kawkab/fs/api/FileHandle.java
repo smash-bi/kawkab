@@ -8,7 +8,7 @@ import kawkab.fs.core.Cache;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.Inode;
 import kawkab.fs.core.InodesBlock;
-import kawkab.fs.core.Block.BlockType;
+import kawkab.fs.core.InodesBlockID;
 import kawkab.fs.core.exceptions.InvalidArgumentsException;
 import kawkab.fs.core.exceptions.InvalidFileModeException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
@@ -53,7 +53,7 @@ public final class FileHandle {
 		Inode inode = null;
 		long fileSize = 0;
 		
-		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, blockIndex, InodesBlock.name(blockIndex), BlockType.InodeBlock);
+		BlockID id = new InodesBlockID(blockIndex);
 		
 		InodesBlock block = null;
 		try {
@@ -218,7 +218,7 @@ public final class FileHandle {
 		
 		int appendedBytes = 0;
 		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
-		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, inodesBlockIdx, InodesBlock.name(inodesBlockIdx), BlockType.InodeBlock);
+		BlockID id = new InodesBlockID(inodesBlockIdx);
 		
 		InodesBlock block = null;
 		try {
@@ -235,13 +235,16 @@ public final class FileHandle {
 			appendedBytes = inode.append(data, offset, length);
 			
 			if (appendedBytes > 0) {
-				block.lock();
-				inode.updateSize(appendedBytes);
-				block.markDirty();
+				try {
+					block.lock();
+					inode.updateSize(appendedBytes);
+					block.markDirty();
+				} finally {
+					block.unlock();
+				}
 			}
 		} finally {
 			if (block != null) {
-				block.unlock();
 				cache.releaseBlock(block.id());
 			}
 		}
@@ -255,7 +258,7 @@ public final class FileHandle {
 	public synchronized long size(){
 		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
 		long size = 0;
-		BlockID id = new BlockID(Constants.inodesBlocksUuidHigh, inodesBlockIdx, InodesBlock.name(inodesBlockIdx), BlockType.InodeBlock);
+		BlockID id = new InodesBlockID(inodesBlockIdx);
 		
 		InodesBlock block = null;
 		try {

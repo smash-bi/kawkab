@@ -1,13 +1,14 @@
 package kawkab.fs.commons;
 
-import kawkab.fs.core.IndexBlock;
 import kawkab.fs.core.Inode;
 
 public class Constants {
 	//Default data block size in bytes
-	public static final int dataBlockSizeBytes = 16*1024*1024;
+	public static final int dataBlockSizeBytes    = 16*1024*1024;
+	public static final int segmentsPerBlock      = 16;
+	public static final int segmentSizeBytes = dataBlockSizeBytes/segmentsPerBlock;
 	public static final int directBlocksPerInode = 0;
-	public static final int numPointersInIndexBlock = dataBlockSizeBytes/IndexBlock.pointerSizeBytes;
+	//public static final int numPointersInIndexBlock = blockSegmentSizeBytes/IndexBlock.pointerSizeBytes;
 	
 	//Ibmap blocks range for this machine
 	public static final int ibmapBlockSizeBytes = 16*1024; //FIXME: using a small number for testing
@@ -38,17 +39,20 @@ public class Constants {
 	
 	static {
 		assert inodesBlockSizeBytes % inodesPerBlock == 0;
+		assert dataBlockSizeBytes == segmentsPerBlock*segmentSizeBytes;
 	}
 	
 	public static void printConfig(){
 		System.out.println(String.format("Data block size MB ....... = %.3f",dataBlockSizeBytes/1024.0/1024.0));
+		System.out.println(String.format("Data block segment size MB = %.3f",segmentSizeBytes/1024.0/1024.0));
+		System.out.println(String.format("Num. of segments per block = %d", segmentsPerBlock));
 		System.out.println(String.format("Direct blocks per inode .. = %d", directBlocksPerInode));
-		System.out.println(String.format("Pointers per index block . = %d", numPointersInIndexBlock));
+		//System.out.println(String.format("Pointers per index block . = %d", numPointersInIndexBlock));
 		System.out.println(String.format("Maximum file size MB ..... = %.3f", Inode.maxFileSize/1024.0/1024.0));
 		System.out.println();
-		System.out.println(String.format("Ibmap block size MB ....... = %.3f", ibmapBlockSizeBytes/1024.0/1024.0));
-		System.out.println(String.format("Ibmap blocks per machine .. = %d", ibmapBlocksPerMachine));
-		System.out.println(String.format("Ibmaps total size MB ...... = %.3f", ibmapBlockSizeBytes*ibmapBlocksPerMachine/1024.0/1024.0));
+		System.out.println(String.format("Ibmap block size MB ...... = %.3f", ibmapBlockSizeBytes/1024.0/1024.0));
+		System.out.println(String.format("Ibmap blocks per machine . = %d", ibmapBlocksPerMachine));
+		System.out.println(String.format("Ibmaps total size MB ..... = %.3f", ibmapBlockSizeBytes*ibmapBlocksPerMachine/1024.0/1024.0));
 		System.out.println();
 		System.out.println(String.format("Inode block size MB ...... = %.3f", inodesBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Inode size bytes ......... = %d", inodeSizeBytes));

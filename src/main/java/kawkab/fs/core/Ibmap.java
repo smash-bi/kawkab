@@ -27,8 +27,8 @@ public class Ibmap extends Block{
 	/**
 	 * @param blockIndex Index of the Ibmap block for the current machine.
 	 */
-	Ibmap(int blockIndex){
-		super(new BlockID(Constants.ibmapUuidHigh, blockIndex, name(blockIndex), BlockType.IbmapBlock), BlockType.IbmapBlock);
+	Ibmap(int blockIndex) {
+		super(new IbmapBlockID(blockIndex));
 		this.blockIndex = blockIndex;
 	}
 	
@@ -112,6 +112,11 @@ public class Ibmap extends Block{
 		}
 	}
 	
+	@Override
+	public int channelOffset() {
+		return 0;
+	}
+	
 	/**
 	 * Bootstraps the ibmap blocks for this machine. This should be called only once when the filesystem
 	 * is formatted for the first use. It creates ibmap block files in the local storage at the
@@ -155,7 +160,7 @@ public class Ibmap extends Block{
 		return name(blockIndex);
 	}
 	
-	static String name(int blockIndex){
+	static String name(int blockIndex) {
 		return "ibmap"+blockIndex;
 	}
 	

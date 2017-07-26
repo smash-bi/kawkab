@@ -17,11 +17,11 @@ public abstract class Block /*implements AutoCloseable*/ {
 	
 	protected final BlockID id;
 	//protected Cache cache = Cache.instance(); //FIXME: This creates circular dependencies, which can lead to deadlocks
-	protected BlockType type; //Used for debugging only.
+	//protected BlockType type; //Used for debugging only.
 	
-	protected Block(BlockID id, BlockType type) {
+	protected Block(BlockID id) {
 		this.id = id;
-		this.type = type;
+		//this.type = type;
 		lock = new ReentrantLock();
 		syncWait = lock.newCondition();
 	}
@@ -65,15 +65,17 @@ public abstract class Block /*implements AutoCloseable*/ {
 	
 	abstract public void storeTo(ByteChannel channel)  throws IOException;
 	
+	abstract int channelOffset();
+	
 	
 	@Override
 	public String toString(){
 		return name();
 	}
 	
-	public BlockType type(){
+	/*public BlockType type(){
 		return type;
-	}
+	}*/
 	
 	/*public void loadFrom() throws IOException {
 		LocalStore store = LocalStore.instance();
