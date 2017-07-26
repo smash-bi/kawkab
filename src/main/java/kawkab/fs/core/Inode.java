@@ -2,7 +2,8 @@ package kawkab.fs.core;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ByteChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
@@ -214,7 +215,7 @@ public class Inode {
 		return fileSize;
 	}
 	
-	void loadFrom(final ByteChannel channel) throws IOException {
+	void loadFrom(final ReadableByteChannel channel) throws IOException {
 		int inodeSizeBytes = Constants.inodeSizeBytes;
 		ByteBuffer buffer = ByteBuffer.allocate(inodeSizeBytes);
 		
@@ -231,7 +232,7 @@ public class Inode {
 		recordSize = buffer.getInt();
 	}
 	
-	void storeTo(final ByteChannel channel) throws IOException {
+	void storeTo(final WritableByteChannel channel) throws IOException {
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.inodeSizeBytes);
 		buffer.putLong(inumber);
 		buffer.putLong(fileSize);

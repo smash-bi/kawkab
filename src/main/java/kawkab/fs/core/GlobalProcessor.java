@@ -1,11 +1,10 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.nio.ByteBuffer;
-import java.nio.channels.ByteChannel;
 import java.io.RandomAccessFile;
-import kawkab.fs.core.BackendStore;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+
 import kawkab.fs.commons.Constants;
 
 public class GlobalProcessor implements SyncProcessor {

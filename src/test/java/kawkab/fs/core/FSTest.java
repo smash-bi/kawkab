@@ -1,4 +1,4 @@
-package kawkab.test;
+package kawkab.fs.core;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -7,9 +7,7 @@ import java.util.Random;
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Constants;
-import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
-import kawkab.fs.core.BackendStore;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.InvalidFileModeException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
@@ -30,8 +28,8 @@ public class FSTest {
 		//tester.testMultipleFiles();
 		//tester.testWritePerformance();
 		//tester.testWritePerformanceConcurrentFiles();
-		tester.testReadPerformance();
-		tester.testReadPerfMultiReadersSameFile();
+		//tester.testReadPerformance();
+		//tester.testReadPerfMultiReadersSameFile();
 		
 		//tester.testVeryLargeReadWrite();
 		//tester.testFileSeek();
@@ -643,7 +641,7 @@ public class FSTest {
 		assert Arrays.equals(data, block3);
 	}*/
 
-	private void testBackendStore(){
+	private void testBackendStore() throws IOException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Backend Store Test");
 		System.out.println("--------------------------------------------");
@@ -670,7 +668,7 @@ public class FSTest {
 		}
 		catch(IOException e){
 			e.printStackTrace();
-		}
+		}		
 	}
 
 	private void testShutdown(){

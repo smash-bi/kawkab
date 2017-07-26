@@ -3,7 +3,8 @@ package kawkab.fs.core;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ByteChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.util.BitSet;
 
 import kawkab.fs.commons.Commons;
@@ -87,7 +88,7 @@ public class Ibmap extends Block{
 	}
 	
 	@Override
-	public void loadFrom(ByteChannel channel) throws IOException {
+	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		int bytesRead = Commons.readFrom(channel, buffer);
@@ -99,7 +100,7 @@ public class Ibmap extends Block{
 	}
 	
 	@Override
-	public void storeTo(ByteChannel channel) throws IOException {
+	public void storeTo(WritableByteChannel channel) throws IOException {
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.ibmapBlockSizeBytes);
 		buffer.put(bitset.toByteArray());
 		buffer.flip();
