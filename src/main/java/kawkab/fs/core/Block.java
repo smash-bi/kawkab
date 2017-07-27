@@ -118,8 +118,19 @@ public abstract class Block /*implements AutoCloseable*/ {
 		unlock();
 	}
 	
-	public int dirtyCount() {
-		return dirtyCount;
+	public int getAndSubtractDirtyCount() {
+		lock();
+		int oldDirtyCount = dirtyCount;
+		dirtyCount = 0;		
+		unlock();	
+
+		return oldDirtyCount;
+	}
+
+	public void addToDirty(int toAdd) {
+		lock();
+		dirtyCount += toAdd;
+		unlock();
 	}
 	
 	/**
