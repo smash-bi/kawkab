@@ -2,7 +2,13 @@ package kawkab.fs.core;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.io.InputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.nio.channels.FileChannel;
 
 import kawkab.fs.commons.Constants;
@@ -27,15 +33,14 @@ public class GlobalProcessor implements SyncProcessor {
 
 	private void storeBlock(Block block) throws IOException {
 		//Read block bytes, then store it in back end
-		ByteBuffer storeBuffer = ByteBuffer.allocate(block.blockSize());
 
-		try(RandomAccessFile file = new RandomAccessFile(block.localPath(), "r")){
-			try(FileChannel channel = file.getChannel()) {
-				block.storeTo(channel);
-				channel.read(storeBuffer);		
-				bes.put(block.id().toString(),storeBuffer.array());
-			}
-		}
+		byte[] fromBytes = new byte[block.blockSize()];
+		ByteArrayOutputStream os = new ByteArrayOutputStream(fromBytes.length);
+		WritableByteChannel fromChan = Channels.newChannel(os);	
+
+		block.storeTo(fromChan);
+
+		bes.put(block.id().toString(),os.toByteArray());
 	}
 
 	private void loadBlock(Block block) throws IOException {
