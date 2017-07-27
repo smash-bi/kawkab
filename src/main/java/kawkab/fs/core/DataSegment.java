@@ -15,6 +15,8 @@ public class DataSegment extends Block {
 	//private MappedByteBuffer buffer;
 	//private SeekableByteChannel channel;
 	private byte[] bytes;
+	private int dirtyBytesStart;
+	private int appendedBytes;
 	
 	/**
 	 * The constructor should not create a new file in the underlying filesystem. This constructor
@@ -27,6 +29,8 @@ public class DataSegment extends Block {
 	DataSegment(DataSegmentID uuid) {
 		super(uuid);
 		bytes = new byte[0];
+		dirtyBytesStart = Constants.segmentSizeBytes;
+		appendedBytes = 0;	
 		//System.out.println(" Opened block: " + name());
 	}
 	
@@ -55,6 +59,7 @@ public class DataSegment extends Block {
 		//buffer.position(offsetInBlock);
 		//buffer.put(data, offset, toAppend);
 		
+
 		/*ByteBuffer buffer = ByteBuffer.wrap(data, offset, toAppend);
 		channel.position(offsetInBlock);
 		int written = channel.write(buffer);*/
@@ -197,9 +202,21 @@ public class DataSegment extends Block {
 	
 	@Override
 	public int channelOffset() {
+		//TODO: Rename this function to segmentInBlockOffset()
 		int offset = ((DataSegmentID)this.id).segmentInBlock * Constants.segmentSizeBytes;
 		assert offset <= Constants.dataBlockSizeBytes;
 		return offset;
+	}
+
+	public void adjustDirtyOffsets(int currentAppendPosition, int length) {
+		if(currentAppendPosition < dirtyBytesStart) {
+			lock();
+			dirtyBytesStart = currentAppendPosition;
+			unlock();
+		}	
+		lock();
+		appendedBytes += length; 	
+		unlock();
 	}
 	
 	@Override
