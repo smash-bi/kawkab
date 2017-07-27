@@ -34,9 +34,9 @@ public class LocalProcessor implements SyncProcessor {
 		if (block == null)
 			return;
 		
-		int dirtyCount = block.dirtyCount();
+		int oldDirtyCount = block.getAndSubtractDirtyCount();
 		
-		if (dirtyCount == 0)
+		if (oldDirtyCount == 0)
 			return;
 		
 		try {
@@ -45,9 +45,8 @@ public class LocalProcessor implements SyncProcessor {
 			globalProc.store(block);
 		} catch (IOException e) {
 			e.printStackTrace();
+			block.addToDirty(oldDirtyCount);
 		}
-		
-		block.clearDirty(dirtyCount);
 	}
 	
 	private void loadBlock(Block block) throws IOException {
