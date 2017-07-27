@@ -11,12 +11,17 @@ import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 public class DataSegment extends Block {
 	//private MappedByteBuffer buffer;
 	//private SeekableByteChannel channel;
 	private byte[] bytes;
 	private int dirtyBytesStart;
 	private int appendedBytes;
+	
+	private final Lock dirtyBytesLock;
 	
 	/**
 	 * The constructor should not create a new file in the underlying filesystem. This constructor
@@ -31,6 +36,7 @@ public class DataSegment extends Block {
 		bytes = new byte[0];
 		dirtyBytesStart = Constants.segmentSizeBytes;
 		appendedBytes = 0;	
+		dirtyBytesLock = new ReentrantLock();
 		//System.out.println(" Opened block: " + name());
 	}
 	
@@ -64,6 +70,7 @@ public class DataSegment extends Block {
 		channel.position(offsetInBlock);
 		int written = channel.write(buffer);*/
 		
+		adjustDirtyOffsets(offsetInBlock, toAppend);
 		markDirty();
 		
 		//System.out.println("  Append: " + name() + " - " + toAppend);
@@ -80,7 +87,8 @@ public class DataSegment extends Block {
 		
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		buffer.putLong(offsetInBlock, data);
-		
+
+		adjustDirtyOffsets(offsetInBlock, longSize);
 		markDirty();
 		
 		return longSize;
@@ -113,6 +121,7 @@ public class DataSegment extends Block {
 		
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		buffer.putInt(offsetInBlock, data);
+		adjustDirtyOffsets(offsetInBlock, intSize);
 		markDirty();
 		
 		return intSize;
@@ -185,6 +194,51 @@ public class DataSegment extends Block {
 	
 	@Override
 	public void storeTo(WritableByteChannel channel) throws IOException {
+		dirtyBytesLock.lock();
+
+		int preLockDirtyBytesStart = dirtyBytesStart;
+		int preLockAppendedBytes = appendedBytes;
+
+		System.out.println("preLockAppendedBytes: "+preLockAppendedBytes);
+
+		if(preLockDirtyBytesStart == Constants.segmentSizeBytes){
+			dirtyBytesLock.unlock();
+			return;
+		}
+	
+		dirtyBytesStart+=preLockAppendedBytes;
+		appendedBytes-=preLockAppendedBytes;		
+		
+		dirtyBytesLock.unlock();
+		lock();	
+
+		try {
+			ByteBuffer buffer = ByteBuffer.wrap(bytes, preLockDirtyBytesStart, preLockAppendedBytes);
+			int capacity = buffer.capacity();
+			int bytesWritten = Commons.writeTo(channel, buffer);
+			
+			if (bytesWritten < capacity) {
+				throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
+						+ "%d bytes out of %d.",bytesWritten, capacity));
+			}
+
+		} catch (IOException e) {
+			dirtyBytesLock.lock();
+
+			dirtyBytesStart-=preLockAppendedBytes;
+			appendedBytes+=preLockAppendedBytes;		
+
+			dirtyBytesLock.unlock();
+
+			throw e;
+		}
+		finally {
+			unlock();
+		}
+	}
+
+	@Override
+	public void storeFullTo(WritableByteChannel channel) throws IOException {
 		lock();
 		try {
 			ByteBuffer buffer = ByteBuffer.wrap(bytes);
@@ -192,7 +246,7 @@ public class DataSegment extends Block {
 			int bytesWritten = Commons.writeTo(channel, buffer);
 			
 			if (bytesWritten < capacity) {
-				throw new InsufficientResourcesException(String.format("Full block is not strored. Stored "
+				throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
 						+ "%d bytes out of %d.",bytesWritten, capacity));
 			}
 		} finally {
@@ -209,14 +263,12 @@ public class DataSegment extends Block {
 	}
 
 	public void adjustDirtyOffsets(int currentAppendPosition, int length) {
+		dirtyBytesLock.lock();
 		if(currentAppendPosition < dirtyBytesStart) {
-			lock();
 			dirtyBytesStart = currentAppendPosition;
-			unlock();
 		}	
-		lock();
 		appendedBytes += length; 	
-		unlock();
+		dirtyBytesLock.unlock();
 	}
 	
 	@Override

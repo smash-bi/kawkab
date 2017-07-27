@@ -28,7 +28,7 @@ public class Constants {
 	public static int maxBlocksInCache = 100;
 	public static final int syncThreadsPerDevice = 2;
 	
-	public static final String basePath = "/ssd1/sm3rizvi/kawkab";
+	public static final String basePath = "fs";
 	public static final String ibmapsPath = basePath+"/ibmaps";
 	public static final String inodeBlocksPath = basePath+"/inodes";
 	public static final String blocksPath = basePath+"/blocks";

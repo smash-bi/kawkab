@@ -85,6 +85,11 @@ public class InodesBlock extends Block {
 	}
 	
 	@Override
+	public void storeFullTo(WritableByteChannel channel) throws IOException {
+		storeTo(channel);	
+	}
+
+	@Override
 	public int channelOffset() {
 		return 0;
 	}

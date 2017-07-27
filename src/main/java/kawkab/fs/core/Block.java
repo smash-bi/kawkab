@@ -69,6 +69,8 @@ public abstract class Block /*implements AutoCloseable*/ {
 	
 	abstract void storeTo(WritableByteChannel channel)  throws IOException;
 	
+	abstract void storeFullTo(WritableByteChannel channel) throws IOException;
+
 	abstract int channelOffset();
 	
 	abstract int memorySizeBytes();
