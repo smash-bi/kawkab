@@ -71,7 +71,14 @@ public abstract class Block /*implements AutoCloseable*/ {
 	
 	abstract void storeFullTo(WritableByteChannel channel) throws IOException;
 
-	abstract int channelOffset();
+	/**
+	 * LocalProcessor calls this function to set the position of the FileChannel before calling block.storeTo(channel)
+	 * function. This is not a good approach because it will cause problem if multiple workers from the LocalProcessor
+	 * concurrently try to flush the segment on disk.
+	 * 
+	 * @return Returns the byte offset in the segment at which the data will be appended.
+	 */
+	abstract int appendOffsetInSegment();
 	
 	abstract int memorySizeBytes();
 	

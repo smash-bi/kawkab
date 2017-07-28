@@ -63,7 +63,7 @@ public class LocalProcessor implements SyncProcessor {
 		try(RandomAccessFile file = 
                 new RandomAccessFile(block.localPath(), "r")) {
 			try (SeekableByteChannel channel = file.getChannel()) {
-				channel.position(block.channelOffset());
+				channel.position(block.appendOffsetInSegment());
 				//System.out.println("Load: "+block.localPath() + ": " + channel.position());
 				block.loadFrom(channel);
 			}
@@ -79,7 +79,7 @@ public class LocalProcessor implements SyncProcessor {
 		try(RandomAccessFile rwFile = 
                 new RandomAccessFile(block.localPath(), "rw")) {
 			try (SeekableByteChannel channel = rwFile.getChannel()) {
-				channel.position(block.channelOffset());
+				channel.position(block.appendOffsetInSegment());
 				//System.out.println("Store: "+block.id() + ": " + channel.position());
 				block.storeTo(channel);
 			}

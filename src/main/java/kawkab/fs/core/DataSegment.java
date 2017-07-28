@@ -19,7 +19,7 @@ public class DataSegment extends Block {
 	//private SeekableByteChannel channel;
 	private byte[] bytes;
 	private int dirtyBytesStart;
-	private int appendedBytes;
+	private int dirtyBytesLength;
 	
 	private final Lock dirtyBytesLock;
 	
@@ -35,7 +35,7 @@ public class DataSegment extends Block {
 		super(uuid);
 		bytes = new byte[0];
 		dirtyBytesStart = Constants.segmentSizeBytes;
-		appendedBytes = 0;	
+		dirtyBytesLength = 0;	
 		dirtyBytesLock = new ReentrantLock();
 		//System.out.println(" Opened block: " + name());
 	}
@@ -195,38 +195,34 @@ public class DataSegment extends Block {
 	@Override
 	public void storeTo(WritableByteChannel channel) throws IOException {
 		dirtyBytesLock.lock();
-
-		int preLockDirtyBytesStart = dirtyBytesStart;
-		int preLockAppendedBytes = appendedBytes;
-
-		System.out.println("preLockAppendedBytes: "+preLockAppendedBytes);
-
-		if(preLockDirtyBytesStart == Constants.segmentSizeBytes){
-			dirtyBytesLock.unlock();
-			return;
-		}
+			int dirtyBytesOffset = dirtyBytesStart;
+			int dirtyBytesSize   = dirtyBytesLength;
 	
-		dirtyBytesStart+=preLockAppendedBytes;
-		appendedBytes-=preLockAppendedBytes;		
+			if(dirtyBytesOffset == Constants.segmentSizeBytes){
+				dirtyBytesLock.unlock();
+				return;
+			}
+		
+			dirtyBytesStart += dirtyBytesSize;
+			dirtyBytesLength -= dirtyBytesSize;		
 		
 		dirtyBytesLock.unlock();
-		lock();	
-
+		
+		lock();
 		try {
-			ByteBuffer buffer = ByteBuffer.wrap(bytes, preLockDirtyBytesStart, preLockAppendedBytes);
-			int capacity = buffer.capacity();
+			ByteBuffer buffer = ByteBuffer.wrap(bytes, dirtyBytesOffset, dirtyBytesSize);
+			int remaining = buffer.remaining();
 			int bytesWritten = Commons.writeTo(channel, buffer);
 			
-			if (bytesWritten < capacity) {
+			if (bytesWritten < remaining) {
 				throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
-						+ "%d bytes out of %d.",bytesWritten, capacity));
+						+ "%d bytes out of %d.",bytesWritten, remaining));
 			}
-
-		} catch (IOException e) {
+		} catch (IOException e) { 
 			dirtyBytesLock.lock();
 
-			dirtyBytesStart-=preLockAppendedBytes;
-			appendedBytes+=preLockAppendedBytes;		
+			dirtyBytesStart -= dirtyBytesSize;   // We can rollback because always the same worker thread in the LocalProcessor
+			dirtyBytesLength += dirtyBytesSize;  // locally stores the segments of the same file
 
 			dirtyBytesLock.unlock();
 
@@ -242,12 +238,11 @@ public class DataSegment extends Block {
 		lock();
 		try {
 			ByteBuffer buffer = ByteBuffer.wrap(bytes);
-			int capacity = buffer.capacity();
 			int bytesWritten = Commons.writeTo(channel, buffer);
 			
-			if (bytesWritten < capacity) {
+			if (bytesWritten < bytes.length) {
 				throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
-						+ "%d bytes out of %d.",bytesWritten, capacity));
+						+ "%d bytes out of %d.",bytesWritten, bytes.length));
 			}
 		} finally {
 			unlock();
@@ -255,7 +250,7 @@ public class DataSegment extends Block {
 	}
 	
 	@Override
-	public int channelOffset() {
+	public int appendOffsetInSegment() {
 		//TODO: Rename this function to segmentInBlockOffset()
 		int offset = ((DataSegmentID)this.id).segmentInBlock * Constants.segmentSizeBytes;
 		assert offset <= Constants.dataBlockSizeBytes;
@@ -264,10 +259,14 @@ public class DataSegment extends Block {
 
 	public void adjustDirtyOffsets(int currentAppendPosition, int length) {
 		dirtyBytesLock.lock();
+		
 		if(currentAppendPosition < dirtyBytesStart) {
 			dirtyBytesStart = currentAppendPosition;
-		}	
-		appendedBytes += length; 	
+		}
+		
+		if (dirtyBytesStart + dirtyBytesLength < currentAppendPosition + length)
+			dirtyBytesLength += (currentAppendPosition + length) - (dirtyBytesStart + dirtyBytesLength);
+		
 		dirtyBytesLock.unlock();
 	}
 	

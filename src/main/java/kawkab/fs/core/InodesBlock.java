@@ -90,7 +90,7 @@ public class InodesBlock extends Block {
 	}
 
 	@Override
-	public int channelOffset() {
+	public int appendOffsetInSegment() {
 		return 0;
 	}
 	
