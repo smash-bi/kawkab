@@ -34,25 +34,22 @@ public class GlobalProcessor implements SyncProcessor {
 	private void storeBlock(Block block) throws IOException {
 		//Read block bytes, then store it in back end
 
-		byte[] fromBytes = new byte[block.blockSize()];
-		ByteArrayOutputStream os = new ByteArrayOutputStream(fromBytes.length);
-		WritableByteChannel fromChan = Channels.newChannel(os);	
+		byte[] toBytes = new byte[block.blockSize()];
+		ByteArrayOutputStream os = new ByteArrayOutputStream(toBytes.length);
+		WritableByteChannel toChan = Channels.newChannel(os);	
 
-		block.storeTo(fromChan);
+		block.storeTo(toChan);
 
 		bes.put(block.id().toString(),os.toByteArray());
 	}
 
 	private void loadBlock(Block block) throws IOException {
 		//read block bytes from backend, then store in front
+	
+		byte[] fromBytes = bes.get(block.id().toString());
+		InputStream is = new ByteArrayInputStream(fromBytes);
+		ReadableByteChannel fromChan = Channels.newChannel(is);
 
-		ByteBuffer loadBuffer = ByteBuffer.wrap(bes.get(block.id().toString()));
-
-		try(RandomAccessFile file = new RandomAccessFile(block.localPath(), "rw")){
-			try(FileChannel channel = file.getChannel()) {
-				channel.write(loadBuffer);
-				block.loadFrom(channel);
-			}
-		}
+		block.loadFrom(fromChan);
 	}
 }
