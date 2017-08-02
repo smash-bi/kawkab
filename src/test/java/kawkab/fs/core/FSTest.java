@@ -3,6 +3,12 @@ package kawkab.fs.core;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Random;
+import java.io.InputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
@@ -34,6 +40,7 @@ public class FSTest {
 		//tester.testVeryLargeReadWrite();
 		//tester.testFileSeek();
 		tester.testBackendStore();
+		tester.testGlobalProcessor();
 		tester.testShutdown();
 	}
 	
@@ -669,6 +676,44 @@ public class FSTest {
 		catch(IOException e){
 			e.printStackTrace();
 		}		
+	}
+
+	private void testGlobalProcessor() throws IOException {
+		System.out.println("--------------------------------------------");
+		System.out.println("            Global Processor Test");
+		System.out.println("--------------------------------------------");
+
+		Random rand = new Random();
+
+		// Create dummy block
+		DataSegmentID dsid = new DataSegmentID(1,1,1);
+		Block block1 = new DataSegment(dsid);
+
+		int bufSize = Constants.segmentSizeBytes;
+		byte[] InputDataByteArray = new byte[bufSize];	
+		rand.nextBytes(InputDataByteArray);
+
+		InputStream is = new ByteArrayInputStream(InputDataByteArray);
+		ReadableByteChannel fromChan = Channels.newChannel(is);
+		block1.loadFrom(fromChan);
+
+		GlobalProcessor proc = new GlobalProcessor();
+		proc.store(block1);
+
+		Block block2 = new DataSegment(dsid);
+		proc.load(block2);
+
+		ByteArrayOutputStream os1 = new ByteArrayOutputStream(InputDataByteArray.length);
+		WritableByteChannel toChan1 = Channels.newChannel(os1);
+		block1.storeTo(toChan1);
+		byte[] block1Data = os1.toByteArray();
+
+		ByteArrayOutputStream os2 = new ByteArrayOutputStream(InputDataByteArray.length);
+		WritableByteChannel toChan2 = Channels.newChannel(os2);
+		block2.storeTo(toChan2);
+		byte[] block2Data = os2.toByteArray();
+
+		assert Arrays.equals(block1Data, block2Data);
 	}
 
 	private void testShutdown(){
