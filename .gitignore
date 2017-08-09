@@ -3,3 +3,4 @@ bin
 .project
 ~*
 Thumbs.db
+/target/
