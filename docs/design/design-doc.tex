@@ -66,10 +66,10 @@
 \hline
 \rowcolor[HTML]{EFEFEF} 
 Date             & Description  & Participants  \\ \hline
- August 03, 2017  & Kawkab single node design: TBD      & Sajjad  \\ \hline
  March 03, 2017  & Kawkab single node design           & Sajjad  \\ \hline
  March 10, 2017  & - Added sections 3 and 4, about the distributed design of Kawkab& \\ 
                  & - Updated architecture diagram & Sajjad  \\ \hline
+ August 11, 2017  & Kawkab single node design updated  & Sajjad  \\ \hline
 \end{tabular}
 \end{table}
 \egroup
@@ -159,7 +159,7 @@ directories, e.g., ``/home/smash/file''.
 In our current design, the file directory is implemented as a distributed
 key-value store, where the keys are the filenames and the values are the corresponding
 inumbers. We propose to use ZooKeeper as the key-value store because of its
-atomically \textit{zknode}-creation functionality that returns an error if
+atomic \textit{zknode}-creation functionality that returns an error if
 the \textit{zknode} already exists. However, any distributed key-value store can be used 
 that provides atomic updates to the key-value store.
 
@@ -189,44 +189,49 @@ rare, the bit is unset in the ibmap.
 %When a file is deleted, Kawkab clears the bit in the ibmap, which allows
 %Kawkab to reuse the inode and the inumber for the next new file.
 
-\subtopic{Metadata Sharding:} As the system consists of several nodes,
+\subtopic{Metadata Partitioning:} As the system consists of several nodes,
 different nodes can concurrently create files that lead to inumber conflicts,
 i.e., different nodes assigning same inumber to different files.  In order to
-inumber conflicts and to  consistently maintain metadata without significant
-communication overhead between the nodes, the 64-bit space of inumbers is
-linearly sharded across the nodes. A node assigns a unique inumber to a new
-file only from its own shard. This ensures that a node can assign an inumber
-to a file without communicating over the network and without consensus
-with the other nodes.
+avoid inumber conflicts and to  consistently maintain metadata without
+significant communication overhead between the nodes, the 64-bit space of
+inumbers is linearly partitioned across the nodes. A node assigns a unique
+inumber to a new file only from its own partition. This ensures that a node can
+assign an inumber to a file without communicating over the network and without
+consensus with the other nodes.
 
-Sharding splits the 64-bit inumber space across all the nodes that may lead to
-two concerns. First, a node may run out of the inumbers in its shard, which
+Partitioning splits the 64-bit inumber space across all the nodes that may lead to
+two problems. First, a node may run out of the inumbers in its partition, which
 will prevent the node from creating new files.  However, this is highly
-unlikely due to the large size of shard assigned to each node. For example, if
+unlikely due to the large size of partition assigned to each node. For example, if
 the system is designed for $2^{20}$ nodes (1.04 million nodes), each nodes is
 assigned nearly $2^{63} / 2^{20} = 2^{43} = 8.79 * 10^{12}$ inumbers, which is a
-sufficiently large shard for a single node. If a node creates a new file
+sufficiently large partition for a single node. If a node creates a new file
 every 100 microseconds, i.e., $10000$ files per second, it will take almost
-$39.7$ years to run out of the inumbers. In addition to the large shard
-sizes, a node reuses the inumber when the file is deleted.
+$39.7$ years to run out of the inumbers. In addition to the large partition
+sizes, a node reuses a file's inumber when the file is deleted.
 
-Second concern is about running out of inumber-shards. For example, if
-the nodes fail and new nodes join enough number of times that exceed the maximum
-number of nodes (1.04 million in the previous example), the system can run out
-of inumbers globally. To prevent this situation, Kawkab allows reassigning
-shards to other nodes. A new node can be assigned the shard of the previously
-failed node.
+The second problem is about running out of inumber-partitions, which will
+prevent adding more nodes in the system. For example, if the nodes fail and the
+new nodes join enough number of times that exceed the maximum number of nodes
+(1.04 million in the previous example), the system can run out of inumbers
+globally. To prevent this situation, Kawkab allows reassigning partitions to
+other nodes. A new node can be assigned the partition of the previously failed
+node.
 
 %To prevent a node from running out of inumbers,
 %the inumbers of the deleted files are reused.  Moreover, a failed node's shard
 %can be reassigned to another node in order to prevent the filesystem from
 %running out of the inumbers.  
 
-\subtopic{Storing Sharding Information:}
-The inumber sharding information is also stored in the key-value store, where the
-keys are the node IDs and the values are the inumber-ranges assigned to the
-nodes. The system ensures that the inumber-ranges assigned to different nodes
-are disjoint. [TBD: How to ensure that the ranges are non-overlapping?]
+\subtopic{Storing Partitions' Information:} The inumber partitioning
+information is stored in a distributed key-value store such as ZooKeeper, where
+the keys are the node IDs and the values are the inumber-ranges assigned to the
+nodes.  A distributed KV store does not become the performance bottleneck in
+this case because the nodes' churn rate is very low.  The system ensures that
+the inumber-ranges assigned to different nodes are disjoint.
+
+
+%[TBD: How to ensure that the ranges are non-overlapping?]
 
 
 %A virtual file comprises of metadata and data blocks.  The storage space is a
@@ -346,7 +351,7 @@ block can be partitioned into 64 segments of size 1MB.
 %A block is not physically partitioned as segments on the local or global
 %storage. Instead, a segment is just an abstraction for better memory
 %management. 
-The files are read in segments instead of blocks that reduces internal
+The files are read in segments instead of blocks, which reduces internal
 fragmentation in memory.  During the file read and append operations, the cache
 sub-system of Kawkab reserves memory for a segment instead of a block. As a
 result, a large number of partially filled blocks do not waste a large portion
@@ -358,16 +363,32 @@ cache requires 1000 1MB-segments in memory instead of 1000 64MB-blocks.
 %not in both its cache and its local storage. The file read operation is further
 %explained in the section~\ref{}. 
 
-\subtopic{Records in Segments:} Kawkab supports two types of file append and
-read operations. Files can be appended using a given blob of bytes or using
-user defined fixed-size structures called \textit{records}. Reads and appends
-using an array of bytes can be viewed as an array of one-byte records. Thus, a
-segment consists of several records, which may not align with the segment
-boundary. For example, 76 bytes are left if 100-byte records are stored in a
-segment of 1MB. For simplicity, Kawkab does not store records across segments.
-Instead, Kawkab uses padding to fill a segment instead of distributing a record
-in multiple segments. Needless to say, this imposes the restriction that the
-record size must be smaller or equal to the segment size in Kawkab. 
+\subtopic{Records in Segments:} 
+Kawkab supports two types of files: binary files and structured files.
+Each type has different way of reading from and appending data to the files.
+For the binary files, data is read and appended using a blob of bytes.
+Structured files are read and appended using fixed-size structures
+called \textit{records}. A record is a user-defined structure that
+the user provides during the file creation process.
+For simplicity and correctness, Kawkab does not allow mixing the file
+types~\footnote{Todo: We need to detect the type of record in each operation. We
+should not allow mixed record structure in a file.}, i.e., mixing binary and
+structured files and mixing different record structures for the same file.
+%Kawkab supports two types of file append and
+%read operations. Files can be appended using a given blob of bytes or using
+%user defined fixed-size structures called \textit{records}. 
+
+%Reads and appends using an array of bytes can be viewed as an array of one-byte
+%records. Thus, 
+
+In a structured file, a data segment consists of several records, which may not
+align with the segment boundary. For example, 76 bytes are left if 100-byte
+records are stored in a segment of 1MB. For simplicity, Kawkab does not store
+records across segments.  Instead, Kawkab uses padding to fill a segment and
+does not distribute records across multiple segments. To achieve this, Kawkab
+imposes the restriction that the record sizes must be smaller or equal to the
+segment size in the system. 
+
 
 %To associate the blocks with a file, the
 %blocks are indexed using a structure called \textit{index node} or
@@ -383,8 +404,11 @@ individual files.  Kawkab converts a block ID to a Base64 encoded string. The
 encoded string then represents the file path in the local storage as well as
 the file path or the key in the global storage.
 
-[Todo: Diagram showing file blocks, segments, and records]
-
+The Base64 encoded string is converted to a path in the following way.  The
+string is divided in words of size 3. The first six words denote the
+directories. The rest of the letters in the string denote the file name in the
+last directory. To avoid weird file names, we use the modified version of
+Base64 encoding that only uses the readable characters in the encoded string.
 
 
 \section{Memory and Storage Management}
@@ -400,20 +424,22 @@ and permanent global storage.
 
 Each node is assigned a fixed size of RAM, which the node uses 
 for all the objects including file segments, ibmaps, inode blocks, and
-file directory. The main memory is divided into three parts: (1) a large
-unified cache for data segments, ibmaps, and inodes blocks; (2) a small
-buffer to read blocks from other nodes, and (3) another small buffer
-for the file directory.
+file directory. The main memory is divided into two parts: (1) a large
+unified cache for data segments, ibmaps, and inodes blocks, and (2) a small
+buffer to read blocks from other nodes.
+%, and (3) another small buffer for the file directory.
 
 
-\subtopic{LRU Cache:} A large portion of memory is used as unified LRU cache
-for data segments, ibmaps, and inodes-blocks.  Each file read and append
-operation require access to an inodes-block as well as a data segment.  File
-creation and deletion additionally require access to the file directory and the
-ibmap blocks. The cache loads the required blocks and segments in memory when
-they are access and not already in memory.  If the cache does not have free
+\subtopic{(1) LRU Cache:} 
+
+A large portion of the memory is used as a unified LRU cache for data segments,
+ibmaps, and inodes-blocks.  Each file read and append operation require access
+to an inodes-block as well as a data block. Moreover, the file creation and
+deletion operations additionally require access to the file directory and the
+ibmap blocks. If the accessed blocks are not already in the cache, the cache
+loads the required blocks into the cache.  If the cache does not have free
 memory space to load a required block or segment, it evicts an existing block
-from the memory to create the space. 
+from the memory to create the space for the incoming block. 
 
 \subtopic{Eviction Policy:} Currently the blocks are evicted based on the LRU
 policy.  If the LRU block is dirty, which is unlikely to happen in the normal
@@ -424,32 +450,42 @@ caused eviction, which automatically adds back pressure to reduce workload on
 the node~\footnote{To discuss: Should we throw an exception when the LRU block 
 is dirty?}.
 
-\subtopic{Remote Segments Buffer:} A remote-segments buffer is a relatively
-small portion of memory that is reserved to read most recently updated blocks
-from the other nodes.  If a data block is not yet stored in the global storage,
-a node can optionally read the block from the distinguished file writer or the
-primary node that always has the more recent file data. The blocks read from
-the other nodes are stored in the remote-segments buffer.  The remote-segments
-buffer also works like an LRU cache. However, it stores only the blocks that
-are read from the remote nodes.
+
+\subtopic{(2) Remote Blocks Buffer:}
+
+A remote-blocks buffer is a relatively small
+portion of memory that is reserved to read recently updated blocks from the
+other nodes.  If a data block is not yet stored in the global storage, a node
+can optionally read the block from the file's primary node, where the file
+writer is located, that always has the most recent file data. These blocks 
+that are read from the remote nodes are stored in the remote-blocks buffer.  
+The blocks are deleted from the buffer at the end of the read operation.
+
+%The buffer space is manged as an LRU cache.
+%However, it stores only
+%the blocks that are read from the remote nodes.
 
 - TOOD: Whey we have not merged this buffer with the main Cache?
 
-\subtopic{File Directory Buffer:} The file directory buffer stores a portion of
-the file directory in memory.  A part of the file directory is kept in memory
-to speed up the file open operations that require the file's inumber.  When a
-node receives a file open request, it checks in the buffer whether it has the
-filename to the inumber mapping in its local cache. If the node does not have
-the mapping, it fetches the mapping from the global file directory and caches
-the information. In this way, the first open request may be slow. However, the
-subsequent file open requests are fast.
 
-Note that the file directory is only accessed during the file open/create and
-file delete operations.
 
-\subtopic{Eviction Policy:} We use LRU based eviction policy for the
-file directory buffer.
-
+%\subtopic{(3) File Directory Buffer:} 
+%
+%The file directory buffer stores a portion of
+%the file directory in memory.  A part of the file directory is kept in memory
+%to speed up the file open operations that require the file's inumber.  When a
+%node receives a file open request, it checks in the buffer whether it has the
+%filename to the inumber mapping in its local cache. If the node does not have
+%the mapping, it fetches the mapping from the global file directory and caches
+%the information. In this way, the first open request may be slow. However, the
+%subsequent file open requests are fast.
+%
+%Note that the file directory is only accessed during the file open/create and
+%file delete operations.
+%
+%\subtopic{Eviction Policy:} We use LRU based eviction policy for the
+%file directory buffer.
+%
 
 \subsection{Local Storage} Each node contains one or more SSDs that are used as
 a temporary local storage for ibmaps, inode blocks, and data blocks.  The local
@@ -460,27 +496,15 @@ order to keep up with the peak data ingestion rates.
 
 During the file append operations, the appended segments in memory are flushed
 to the corresponding blocks on the local storage.  The data blocks that become
-full (i.e., all of their segments are filled with filled with the file data)
-are then transferred to the global storage.  Other blocks, such as ibmaps and
+full (i.e., all of their segments are filled with the file data)
+are transferred to the global storage.  Other blocks, such as ibmaps and
 inode blocks, are periodically synced to the global storage.
 
 Like the main memory cache, local storage is also managed as an evictable
 staging area. The blocks that are synced to the global/persistent storage are
 marked as deletable. When the local storage is full up to a threshold, Kawkab
-deletes the complete and globally synced blocks to keep the storage usage up to
+deletes the globally synced blocks to keep the storage usage up to
 the defined threshold.
-
-Ibmaps and inode blocks are not append-only blocks. Therefore, their
-synchronization with the global storage is different than the data blocks,
-which are append-only blocks. Ibmaps and inodes-blocks are frequently updated
-during different file operations. Ibmap modifications are less frequent: an
-ibmap is modified when a new file is created or an existing file is deleted.
-Inodes-blocks modifications are more frequent. An inodes-block is modified
-after each append operation. Particularly the file size field is updated in the
-inode after each file append operation.  Therefore, these blocks are
-periodically flushed to the local storage for fault tolerance.  Moreover, these
-blocks are periodically updated in the global storage as well for persistence
-and availability to the other nodes.
 
 In the local storage, the blocks are saved as individual files. The actual
 file location in the local storage is based on the block ID.
@@ -503,9 +527,39 @@ technology can be used as the global storage, e.g., Amazon S3, Dynamo, HDFS, a
 distributed key-value store, etc.  Kawkab requires that the global storage is
 directly accessible to all the nodes in the system.
 
-TODO: What if the global storage is not accessible?
+Ibmaps and inode blocks are not append-only blocks. Therefore, their
+synchronization with the global storage is different than the data blocks,
+which are append-only blocks. Ibmaps and inodes-blocks are frequently updated
+during different file operations. Ibmap modifications are less frequent than
+the inodes-blocks modifications. An ibmap is only modified when a new file is
+created or an existing file is deleted.  However, an inodes-block is modified
+after each append operation because the file size is updated in
+the inode after each append operation. Therefore, ibmaps and inodes blocks are
+periodically flushed to the local storage for fault tolerance.  Moreover, these
+blocks are periodically updated in the global storage as well for persistence
+and availability to the other nodes.
 
-TODO: Failed get and put operations
+
+\subtopic{Global Store Assumptions:}
+
+We assume the following properties for the global store:
+
+\begin{itemize}
+
+\item Highly available: The global store is always available to at least all
+  the file writers.
+
+\item Globally accessible: Data store is concurrently accessible to all the nodes
+  in the Kawkab cluster.
+
+\item Highly scalable: The throughput of the global store increases at least linearly 
+  with the number of nodes in the Kawkab cluster.
+
+\end{itemize}
+
+
+
+
 
 
 \begin{figure}[t]
@@ -556,14 +610,17 @@ does not return a new file descriptor for each file open request.  Instead, the
 file operations are performed using the file's inumber that is returned in a
 FileHandle when the file is opened.  The file descriptors are not necessary
 because Kawkab is an append-only system and only one file-writer is allowed to
-append to the file.
+append to the file.~\footnote{\hl{To discuss: The open-files table should be a
+distributed table. We need to keep the open count globally. The open-files
+table can also be used to store the IDs of the file readers that should be
+notified when the primary node of the file changes.}}
 
 
 \subtopic{File Creation:} File creation is an atomic operation, which is
 performed as follows.
 %The node first acquires the file-specific lock that prevents multiple clients
 %from creating the same files at the same time.  
-The node first assigns an unused inumber from its shard to the new file.  The
+The node first assigns an unused inumber from its inumber-partition to the new file.  The
 node then adds the new filename-to-inode mapping in the file directory.  This
 operation succeeds only if the file directory does not already contain the
 mapping. This can be achieved, e.g., by using the ZooKeeper's zknode creation
@@ -584,22 +641,24 @@ writers? We need a distributed lock to gain exclusive write
 access.}}'\footnote{ \hl{To discuss: How the primary node of a file is changed? How
 the file readers are notified updated primary node of the file? We need to
 store the primary node information of each file. The node that wants to become
-the primary node need to first acquire the distributed lock and then update
-primary node information. Finally, the node need to notify the existing file
+the primary node needs to first acquire the distributed lock and then update
+primary node information. Finally, the node needs to notify the existing file
 readers about the updated location of the primary node.}}.
 Rest of the nodes can only read the file.
 
-In the file append operation, first the node get the file's inode. The
+In the file append operation, first the node retrieves the file's inode. The
 inode contains the current size and the data index of the file. The
 data is then appended at the end of the file. 
 
-\subtopic{Creating New Data Block:}
-To append data, first the last data segment of the file is loaded in the cache. 
-If the last segment is already full and the segment is the last segment in the 
-data block, first a new data block is created.
-To create a new block, the node first creates a new block in the local storage.
-The new block is created as a new file and the file is filled with random
-bytes to reserve the full block space in the local storage.
+\subtopic{Creating New Data Block:} To append data, the node first loads the
+last data segment of the file into the cache.  If the last segment is already
+full and the segment is the last segment in the data block, the node first
+creates a new data block.% in the local storage.  To create a new block in the
+virtual file, the node first creates a new block in its local storage.  The new
+block is created as a new physical file of block size that reserves the full
+block space in its local storage.
+% and the file is filled with random
+%bytes to reserve the full block space in the local storage.
 
 \subtopic{Appending to Last Segment:}
 As data is appended at the end of the file, the cache loads the last data segment
@@ -614,16 +673,19 @@ When all the data segments of the last block are full, the data block is marked
 as closed. The closed blocks are then added in another queue that copies
 the data block to the global storage. Once the block is copied to the global
 storage, the block is then marked as persistent. The persistent blocks
-can be deleted from the local storage when the local store need to create
-space for more data blocks.
+can be deleted from the local storage when the local store needs to create
+space for more data blocks.~\footnote{\hl{To discuss: We should copy an unfinished
+block to the global storage after a certain time period. This is to avoid data
+loss if the last unfinished block remains not full for an extended period.}}
 
 
 \subtopic{Appending Records:} Kawkab supports two types of append operations. A
 file can be appended either using a list of bytes, or using a user defined
-records.  In the later case, a record is a fixed size structure that has a user
-defined key. Kawkab uses the key to create the data index for the file. For
-timestamp based index, it is required that the appended record's key must be
-greater than or equal to the last record's key.
+records~\footnote{Todo: How to ensure that the records are well structured?}.
+In the later case, a record is a fixed size structure that has a user defined
+key. Kawkab uses the key to create the data index for the file. For timestamp
+based index, it is required that each record's key must be greater than or
+equal to the previous record's key.
 
 Appending records also require updating the data index. In this case, the
 data index blocks are also appended and flushed to the local and the
@@ -644,6 +706,7 @@ in a storage that allows random writes, e.g., in a key-value store.}.
 
 
 
+
 \subsection{File Read}
 
 File read operation requires access to the inode and the data segments of the
@@ -656,7 +719,7 @@ using record timestamps. If the data is read using the byte offset and the
 required data is not located in the last block of the file, the inode access is
 not required. It is because the data block ID is a combination of inumber,
 block number in the file, and segment number in the block.}.  The node's cache
-may need to load the required inodes-block, which contains the file's inode,
+may needs to load the required inodes-block, which contains the file's inode,
 from the local or the global storage~\footnote{\hl{To discuss: Do we save the
 fetched inodes block in local storage or not? We cannot argue about temporal
 locality in the case of inode blocks because each inode represents a different
@@ -665,14 +728,14 @@ most likely available in the local storage if the node is the primary
 node~\footnote{A file's primary node is the node on which the file is opened
 for writing. Kawkab allows only one file writer in the system.} of the file.
 Otherwise, the inodes-block is loaded from the global store directly into the
-cache. In this case, the loaded inodes-block may have the staled file size and
+cache. In this case, the loaded inodes-block may have the stale file size and
 data index. 
 
-If the inode has staled information, the inodes-block can optionally
+If the inode has stale information, the inodes-block can optionally
 be fetched from the local storage of the primary node of the file. Currently
 the only way to check the freshness of an inode is to read the inodes block
 from the file's primary node
-\footnote{\hl{To discuss: How do we detect if an inode is staled or not?}}.
+\footnote{\hl{To discuss: How do we detect if an inode is stale or not?}}.
 
 
 %- What if the required data lies beyond the file size in the inodes block?
@@ -721,10 +784,6 @@ again tries to read from the global store if the file reader is unable to
 locate the required segment on the primary node. 
 
 
-\hl{To discuss: The open-files table should be a distributed table. We need to 
-keep the open count globally. The open-files table can also be used to
-store the IDs of the file readers that should be notified when the
-primary node of the file changes.}
 
 
 %- Loading cache:
@@ -740,6 +799,8 @@ primary node of the file changes.}
 
 %- Deletes file data if the file is marked for deletion
 
+TBD
+
 - Updates the open-files table
 
 - The last node that closes the file also deletes the file if the file is
@@ -747,6 +808,8 @@ primary node of the file changes.}
 
 
 \subsection{File Delete}
+
+TBD
 
 - Marks the file as deleted in the open-files table. This prevents further
   file open requests.
@@ -757,31 +820,31 @@ primary node of the file changes.}
 
 \section{Filesystem Implementation}
 
-The system is divided in four layers: API, core, main memory, and persistence.
-Clients interact with the API layer directly or using an RPC service.  API
-provides functions to open, close, read, and write files.
+TBD
 
-
-The core layer controls the metadata of the whole system. It mainly consists of
-four structures: a file directory, an index node bitmap, index nodes, and data
-blocks. Only the data blocks contain the actual data of a file. The other
-structures comprise the metadata of the filesystem.
-
-
-The main memory layer manages the memory usage of a node. 
-The memory is divided in a cache and a small buffer for remote segments.
-The cache serves as the primary memory resource pool for most of the
-in-memory storage of a node. The cache serves as a unified memory
-resource pool for most of the operations in the filesystem. The small
-buffer is only used to read most recent data segments that are only
-available at other nodes in the system.
-
-
-The persistence layer controls the local and global storage of the system.
-A node temporarily saves data on local storage that consists of fast
-storage devices such as SSDs or Amazon EBS. The global store persistently
-stores all the data.
-
+%The system is divided in four layers: API, core, main memory, and persistence.
+%Clients interact with the API layer directly or using an RPC service.  API
+%provides functions to open, close, read, and write files.
+%
+%The core layer controls the metadata of the whole system. It mainly consists of
+%four structures: a file directory, an ibmap, inodes block, and data
+%blocks. Only the data blocks contain the actual data of a file. The other
+%structures comprise the metadata of the filesystem.
+%
+%The main memory layer manages the memory usage of a node. 
+%The memory is divided in a cache and a small buffer for the blocks read from the other nodes.
+%The cache serves as the primary memory resource pool for most of the
+%in-memory storage of a node. The cache serves as a unified memory
+%resource pool for most of the operations in the filesystem. The small
+%buffer is only used to read most recent data segments that are only
+%available at other nodes in the system.
+%
+%
+%The persistence layer controls the local and global storage of the system.
+%A node temporarily saves data on local storage that consists of fast
+%storage devices such as SSDs or Amazon EBS. The global store persistently
+%stores all the data.
+%
 
 %\subsection{File Operations}
 %
@@ -886,7 +949,10 @@ stores all the data.
 %\end{figure}
 
 
-\subsection{Atomic Appends and Reading Unfinished Block}
+\subsection{Atomic Appends}
+
+\subsection{Reading Unfinished Block}
+
 
 \section{Extensible Indexing}
 
@@ -935,8 +1001,8 @@ Todo:
 In Kawkab, only the filesystem namespace (file directory) and other metadata
 (ibmaps and inodes) are concurrently updated across the nodes. Data blocks are
 not updated concurrently. Therefore, Kawkab uses a distributed key-value store
-to safely and consistently store only the namespace. The other metadata
-is partitioned across the nodes.
+to safely and consistently store only the namespace, and it partitions the 
+other metadata across the nodes.
 
 \subtopic{Key-Value Store Consistency Requirements:} The basic requirement for
 metadata consistency is that all of the nodes in Kawkab observe the same
@@ -956,17 +1022,17 @@ of the file directory across all the nodes in Kawkab.
 
 
 \subsubsection{Data Blocks and Indirect Blocks} Data blocks are stored locally
-on SSDs and remotely in the cloud storage such as EBS and S3. Data blocks are
+on SSDs and remotely in the global storage such as S3. Data blocks are
 not replicated to the storage of other nodes.
 
 \subtopic{File Appends:} The file writer appends data in memory. The data
 blocks are then flushed to the local SSD asynchronously for faster file write
-operations. When a data block is closed, it is copied to the cloud storage.
+operations. When a data block is closed, it is copied to the global storage.
 
 \subtopic{File Reads:} Remote nodes read data blocks directly from the cache,
-or from the cloud storage (EBS/S3) if the data blocks are not in cache.  If a
-data block does not exist in the remote storage, e.g., if it is the last block
-in file or the block is not yet replicated in the cloud storage, the reader
+or from the global storage if the data blocks are not in cache.  If a
+data block does not exist in the global storage, e.g., if it is the last block
+in file or the block is not yet replicated in the storage, the reader
 node fetches the desired block from the primary node of the file where the file
 writer is located. The fetched data block is then kept in the LRU cache.
 
@@ -1014,7 +1080,7 @@ each node uses a unique inumber for the new files without any synchronization
 overhead.
 
 \subtopic{Persistence:} Each node persistently stores its Ibmap blocks and the
-inode blocks in its local storage as well as the remote storage. The blocks are
+inode blocks in its local storage as well as the global storage. The blocks are
 periodically flushed to these storage to reduce the memory and the network usage.
 
 \subtopic{Inode Updates Across Nodes:} Inodes are frequently updated as an inode is
@@ -1022,12 +1088,14 @@ updated after each file append operation to reflect the changes in the file
 size and the other metadata (e.g., last modified time).  Therefore, inodes need
 to be made consistent across all the readers of the file.
 
-Kawkab uses a simple publish-subscribe system to propagate the inodes' updates
-across the nodes where the file-readers are located. Each node with
-at least one active reader subscribes to the inode updates on the primary node
-of the file, i.e., where the file writer is located. The file writer 
-asynchronously publishes the inodes to all the subscribers. In this way,
-the staleness of the inodes is reduced on the file readers.
+\hl{Todo: How the nodes read data blocks and inodes-blocks from the other nodes.}
+
+%Kawkab uses a simple publish-subscribe system to propagate the inodes' updates
+%across the nodes where the file-readers are located. Each node with
+%at least one active reader subscribes to the inode updates on the primary node
+%of the file, i.e., where the file writer is located. The file writer 
+%asynchronously publishes the inodes to all the subscribers. In this way,
+%the staleness of the inodes is reduced on the file readers.
 
 
 \subtopic{Inodes Location from Inumbers:} It may happen that a node opens a
@@ -1046,11 +1114,61 @@ reflect the changes in their cache.
 
 \subsection{Scalability}
 
+\begin{easylist}[itemize]
+
+  # Scaling with the number of nodes
+    ## Can scale with the number of nodes because:
+      ### Nodes do not interact with each other for the read and append operations
+      ### Global storage is assumed to be scalable
+
+    ## Bottlenecks can be:
+      ### Reading most recent data
+      ### Frequent access to the file directory
+
+  # Scaling requests per node
+    ## Bottlenecks:
+      ### Limited RAM and LRU cache
+      ### Local storage
+        #### Can be reduced by using multiple SSDs or EBS
+      ### Global storage
+      ### Locks around the cache
+
+\end{easylist}
+
 \subsection{Fault-tolerance}
+
+\begin{easylist}[itemize]
+
+# File append operations
+  ## Before writing to the local storage, appends are not fault-tolerant
+  ## Data blocks are copied to the global storage only after the blocks are full. We may need to copy
+     them to the global storage
+
+# Node failures
+
+# What if the global storage is not available?
+  ## Global store failures: assume that the global store will not fail due to enough data replication
+
+# Failed get and put operations
+
+
+\end{easylist}
 
 \subsection{Consistency Guarantees}
 
+- Strong consistency, single writer
+
+- Data loss due to power or machine failures
+
+%We guarantee strong consistency, however, the data may be lost if the node fails before coping the
+%data to the global store. Isn't it a weak strong consistency ;)
+
 \subsection{Metadata and Data Journaling}
+
+We need metadata and data journaling to ensure atomic operations and recovery from failures. However,
+this will slow down the filesystem's performance. 
+
+
 
 %\subtopic{Creating a New File:}
 %\begin{itemize}
@@ -1084,7 +1202,7 @@ write the file. The first client that opens the file becomes the distinguished
 writer of the file. Only the distinguished writer is then allowed to append to
 the file. Moreover, the node where the client is located becomes the primary
 node of the file.  The other nodes may fetch recent appends from the primary
-node when the data is not replicated in the cloud storage (S3/EBS).
+node when the data is not replicated in the global storage.
 
 If an existing writer fails, another client can become the distinguished writer
 by successfully opening the file for writing. If the writer closes the file,
@@ -1096,8 +1214,8 @@ Each append request consists of small number of bytes, e.g., less than 100 bytes
 
 \subtopic{File Reads:}
 Kawkab allows multiple readers to read at the same time. If the data block
-is not located locally in the system, the data block is fetched from S3/EBS if
-it is available. If the data block is not available in S3/EBS, the data block
+is not located locally in the system, the data block is fetched from the global storage if
+it is available. If the data block is not available in the global storage, the data block
 is fetched from the node where the file-writer is located.
 
 Todo: Data access frequency and size, number of readers per node, number of
@@ -1118,6 +1236,251 @@ nodes where readers are located $\ldots$.
 
 \end{easylist}
 
+\newpage
 
+
+\subsection{Versioning in Inodes-blocks}
+
+%\subtopic{Problems with the Global Store:}
+%
+%To discuss: Why do we want to add another channel to read the inodes blocks, in
+%addition to reading directly from the global store? Is it because:
+%
+%\begin{easylist}[itemize]
+%
+%# S3 is slow, which increases inodes staleness? 
+%  ## What about reading inode blocks directly from the primary node, just 
+%     like the data blocks?
+%
+%# S3 is error prone, which increases indoes staleness?
+%  ## Could be solved by 
+%
+%# Global store or S3 could be append-only, which conflicts with the random
+%  updates in inodes-blocks? This may introduce some availability problems
+%  if we update the inodes-blocks using the copy-rename-delete approach.
+%
+%# Do we have data availability problem? For example, S3 replication is slow
+%  and we want inode-blocks to be updated immediately for all the readers.
+%
+%\end{easylist}
+
+%Kawkab stores inodes blocks and data blocks persistently in a global storage
+%system. Kawkab assumes that the global store is highly scalable and
+%concurrently accessible to all the nodes in the system. However, the global
+%system can be error prone, slow, and have append-only semantics. For example,
+%Amazon S3 is a good candidate for the global store due to its high scalability and
+%lower cost. However, failure rate of operations on S3 is high and S3 appends data 
+%internally like an append-only system.
+
+
+Inode blocks are persistently stored in the global store, which we assume to be
+possibly slow, error prone, and immutable. 
+%In addition, we do not impose
+%any update semantics for the global storage because 
+Many high performance and
+scalable storage systems do not support mutable storage and atomic reads/writes. 
+For such systems, random writes are more complex, often leading to
+global locks for concurrent read and write operations. As inodes-blocks have
+random update semantics, in contrast with the data blocks that are append-only,
+storing inodes-blocks is therefore more complex.  In order to support more
+storage systems as the global store and for higher performance, we introduce
+multi-version inodes-blocks.
+
+
+%These can lead to several
+%problems such as data staleness and unavailability for a small period.
+%Moreover, some of the scalable  storage systems provide immutable object storage. 
+%They might not event support atomic write operations. Random writes and
+%object updates to these systems are more complex, often leading to
+%retries and grabbing locks for the read/update operations.
+%As inodes-blocks are also randomly written, in contrast to the append-only data blocks, 
+%storing inodes-blocks in the global store is more complex. Therefore, in order
+%to avoid the above mentioned problems, we introduce versioning for the
+%inodes-blocks, which is further described below.
+
+
+\subtopic{Multi-version Inode-blocks:} 
+
+%Inode blocks are persistently stored in
+%a global storage system that could be slow, error prone, and might not support
+%atomic updates. This could lead to data availability and staleness problems as
+%the inode blocks are updated randomly in contrast to append-only data blocks.
+%To avoid these problems, we introduce multi-version inode blocks. 
+
+Kawkab stores multiple versions of inodes-blocks in the global store.  Instead
+of overwriting the previous copy of an inodes-block in the global storage, we
+update the version number of the block and copy the block as a new file in the
+global storage. The blocks are now located in the global store using the naming
+scheme that depends on the $<$block number,  version number$>$ pairs.
+
+
+\subtopic{Frequency of Creating New Versions:}
+
+As the inodes-blocks are frequently updated, the frequency of new versions
+per file can be large. Therefore, we limit frequency of new versions 
+per inodes-block by using the following policy:
+An inodes-block is copied to the global storage if a minimum time limit
+has passed since the last copy to the global store, and if:
+%only if: % any of the following becomes true:
+
+\begin{itemize}
+
+\item A predefined time limit exceeds after the inodes-block was first modified
+and flushed to the local storage.
+
+\item Or, for the files corresponding to the inodes in the inodes-block, 
+      the total number of new data blocks created exceed a predefined limit.
+
+\end{itemize}
+
+This essentially coalesce many updates to the same inodes-block, which limits
+the frequency of new versions created in the global storage for a particular
+inodes-block. The previous versions can be deleted after a fixed number of
+version updates or a fixed time. Deletion of previous versions is simple
+because inodes-blocks are simply stored as objects, blobs, or files in the
+global store.
+
+This versioning scheme now require recent version number propagation to the
+file readers. Kawkab supports two ways to disseminate version number changes
+from the primary node to the other nodes in the Kawkab cluster. First, the
+version numbers are propagated through publish-subscribe channels to only
+the file readers who subscribe to receive updates for specific inodes-blocks.
+This mechanism is primarily used to allow file readers to read most recent
+inodes-blocks with minimal staleness and to read most recent data. The other 
+way to propagate inodes-blocks' version updates is using a global distributed 
+map. This mechanism is primarily used when a new node joins or when the recent
+data is not required for file reads. Below, first we describe the distributed
+map and then we discuss the pub-sub approach for version changes propagation.
+
+\subsubsection{Inodes-block-versions Table}
+
+Adding version numbers for the inode blocks require keeping track of the
+current version number for each inodes block. Therefore, we introduce a global
+distributed table, inodes-block-versions table (IBV table) that stores the
+recent version number for each inodes block. Any distributed key value store,
+e.g., ZooKeeper and DynamoDB, can be used as the IBV table. 
+
+In the IBV table, we store the version numbers of all the inodes-blocks
+assigned to the nodes in Kawkab. The IBV table maps Kawkab node ID's
+to a list of $<$inodes-block number, recent version$>$ tuples for all
+the inodes-blocks assigned to the node. The list will not be very
+large because the list only contains the block and version numbers for
+only the block that created by the node. The number of inodes-blocks
+created by each node is not a huge number, even though the total number
+of files created can be very large,  because each inodes-block stores
+a large number of inodes. The list size is expected to be a few kilo-bytes
+only.
+
+\subtopic{Consistency Requirements:}
+
+The IBV table is required to be at least eventually consistent.
+Eventual consistency is sufficient for the IBV Table because Kawkab
+allows only one file writer per file at a time.
+%ventually consistent IBV table does not introduce the problem of data
+%onflicts in Kawkab because  Kawkab allows only one writer per file at a time.
+Therefore, the updates to the same data in the IBV table originate from only
+one source, which cannot create data conflicts.
+
+\subtopic{IBV-table Update Frequency:}
+
+A possible problem with the IBV table could be that the high request rate to
+the IBV table may limit the scalability of the system. Inodes-blocks are
+frequently updated as each append operation updates an inode. This could lead
+to a high rate of version number updates that can overwhelm the IBV table.
+However, this situation is unlikely because we already throttle the frequency
+of new versions created in the global store for each inodes-block.  In
+addition, we limit the updates to the IBV table by adding a minimum time bound
+between the subsequent updates. The minimum time
+could a large value such as tens of seconds because the IBV table is mainly
+supposed to be used when a new node joins the Kawkab cluster, or when a node
+reads data that is not recent in the file.
+
+
+\subsubsection{Versions Propagation Using Pub-sub Channels:}
+
+Limiting the frequency of updates to the inodes-blocks adds staleness in the
+data stored in the IBV table. Therefore, we add a pub-sub system in Kawkab that
+allows readers to receive the most recent version changes for specific
+inodes-blocks. The readers subscribe to the writers for particular
+inodes-blocks to receive version change updates. The writers publish the recent
+version number of an inodes-block after copying the inodes-block to the
+global store. In this way, the readers can read
+the most recent inodes-blocks available in the global store.\footnote{Another
+option could be to publish inodes to the subscribed readers, instead of just
+publishing the version numbers of the blocks. This will allow the readers to
+read most recent data with minimal staleness.} For implementation, we can
+either use ZooKeeper for this purpose, which may become the bottleneck, or use
+a specialized system such as Apache Kafka and Chronicle Queues.
+
+
+
+\subsubsection{Inodes Propagation Using Pub-sub Channels:}
+
+
+- We publish individual inodes as well through the pub-sub channel. The objective
+  is to reduce staleness for the inodes and to allow readers to read the unfinished blocks.
+
+
+- Inodes are only published to the subscribers, which are expected to be small
+  in number.
+
+- Inodes will be published periodically, with a small time bound in milliseconds, e.g.,
+  100ms.
+
+
+
+- TODO: Does a node subscribes to all other nodes?
+
+- TODO: Should a node publish the map of inodes-blocks and their versions
+  instead of the versions of individual inodes-blocks?
+
+\subsection{Reading Unfinished Blocks:}
+
+- The objective is to allow the readers to read the unfinished blocks
+  from the global store. Moreover, it reduces data loss for the last blocks
+  in the case of node failures.
+
+- We add versioning for last data block
+
+- Inode keeps track of the version number of the last data block
+
+- A complete block gets a default version number, e.g., version zero.
+
+- The unfinished dirty data blocks are periodically copied to the global store 
+  by updating version numbers.
+
+- The version number change for the last block is also added in the inode.
+
+- The inode change is published to the subscribers periodically.
+
+
+- TODO: Node failures. Now we have multiple levels 
+
+
+
+%\subtopic{Performance Implications:}
+%
+%Pub-sub shares the upload bandwidth with the data transfers to the global
+%store. Moreover, an inode read may follow a data block read. Therefore, enough
+%large number of publications in the pub-sub channels may slow down data
+%transfer to the global store, which may lead to overflow in the local storage.
+
+
+\subtopic{Alternate Design: Storing Inodes in DynamoDB:} TBD
+%Another way to store inodes is to place the inodes in a key-value store such as
+%DynamoDB. Howe
+
+
+\subtopic{Alternate Design: Storing Inodes-blocks in DynamoDB:} TBD
+
+\subtopic{Other Options: Recent Data blocks:}
+
+If a reader reads the most recent inode, it may also want to read the last
+data block, which will most likely be not available in the global store yet.
+Therefore, the most recent inode read likely follows the last or a few recent
+blocks. This implies that the inode reads and the recent data block reads have
+high correlation. Therefore, we may want to add pub-sub for data records
+instead inodes-block versions.
 
 \end{document}
+
