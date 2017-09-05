@@ -4,33 +4,46 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.SeekableByteChannel;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import kawkab.fs.commons.Constants;
 
 public class LocalProcessor implements SyncProcessor {
-	private ExecutorService workers;
+	//private ExecutorService workers;
 	private SyncProcessor globalProc;
 	
 	private final long maxBlocks = Constants.maxBlocksPerLocalDevice;
 	private long usedBlocks;
 	private Lock lock;
+	private LinkedBlockingQueue<Block> reqQs[];
+	private Thread[] workers;
+	private final int numWorkers;
+	private volatile boolean keepWorking = true;
 	
 	public LocalProcessor(int numWorkers) {
-		workers = Executors.newFixedThreadPool(numWorkers);
+		//workers = Executors.newFixedThreadPool(numWorkers);
 		globalProc = new GlobalProcessor();
 		lock = new ReentrantLock();
+		this.numWorkers = numWorkers;
+		
+		reqQs = new LinkedBlockingQueue[numWorkers];
+		for(int i=0; i<numWorkers; i++) {
+			reqQs[i] = new LinkedBlockingQueue<Block>();
+		}
+		
+		startWorkers();
 	}
 	
 	@Override
 	public void store(Block block) throws IOException {
-		//FIXME: Assign same worker to the same block. Otherwise two or more workers can write same data
-		//to the same file concurrently and then the dirtyCount will be wrong.
-		workers.submit(() -> { runWorker(block); });
+		if (!keepWorking) {
+			throw new IOException("LocalProcessor has already received stop signal. It is not accepting new requests");
+		}
+		
+		int queueNum = (int)(block.id.highBits ^ block.id.lowBits) % numWorkers;
+		reqQs[queueNum].add(block);
 	}
 	
 	@Override
@@ -38,10 +51,44 @@ public class LocalProcessor implements SyncProcessor {
 		loadBlock(block);
 	}
 	
-	private void runWorker(Block block) {
-		if (block == null)
-			return;
+	private void startWorkers() {
+		workers = new Thread[numWorkers];
+		for (int i=0; i<workers.length; i++) {
+			final int workerID = i;
+			workers[i] = new Thread() {
+				public void run() {
+					runWorker(reqQs[workerID]);
+				}
+			};
+			
+			workers[i].start();
+		}
+	}
+	
+	private void runWorker(LinkedBlockingQueue<Block> reqs) {
+		while(keepWorking) {
+			Block block = null;
+			try {
+				block = reqs.take();
+			} catch (InterruptedException e1) {
+				if (!keepWorking) {
+					break;
+				}
+			}
 		
+			if (block == null)
+				return;
+			
+			process(block);
+		}
+		
+		Block block = null;
+		while( (block = reqs.poll()) != null) {
+			process(block);
+		}
+	}
+	
+	private void process(Block block) {
 		int dirtyCount = block.dirtyCount();
 		
 		if (dirtyCount == 0)
@@ -98,17 +145,18 @@ public class LocalProcessor implements SyncProcessor {
 	public void stop() {
 		System.out.println("Closing syncProc...");
 		
-		assert workers != null;
+		keepWorking = false;
 		
-		workers.shutdown();
-		try {
-			while (!workers.awaitTermination(2, TimeUnit.SECONDS)) { //Wait until all blocks have been written to disk.
-				System.err.println("Unable to close all sync threads.");
+		if (workers == null)
+			return;
+		
+		for (int i=0; i<numWorkers; i++) {
+			workers[i].interrupt();
+			try {
+				workers[i].join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
 			}
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		} finally {
-			workers.shutdownNow();
 		}
 	}
 	

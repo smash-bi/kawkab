@@ -55,6 +55,7 @@ public abstract class BlockID {
 
 	abstract public Block newBlock();
 	
+	
 	/*public Block newBlock() {
 		//TODO: Use an alternate solution where BlockIDs are of different types and they
 		//create only one type of blocks.
