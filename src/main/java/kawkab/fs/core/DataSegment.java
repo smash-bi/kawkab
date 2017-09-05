@@ -18,6 +18,8 @@ public class DataSegment extends Block {
 	//private MappedByteBuffer buffer;
 	//private SeekableByteChannel channel;
 	private byte[] bytes;
+	
+	//Keeps track of the offset and length of dirty bytes
 	private int dirtyBytesStart;
 	private int dirtyBytesLength;
 	
@@ -34,8 +36,8 @@ public class DataSegment extends Block {
 	DataSegment(DataSegmentID uuid) {
 		super(uuid);
 		bytes = new byte[0];
-		dirtyBytesStart = Constants.segmentSizeBytes;
-		dirtyBytesLength = 0;	
+		dirtyBytesStart = Constants.segmentSizeBytes; //The variable is updated to correct value in adjustDirtyOffsets()
+		dirtyBytesLength = 0; //The variable is updated to correct value in adjustDirtyOffsets()
 		dirtyBytesLock = new ReentrantLock();
 		//System.out.println(" Opened block: " + name());
 	}
@@ -198,7 +200,7 @@ public class DataSegment extends Block {
 			int dirtyBytesOffset = dirtyBytesStart;
 			int dirtyBytesSize   = dirtyBytesLength;
 	
-			if(dirtyBytesOffset == Constants.segmentSizeBytes){
+			if(dirtyBytesSize == 0){
 				dirtyBytesLock.unlock();
 				return;
 			}
@@ -221,7 +223,7 @@ public class DataSegment extends Block {
 		} catch (IOException e) { 
 			dirtyBytesLock.lock();
 
-			dirtyBytesStart -= dirtyBytesSize;   // We can rollback because always the same worker thread in the LocalProcessor
+			dirtyBytesStart -= dirtyBytesSize;   // We can reverse the changes because always the same worker thread in the LocalProcessor
 			dirtyBytesLength += dirtyBytesSize;  // locally stores the segments of the same file
 
 			dirtyBytesLock.unlock();
@@ -250,21 +252,27 @@ public class DataSegment extends Block {
 	}
 	
 	@Override
-	public int appendOffsetInSegment() {
-		//TODO: Rename this function to segmentInBlockOffset()
-		int offset = ((DataSegmentID)this.id).segmentInBlock * Constants.segmentSizeBytes;
+	public int appendOffsetInBlock() {
+		dirtyBytesLock.lock();
+		int offsetInSegment = dirtyBytesLength > 0 ? dirtyBytesStart : 0;
+		dirtyBytesLock.unlock();
+		
+		//Offset in block is equal to the start offset of the current segment + the start of the dirty bytes
+		int offset = ((DataSegmentID)this.id).segmentInBlock * Constants.segmentSizeBytes + offsetInSegment;
+		
 		assert offset <= Constants.dataBlockSizeBytes;
+		
 		return offset;
 	}
-
+	
 	public void adjustDirtyOffsets(int currentAppendPosition, int length) {
 		dirtyBytesLock.lock();
 		
-		if(currentAppendPosition < dirtyBytesStart) {
+		if(currentAppendPosition < dirtyBytesStart) { //This will be true when the segment is loaded and no append is done yet
 			dirtyBytesStart = currentAppendPosition;
 		}
 		
-		if (dirtyBytesStart + dirtyBytesLength < currentAppendPosition + length)
+		if (dirtyBytesStart + dirtyBytesLength < currentAppendPosition + length) //If the previous dirty bytes have not been saved locally
 			dirtyBytesLength += (currentAppendPosition + length) - (dirtyBytesStart + dirtyBytesLength);
 		
 		dirtyBytesLock.unlock();

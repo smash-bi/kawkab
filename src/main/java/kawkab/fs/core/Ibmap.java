@@ -119,7 +119,7 @@ public class Ibmap extends Block{
 	}	
 
 	@Override
-	public int appendOffsetInSegment() {
+	public int appendOffsetInBlock() {
 		return 0;
 	}
 	

@@ -78,7 +78,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * 
 	 * @return Returns the byte offset in the segment at which the data will be appended.
 	 */
-	abstract int appendOffsetInSegment();
+	abstract int appendOffsetInBlock();
 	
 	abstract int memorySizeBytes();
 	
