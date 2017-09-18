@@ -75,5 +75,24 @@ public class Commons {
     	
     	return bytesWritten;
     }
+    
+    public static byte[] longToBytes(long longNum) {
+        byte[] result = new byte[Long.BYTES];
+        for (int i = Long.BYTES-1; i >= 0; i--) {
+            result[i] = (byte)(longNum & 0xFF);
+            longNum >>= Byte.SIZE;
+        }
+        return result;
+    }
+
+    public static long bytesToLong(byte[] b) {
+        long result = 0;
+        for (int i = 0; i < Long.BYTES; i++) {
+            result <<= Byte.SIZE;
+            result |= (b[i] & 0xFF);
+        }
+        
+        return result;
+    }
 }
 

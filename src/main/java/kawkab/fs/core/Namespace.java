@@ -3,10 +3,14 @@ package kawkab.fs.core;
 import java.io.IOException;
 
 import kawkab.fs.commons.Constants;
+import kawkab.fs.core.exceptions.FileAlreadyExistsException;
+import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
+import kawkab.fs.core.zookeeper.NamespaceService;
 
 public class Namespace {
-	private PersistentMap filesMap;
+	//private PersistentMap filesMap;
+	private NamespaceService ns;
 	private Cache cache;
 	private int lastIbmapUsed;
 	private KeyedLock locks;
@@ -14,12 +18,13 @@ public class Namespace {
 	private static Namespace instance;
 	
 	
-	private Namespace(){
+	private Namespace() throws IOException {
 		cache = Cache.instance();
 		locks = new KeyedLock();
+		ns = NamespaceService.instance();
 	}
 	
-	public static Namespace instance(){
+	public static Namespace instance() throws IOException {
 		if (instance == null){
 			instance = new Namespace();
 		}
@@ -28,7 +33,7 @@ public class Namespace {
 	
 	/**
 	 * @param filename
-	 * @return 
+	 * @return inumber of the file
 	 * @throws IbmapsFullException if all the ibmaps are full for this node, which means the
 	 *          filesystem has reached the maximum number of files limit.
 	 * @throws IOException 
@@ -40,12 +45,28 @@ public class Namespace {
 		locks.lock(filename);
 		
 		try {
-			inumber = filesMap.get(filename);
+			//inumber = filesMap.get(filename);
+			try {
+				inumber = ns.getInumber(filename);
+			} catch(FileNotExistException e) {     //If the file does not exist
+				inumber = null;
+			}
 			
-			//if the file does not exist, create a new file
-			if (inumber == null) {
+			if (inumber == null) {                 //if the file does not exist, create a new file
 				inumber = createNewFile();
-				filesMap.put(filename, inumber);
+				//filesMap.put(filename, inumber);
+				
+				try {
+					ns.addFile(filename, inumber);
+				} catch (FileAlreadyExistsException e) { // If the file already exists, e.g., because another 
+					                                     // node created the same file with different inumber
+					releaseInumber(inumber);
+					
+					inumber = ns.getInumber(filename); // We may get another exception if another node deletes 
+					                                   // the file immediately after creating the file. In that case,
+					                                   // the exception will be passed to the caller.
+				} 
+				   
 			}
 			
 			//TODO: update openFilesTable
@@ -55,6 +76,10 @@ public class Namespace {
 		}
 		
 		return inumber;
+	}
+	
+	private void releaseInumber(long inumber) {
+		//TODO: Need to implement this function
 	}
 	
 	/**
@@ -119,9 +144,10 @@ public class Namespace {
 		return inumber;
 	}
 	
-	void bootstrap() throws IOException {
-		filesMap = PersistentMap.instance();
-		System.out.println("Already existing files = " + filesMap.size());
+	void bootstrap() throws IOException { //We don't need to bootstrap if we are using a distributed namesapce through ZooKeeper
+		//filesMap = PersistentMap.instance();
+		//System.out.println("Already existing files = " + filesMap.size());
+		//ns = NamespaceService.instance();
 	}
 	
 	static void shutdown(){

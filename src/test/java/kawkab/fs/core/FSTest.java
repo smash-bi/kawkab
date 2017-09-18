@@ -7,7 +7,6 @@ import java.util.Random;
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Constants;
-import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.InvalidFileModeException;
@@ -18,17 +17,17 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 public class FSTest {
 	public static void main(String args[]) throws OutOfMemoryException, 
 				MaxFileSizeExceededException, InterruptedException, IbmapsFullException, 
-				InvalidFileOffsetException, InvalidFileModeException, IOException {
+				InvalidFileOffsetException, InvalidFileModeException, IOException, IllegalArgumentException {
 		FSTest tester = new FSTest();
 		Constants.printConfig();
 		tester.testBootstrap();
-		tester.testBlocksCreation();
-		tester.testSmallReadWrite();
-		tester.testLargeReadWrite();
+		//tester.testBlocksCreation();
+		//tester.testSmallReadWrite();
+		//tester.testLargeReadWrite();
 		//tester.testMultipleReaders();
 		//tester.testMultipleFiles();
 		//tester.testWritePerformance();
-		//tester.testWritePerformanceConcurrentFiles();
+		tester.testWritePerformanceConcurrentFiles();
 		//tester.testReadPerformance();
 		//tester.testReadPerfMultiReadersSameFile();
 		
@@ -43,7 +42,7 @@ public class FSTest {
 	
 	public void testMain() throws OutOfMemoryException, MaxFileSizeExceededException, 
 	InterruptedException, IbmapsFullException, InvalidFileOffsetException, 
-	InvalidFileModeException, IOException {
+	InvalidFileModeException, IOException, IllegalArgumentException {
 		FSTest.main(null);
 	}
 	
@@ -71,7 +70,7 @@ public class FSTest {
 	}
 	
 	private void testSmallReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
-				InvalidFileOffsetException, InvalidFileModeException, IOException{
+				InvalidFileOffsetException, InvalidFileModeException, IOException, IllegalArgumentException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Small file test");
 		System.out.println("--------------------------------------------");
@@ -106,7 +105,7 @@ public class FSTest {
 	}
 	
 	private void testLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
-				InvalidFileOffsetException, InvalidFileModeException, IOException{
+				InvalidFileOffsetException, InvalidFileModeException, IOException, IllegalArgumentException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Large files test");
 		System.out.println("--------------------------------------------");
@@ -155,7 +154,7 @@ public class FSTest {
 		Random rand = new Random(0);
 		int bufSize = Constants.segmentSizeBytes;//8*1024*1024;
 		long dataSize = 1L*20*Constants.dataBlockSizeBytes + 1;
-		long appended = file.size();
+		long appended = 0;
 		
 		byte[] writeBuf = new byte[bufSize];
 		rand.nextBytes(writeBuf);
@@ -195,7 +194,7 @@ public class FSTest {
 						int bytes = 0;
 						try {
 							bytes = file.read(readBuf, toRead);
-						} catch (IOException e) {
+						} catch (IOException | IllegalArgumentException e) {
 							e.printStackTrace();
 							break;
 						}
@@ -408,7 +407,7 @@ public class FSTest {
 	}
 	
 	private void testReadPerformance() throws IOException, IbmapsFullException, OutOfMemoryException, 
-		MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException{
+		MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IllegalArgumentException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Read Performance Test");
 		System.out.println("--------------------------------------------");
@@ -500,7 +499,7 @@ public class FSTest {
 						int bytes = 0;
 						try {
 							bytes = file.read(readBuf, toRead);
-						} catch (IOException e) {
+						} catch (IOException | IllegalArgumentException e) {
 							e.printStackTrace();
 							break;
 						}

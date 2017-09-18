@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.SeekableByteChannel;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -20,7 +21,7 @@ public class LocalProcessor implements SyncProcessor {
 	private LinkedBlockingQueue<Block> reqQs[];
 	private Thread[] workers;
 	private final int numWorkers;
-	private volatile boolean keepWorking = true;
+	private volatile boolean working = true;
 	
 	public LocalProcessor(int numWorkers) {
 		//workers = Executors.newFixedThreadPool(numWorkers);
@@ -38,11 +39,11 @@ public class LocalProcessor implements SyncProcessor {
 	
 	@Override
 	public void store(Block block) throws IOException {
-		if (!keepWorking) {
+		if (!working) {
 			throw new IOException("LocalProcessor has already received stop signal. It is not accepting new requests");
 		}
 		
-		int queueNum = (int)(block.id.highBits ^ block.id.lowBits) % numWorkers;
+		int queueNum = (int)(block.id.highBits ^ block.id.lowBits) % numWorkers; //Want to assign blocks from different files to different workers
 		reqQs[queueNum].add(block);
 	}
 	
@@ -66,29 +67,29 @@ public class LocalProcessor implements SyncProcessor {
 	}
 	
 	private void runWorker(LinkedBlockingQueue<Block> reqs) {
-		while(keepWorking) {
+		while(working) {
 			Block block = null;
 			try {
-				block = reqs.take();
+				block = reqs.poll(1, TimeUnit.SECONDS);
 			} catch (InterruptedException e1) {
-				if (!keepWorking) {
+				if (!working) {
 					break;
 				}
 			}
 		
 			if (block == null)
-				return;
+				continue;
 			
-			process(block);
+			processStoreRequest(block);
 		}
 		
 		Block block = null;
 		while( (block = reqs.poll()) != null) {
-			process(block);
+			processStoreRequest(block);
 		}
 	}
 	
-	private void process(Block block) {
+	private void processStoreRequest(Block block) {
 		int dirtyCount = block.dirtyCount();
 		
 		if (dirtyCount == 0)
@@ -120,7 +121,7 @@ public class LocalProcessor implements SyncProcessor {
 		//FIXME: This creates a new file if it does not already exist. We should prevent that in order to make sure that
 		//first we create a file and do proper accounting for the file.
 		
-		useBlock();
+		//useBlock();
 		
 		try(RandomAccessFile rwFile = 
                 new RandomAccessFile(block.localPath(), "rw")) {
@@ -145,13 +146,13 @@ public class LocalProcessor implements SyncProcessor {
 	public void stop() {
 		System.out.println("Closing syncProc...");
 		
-		keepWorking = false;
+		working = false;
 		
 		if (workers == null)
 			return;
 		
 		for (int i=0; i<numWorkers; i++) {
-			workers[i].interrupt();
+			//workers[i].interrupt();
 			try {
 				workers[i].join();
 			} catch (InterruptedException e) {
@@ -160,7 +161,7 @@ public class LocalProcessor implements SyncProcessor {
 		}
 	}
 	
-	private void useBlock() {
+	private void useBlock() { //Limit the number of blocks stored in the local store
 		lock.lock();
 		
 		if (usedBlocks == maxBlocks) {

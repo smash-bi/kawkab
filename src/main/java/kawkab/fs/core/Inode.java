@@ -9,7 +9,6 @@ import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
-import kawkab.fs.core.exceptions.InvalidArgumentsException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 
@@ -52,13 +51,13 @@ public class Inode {
 		return new DataSegmentID(inumber, blockNumber, segmentInBlock);
 	}
 	
-	public int read(final byte[] buffer, final int length, final long offsetInFile) throws InvalidFileOffsetException, InvalidArgumentsException, IOException{
+	public int read(final byte[] buffer, final int length, final long offsetInFile) throws InvalidFileOffsetException, IllegalArgumentException, IOException{
 		//TODO: Check for input bounds
 		if (length <= 0)
-			throw new InvalidArgumentsException("Given length is 0.");
+			throw new IllegalArgumentException("Given length is 0.");
 		
 		if (offsetInFile + length > fileSize)
-			throw new InvalidArgumentsException(String.format("File offset + read length is greater "
+			throw new IllegalArgumentException(String.format("File offset + read length is greater "
 					+ "than file size: %d + %d > %d", offsetInFile,length,fileSize));
 		
 		int bufferOffset = 0;

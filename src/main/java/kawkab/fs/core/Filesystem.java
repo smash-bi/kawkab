@@ -16,11 +16,11 @@ public class Filesystem {
 	private static Filesystem instance;
 	private Namespace namespace;
 	
-	private Filesystem(){
+	private Filesystem() throws IOException {
 		namespace = Namespace.instance();
 	}
 	
-	public static Filesystem instance(){
+	public static Filesystem instance() throws IOException {
 		if (instance == null) {
 			instance = new Filesystem();
 		}

@@ -9,7 +9,6 @@ import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.Inode;
 import kawkab.fs.core.InodesBlock;
 import kawkab.fs.core.InodesBlockID;
-import kawkab.fs.core.exceptions.InvalidArgumentsException;
 import kawkab.fs.core.exceptions.InvalidFileModeException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
@@ -34,7 +33,7 @@ public final class FileHandle {
 	 * @return Number of bytes read from the file
 	 * @throws IOException 
 	 */
-	public synchronized int read(byte[] buffer, int length) throws IOException{
+	public synchronized int read(byte[] buffer, int length) throws IOException, IllegalArgumentException {
 		/*1. Borrow InodesBlock from cache
 		    2. Acquire InodesBlock lock
 		      3. Get the pointer to the dataBlock or the indirectBlock
@@ -68,16 +67,20 @@ public final class FileHandle {
 			}
 		}
 		
-		if (readOffsetInFile + length >= fileSize)
-			length = (int)(fileSize - readOffsetInFile);
+		if (readOffsetInFile + length > fileSize)
+			throw new IllegalArgumentException(String.format(
+					"Read length exceeds file length: Read offset=%d, read length=%d, file length=%d.",
+					readOffsetInFile, length, fileSize));
 		
 		int bytesRead = 0;
 		try {
 			bytesRead = inode.read(buffer, length, readOffsetInFile);
 		} catch (InvalidFileOffsetException e) {
 			e.printStackTrace();
-		} catch (InvalidArgumentsException e) {
+			return bytesRead;
+		} catch (IllegalArgumentException e) {
 			e.printStackTrace();
+			return bytesRead;
 		}
 		
 		readOffsetInFile += bytesRead;
