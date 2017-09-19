@@ -13,7 +13,7 @@ import kawkab.fs.core.exceptions.FileAlreadyExistsException;
 import kawkab.fs.core.exceptions.FileNotExistException;
 
 public class NamespaceService {
-	private static NamespaceService instance;
+	private static NamespaceService instance; //There must be only one instance of 
 	private CuratorFramework client;
 	private final static String namePrefix = "KawkabFiles";
 	
@@ -22,7 +22,7 @@ public class NamespaceService {
 		
 		ExponentialBackoffRetry retryPolicy = new ExponentialBackoffRetry(Constants.connectRetrySleepMs, Constants.connectMaxRetries);
 		client = CuratorFrameworkFactory.builder()  //There should be only one instance of the framework for each cluster
-				.namespace(namePrefix) //Somehow this namespace is not working. We get an error that a path must start with "/".
+				.namespace(namePrefix)
 				.retryPolicy(retryPolicy)
 				.connectString(zkservers)
 				.build();

@@ -34,13 +34,14 @@ public class Constants {
 	public static final String inodeBlocksPath = basePath+"/inodes";
 	public static final String blocksPath = basePath+"/blocks";
 	public static final String namespacePath = basePath+"/namespace";
-	public static final int inodeBlocksPerDirectory = 1000;
+	public static final int inodeBlocksPerDirectory = 1000; //Number of inodesBlocks per directory in the local storage
 	
 	public static final long ibmapUuidHigh = 1; //High bits of uuid for ibmap. The low bits are the global blockIndex.
 	public static final long inodesBlocksUuidHigh = 2;  //High bits of uuid for inodesBlock. The low bits are the global blockIndex.
 	
 	
-	//ZooKeeper settings for the namespace
+	//ZooKeeper cluster settings
+	public static final int zkMainClusterID = 1;
 	public static final String zkServers = "127.0.0.1:2181,127.0.0.1:2182,127.0.0.1:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;

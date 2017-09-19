@@ -13,6 +13,7 @@ public class InodesBlock extends Block {
 	private final int blockIndex; //Not saved persistently
 	private static boolean bootstraped; //Not saved persistently
 	private Inode[] inodes; //Should be initialized in the bootstrap function only.
+	//private int version; //Inodes-block's current version number.
 	
 	/*
 	 * The access modifier of the constructor is "default" so that it can be packaged as a library. Clients
@@ -22,12 +23,14 @@ public class InodesBlock extends Block {
 	 * @param blockIndex The block number, starting from zero, of this inodesBlock. Although the
 	 *         inodesBlocks are sharded across machines, the blockIndex is relative to the whole
 	 *         system, not relative to this machine.
+	 * at param version This the version number of this inodesBlock. The current version number should be retrieved
+	 *        from the inodesBlock version table (IBV table).
 	 */
 	InodesBlock(int blockIndex){
 		super(new InodesBlockID(blockIndex));
 		this.blockIndex = blockIndex;
 		//type = BlockType.InodeBlock;
-		//Must not initialize inodes array in any constructor.
+		//Must not initialize the "inodes" array in any constructor.
 	}
 	
 	/**
