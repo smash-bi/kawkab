@@ -42,6 +42,8 @@ public class ZKService {
 	}
 	
 	public void addNode(int zkClusterID, String path, byte[] data) throws KeeperException, KawkabException { //TODO: Change KawkabException to proper type
+		System.out.println("Adding node " + path);
+		
 		CuratorFramework client = clients.get(zkClusterID);
 		if (client == null)
 			throw new KawkabException("ZK cluster "+zkClusterID+" is not initialized.");
@@ -49,8 +51,6 @@ public class ZKService {
 		try {
 			client.create().forPath(path, data);
 		} catch(Exception e) {
-			e.printStackTrace();
-			
 			if (e instanceof KeeperException)
 				throw (KeeperException)e;
 			
@@ -59,6 +59,8 @@ public class ZKService {
 	}
 	
 	public byte[] getData(int zkClusterID, String path) throws KeeperException, KawkabException { //TODO: Change KawkabException to proper type
+		System.out.println("Get node " + path);
+		
 		CuratorFramework client = clients.get(zkClusterID);
 		if (client == null)
 			throw new KawkabException("ZK cluster "+zkClusterID+" is not initialized.");
@@ -67,8 +69,6 @@ public class ZKService {
 		try {
 			res = client.getData().forPath(path);
 		} catch(Exception e) {
-			e.printStackTrace();
-			
 			if (e instanceof KeeperException)
 				throw (KeeperException)e;
 			

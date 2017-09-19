@@ -121,7 +121,7 @@ public class LocalProcessor implements SyncProcessor {
 		//FIXME: This creates a new file if it does not already exist. We should prevent that in order to make sure that
 		//first we create a file and do proper accounting for the file.
 		
-		//useBlock();
+		//useBlock(); //FIXME: Limit the number of files creatd in the local storage.
 		
 		try(RandomAccessFile rwFile = 
                 new RandomAccessFile(block.localPath(), "rw")) {

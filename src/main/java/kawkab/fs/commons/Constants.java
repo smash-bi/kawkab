@@ -1,6 +1,7 @@
 package kawkab.fs.commons;
 
 import kawkab.fs.core.Inode;
+import kawkab.fs.core.zookeeper.ZKClusterConfig;
 
 public class Constants {
 	public static final long maxBlocksPerLocalDevice = 1000;
@@ -42,9 +43,11 @@ public class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkServers = "127.0.0.1:2181,127.0.0.1:2182,127.0.0.1:2183";
+	public static final String zkMainServers = "127.0.0.1:2181,127.0.0.1:2182,127.0.0.1:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
+	public static final ZKClusterConfig zkMainCluster = 
+			new ZKClusterConfig(zkMainClusterID, zkMainServers, connectRetrySleepMs, connectMaxRetries);
 	
 	static {
 		assert inodesBlockSizeBytes % inodesPerBlock == 0;

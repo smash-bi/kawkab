@@ -6,6 +6,7 @@ import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.IbmapsFullException;
+import kawkab.fs.core.exceptions.KawkabException;
 
 public class Filesystem {
 	private static boolean initialized;
@@ -16,18 +17,18 @@ public class Filesystem {
 	private static Filesystem instance;
 	private Namespace namespace;
 	
-	private Filesystem() throws IOException {
+	private Filesystem() throws KawkabException {
 		namespace = Namespace.instance();
 	}
 	
-	public static Filesystem instance() throws IOException {
+	public static Filesystem instance() throws KawkabException {
 		if (instance == null) {
 			instance = new Filesystem();
 		}
 		return instance;
 	}
 	
-	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException, IOException{
+	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException, IOException, KawkabException{
 		//TODO: Validate input
 		long inumber = namespace.openFile(filename);
 		FileHandle file = new FileHandle(inumber, mode);

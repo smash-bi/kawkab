@@ -6,6 +6,7 @@ import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileAlreadyExistsException;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
+import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.zookeeper.NamespaceService;
 
 public class Namespace {
@@ -18,13 +19,13 @@ public class Namespace {
 	private static Namespace instance;
 	
 	
-	private Namespace() throws IOException {
+	private Namespace() throws KawkabException {
 		cache = Cache.instance();
 		locks = new KeyedLock();
 		ns = NamespaceService.instance();
 	}
 	
-	public static Namespace instance() throws IOException {
+	public static Namespace instance() throws KawkabException {
 		if (instance == null){
 			instance = new Namespace();
 		}
@@ -37,8 +38,9 @@ public class Namespace {
 	 * @throws IbmapsFullException if all the ibmaps are full for this node, which means the
 	 *          filesystem has reached the maximum number of files limit.
 	 * @throws IOException 
+	 * @throws KawkabException 
 	 */
-	public long openFile(String filename) throws IbmapsFullException, IOException {
+	public long openFile(String filename) throws IbmapsFullException, IOException, KawkabException {
 		Long inumber = -1L;
 		
 		//Lock namespace for the given filename
