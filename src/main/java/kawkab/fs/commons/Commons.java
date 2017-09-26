@@ -94,5 +94,13 @@ public class Commons {
         
         return result;
     }
+    
+    public int myid() {
+    	return Constants.thisNodeID; //FIXME: Get the id of the current node in a proper way. 
+    }
+    
+    public int nodesCount() {
+    	return Constants.nodesInSystem;
+    }
 }
 

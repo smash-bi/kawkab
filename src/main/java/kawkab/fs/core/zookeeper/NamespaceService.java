@@ -15,14 +15,14 @@ import kawkab.fs.core.exceptions.KawkabException;
 public class NamespaceService {
 	private static NamespaceService instance; //There must be only one instance of 
 	private final static String pathPrefix = "/KawkabFiles/";
-	private ZKService zkClient;
+	private ZKService zkclient;
 	private ZKClusterConfig zkcluster;
 	private Encoder encoder;
 	
 	private NamespaceService() throws KawkabException {
-		zkClient = ZKService.instance();
+		zkclient = ZKService.instance();
 		zkcluster = Constants.zkMainCluster;
-		zkClient.initService(zkcluster);
+		zkclient.initService(zkcluster);
 		encoder = Base64.getUrlEncoder();
 		createRootNode();
 	}
@@ -45,7 +45,7 @@ public class NamespaceService {
 		String path = fixPath(filename);
 		
 		try {
-			zkClient.addNode(zkcluster.id(), path, Commons.longToBytes(inumber));
+			zkclient.addNode(zkcluster.id(), path, Commons.longToBytes(inumber));
 		} catch (KeeperException e) {
 			if (e.code() == Code.NODEEXISTS) {
 				throw new FileAlreadyExistsException(e.getMessage());
@@ -64,7 +64,7 @@ public class NamespaceService {
 		
 		long inumber = -1;
 		try {
-			byte[] res = zkClient.getData(zkcluster.id(), path);
+			byte[] res = zkclient.getData(zkcluster.id(), path);
 			inumber = Commons.bytesToLong(res);
 		} catch (KeeperException e) {
 			if (e.code() == Code.NONODE)
@@ -90,7 +90,7 @@ public class NamespaceService {
 	private void createRootNode() throws KawkabException {
 		String path = pathPrefix.substring(0, pathPrefix.length()-1);
 		try {
-			zkClient.addNode(zkcluster.id(), path, new byte[]{0});
+			zkclient.addNode(zkcluster.id(), path, new byte[]{0});
 		} catch (KeeperException e) {
 			if (e.code() != Code.NODEEXISTS)
 				throw new KawkabException(e.getMessage());

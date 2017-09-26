@@ -4,6 +4,9 @@ import kawkab.fs.core.Inode;
 import kawkab.fs.core.zookeeper.ZKClusterConfig;
 
 public class Constants {
+	public static int thisNodeID = 1; //FIXME: Get this from a configuration file or command line
+	public static int nodesInSystem = 1; //FIXME: Get this from a configuration file or ZooKeeper
+	
 	public static final long maxBlocksPerLocalDevice = 1000;
 	
 	//Default data block size in bytes
@@ -23,7 +26,8 @@ public class Constants {
 	public static final int inodesBlockSizeBytes = 5120; //dataBlockSizeBytes; 
 	public static final int inodeSizeBytes = Inode.inodesSize();
 	public static final int inodesPerBlock = inodesBlockSizeBytes/inodeSizeBytes;
-	public static final int inodeBlocksPerMachine = (int)Math.ceil(ibmapBlockSizeBytes*ibmapBlocksPerMachine*8.0/inodesPerBlock); //FIXME: Calculate this based on the maximum number of files supported by a machine
+	//FIXME: Calculate this based on the maximum number of files supported by a machine
+	public static final int inodeBlocksPerMachine = (int)Math.ceil(ibmapBlockSizeBytes*ibmapBlocksPerMachine*8.0/inodesPerBlock); 
 	public static int inodesBlocksRangeStart = 0; //TODO: Get these numbers from a configuration file or ZooKeeper
 	
 	public static int maxBlocksInCache = 100;
