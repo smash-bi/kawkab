@@ -1,7 +1,9 @@
 package kawkab.fs.core;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 
@@ -62,6 +64,11 @@ public class InodesBlock extends Block {
 	}
 	
 	@Override
+	public boolean shouldStoreGlobally() {
+		return true;
+	}
+	
+	@Override
 	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		lock();
 		try {
@@ -76,20 +83,39 @@ public class InodesBlock extends Block {
 	}
 	
 	@Override
-	public void storeTo(WritableByteChannel channel) throws IOException {
+	public int storeTo(WritableByteChannel channel) throws IOException {
+		return storeFullTo(channel);
+	}
+	
+	@Override
+	public int storeFullTo(WritableByteChannel channel) throws IOException {
+		int bytesWritten = 0;
 		lock();
 		try {
 			for(Inode inode : inodes) {
-				inode.storeTo(channel);
+				bytesWritten += inode.storeTo(channel);
 			}
 		} finally {
 			unlock();
 		}
+		
+		return bytesWritten;
 	}
 	
-	@Override
-	public void storeFullTo(WritableByteChannel channel) throws IOException {
-		storeTo(channel);	
+	@Override ByteArrayInputStream getInputStream() {
+		//TODO: This function takes extra memory to serialize inodes in an input stream. We need an alternate
+		//method for this purpose.
+		ByteBuffer buffer = ByteBuffer.allocate(inodes.length * Constants.inodeSizeBytes);
+		lock();
+		try {
+			for(Inode inode : inodes) {
+				inode.storeTo(buffer);
+			}
+		} finally {
+			unlock();
+		}
+		buffer.flip();
+		return new ByteArrayInputStream(buffer.array());
 	}
 
 	@Override
@@ -100,6 +126,11 @@ public class InodesBlock extends Block {
 	@Override
 	int memorySizeBytes() {
 		return Constants.inodesBlockSizeBytes + 8; //FIXME: Get the exact number
+	}
+	
+	@Override
+	int sizeWhenSerialized() {
+		return Constants.inodesBlockSizeBytes;
 	}
 	
 	
@@ -156,11 +187,6 @@ public class InodesBlock extends Block {
 		return Constants.inodeBlocksPath + File.separator + 
 				(blockIndex/Constants.inodeBlocksPerDirectory) + File.separator + 
 				name(blockIndex);
-	}
-	
-	@Override
-	int blockSize(){
-		return Constants.inodesBlockSizeBytes;
 	}
 	
 	/**

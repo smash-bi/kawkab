@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.SeekableByteChannel;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
@@ -13,7 +15,7 @@ import kawkab.fs.commons.Constants;
 
 public class LocalProcessor implements SyncProcessor {
 	//private ExecutorService workers;
-	private SyncProcessor globalProc;
+	private GlobalProcessor globalProc;
 	
 	private final long maxBlocks = Constants.maxBlocksPerLocalDevice;
 	private long usedBlocks;
@@ -23,11 +25,20 @@ public class LocalProcessor implements SyncProcessor {
 	private final int numWorkers;
 	private volatile boolean working = true;
 	
+	private LocalStoreDB storedFilesMap;
+	
 	public LocalProcessor(int numWorkers) {
 		//workers = Executors.newFixedThreadPool(numWorkers);
-		globalProc = new GlobalProcessor();
+		globalProc = S3Backend.instance();
 		lock = new ReentrantLock();
 		this.numWorkers = numWorkers;
+		
+		try {
+			storedFilesMap = new LocalStoreDB();
+		} catch (IOException e) {
+			e.printStackTrace();
+			return;
+		}
 		
 		reqQs = new LinkedBlockingQueue[numWorkers];
 		for(int i=0; i<numWorkers; i++) {
@@ -40,15 +51,35 @@ public class LocalProcessor implements SyncProcessor {
 	@Override
 	public void store(Block block) throws IOException {
 		if (!working) {
-			throw new IOException("LocalProcessor has already received stop signal. It is not accepting new requests");
+			throw new IOException("LocalProcessor has already received stop signal.");
 		}
 		
-		int queueNum = (int)(block.id.highBits ^ block.id.lowBits) % numWorkers; //Want to assign blocks from different files to different workers
+		//Load balance between workers, but assign same worker to the same block.
+		int queueNum = (int)(block.id.highBits ^ block.id.lowBits) % numWorkers;  
 		reqQs[queueNum].add(block);
 	}
 	
 	@Override
 	public void load(Block block) throws IOException {
+		System.out.println("[LS] Load block: " + block.name());
+		
+		if (!storedFilesMap.exists(block)) {
+			//Get the block from the global store.
+			Future<?> future = globalProc.load(block);
+			try {
+				if (future.get() != null) { //Returns null on success
+					throw new IOException("Unbale to load block from the global store. Block: " + block.name());
+				}
+			} catch (InterruptedException e) {
+				throw new IOException(e);
+			} catch (ExecutionException e) {
+				throw new IOException(e);
+			}
+			
+			System.out.println("Loaded block from the global store: " + block.name());
+			storedFilesMap.put(block);
+		}
+		
 		loadBlock(block);
 	}
 	
@@ -90,6 +121,7 @@ public class LocalProcessor implements SyncProcessor {
 	}
 	
 	private void processStoreRequest(Block block) {
+		System.out.println("[LS] Store block: " + block.name());
 		int dirtyCount = block.dirtyCount();
 		
 		if (dirtyCount == 0)
@@ -98,7 +130,11 @@ public class LocalProcessor implements SyncProcessor {
 		try {
 			storeBlock(block);
 			
-			globalProc.store(block);
+			storedFilesMap.put(block); //FIXME: What if an error occurs here. Should we remove the locally stored block?
+			
+			if (block.shouldStoreGlobally()) {
+				globalProc.store(block);
+			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -121,7 +157,7 @@ public class LocalProcessor implements SyncProcessor {
 		//FIXME: This creates a new file if it does not already exist. We should prevent that in order to make sure that
 		//first we create a file and do proper accounting for the file.
 		
-		//useBlock(); //FIXME: Limit the number of files creatd in the local storage.
+		//useBlock(); //FIXME: Limit the number of files created in the local storage.
 		
 		try(RandomAccessFile rwFile = 
                 new RandomAccessFile(block.localPath(), "rw")) {
@@ -141,6 +177,10 @@ public class LocalProcessor implements SyncProcessor {
 		}
 		
 		storeBlock(block);
+		
+		System.out.println("[LS] Added in local DB: " + block.name());
+		
+		storedFilesMap.put(block);
 	}
 	
 	public void stop() {
@@ -176,4 +216,5 @@ public class LocalProcessor implements SyncProcessor {
 	private void evictBlocks() {
 		usedBlocks -= 1;
 	}
+
 }

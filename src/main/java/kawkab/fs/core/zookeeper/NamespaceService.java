@@ -24,7 +24,7 @@ public class NamespaceService {
 		zkcluster = Constants.zkMainCluster;
 		zkclient.initService(zkcluster);
 		encoder = Base64.getUrlEncoder();
-		createRootNode();
+		//createRootNode();
 	}
 	
 	public static NamespaceService instance() throws KawkabException {
@@ -42,6 +42,7 @@ public class NamespaceService {
 	 * @throws KawkabException Any other exception
 	 */
 	public void addFile(String filename, long inumber) throws FileAlreadyExistsException, KawkabException {
+		System.out.println("[NSS] Adding file in the namespace: " + filename);
 		String path = fixPath(filename);
 		
 		try {
@@ -50,6 +51,8 @@ public class NamespaceService {
 			if (e.code() == Code.NODEEXISTS) {
 				throw new FileAlreadyExistsException(e.getMessage());
 			}
+			
+			e.printStackTrace();
 		}
 	}
 	

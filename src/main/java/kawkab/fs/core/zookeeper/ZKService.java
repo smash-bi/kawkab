@@ -38,18 +38,25 @@ public class ZKService {
 				.build();
 		client.start(); //Connect to ZooKeeper
 		
+		try {
+			client.blockUntilConnected();
+		} catch(Exception e) {
+			e.printStackTrace();
+			return;
+		}
+		
 		clients.put(cluster.id(), client);
 	}
 	
 	public void addNode(int zkClusterID, String path, byte[] data) throws KeeperException, KawkabException { //TODO: Change KawkabException to proper type
-		System.out.println("Adding node " + path);
+		System.out.println("[ZKService] Adding node " + path);
 		
 		CuratorFramework client = clients.get(zkClusterID);
 		if (client == null)
 			throw new KawkabException("ZK cluster "+zkClusterID+" is not initialized.");
 		
 		try {
-			client.create().forPath(path, data);
+			client.create().creatingParentContainersIfNeeded().forPath(path, data);
 		} catch(Exception e) {
 			if (e instanceof KeeperException)
 				throw (KeeperException)e;

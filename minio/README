@@ -1,0 +1,31 @@
+MINIO as S3
+-----------
+
+Complete guide is available at: https://docs.minio.io
+
+Download server binary:
+  > https://dl.minio.io/server/minio/release/linux-amd64/minio
+
+Download cli binary:
+  > https://dl.minio.io/client/mc/release/linux-amd64/mc
+
+Make executable: 
+  > chmod u+x minio
+  > chmod u+x mc
+
+Run server:
+  > minio server ./data #This will create $HOME/.minio config directory
+  or
+  > minio -C config-minio server ./data #If you want to create config directory at custom location
+
+Running the server gives the access key and secret key that will be used to connect to the service.
+
+Server configuration for mc:
+
+  > command: mc config host add <ALIAS> <YOUR-S3-ENDPOINT> <YOUR-ACCESS-KEY> <YOUR-SECRET-KEY> <API-SIGNATURE> #creates $HOME/.mc directory
+
+Example: ./mc config host add minio http://10.10.10.10 BKIKJAA5BMMU2RHO6IBB V7f1CwQqAcwo80UEIJEjc5gVQUSSx5ohQ9GSrr12 S3v4
+
+Run client:
+  > ./mc -h
+

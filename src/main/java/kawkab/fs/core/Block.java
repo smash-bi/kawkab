@@ -1,23 +1,30 @@
 package kawkab.fs.core;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public abstract class Block /*implements AutoCloseable*/ {
 	public enum BlockType {
-		DataBlock, InodeBlock, IbmapBlock
+		DataBlock,  // A segment in a data block 
+		InodeBlock, 
+		IbmapBlock
 	}
 	
 	private final Lock lock;
 	private final Condition syncWait;
 	private int dirtyCount;
+	
+	private AtomicBoolean storedLocally;
+	private AtomicBoolean storedGlobally;
+	
 	int initialFilledBytes;
 	int currentFilledBytes;
-	boolean storedGlobally;
 	
 	final BlockID id;
 	//protected Cache cache = Cache.instance(); //FIXME: This creates circular dependencies, which can lead to deadlocks
@@ -57,19 +64,38 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 */
 	abstract String localPath();
 	
-	/**
-	 * The serialization/deserialization size of this block.
-	 * 
-	 * @return Returns the size of the block in bytes. When the block is serializes or deserializes,
-	 * it consumes the number of bytes equal to the returned value of this function.  
-	 */
-	abstract int blockSize();
+	abstract boolean shouldStoreGlobally();
 	
+	/**
+	 * Load the contents of the block from channel.
+	 * @param channel
+	 * @throws IOException
+	 */
 	abstract void loadFrom(ReadableByteChannel channel)  throws IOException;
 	
-	abstract void storeTo(WritableByteChannel channel)  throws IOException;
+	/**
+	 * Store contents of the block to channel. This function stores only the
+	 * updated bytes in the channel.
+	 * @param channel
+	 * @return Number of bytes written to the channel.
+	 * @throws IOException
+	 */
+	abstract int storeTo(WritableByteChannel channel)  throws IOException;
 	
-	abstract void storeFullTo(WritableByteChannel channel) throws IOException;
+	/**
+	 * Stores the complete block in the channel.
+	 * @param channel
+	 * @return Number of bytes written to the channel.
+	 * @throws IOException
+	 */
+	abstract int storeFullTo(WritableByteChannel channel) throws IOException;
+	
+	/*
+	 * Returns a ByteArrayInputStream that wraps around the byte[] containing the block in bytes. GlobalProcessor
+	 * calls this function to store the block in the global store. Note that no guarantees are made about the concurrent
+	 * modification of the block while the block is read from the stream.
+	 */
+	abstract ByteArrayInputStream getInputStream();
 
 	/**
 	 * LocalProcessor calls this function to set the position of the FileChannel before calling block.storeTo(channel)
@@ -80,11 +106,16 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 */
 	abstract int appendOffsetInBlock();
 	
+	/**
+	 * Number of bytes this block is taking in memory. 
+	 * @return
+	 */
 	abstract int memorySizeBytes();
 	
-	final int usedMemoryBytes() {
-		return 30 + memorySizeBytes(); //FIXME: Get the exact number
-	}
+	/**
+	 * @return Size of the block in bytes when the complete block is serialized.
+	 */
+	abstract int sizeWhenSerialized();
 	
 	@Override
 	public String toString(){
@@ -112,9 +143,6 @@ public abstract class Block /*implements AutoCloseable*/ {
 			e.printStackTrace();
 		}
 	}*/
-	
-	
-	
 	
 	/**
 	 * @return Returns whether this block has been modified until now or not.
@@ -189,6 +217,21 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * @throws InterruptedException 
 	 */
 	void waitUntilSynced() throws InterruptedException {
+		lock();
+		try {
+			while (dirtyCount > 0) {
+				syncWait.await(); //FIXME: This should be the wait condition from the Cache.cacheLock. 
+			}
+		} finally {
+			unlock();
+		}
+	}
+	
+	/**
+	 * The caller thread blocks until the block is stored in the Global store.
+	 * @throws InterruptedException
+	 */
+	void waitUntilStoredGlobally() throws InterruptedException {
 		lock();
 		try {
 			while (dirtyCount > 0) {

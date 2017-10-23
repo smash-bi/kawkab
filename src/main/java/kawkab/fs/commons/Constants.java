@@ -33,17 +33,18 @@ public class Constants {
 	public static int maxBlocksInCache = 100;
 
 	public static final int syncThreadsPerDevice = 2;
+	public static final int numGlobalStoreLoadWorkers = 1;
+	public static final int numGlobalStoreStoreWorkers = 1;
 	
 	public static final String basePath = "fs";
 	public static final String ibmapsPath = basePath+"/ibmaps";
 	public static final String inodeBlocksPath = basePath+"/inodes";
-	public static final String blocksPath = basePath+"/blocks";
+	public static final String blocksPath = basePath+"/blocks/"+thisNodeID;
 	public static final String namespacePath = basePath+"/namespace";
 	public static final int inodeBlocksPerDirectory = 1000; //Number of inodesBlocks per directory in the local storage
 	
 	public static final long ibmapUuidHigh = 1; //High bits of uuid for ibmap. The low bits are the global blockIndex.
 	public static final long inodesBlocksUuidHigh = 2;  //High bits of uuid for inodesBlock. The low bits are the global blockIndex.
-	
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
@@ -53,12 +54,21 @@ public class Constants {
 	public static final ZKClusterConfig zkMainCluster = 
 			new ZKClusterConfig(zkMainClusterID, zkMainServers, connectRetrySleepMs, connectMaxRetries);
 	
+	
+	//minio settings
+	public static final String[] minioServers = {"http://127.0.0.1:9000"};
+	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
+	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
+	
 	static {
 		assert inodesBlockSizeBytes % inodesPerBlock == 0;
 		assert dataBlockSizeBytes == segmentsPerBlock*segmentSizeBytes;
 		
 		assert ibmapBlockSizeBytes <= segmentSizeBytes;
 		assert inodesBlockSizeBytes <= segmentSizeBytes;
+		
+		assert minioAccessKey.length() >= 5; //From minio documentation
+		assert minioSecretKey.length() >= 8; //From minio documentation
 	}
 	
 	public static void printConfig(){

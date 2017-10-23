@@ -8,12 +8,13 @@ then
   exit 1
 fi
 
-BIN=zookeeper-3.4.10/bin
+#BIN=zookeeper-3.4.10/bin
+BIN=zookeeper-3.5.3-beta/bin
 datadir="/tmp/zookeeper/data"
 logdir="/tmp/zookeeper/logs"
 outdir="/tmp/zookeeper/out"
 server="server_$1"
-conf="conf/zoo$1.cfg"
+conf="./conf/zoo$1.cfg"
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:zookeeper-3.4.10/lib;
 export ZOO_LOG_DIR=${logdir}/${server};

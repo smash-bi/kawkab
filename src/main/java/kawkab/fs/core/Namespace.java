@@ -51,10 +51,12 @@ public class Namespace {
 			try {
 				inumber = ns.getInumber(filename);
 			} catch(FileNotExistException e) {     //If the file does not exist
+				System.out.println("[NS] File note found: " + filename);
 				inumber = null;
 			}
 			
 			if (inumber == null) {                 //if the file does not exist, create a new file
+				System.out.println("[NS] Creating new file: " + filename);
 				inumber = createNewFile();
 				//filesMap.put(filename, inumber);
 				

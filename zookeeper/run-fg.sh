@@ -13,7 +13,7 @@ datadir="/tmp/zookeeper/data"
 logdir="/tmp/zookeeper/logs"
 outdir="/tmp/zookeeper/out"
 server="server_$1"
-conf="conf/zoo$1.cfg"
+conf="./conf/zoo$1.cfg"
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:zookeeper-3.4.10/lib;
 export ZOO_LOG_DIR=${logdir}/${server};
@@ -31,6 +31,7 @@ echo $1 > ${datadir}/${server}/myid
 
 echo "Starting server $1 with config file: ${conf}"
 
-zookeeper-3.4.10/bin/zkServer.sh start-foreground ${conf}
+#zookeeper-3.4.10/bin/zkServer.sh start-foreground ${conf}
+zookeeper-3.5.3-beta/bin/zkServer.sh start-foreground ${conf}
 
 exit 0

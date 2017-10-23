@@ -10,13 +10,13 @@ public class Cache implements BlockEvictionListener{
 	private static Cache instance;
 	private LRUCache cache;
 	private Lock cacheLock;
-	private LocalProcessor syncProc;
+	private LocalProcessor localStore;
 	private volatile boolean closing = false;
 	
 	private Cache(){
 		cache = new LRUCache(this);
 		cacheLock = new ReentrantLock();
-		syncProc = new LocalProcessor(Constants.syncThreadsPerDevice);
+		localStore = new LocalProcessor(Constants.syncThreadsPerDevice);
 	}
 	
 	public static Cache instance(){
@@ -28,10 +28,13 @@ public class Cache implements BlockEvictionListener{
 	}
 	
 	public void createBlock(Block block) throws IOException {
-		syncProc.storeLocally(block);
+		localStore.storeLocally(block);
 	}
 	
 	/**
+	 * An acquired block cannot be evicted from the cache. The cache keeps the
+	 * reference count of all the acquired blocks.
+	 * 
 	 * @param blockID
 	 * @param type
 	 * @return
@@ -72,7 +75,7 @@ public class Cache implements BlockEvictionListener{
 				return cachedItem.block();
 			}
 			
-			syncProc.load(cachedItem.block());
+			localStore.load(cachedItem.block());
 			
 			//TODO: Signal any thread that is waiting for the block to get loaded
 		} finally {
@@ -84,6 +87,10 @@ public class Cache implements BlockEvictionListener{
 		return cachedItem.block();
 	}
 	
+	/**
+	 * Reduces the reference count by 1. Blocks with reference count 0 are eligible for eviction.
+	 * @param blockID
+	 */
 	public void releaseBlock(BlockID blockID) {
 		CachedItem cachedItem = null;
 		cacheLock.lock();
@@ -104,7 +111,7 @@ public class Cache implements BlockEvictionListener{
 			//cachedItem.lock(); //FIXME: Do we need a lock here???
 			if (cachedItem.block().dirty()) {
 				try {
-					syncProc.store(cachedItem.block()); //FIXME: What to do with the exception?
+					localStore.store(cachedItem.block()); //FIXME: What to do with the exception?
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
@@ -121,7 +128,7 @@ public class Cache implements BlockEvictionListener{
 			if (cached.block().dirty()) {
 				//cached.block().storeToDisk();
 				try {
-					syncProc.store(cached.block());
+					localStore.store(cached.block());
 				} catch (IOException e) {
 					e.printStackTrace(); //FIXME: What to do with the exception?
 				}
@@ -135,7 +142,7 @@ public class Cache implements BlockEvictionListener{
 		cacheLock.lock();
 		cache.clear();
 		cacheLock.unlock();
-		syncProc.stop();
+		localStore.stop();
 	}
 
 	@Override

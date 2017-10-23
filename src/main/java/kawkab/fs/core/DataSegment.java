@@ -1,18 +1,18 @@
 package kawkab.fs.core;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
-
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class DataSegment extends Block {
 	//private MappedByteBuffer buffer;
@@ -22,6 +22,7 @@ public class DataSegment extends Block {
 	//Keeps track of the offset and length of dirty bytes
 	private int dirtyBytesStart;
 	private int dirtyBytesLength;
+	private DataSegmentID segmentID;
 	
 	private final Lock dirtyBytesLock;
 	
@@ -39,6 +40,7 @@ public class DataSegment extends Block {
 		dirtyBytesStart = Constants.segmentSizeBytes; //The variable is updated to correct value in adjustDirtyOffsets()
 		dirtyBytesLength = 0; //The variable is updated to correct value in adjustDirtyOffsets()
 		dirtyBytesLock = new ReentrantLock();
+		segmentID = uuid;
 		//System.out.println(" Opened block: " + name());
 	}
 	
@@ -177,6 +179,12 @@ public class DataSegment extends Block {
 	}
 	
 	@Override
+	public boolean shouldStoreGlobally() {
+		System.out.println("[DataSegment] " + name() + " -> " + segmentID.segmentInBlock + "/" + Constants.segmentsPerBlock);
+		return segmentID.segmentInBlock+1 == Constants.segmentsPerBlock ? true : false;
+	}
+	
+	@Override
 	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		lock();
 		try {
@@ -195,14 +203,16 @@ public class DataSegment extends Block {
 	}
 	
 	@Override
-	public void storeTo(WritableByteChannel channel) throws IOException {
+	public int storeTo(WritableByteChannel channel) throws IOException {
+		int bytesWritten = 0;
+		
 		dirtyBytesLock.lock();
 			int dirtyBytesOffset = dirtyBytesStart;
 			int dirtyBytesSize   = dirtyBytesLength;
 	
 			if(dirtyBytesSize == 0){
 				dirtyBytesLock.unlock();
-				return;
+				return 0;
 			}
 		
 			dirtyBytesStart += dirtyBytesSize;
@@ -210,11 +220,12 @@ public class DataSegment extends Block {
 		
 		dirtyBytesLock.unlock();
 		
+		
 		lock();
 		try {
 			ByteBuffer buffer = ByteBuffer.wrap(bytes, dirtyBytesOffset, dirtyBytesSize);
 			int remaining = buffer.remaining();
-			int bytesWritten = Commons.writeTo(channel, buffer);
+			bytesWritten = Commons.writeTo(channel, buffer);
 			
 			if (bytesWritten < remaining) {
 				throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
@@ -233,14 +244,17 @@ public class DataSegment extends Block {
 		finally {
 			unlock();
 		}
+		
+		return bytesWritten;
 	}
 
 	@Override
-	public void storeFullTo(WritableByteChannel channel) throws IOException {
+	public int storeFullTo(WritableByteChannel channel) throws IOException {
+		int bytesWritten = 0;
 		lock();
 		try {
 			ByteBuffer buffer = ByteBuffer.wrap(bytes);
-			int bytesWritten = Commons.writeTo(channel, buffer);
+			bytesWritten = Commons.writeTo(channel, buffer);
 			
 			if (bytesWritten < bytes.length) {
 				throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
@@ -249,6 +263,13 @@ public class DataSegment extends Block {
 		} finally {
 			unlock();
 		}
+		
+		return bytesWritten;
+	}
+	
+	@Override
+	public ByteArrayInputStream getInputStream() {
+		return new ByteArrayInputStream(bytes);
 	}
 	
 	@Override
@@ -281,6 +302,11 @@ public class DataSegment extends Block {
 	@Override
 	int memorySizeBytes() {
 		return Constants.segmentSizeBytes + 8; //FIXME: Get the exact number
+	}
+	
+	@Override
+	int sizeWhenSerialized() {
+		return Constants.segmentSizeBytes;
 	}
 	
 	
@@ -333,11 +359,6 @@ public class DataSegment extends Block {
 	static String name(long inumber, long blockNumber, int segmentNumber){
 		//return Commons.uuidToString(uuidHigh, uuidLow);
 		return String.format("%016x-%016x-%08x", inumber, blockNumber, segmentNumber);
-	}
-	
-	@Override
-	int blockSize(){
-		return Constants.segmentSizeBytes;
 	}
 	
 	@Override

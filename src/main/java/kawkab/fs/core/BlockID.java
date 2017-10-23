@@ -12,9 +12,6 @@ public abstract class BlockID {
 	public final String key;
 	public final BlockType type;
 	
-	//FIXME: Chnage the variable names from uuidHigh/Low to idHigh/Low because some blocks do not
-	//have proper uuid as the id, e.g., ibmap and inodesBlocks.
-	
 	public BlockID(long highBits, long lowBits, String key, BlockType type){
 		this.highBits = highBits;
 		this.lowBits = lowBits;

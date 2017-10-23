@@ -1,5 +1,6 @@
 package kawkab.fs.core;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -13,7 +14,7 @@ import kawkab.fs.core.exceptions.InodeNumberOutOfRangeException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 
 public class Ibmap extends Block{
-	private static final int bitsPerByte = 8;
+	private static final int bitsPerByte = Byte.SIZE;
 	
 	private final int blockIndex; //Not saved persistently
 	
@@ -88,6 +89,11 @@ public class Ibmap extends Block{
 	}
 	
 	@Override
+	public boolean shouldStoreGlobally() {
+		return true;
+	}
+	
+	@Override
 	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
@@ -100,7 +106,12 @@ public class Ibmap extends Block{
 	}
 	
 	@Override
-	public void storeTo(WritableByteChannel channel) throws IOException {
+	public int storeTo(WritableByteChannel channel) throws IOException {
+		return storeFullTo(channel);
+	}
+	
+	@Override
+	public int storeFullTo(WritableByteChannel channel) throws IOException {
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.ibmapBlockSizeBytes);
 		buffer.put(bitset.toByteArray());
 		buffer.flip();
@@ -111,12 +122,14 @@ public class Ibmap extends Block{
 			throw new InsufficientResourcesException(String.format("Full block is not strored. Stored "
 					+ "%d bytes out of %d.",bytesWritten, buffer.capacity()));
 		}
+		
+		return bytesWritten;
 	}
 
 	@Override
-	public void storeFullTo(WritableByteChannel channel) throws IOException {
-		storeTo(channel);
-	}	
+	public ByteArrayInputStream getInputStream() {
+		return new ByteArrayInputStream(bitset.toByteArray());
+	}
 
 	@Override
 	public int appendOffsetInBlock() {
@@ -126,6 +139,13 @@ public class Ibmap extends Block{
 	@Override
 	int memorySizeBytes() {
 		return Constants.ibmapBlockSizeBytes + 16; //FIXME: Get the exact number
+	}
+	
+	@Override
+	int sizeWhenSerialized() {
+		//FIXME: This creates a copy in memory. Get size without memory copy.
+		//return bitset.toByteArray().length;
+		return (bitset.length()+7)/8; //Taken from the documentation of BitSet.toArray() function. 
 	}
 	
 	/**
@@ -178,11 +198,6 @@ public class Ibmap extends Block{
 	@Override
 	String localPath(){
 		return Constants.ibmapsPath +File.separator+ name(blockIndex);
-	}
-	
-	@Override
-	int blockSize(){
-		return Constants.ibmapBlockSizeBytes;
 	}
 	
 	static void shutdown(){

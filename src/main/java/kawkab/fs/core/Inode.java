@@ -231,11 +231,13 @@ public class Inode {
 		recordSize = buffer.getInt();
 	}
 	
-	void storeTo(final WritableByteChannel channel) throws IOException {
+	/*
+	 * Serializes the inode in the channel
+	 * @return Number of bytes written in the channel
+	 */
+	int storeTo(final WritableByteChannel channel) throws IOException {
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.inodeSizeBytes);
-		buffer.putLong(inumber);
-		buffer.putLong(fileSize);
-		buffer.putInt(recordSize);
+		storeTo(buffer);
 		buffer.flip();
 		buffer.limit(buffer.capacity());
 		
@@ -246,6 +248,18 @@ public class Inode {
 					+ "%d bytes out of %d.",bytesWritten, Constants.inodeSizeBytes));
 		}
 		
+		return bytesWritten;
+	}
+	
+	int storeTo(ByteBuffer buffer) {
+		int start = buffer.position();
+		
+		buffer.putLong(inumber);
+		buffer.putLong(fileSize);
+		buffer.putInt(recordSize);
+		
+		int written = buffer.position() - start;
+		return written;
 	}
 	
 	public static int inodesSize(){
