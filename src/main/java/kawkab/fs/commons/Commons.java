@@ -102,5 +102,16 @@ public class Commons {
     public int nodesCount() {
     	return Constants.nodesInSystem;
     }
+    
+    public static int primaryWriterID(long inumber) {
+		long inodeBlocksPerIbmap = Constants.ibmapBlockSizeBytes * Byte.SIZE;
+		long ibmapNum = inumber / inodeBlocksPerIbmap;
+		
+		return ibmapOwner(ibmapNum);
+	}
+    
+    public static int ibmapOwner(long ibmapNum) {
+    	return (int)(ibmapNum / Constants.ibmapsPerMachine); //TODO: Get this number from ZooKeeper
+    }
 }
 

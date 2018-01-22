@@ -11,6 +11,7 @@ import kawkab.fs.core.InodesBlock;
 import kawkab.fs.core.InodesBlockID;
 import kawkab.fs.core.exceptions.InvalidFileModeException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
+import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 
@@ -32,8 +33,9 @@ public final class FileHandle {
 	 * @param length Number of bytes to read from the file.
 	 * @return Number of bytes read from the file
 	 * @throws IOException 
+	 * @throws KawkabException 
 	 */
-	public synchronized int read(byte[] buffer, int length) throws IOException, IllegalArgumentException {
+	public synchronized int read(byte[] buffer, int length) throws IOException, IllegalArgumentException, KawkabException {
 		/*1. Borrow InodesBlock from cache
 		    2. Acquire InodesBlock lock
 		      3. Get the pointer to the dataBlock or the indirectBlock
@@ -48,12 +50,11 @@ public final class FileHandle {
 		    11. Read data
 		  12. Return DataBlock to the cache*/
 		int blockIndex = (int)(inumber / Constants.inodesPerBlock);
+		System.out.println("[FH] inodeBlock: " + blockIndex);
+		BlockID id = new InodesBlockID(blockIndex);
 		
 		Inode inode = null;
 		long fileSize = 0;
-		
-		BlockID id = new InodesBlockID(blockIndex);
-		
 		InodesBlock block = null;
 		try {
 			block = (InodesBlock)cache.acquireBlock(id);
@@ -184,12 +185,12 @@ public final class FileHandle {
 	 * dataIndex.timestamp() to refer to the data just written. 
 	 * @throws OutOfMemoryException 
 	 * @throws InvalidFileOffsetException 
-	 * @throws InvalidFileModeException 
 	 * @throws IOException 
+	 * @throws KawkabException 
 	 */
 	public synchronized int append(byte[] data, int offset, int length) throws OutOfMemoryException, 
 									MaxFileSizeExceededException, InvalidFileOffsetException, 
-									InvalidFileModeException, IOException{
+									IOException, KawkabException{
 		/*- File Append
 		  1. Borrow InodesBlock from the cache
 		    2. Acquire InodesBlock lock
@@ -257,8 +258,9 @@ public final class FileHandle {
 	
 	/**
 	 * @return Returns file size in bytes.
+	 * @throws KawkabException 
 	 */
-	public synchronized long size(){
+	public synchronized long size() throws KawkabException{
 		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
 		long size = 0;
 		BlockID id = new InodesBlockID(inodesBlockIdx);

@@ -1,8 +1,6 @@
 package kawkab.fs.core.exceptions;
 
-import java.io.IOException;
-
-public class FileNotExistException extends IOException {
+public class FileNotExistException extends KawkabException {
 	public FileNotExistException(){
 		super();
 	}

@@ -22,10 +22,11 @@ public class FSTest {
 		FSTest tester = new FSTest();
 		Constants.printConfig();
 		tester.testBootstrap();
-		tester.testBlocksCreation();
-		tester.testSmallReadWrite();
-		tester.testLargeReadWrite();
-		tester.testMultipleReaders();
+		//tester.testBlocksCreation();
+		//tester.testSmallReadWrite();
+		tester.testSmallRead();
+		//tester.testLargeReadWrite();
+		//tester.testMultipleReaders();
 		//tester.testMultipleFiles();
 		//tester.testWritePerformance();
 		//tester.testWritePerformanceConcurrentFiles();
@@ -75,7 +76,7 @@ public class FSTest {
 	private void testSmallReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
 				InvalidFileOffsetException, InvalidFileModeException, IOException, IllegalArgumentException, KawkabException{
 		System.out.println("--------------------------------------------");
-		System.out.println("            Small file test");
+		System.out.println("            Small file test read and write");
 		System.out.println("--------------------------------------------");
 		
 		Filesystem fs = Filesystem.instance().bootstrap();
@@ -85,7 +86,7 @@ public class FSTest {
 		
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
-		int dataSize = Constants.dataBlockSizeBytes + 1;
+		int dataSize = Constants.dataBlockSizeBytes;
 		byte[] dataBuffer = new byte[dataSize];
 		new Random().nextBytes(dataBuffer);
 		
@@ -105,6 +106,40 @@ public class FSTest {
 
 		assert appended == read;
 		assert Arrays.equals(dataBuffer, readBuf);
+	}
+	
+	private void testSmallRead()
+			throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, InvalidFileOffsetException,
+			InvalidFileModeException, IOException, IllegalArgumentException, KawkabException {
+		System.out.println("--------------------------------------------");
+		System.out.println("            Small file test read");
+		System.out.println("--------------------------------------------");
+
+		Filesystem fs = Filesystem.instance().bootstrap();
+
+		String filename = new String("/home/smash/testSmall");
+		FileOptions opts = new FileOptions();
+
+		FileHandle file = fs.open(filename, FileMode.READ, opts);
+
+		int bufSize = Constants.dataBlockSizeBytes;
+
+		System.out.println("Initial file size: " + file.size());
+
+		file.seekBytes(0);
+
+		byte[] readBuf = new byte[bufSize];
+		
+		long fileSize = file.size();
+		long read = 0;
+		while(read != fileSize) {
+			read += file.read(readBuf, readBuf.length);
+		}
+
+		// System.out.println(Arrays.toString(readBuf));
+		// System.out.println(Arrays.toString(dataBuffer));
+
+		System.out.println(String.format("Current readOffset %d, file size %d, read bytes %d", file.readOffset(), file.size(), read));
 	}
 	
 	private void testLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
@@ -197,7 +232,7 @@ public class FSTest {
 						int bytes = 0;
 						try {
 							bytes = file.read(readBuf, toRead);
-						} catch (IOException | IllegalArgumentException e) {
+						} catch (IOException | IllegalArgumentException | KawkabException e) {
 							e.printStackTrace();
 							break;
 						}
@@ -502,7 +537,7 @@ public class FSTest {
 						int bytes = 0;
 						try {
 							bytes = file.read(readBuf, toRead);
-						} catch (IOException | IllegalArgumentException e) {
+						} catch (IOException | IllegalArgumentException | KawkabException e) {
 							e.printStackTrace();
 							break;
 						}
@@ -643,11 +678,11 @@ public class FSTest {
 		assert Arrays.equals(data, block3);
 	}*/
 	
-	private void testShutdown(){
+	private void testShutdown() throws KawkabException, InterruptedException, IOException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Filesystem shutdown Test");
 		System.out.println("--------------------------------------------");
 		
-		Filesystem.shutdown();
+		Filesystem.instance().shutdown();
 	}
 }

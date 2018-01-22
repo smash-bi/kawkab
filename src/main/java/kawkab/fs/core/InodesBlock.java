@@ -69,6 +69,20 @@ public class InodesBlock extends Block {
 	}
 	
 	@Override
+	public void loadFrom(ByteBuffer buffer) throws IOException {
+		lock();
+		try {
+			inodes = new Inode[Constants.inodesPerBlock];
+			for(int i=0; i<Constants.inodesPerBlock; i++){
+				inodes[i] = new Inode(0);
+				inodes[i].loadFrom(buffer);
+			}
+		} finally {
+			unlock();
+		}
+	}
+	
+	@Override
 	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		lock();
 		try {
@@ -102,7 +116,8 @@ public class InodesBlock extends Block {
 		return bytesWritten;
 	}
 	
-	@Override ByteArrayInputStream getInputStream() {
+	@Override 
+	public ByteArrayInputStream getInputStream() {
 		//TODO: This function takes extra memory to serialize inodes in an input stream. We need an alternate
 		//method for this purpose.
 		ByteBuffer buffer = ByteBuffer.allocate(inodes.length * Constants.inodeSizeBytes);
@@ -124,12 +139,12 @@ public class InodesBlock extends Block {
 	}
 	
 	@Override
-	int memorySizeBytes() {
+	public int memorySizeBytes() {
 		return Constants.inodesBlockSizeBytes + 8; //FIXME: Get the exact number
 	}
 	
 	@Override
-	int sizeWhenSerialized() {
+	public int sizeWhenSerialized() {
 		return Constants.inodesBlockSizeBytes;
 	}
 	
@@ -173,21 +188,19 @@ public class InodesBlock extends Block {
 		}
 	}*/
 	
-	@Override
+	/*@Override
 	String name() {
-		return name(blockIndex);
+		return id.name();
 	}
 	
 	public static String name(int blockIndex){
-		return namePrefix+blockIndex;
+		return InodesBlockID.name(blockIndex);
 	}
 	
 	@Override
 	String localPath(){
-		return Constants.inodeBlocksPath + File.separator + 
-				(blockIndex/Constants.inodeBlocksPerDirectory) + File.separator + 
-				name(blockIndex);
-	}
+		return id.localPath();
+	}*/
 	
 	/**
 	 * Creates inodeBlocks on local disk belonging to this machine.
@@ -203,24 +216,28 @@ public class InodesBlock extends Block {
 			folder.mkdirs();
 		}
 		
+		int count=0;
 		//LocalStore storage = LocalStore.instance();
 		Cache cache = Cache.instance();
-		int offset = Constants.inodesBlocksRangeStart;
-		for(int i=0; i<Constants.inodeBlocksPerMachine; i++){
-			InodesBlock block = new InodesBlock(offset+i);
+		int rangeStart = Constants.inodeBlocksRangeStart;
+		int rangeEnd = rangeStart + Constants.inodeBlocksPerMachine;
+		for(int i=rangeStart; i<rangeEnd; i++){
+			InodesBlock block = new InodesBlock(i);
 			block.inodes = new Inode[Constants.inodesPerBlock];
 			for (int j=0; j<Constants.inodesPerBlock; j++) {
 				long inumber = i*Constants.inodesPerBlock + j;
 				block.inodes[j] = new Inode(inumber);
 			}
 			
-			File file = new File(block.localPath());
+			File file = new File(block.id().localPath());
 			if (!file.exists()) {
 				//storage.writeBlock(block);
 				cache.createBlock(block);
+				count++;
 			}
 		}
 		
+		System.out.println("Created inodeBlock files: " + count);
 		bootstraped = true;
 	}
 	

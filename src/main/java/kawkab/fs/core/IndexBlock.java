@@ -7,6 +7,7 @@ import kawkab.fs.commons.Constants;
 import kawkab.fs.core.Block.BlockType;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
+import kawkab.fs.core.exceptions.KawkabException;
 
 public class IndexBlock {
 	public static final int pointerSizeBytes = 16; //Two long values: uuidHigh and uuidLow
@@ -44,8 +45,9 @@ public class IndexBlock {
 	 * @throws IndexBlockFullException
 	 * @throws InvalidFileOffsetException 
 	 * @throws IOException 
+	 * @throws KawkabException 
 	 */
-	synchronized void addBlock(BlockID dataBlockID, long blockNumber) throws IndexBlockFullException, InvalidFileOffsetException, IOException{
+	synchronized void addBlock(BlockID dataBlockID, long blockNumber) throws IndexBlockFullException, InvalidFileOffsetException, IOException, KawkabException{
 		/*if (!canAddBlock()){
 			throw new IndexBlockFullException("Cannot add a new block.");
 		}*/
@@ -93,7 +95,7 @@ public class IndexBlock {
 		}
 	}
 	
-	synchronized void appendDataBlock(BlockID dataBlockID, long globalBlockNumber) throws IndexBlockFullException, IOException{
+	synchronized void appendDataBlock(BlockID dataBlockID, long globalBlockNumber) throws IndexBlockFullException, IOException, KawkabException{
 		assert indexLevel == 1;
 		
 		int blockNumber = (int)(blockInSubtree(globalBlockNumber) % maxBlocksCount(1));
@@ -115,7 +117,7 @@ public class IndexBlock {
 		}
 	}
 	
-	BlockID getBlockIDByByte(long offsetInFile) throws InvalidFileOffsetException, IOException{
+	BlockID getBlockIDByByte(long offsetInFile) throws InvalidFileOffsetException, IOException, KawkabException{
 		//TODO: Convert this recursive process in an iterative loop in the INode function.
 		
 		long blockInFile = offsetInFile / Constants.segmentSizeBytes;

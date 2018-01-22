@@ -5,6 +5,10 @@ public class KawkabException extends Exception {
 		super();
 	}
 	
+	public KawkabException(Throwable w){
+		super(w);
+	}
+	
 	public KawkabException(String errorMsg){
 		super(errorMsg);
 	}

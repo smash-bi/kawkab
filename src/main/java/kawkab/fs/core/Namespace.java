@@ -2,10 +2,12 @@ package kawkab.fs.core;
 
 import java.io.IOException;
 
+import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileAlreadyExistsException;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
+import kawkab.fs.core.exceptions.InvalidFileModeException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.zookeeper.NamespaceService;
 
@@ -22,6 +24,7 @@ public class Namespace {
 	private Namespace() throws KawkabException {
 		cache = Cache.instance();
 		locks = new KeyedLock();
+		lastIbmapUsed = Constants.ibmapBlocksRangeStart;
 		ns = NamespaceService.instance();
 	}
 	
@@ -40,8 +43,8 @@ public class Namespace {
 	 * @throws IOException 
 	 * @throws KawkabException 
 	 */
-	public long openFile(String filename) throws IbmapsFullException, IOException, KawkabException {
-		Long inumber = -1L;
+	public long openFile(String filename, boolean appendMode) throws IbmapsFullException, IOException, InvalidFileModeException, KawkabException {
+		long inumber = -1L;
 		
 		//Lock namespace for the given filename
 		locks.lock(filename);
@@ -50,27 +53,33 @@ public class Namespace {
 			//inumber = filesMap.get(filename);
 			try {
 				inumber = ns.getInumber(filename);
-			} catch(FileNotExistException e) {     //If the file does not exist
-				System.out.println("[NS] File note found: " + filename);
-				inumber = null;
+			} catch(FileNotExistException fnee) {     //If the file does not exist
+				System.out.println("[NS] File not found: " + filename);
+				
+				if (appendMode) { //Create file if the file is opened in the append mode.
+					System.out.println("[NS] Creating new file: " + filename);
+					inumber = createNewFile();
+					//filesMap.put(filename, inumber);
+					
+					try {
+						ns.addFile(filename, inumber);
+					} catch (FileAlreadyExistsException faee) { // If the file already exists, e.g., because another 
+						                                     // node created the same file with different inumber
+						releaseInumber(inumber);
+						
+						inumber = ns.getInumber(filename); // We may get another exception if another node deletes 
+						                                   // the file immediately after creating the file. In that case,
+						                                   // the exception will be passed to the caller.
+					}
+				} else { //if the file cannot be created due to not being opened in the append mode.
+					throw fnee;
+				}
 			}
 			
-			if (inumber == null) {                 //if the file does not exist, create a new file
-				System.out.println("[NS] Creating new file: " + filename);
-				inumber = createNewFile();
-				//filesMap.put(filename, inumber);
-				
-				try {
-					ns.addFile(filename, inumber);
-				} catch (FileAlreadyExistsException e) { // If the file already exists, e.g., because another 
-					                                     // node created the same file with different inumber
-					releaseInumber(inumber);
-					
-					inumber = ns.getInumber(filename); // We may get another exception if another node deletes 
-					                                   // the file immediately after creating the file. In that case,
-					                                   // the exception will be passed to the caller.
-				} 
-				   
+			//if the file is opened in append mode and this node is not the primary file writer
+			if (appendMode && Commons.primaryWriterID(inumber) != Constants.thisNodeID) {
+				throw new InvalidFileModeException(
+						"Cannot open file in the append mode. Inumber of the file is out of range of this node's range.");
 			}
 			
 			//TODO: update openFilesTable
@@ -92,22 +101,25 @@ public class Namespace {
 	 * @return returns the inumber of the new file.
 	 * @throws IbmapsFullException
 	 * @throws IOException 
+	 * @throws KawkabException 
 	 */
-	private long getNewInumber() throws IbmapsFullException, IOException {
+	private long getNewInumber() throws IbmapsFullException, IOException, KawkabException {
 		long inumber;
 		int mapNum = lastIbmapUsed;
 		while(true){ //Iterate over the ibmap blocks.
 			//try(Ibmap ibmap = cache.getIbmap(mapNum)) {
+			
 			BlockID id = new IbmapBlockID(mapNum);
 			Ibmap ibmap = null;
 			
 			try {
+				System.out.println("[N] Map number: " + mapNum);
 				ibmap = (Ibmap)(cache.acquireBlock(id));
 				inumber = ibmap.nextInode();
-				if (inumber >=0)
+				if (inumber >= 0)
 					break;
 				
-				mapNum = (mapNum + 1) % Constants.ibmapBlocksPerMachine;
+				mapNum = (mapNum + 1) % Constants.ibmapsPerMachine;
 				if (mapNum == lastIbmapUsed){
 					throw new IbmapsFullException();
 				}
@@ -129,14 +141,17 @@ public class Namespace {
 	 * @return the inumber of the new file
 	 * @throws IbmapsFullException
 	 * @throws IOException 
+	 * @throws KawkabException 
 	 */
-	private long createNewFile() throws IbmapsFullException, IOException{
+	private long createNewFile() throws IbmapsFullException, IOException, KawkabException{
 		long inumber = getNewInumber();
 		
 		int blockIndex = InodesBlock.blockIndexFromInumber(inumber);
 		BlockID id = new InodesBlockID(blockIndex);
 		InodesBlock inodes = null;
 		try {
+			System.out.println("[N] Inodes Block: " + blockIndex + ", inumber: " + inumber + ", primary: " + Commons.primaryWriterID(inumber));
+			
 			inodes = (InodesBlock)cache.acquireBlock(id);
 			inodes.initInode(inumber);
 		} finally {
@@ -154,7 +169,7 @@ public class Namespace {
 		//ns = NamespaceService.instance();
 	}
 	
-	static void shutdown(){
+	void shutdown(){
 		//TODO: Stop new requests
 	}
 }

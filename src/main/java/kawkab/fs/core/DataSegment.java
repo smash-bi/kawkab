@@ -1,7 +1,6 @@
 package kawkab.fs.core;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
@@ -22,6 +21,7 @@ public class DataSegment extends Block {
 	//Keeps track of the offset and length of dirty bytes
 	private int dirtyBytesStart;
 	private int dirtyBytesLength;
+	private boolean blockIsFull; //Sets to true only when the block becomes full in an append operation.
 	private DataSegmentID segmentID;
 	
 	private final Lock dirtyBytesLock;
@@ -76,6 +76,11 @@ public class DataSegment extends Block {
 		
 		adjustDirtyOffsets(offsetInBlock, toAppend);
 		markDirty();
+		
+		//Mark block as full
+		if (offsetInBlock+toAppend == Constants.segmentSizeBytes) {
+			blockIsFull = true;
+		}
 		
 		//System.out.println("  Append: " + name() + " - " + toAppend);
 		
@@ -175,13 +180,39 @@ public class DataSegment extends Block {
 	}
 	
 	BlockID uuid(){
-		return id;
+		return id();
 	}
 	
 	@Override
 	public boolean shouldStoreGlobally() {
-		System.out.println("[DataSegment] " + name() + " -> " + segmentID.segmentInBlock + "/" + Constants.segmentsPerBlock);
-		return segmentID.segmentInBlock+1 == Constants.segmentsPerBlock ? true : false;
+		System.out.println("[DataSegment] " + id().name() + " -> " + (segmentID.segmentInBlock+1) + "/" + Constants.segmentsPerBlock + " " + blockIsFull);
+		if (segmentID.segmentInBlock+1 == Constants.segmentsPerBlock 
+				&& blockIsFull) {
+			return true;
+		}
+		
+		return false;
+	}
+	
+	@Override
+	public void loadFrom(ByteBuffer buffer) throws IOException {
+		if (buffer.remaining() < Constants.segmentSizeBytes) {
+			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
+					+ "Have %d, needed %d.",buffer.remaining(), Constants.segmentSizeBytes));
+		}
+		
+		lock();
+		try {
+			bytes = new byte[Constants.segmentSizeBytes];
+			//ByteBuffer buffer = ByteBuffer.wrap(bytes);
+			buffer.get(bytes);
+			//FIXME: What if the number of bytes read is less than the block size?
+			//if (bytesRead < bytes.length)
+			//	throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
+			//			+ "%d bytes out of %d.",bytesRead,bytes.length));
+		} finally {
+			unlock();
+		}
 	}
 	
 	@Override
@@ -201,6 +232,29 @@ public class DataSegment extends Block {
 			unlock();
 		}
 	}
+	
+	/*@Override
+	public int fromInputStream(InputStream in) throws IOException {
+		lock();
+		bytes = new byte[Constants.segmentSizeBytes];
+		int read = 0;
+		int remaining = bytes.length;
+		int ret = 0;
+		try {
+			while(remaining > 0 && ret >= 0) {
+				ret = in.read(bytes, read, remaining);
+				remaining -= ret;
+				read += ret;
+			}
+		} finally {
+			unlock();
+		}
+		
+		if (read != bytes.length)
+			throw new IOException("Unable to load Ibmap completely from the inputstream: " + name());
+		
+		return read;
+	}*/
 	
 	@Override
 	public int storeTo(WritableByteChannel channel) throws IOException {
@@ -279,7 +333,7 @@ public class DataSegment extends Block {
 		dirtyBytesLock.unlock();
 		
 		//Offset in block is equal to the start offset of the current segment + the start of the dirty bytes
-		int offset = ((DataSegmentID)this.id).segmentInBlock * Constants.segmentSizeBytes + offsetInSegment;
+		int offset = ((DataSegmentID)this.id()).segmentInBlock * Constants.segmentSizeBytes + offsetInSegment;
 		
 		assert offset <= Constants.dataBlockSizeBytes;
 		
@@ -300,12 +354,12 @@ public class DataSegment extends Block {
 	}
 	
 	@Override
-	int memorySizeBytes() {
+	public int memorySizeBytes() {
 		return Constants.segmentSizeBytes + 8; //FIXME: Get the exact number
 	}
 	
 	@Override
-	int sizeWhenSerialized() {
+	public int sizeWhenSerialized() {
 		return Constants.segmentSizeBytes;
 	}
 	
@@ -349,16 +403,13 @@ public class DataSegment extends Block {
 		bytes = null;
 	}
 
-	@Override
+	/*@Override
 	String name() {
-		//return Commons.uuidToString(id.uuidHigh, id.uuidLow);
-		DataSegmentID id = (DataSegmentID)id();
-		return name(id.highBits, id.lowBits, id.segmentInBlock);
+		return id.name();
 	}
 	
-	static String name(long inumber, long blockNumber, int segmentNumber){
-		//return Commons.uuidToString(uuidHigh, uuidLow);
-		return String.format("%016x-%016x-%08x", inumber, blockNumber, segmentNumber);
+	static String name(long inumber, long blockNumber, int segmentInBlock){
+		return DataSegmentID.name(inumber, blockNumber, segmentInBlock);
 	}
 	
 	@Override
@@ -367,36 +418,12 @@ public class DataSegment extends Block {
 	}
 	
 	private static String localPath(BlockID id) {
-		//TODO: May be a better approach is to use Base64 encoding for the inumber and use hex values
-		//for the block number! Currently it is implemented as the encoding of both values.
-		
-		//String uuid = String.format("%016x%016x", id.highBits, id.lowBits);
-		
-		String uuid = Commons.uuidToString(id.highBits, id.lowBits);
-		int uuidLen = uuid.length();
-		
-		int wordSize = 3; //Number of characters of the Base64 encoding that make a directory
-		int levels = 6; //Number of directory levels //FIXME: we will have 64^3 files in a directory, 
-						//which is 262144. This may slow down the underlying filesystem.
-		
-		assert wordSize * levels < uuidLen-1;
-		
-		StringBuilder path = new StringBuilder(Constants.blocksPath.length()+uuidLen+levels);
-		path.append(Constants.blocksPath + File.separator);
-		int rootLen = uuidLen - levels*wordSize;
-		path.append(uuid.substring(0, rootLen));
-		
-		for (int i=0; i<levels; i++){
-			path.append(File.separator).append(uuid.substring(rootLen+i*wordSize, rootLen+i*wordSize+wordSize));
-		}
-		//path.append(File.separator).append(uuid.substring(levels*wordSize));
-		
-		return path.toString();
-	}
+		return id.localPath();
+	}*/
 
 	@Override
 	public String toString(){
-		return id.highBits+"-"+id.lowBits+"-"+name();
+		return id().toString();
 	}
 	
 	public static int recordsPerSegment(int recordSize) {

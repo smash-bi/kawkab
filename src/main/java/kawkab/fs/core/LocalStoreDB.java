@@ -8,7 +8,7 @@ import net.openhft.chronicle.map.ChronicleMap;
 
 public class LocalStoreDB {
 	
-	private static final String mapFilePath = Constants.basePath + "/localStoreDB/chroniclemap";
+	private static final String mapFilePath = Constants.basePath + "/localStoreDB/chroniclemap-"+Constants.thisNodeID;
 	private static final String mapName = "localStoreDB";
 	private ChronicleMap<String, String> map;
 	
@@ -33,12 +33,11 @@ public class LocalStoreDB {
 	}
 	
 	/**
-	 * @param blockName
-	 * @param location
 	 * @return Previous location associated with blockName, or null if blockName was not already in the DB.
 	 */
-	public synchronized String put(Block block) {
-		return map.put(block.localPath(), block.name());
+	public synchronized String put(BlockID id) {
+		System.out.println("[LSDB] Added: " + id.name());
+		return map.put(id.localPath(), id.name());
 	}
 	
 	/**
@@ -53,15 +52,17 @@ public class LocalStoreDB {
 	 * @param blockName
 	 * @return Whether the blockName entry exists in the DB or not
 	 */
-	public synchronized boolean exists(Block block) {
-		return map.containsKey(block.localPath());
+	public synchronized boolean exists(BlockID id) {
+		System.out.println("[LSDB] Exists: " + id.name());
+		return map.containsKey(id.localPath());
 	}
 	
 	/**
 	 * @param blockName
 	 * @return Location of the blockName, or null if blockName entry was not in the DB.
 	 */
-	public synchronized String removeEntry(String blockName) {
-		return map.remove(blockName);
+	public synchronized String removeEntry(BlockID id) {
+		System.out.println("[LSDB] Removed: " + id.localPath());
+		return map.remove(id.localPath());
 	}
 }

@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package kawkab;
+
+option java_package = "kawkab.fs.core.services.proto";
+option java_outer_classname = "KawkabPrimaryNode";
+
+message KBlockID {
+  int64 highBits      = 1;
+  int64 lowBits       = 2;
+  int32 segmentNumber = 3;
+  int32 type  = 4; //Corresponds to Block.BlockType enum
+  
+}
+
+message KBlockRequest {
+  KBlockID blockID = 1;
+}
+
+message KBlockResponse {
+  enum ErrorCode {
+    SUCCESS         = 0;
+    BLOCK_NOT_EXIST = 1;
+    FAILED          = 2;
+  }
+  bytes blockBytes     = 1;
+  ErrorCode errorCode  = 2;
+}
+
+message KInodeRequest {
+  int64 inumber = 1;
+}
+
+message KInodeResponse {
+  enum ErrorCode {
+    SUCCESS         = 0;
+    BLOCK_NOT_EXIST = 1;
+    FAILED          = 2;
+  }
+  bytes inodeBytes     = 1;
+  ErrorCode errorCode  = 2;
+}
+
+message KBlockExistsResponse {
+  bool exists = 1;
+}
+
+service PrimaryNode {
+  rpc GetBlock(KBlockRequest) returns (KBlockResponse) {}
+  rpc BlockExists(KBlockID) returns (KBlockExistsResponse) {}
+}
+

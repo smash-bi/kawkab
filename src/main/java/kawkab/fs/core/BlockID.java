@@ -1,5 +1,6 @@
 package kawkab.fs.core;
 
+import kawkab.fs.commons.Constants;
 import kawkab.fs.core.Block.BlockType;
 
 /**
@@ -27,12 +28,6 @@ public abstract class BlockID {
 	}
 	
 	@Override
-	public String toString(){
-		//return highBits+"-"+lowBits+"-"+key;
-		return key;
-	}
-	
-	@Override
 	public boolean equals(Object blockID){
 		if (blockID == null)
 			return false;
@@ -49,9 +44,27 @@ public abstract class BlockID {
 				key.equals(id.key) &&
 				type == id.type;
 	}
+	
+	@Override
+	public String toString() {
+		return highBits+"-"+lowBits+"-"+name();
+	}
 
 	abstract public Block newBlock();
 	
+	abstract public int primaryNodeID();
+	
+	abstract public String name();
+	
+	abstract public String localPath();
+	
+	/**
+	 * Determines whether this node is the primary writer of the block. 
+	 * @return
+	 */
+	public boolean onPrimaryNode() {
+		return primaryNodeID() == Constants.thisNodeID;
+	}
 	
 	/*public Block newBlock() {
 		//TODO: Use an alternate solution where BlockIDs are of different types and they

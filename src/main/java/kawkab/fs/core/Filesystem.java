@@ -7,6 +7,7 @@ import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.services.PrimaryNodeServiceServer;
 
 public class Filesystem {
 	private static boolean initialized;
@@ -16,12 +17,15 @@ public class Filesystem {
 	
 	private static Filesystem instance;
 	private Namespace namespace;
+	private PrimaryNodeServiceServer ns;
 	
-	private Filesystem() throws KawkabException {
+	private Filesystem() throws KawkabException, IOException {
 		namespace = Namespace.instance();
+		ns = new PrimaryNodeServiceServer();
+		ns.startServer();
 	}
 	
-	public static Filesystem instance() throws KawkabException {
+	public static synchronized Filesystem instance() throws KawkabException, IOException {
 		if (instance == null) {
 			instance = new Filesystem();
 		}
@@ -30,7 +34,8 @@ public class Filesystem {
 	
 	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException, IOException, KawkabException{
 		//TODO: Validate input
-		long inumber = namespace.openFile(filename);
+		long inumber = namespace.openFile(filename, mode == FileMode.APPEND);
+		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber);
 		FileHandle file = new FileHandle(inumber, mode);
 		return file;
 	}
@@ -51,15 +56,16 @@ public class Filesystem {
 		return this;
 	}
 	
-	public static void shutdown(){
+	public synchronized void shutdown() throws KawkabException, InterruptedException{
 		if (closed)
 			return;
 		
-		Namespace.shutdown();
+		closed = true;
+		ns.stopServer();
+		namespace.shutdown();
 		Ibmap.shutdown();
 		InodesBlock.shutdown();
 		Cache.instance().shutdown();
 		
-		closed = true;
 	}
 }

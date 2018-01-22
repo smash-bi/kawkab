@@ -10,6 +10,7 @@ import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
+import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 
 public class Inode {
@@ -51,7 +52,7 @@ public class Inode {
 		return new DataSegmentID(inumber, blockNumber, segmentInBlock);
 	}
 	
-	public int read(final byte[] buffer, final int length, final long offsetInFile) throws InvalidFileOffsetException, IllegalArgumentException, IOException{
+	public int read(final byte[] buffer, final int length, final long offsetInFile) throws InvalidFileOffsetException, IllegalArgumentException, IOException, KawkabException{
 		//TODO: Check for input bounds
 		if (length <= 0)
 			throw new IllegalArgumentException("Given length is 0.");
@@ -110,8 +111,9 @@ public class Inode {
 	 * @return number of bytes appended
 	 * @throws InvalidFileOffsetException 
 	 * @throws IOException 
+	 * @throws KawkabException 
 	 */
-	public int append(final byte[] data, int offset, final int length) throws MaxFileSizeExceededException, InvalidFileOffsetException, IOException{
+	public int append(final byte[] data, int offset, final int length) throws MaxFileSizeExceededException, InvalidFileOffsetException, IOException, KawkabException{
 		int remaining = length;
 		int appended = 0;
 		long fileSize = this.fileSize;
@@ -212,6 +214,17 @@ public class Inode {
 	
 	public long fileSize(){
 		return fileSize;
+	}
+	
+	void loadFrom(final ByteBuffer buffer) throws IOException {
+		if (buffer.remaining() < Constants.inodeSizeBytes) {
+			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
+					+ "Have %d, needed %d.",buffer.remaining(), Constants.inodeSizeBytes));
+		}
+		
+		inumber = buffer.getLong();
+		fileSize = buffer.getLong();
+		recordSize = buffer.getInt();
 	}
 	
 	void loadFrom(final ReadableByteChannel channel) throws IOException {

@@ -1,8 +1,12 @@
 package kawkab.fs.core;
 
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -18,8 +22,12 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
 
 import kawkab.fs.commons.Constants;
+import kawkab.fs.core.Block.BlockType;
+import kawkab.fs.core.exceptions.FileNotExistException;
+import kawkab.fs.core.exceptions.KawkabException;
 
 public class S3Backend implements GlobalProcessor {
 	private AmazonS3 client;
@@ -46,34 +54,86 @@ public class S3Backend implements GlobalProcessor {
 	}
 
 	@Override
-	public Future<?> load(Block destBlock) throws IOException {
-		return loadWorkers.submit(() -> loadFromGlobal(destBlock));
+	public void load(Block destBlock) throws FileNotExistException, KawkabException {
+		Future<?> future = loadWorkers.submit(() -> loadFromGlobal(destBlock));
+		try {
+			if (future.get() != null) { //Returns null on success
+				throw new KawkabException("Unbale to load block from the global store. Block: " + destBlock.id().name());
+			}
+		} catch (ExecutionException e) {
+			Throwable w = e.getCause();
+			if (w instanceof AmazonS3Exception) {
+				AmazonS3Exception ae = (AmazonS3Exception)w;
+				if (ae.getErrorCode().equals("NoSuchKey")) {
+					throw new FileNotExistException();
+				} else {
+					throw new KawkabException(ae);
+				}
+			} else {
+				throw new KawkabException(e);
+			}
+		} catch (InterruptedException e) {
+			throw new KawkabException(e);
+		}
 	}
 	
 	@Override
-	public Future<?> store(Block srcBlock) throws IOException {
-		System.out.println("[GS] S3 store block: " + srcBlock.name());
-		return storeWorkers.submit(() -> storeToGlobal(srcBlock));
+	public void store(Block srcBlock) throws KawkabException {
+		System.out.println("[GS] S3 store block: " + srcBlock.id().name());
+		Future<?> future = storeWorkers.submit(() -> storeToGlobal(srcBlock));
+		try {
+			if (future.get() != null) { //Returns null on success
+				throw new KawkabException("Unbale to store block in the global store. Block: " + srcBlock.id().name());
+			}
+		} catch (ExecutionException e) {
+			throw new KawkabException(e);
+		} catch (InterruptedException e) {
+			throw new KawkabException(e);
+		}
 	}
 	
 	private void loadFromGlobal(Block dstBlock) {
-		System.out.println("[GS] S3 loading block: " + dstBlock.name());
+		long rangeStart = 0;
+		long rangeEnd = dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
+		
+		BlockID id = dstBlock.id();
+		if (id.type == BlockType.DataBlock) { //If it's dataSegment, it can be any segment in the block. GlobalStore has complete blocks.
+			int segmentInBlock = ((DataSegmentID)id).segmentInBlock;
+			rangeStart = segmentInBlock * dstBlock.sizeWhenSerialized();
+			rangeEnd = rangeStart + dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
+		}
+		
+		System.out.println("[GS] S3 loading block: " + id.localPath() + ": " + rangeStart + " to " + rangeEnd);
+		
+		String path = id.localPath();
+		GetObjectRequest getReq = new GetObjectRequest(rootBucket, path);
+		getReq.setRange(rangeStart, rangeEnd);
+		
+		S3Object obj = client.getObject(getReq);
+		ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(obj.getObjectContent()));
+		
+		try {
+			dstBlock.loadFrom(chan);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		
 		//TODO: Verify that the block does not exist locally. If it exists, should we overwrite the block?
+		//File file = new File(dstBlock.localPath());
+		//client.getObject(getReq, file);
 		
-		File file = new File(dstBlock.localPath());
-		
-		GetObjectRequest getReq = new GetObjectRequest(rootBucket, dstBlock.name());
-		client.getObject(getReq, file);
+		System.out.println("[GS] Finished loading from global: " + id.name());
 	}
 	
 	private void storeToGlobal(Block srcBlock) {
-		System.out.println("[GS] Storing to global: " + srcBlock.name());
+		BlockID id = srcBlock.id(); 
+		System.out.println("[GS] Storing to global: " + id.localPath());
 		
-		File file = new File(srcBlock.localPath());
-		client.putObject(rootBucket, srcBlock.name(), file);
+		String path = id.localPath();
+		File file = new File(path);
+		client.putObject(rootBucket, path, file);
 		
-		System.out.println("\t[GS] >>> Finished store to global: " + srcBlock.name());
+		System.out.println("\t[GS] >>> Finished store to global: " + id.localPath());
 	}
 	
 	private AmazonS3 getClient() {

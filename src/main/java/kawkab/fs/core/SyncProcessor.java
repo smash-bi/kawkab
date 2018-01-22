@@ -1,8 +1,9 @@
 package kawkab.fs.core;
 
-import java.io.IOException;
+import kawkab.fs.core.exceptions.FileNotExistException;
+import kawkab.fs.core.exceptions.KawkabException;
 
 public interface SyncProcessor {
-	public void load(Block block) throws IOException;
-	public void store(Block block) throws IOException;
+	public void load(Block block) throws FileNotExistException,KawkabException;
+	public void store(Block block) throws KawkabException;
 }

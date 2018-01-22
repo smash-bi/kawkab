@@ -4,8 +4,14 @@ import kawkab.fs.core.Inode;
 import kawkab.fs.core.zookeeper.ZKClusterConfig;
 
 public class Constants {
-	public static int thisNodeID = 1; //FIXME: Get this from a configuration file or command line
-	public static int nodesInSystem = 1; //FIXME: Get this from a configuration file or ZooKeeper
+	//TODO: Read constants and properties from a given configuration file.
+	
+	static {
+		init();
+	}
+	
+	public static int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
+	public static int nodesInSystem = 2; //FIXME: Get this from a configuration file or ZooKeeper
 	
 	public static final long maxBlocksPerLocalDevice = 1000;
 	
@@ -18,8 +24,8 @@ public class Constants {
 	
 	//Ibmap blocks range for this machine
 	public static final int ibmapBlockSizeBytes = 16*1024; //FIXME: using a small number for testing
-	public static final int ibmapBlocksPerMachine = 1; //FIXME: Calculate this based on the maximum number of files supported per machine
-	public static int ibmapBlocksRangeStart = 0; //TODO: Get these numbers from a configuration file or ZooKeeper
+	public static final int ibmapsPerMachine = 1; //FIXME: Calculate this based on the maximum number of files supported per machine
+	public static int ibmapBlocksRangeStart = thisNodeID*ibmapsPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
 
 	//Small inodesBlockSize shows better writes performance, perhaps due to locks in the InodesBlocks. The down side
 	//is that small size files consume more disk resources.
@@ -27,8 +33,9 @@ public class Constants {
 	public static final int inodeSizeBytes = Inode.inodesSize();
 	public static final int inodesPerBlock = inodesBlockSizeBytes/inodeSizeBytes;
 	//FIXME: Calculate this based on the maximum number of files supported by a machine
-	public static final int inodeBlocksPerMachine = (int)Math.ceil(ibmapBlockSizeBytes*ibmapBlocksPerMachine*8.0/inodesPerBlock); 
-	public static int inodesBlocksRangeStart = 0; //TODO: Get these numbers from a configuration file or ZooKeeper
+	public static final int inodeBlocksPerMachine = (int)(1.0/inodesPerBlock*ibmapBlockSizeBytes*ibmapsPerMachine*8.0);//inodesPerMachine/inodesPerBlock 
+	public static int inodeBlocksRangeStart = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
+																					 //Blocks start with ID 0.
 	
 	public static int maxBlocksInCache = 100;
 
@@ -39,7 +46,7 @@ public class Constants {
 	public static final String basePath = "fs";
 	public static final String ibmapsPath = basePath+"/ibmaps";
 	public static final String inodeBlocksPath = basePath+"/inodes";
-	public static final String blocksPath = basePath+"/blocks/"+thisNodeID;
+	public static final String blocksPath = basePath+"/blocks";
 	public static final String namespacePath = basePath+"/namespace";
 	public static final int inodeBlocksPerDirectory = 1000; //Number of inodesBlocks per directory in the local storage
 	
@@ -48,7 +55,7 @@ public class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkMainServers = "127.0.0.1:2181,127.0.0.1:2182,127.0.0.1:2183";
+	public static final String zkMainServers = "10.0.4.1:2181,10.0.4.1:2182,10.0.4.1:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
 	public static final ZKClusterConfig zkMainCluster = 
@@ -56,22 +63,20 @@ public class Constants {
 	
 	
 	//minio settings
-	public static final String[] minioServers = {"http://127.0.0.1:9000"};
+	public static final String[] minioServers = {"http://10.0.4.1:9000"};
 	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
+	//gRPC service
+	public static final int primaryNodeServicePort = 22332;
+	
 	static {
-		assert inodesBlockSizeBytes % inodesPerBlock == 0;
-		assert dataBlockSizeBytes == segmentsPerBlock*segmentSizeBytes;
-		
-		assert ibmapBlockSizeBytes <= segmentSizeBytes;
-		assert inodesBlockSizeBytes <= segmentSizeBytes;
-		
-		assert minioAccessKey.length() >= 5; //From minio documentation
-		assert minioSecretKey.length() >= 8; //From minio documentation
+		verify();
 	}
 	
 	public static void printConfig(){
+		System.out.println(String.format("This node ID ............. = %d",thisNodeID));
+		System.out.println(String.format("Nodes in system .......... = %d",nodesInSystem));
 		System.out.println(String.format("Data block size MB ....... = %.3f",dataBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Data block segment size MB = %.3f",segmentSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Num. of segments per block = %d", segmentsPerBlock));
@@ -80,13 +85,37 @@ public class Constants {
 		System.out.println(String.format("Maximum file size MB ..... = %.3f", Inode.maxFileSize/1024.0/1024.0));
 		System.out.println();
 		System.out.println(String.format("Ibmap block size MB ...... = %.3f", ibmapBlockSizeBytes/1024.0/1024.0));
-		System.out.println(String.format("Ibmap blocks per machine . = %d", ibmapBlocksPerMachine));
-		System.out.println(String.format("Ibmaps total size MB ..... = %.3f", ibmapBlockSizeBytes*ibmapBlocksPerMachine/1024.0/1024.0));
+		System.out.println(String.format("Ibmap blocks per machine . = %d", ibmapsPerMachine));
+		System.out.println(String.format("Ibmaps total size MB ..... = %.3f", ibmapBlockSizeBytes*ibmapsPerMachine/1024.0/1024.0));
+		System.out.println(String.format("Ibmaps range start ....... = %d", ibmapBlocksRangeStart));
 		System.out.println();
 		System.out.println(String.format("Inode block size MB ...... = %.3f", inodesBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Inode size bytes ......... = %d", inodeSizeBytes));
 		System.out.println(String.format("Inodes per block ......... = %d", inodesPerBlock));
 		System.out.println(String.format("Inode blocks per machine . = %d", inodeBlocksPerMachine));
 		System.out.println(String.format("Inode blocks total size MB = %.3f", inodeBlocksPerMachine*inodesBlockSizeBytes/1024.0/1024.0));
+		System.out.println(String.format("Inode blocks range start . = %d", inodeBlocksRangeStart));
+	}
+	
+	private static void init() {
+		String nodeID = System.getenv("kawkabNodeID");
+		if (nodeID == null) {
+			thisNodeID = 1;
+		} else {
+			thisNodeID = Integer.parseInt(nodeID);
+		}
+	}
+	
+	private static void verify() {
+		assert thisNodeID >= 0;
+		
+		assert inodesBlockSizeBytes % inodesPerBlock == 0;
+		assert dataBlockSizeBytes == segmentsPerBlock*segmentSizeBytes;
+		
+		assert ibmapBlockSizeBytes <= segmentSizeBytes;
+		assert inodesBlockSizeBytes <= segmentSizeBytes;
+		
+		assert minioAccessKey.length() >= 5; //From minio documentation
+		assert minioSecretKey.length() >= 8; //From minio documentation
 	}
 }

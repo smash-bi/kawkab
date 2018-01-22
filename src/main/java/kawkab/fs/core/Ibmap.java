@@ -52,13 +52,15 @@ public class Ibmap extends Block{
 			unlock();
 		}
 		
-		long inumber = bitIndexToInumber(blockIndex, bitIdx); //Convert the bit index to inumber
+		long inumber = bitIdxToInumber(blockIndex, bitIdx); //Convert the bit index to inumber
 		
 		return inumber;
 	}
 	
-	private long bitIndexToInumber(int blockIndex, int bitIndex){
-		return (8L*blockIndex*Constants.ibmapBlockSizeBytes) + bitIndex;
+	private long bitIdxToInumber(int ibmapIdx, int bitIndex){
+		long inumber = (8L*ibmapIdx*Constants.ibmapBlockSizeBytes) + bitIndex;
+		System.out.println("[Ibmap] blockIdx: " + ibmapIdx + ", bitIdx: " + bitIndex + ", inumber: " + inumber);
+		return inumber;
 	}
 	
 	private int inumberToBitIndex(long inumber){
@@ -72,7 +74,7 @@ public class Ibmap extends Block{
 	 */
 	void unlinkInode(long inumber) throws InodeNumberOutOfRangeException{
 		//The inumber associated with the last bit of this ibmap block.
-		long maxInumber = bitIndexToInumber(blockIndex, Constants.ibmapBlockSizeBytes*8 - 1);
+		long maxInumber = bitIdxToInumber(blockIndex, Constants.ibmapBlockSizeBytes*8 - 1);
 		if (inumber < 0 || inumber > maxInumber)
 			throw new InodeNumberOutOfRangeException();
 		
@@ -94,6 +96,19 @@ public class Ibmap extends Block{
 	}
 	
 	@Override
+	public void loadFrom(ByteBuffer buffer) throws IOException {
+		if (buffer.remaining() < Constants.ibmapBlockSizeBytes) {
+			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
+					+ "Have %d, needed %d.",buffer.remaining(), Constants.ibmapBlockSizeBytes));
+		}
+		
+		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
+		buffer.get(bytes);
+		
+		bitset = BitSet.valueOf(bytes);
+	}
+	
+	@Override
 	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
@@ -104,6 +119,26 @@ public class Ibmap extends Block{
 		
 		bitset = BitSet.valueOf(bytes);
 	}
+	
+	/*@Override
+	public int fromInputStream(InputStream in) throws IOException {
+		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
+		int read = 0;
+		int remaining = bytes.length;
+		int ret = 0;
+		while(remaining > 0 && ret >= 0) {
+			ret = in.read(bytes, read, remaining);
+			remaining -= ret;
+			read += ret;
+		}
+		
+		if (read != bytes.length)
+			throw new IOException("Unable to load Ibmap completely from the inputstream: " + name());
+		
+		bitset = BitSet.valueOf(bytes);
+		
+		return read;
+	}*/
 	
 	@Override
 	public int storeTo(WritableByteChannel channel) throws IOException {
@@ -137,12 +172,12 @@ public class Ibmap extends Block{
 	}
 	
 	@Override
-	int memorySizeBytes() {
+	public int memorySizeBytes() {
 		return Constants.ibmapBlockSizeBytes + 16; //FIXME: Get the exact number
 	}
 	
 	@Override
-	int sizeWhenSerialized() {
+	public int sizeWhenSerialized() {
 		//FIXME: This creates a copy in memory. Get size without memory copy.
 		//return bitset.toByteArray().length;
 		return (bitset.length()+7)/8; //Taken from the documentation of BitSet.toArray() function. 
@@ -168,11 +203,13 @@ public class Ibmap extends Block{
 		//LocalStore storage = LocalStore.instance();
 		Cache cache = Cache.instance();
 		int offset = Constants.ibmapBlocksRangeStart;
-		for(int i=0; i<Constants.ibmapBlocksPerMachine; i++){
-			Ibmap ibmap = new Ibmap(offset+i);
+		int rangeStart = Constants.ibmapBlocksRangeStart;
+		int rangeEnd = rangeStart + Constants.ibmapsPerMachine;
+		for(int i=rangeStart; i<rangeEnd; i++){
+			Ibmap ibmap = new Ibmap(i);
 			ibmap.bitset = new BitSet(Constants.ibmapBlockSizeBytes*8);
 			
-			File file = new File(ibmap.localPath());
+			File file = new File(ibmap.id().localPath());
 			if (!file.exists()) {
 				//storage.writeBlock(ibmap);
 				cache.createBlock(ibmap);
@@ -186,19 +223,19 @@ public class Ibmap extends Block{
 		return bootstraped;
 	}
 	
-	@Override
+	/*@Override
 	String name() {
-		return name(blockIndex);
+		return id.name();
 	}
 	
 	static String name(int blockIndex) {
-		return "ibmap"+blockIndex;
+		return IbmapBlockID.name(blockIndex);
 	}
 	
 	@Override
 	String localPath(){
-		return Constants.ibmapsPath +File.separator+ name(blockIndex);
-	}
+		return id.localPath();
+	}*/
 	
 	static void shutdown(){
 		System.out.println("Closing Ibmaps");
