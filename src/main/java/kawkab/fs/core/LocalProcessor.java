@@ -13,7 +13,7 @@ import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 
-public class LocalProcessor implements SyncProcessor {
+public class LocalProcessor {
 	//private ExecutorService workers;
 	private GlobalProcessor globalProc;
 	
@@ -58,18 +58,16 @@ public class LocalProcessor implements SyncProcessor {
 		return instance;
 	}
 	
-	@Override
 	public void store(Block block) throws KawkabException {
 		if (!working) {
 			throw new KawkabException("LocalProcessor has already received stop signal.");
 		}
 		
 		//Load balance between workers, but assign same worker to the same block.
-		int queueNum = (int)(block.id().highBits ^ block.id().lowBits) % numWorkers;  
+		int queueNum = block.id().key().hashCode() % numWorkers;
 		reqQs[queueNum].add(block);
 	}
 	
-	@Override
 	public void load(Block block) throws FileNotExistException,KawkabException {
 		BlockID id = block.id();
 		System.out.println("[LS] Load block: " + id.name());

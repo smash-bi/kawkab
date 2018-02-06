@@ -4,23 +4,32 @@ import java.io.File;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
-import kawkab.fs.core.Block.BlockType;
 
 /**
  * This class is supposed to be an immutable class.
  *
  */
-public class DataSegmentID extends BlockID {
-	public final int segmentInBlock; //Zero based segment index
+public final class DataSegmentID extends BlockID {
+	private final long inumber;
+	private final long blockInFile;
+	private final int segmentInBlock; //Zero based segment index
 	
+	/**
+	 * @param inumber inode number of the file
+	 * @param blockInFile block number in the file
+	 * @param segmentInBlock segment number in the block
+	 * @param loadFromPrimary Loading from the primary node is enabled or not
+	 */
 	public DataSegmentID(long inumber, long blockInFile, int segmentInBlock) {
-		super(inumber, blockInFile, name(inumber, blockInFile, segmentInBlock), BlockType.DataBlock);
+		super(name(inumber, blockInFile, segmentInBlock), BlockType.DataBlock);
+		this.inumber = inumber;
+		this.blockInFile = blockInFile;
 		this.segmentInBlock = segmentInBlock;
 	}
 	
 	@Override
 	public int primaryNodeID() {
-		return Commons.primaryWriterID(highBits);
+		return Commons.primaryWriterID(inumber);
 	}
 
 	@Override
@@ -29,8 +38,11 @@ public class DataSegmentID extends BlockID {
 	}
 	
 	@Override
-	public boolean equals(Object blockID){
+	public boolean areEqual(BlockID blockID){
 		if (blockID == null)
+			return false;
+		
+		if (!(blockID instanceof DataSegmentID))
 			return false;
 		
 		DataSegmentID id;
@@ -40,11 +52,9 @@ public class DataSegmentID extends BlockID {
 			return false;
 		}
 		
-		return highBits == id.highBits &&
-				lowBits == id.lowBits &&
-				segmentInBlock == id.segmentInBlock &&
-				key.equals(id.key) &&
-				type == id.type;
+		return inumber == id.inumber &&
+				blockInFile == id.blockInFile &&
+				segmentInBlock == id.segmentInBlock;
 	}
 	
 	public static String name(long inumber, long blockInFile, int segmentInBlock) {
@@ -53,7 +63,7 @@ public class DataSegmentID extends BlockID {
 
 	@Override
 	public String name() {
-		return name(highBits, lowBits, segmentInBlock);
+		return name(inumber, blockInFile, segmentInBlock);
 	}
 
 	@Override
@@ -63,7 +73,7 @@ public class DataSegmentID extends BlockID {
 		
 		//String uuid = String.format("%016x%016x", id.highBits, id.lowBits);
 		
-		String uuid = Commons.uuidToString(highBits, lowBits); //highBits=inumber, lowBits=BlockNumber
+		String uuid = Commons.uuidToString(inumber, blockInFile); //highBits=inumber, lowBits=BlockNumber
 		int uuidLen = uuid.length();
 		
 		int wordSize = 3; //Number of characters of the Base64 encoding that make a directory
@@ -85,9 +95,20 @@ public class DataSegmentID extends BlockID {
 		return path.toString();
 	}
 	
+	public long inumber() {
+		return inumber;
+	}
+	
+	public long blockInFile() {
+		return blockInFile;
+	}
+	
+	public int segmentInBlock() {
+		return segmentInBlock;
+	}
+	
 	@Override
 	public String toString() {
-		return highBits+"-"+lowBits+"-"+segmentInBlock+"-"+name();
+		return inumber+"-"+blockInFile+"-"+segmentInBlock+"-"+name();
 	}
-
 }

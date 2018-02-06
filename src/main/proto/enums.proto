@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package kawkab;
+
+option java_package = "kawkab.fs.core.services.proto";
+option java_outer_classname = "KawkabPrimaryNodeServiceEnums";
+
+enum KErrorCode {
+    UNKNOWN         = 0;
+    SUCCESS         = 1;
+    BLOCK_NOT_EXIST = 2;
+    FAILED          = 3;
+}

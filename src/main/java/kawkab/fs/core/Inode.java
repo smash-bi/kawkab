@@ -46,13 +46,15 @@ public class Inode {
 	 * @throws IOException
 	 */
 	private BlockID getByFileOffset(long offsetInFile) throws IOException {
-		long blockNumber = DataSegment.blockInFile(offsetInFile, recordSize);
-		int segmentInBlock = DataSegment.segmentInBlock(offsetInFile, recordSize);
+		long segmentInFile = DataSegment.segmentInFile(offsetInFile, recordSize);
+		int segmentInBlock = DataSegment.segmentInBlock(segmentInFile);
+		long blockInFile = DataSegment.blockInFile(segmentInFile);
 		
-		return new DataSegmentID(inumber, blockNumber, segmentInBlock);
+		return new DataSegmentID(inumber, blockInFile, segmentInBlock);
 	}
 	
-	public int read(final byte[] buffer, final int length, final long offsetInFile) throws InvalidFileOffsetException, IllegalArgumentException, IOException, KawkabException{
+	public int read(final byte[] buffer, final int length, final long offsetInFile) throws InvalidFileOffsetException, 
+					IllegalArgumentException, IOException, KawkabException{
 		//TODO: Check for input bounds
 		if (length <= 0)
 			throw new IllegalArgumentException("Given length is 0.");
@@ -113,7 +115,8 @@ public class Inode {
 	 * @throws IOException 
 	 * @throws KawkabException 
 	 */
-	public int append(final byte[] data, int offset, final int length) throws MaxFileSizeExceededException, InvalidFileOffsetException, IOException, KawkabException{
+	public int append(final byte[] data, int offset, final int length) throws MaxFileSizeExceededException, 
+				InvalidFileOffsetException, IOException, KawkabException{
 		int remaining = length;
 		int appended = 0;
 		long fileSize = this.fileSize;
@@ -198,12 +201,13 @@ public class Inode {
 		
 		//long blockNumber = fileSize/Constants.blockSegmentSizeBytes; //Zero based block number;
 		
-		long blockNumber = DataSegment.blockInFile(fileSize, recordSize);
-		int segmentInBlock = DataSegment.segmentInBlock(fileSize, recordSize);
+		long segmentInFile = DataSegment.segmentInFile(fileSize, recordSize);
+		int segmentInBlock = DataSegment.segmentInBlock(segmentInFile);
+		long blockInFile = DataSegment.blockInFile(segmentInFile);
 		
 		assert segmentInBlock == 0;
 		
-		DataSegmentID dataSegmentID = new DataSegmentID(inumber, blockNumber, segmentInBlock);
+		DataSegmentID dataSegmentID = new DataSegmentID(inumber, blockInFile, segmentInBlock);
 		DataSegment block = new DataSegment(dataSegmentID);
 		cache.createBlock(block);
 		

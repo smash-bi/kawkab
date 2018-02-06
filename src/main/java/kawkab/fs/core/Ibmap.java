@@ -8,10 +8,14 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.BitSet;
 
+import javax.naming.OperationNotSupportedException;
+
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
+import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.InodeNumberOutOfRangeException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
+import kawkab.fs.core.exceptions.KawkabException;
 
 public class Ibmap extends Block{
 	private static final int bitsPerByte = Byte.SIZE;
@@ -164,6 +168,11 @@ public class Ibmap extends Block{
 	@Override
 	public ByteArrayInputStream getInputStream() {
 		return new ByteArrayInputStream(bitset.toByteArray());
+	}
+	
+	@Override
+	protected void getFromPrimary()  throws FileNotExistException, KawkabException, IOException {
+		throw new KawkabException(new OperationNotSupportedException());
 	}
 
 	@Override

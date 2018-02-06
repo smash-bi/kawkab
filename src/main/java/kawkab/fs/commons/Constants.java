@@ -1,6 +1,10 @@
 package kawkab.fs.commons;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import kawkab.fs.core.Inode;
+import kawkab.fs.core.NodeInfo;
 import kawkab.fs.core.zookeeper.ZKClusterConfig;
 
 public class Constants {
@@ -37,7 +41,9 @@ public class Constants {
 	public static int inodeBlocksRangeStart = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
 																					 //Blocks start with ID 0.
 	
-	public static int maxBlocksInCache = 100;
+	public static int maxBlocksInCache = 100; //Size of the cache in number of blocks
+	public static int globalFetchExpiryTimeoutMs = 2500; //Expire data fetched from the global store after dataExpiryTimeoutMs
+	public static int primaryFetchExpiryTimeoutMs = 500; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
 	public static final int syncThreadsPerDevice = 2;
 	public static final int numGlobalStoreLoadWorkers = 1;
@@ -55,7 +61,7 @@ public class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkMainServers = "10.0.4.1:2181,10.0.4.1:2182,10.0.4.1:2183";
+	public static final String zkMainServers = "10.0.1.100:2181,10.0.1.100:2182,10.0.1.100:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
 	public static final ZKClusterConfig zkMainCluster = 
@@ -63,12 +69,14 @@ public class Constants {
 	
 	
 	//minio settings
-	public static final String[] minioServers = {"http://10.0.4.1:9000"};
+	public static final String[] minioServers = {"http://10.0.1.100:9000"};
 	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
 	//gRPC service
 	public static final int primaryNodeServicePort = 22332;
+	
+	public static Map<Integer, NodeInfo> nodesMap;
 	
 	static {
 		verify();
@@ -104,6 +112,10 @@ public class Constants {
 		} else {
 			thisNodeID = Integer.parseInt(nodeID);
 		}
+		
+		nodesMap = new HashMap<Integer, NodeInfo>();
+		nodesMap.put(1, new NodeInfo(1, "10.0.1.100"));
+		nodesMap.put(2, new NodeInfo(1, "10.0.7.3"));
 	}
 	
 	private static void verify() {

@@ -10,8 +10,10 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
+import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
+import kawkab.fs.core.exceptions.KawkabException;
 
 public class DataSegment extends Block {
 	//private MappedByteBuffer buffer;
@@ -34,13 +36,13 @@ public class DataSegment extends Block {
 	 * This constructor should not create the bytes array. It is created in loadFrom function.
 	 * @param uuid
 	 */
-	DataSegment(DataSegmentID uuid) {
-		super(uuid);
+	DataSegment(DataSegmentID segmentID) {
+		super(segmentID);
 		bytes = new byte[0];
 		dirtyBytesStart = Constants.segmentSizeBytes; //The variable is updated to correct value in adjustDirtyOffsets()
 		dirtyBytesLength = 0; //The variable is updated to correct value in adjustDirtyOffsets()
 		dirtyBytesLock = new ReentrantLock();
-		segmentID = uuid;
+		this.segmentID = segmentID;
 		//System.out.println(" Opened block: " + name());
 	}
 	
@@ -185,8 +187,8 @@ public class DataSegment extends Block {
 	
 	@Override
 	public boolean shouldStoreGlobally() {
-		System.out.println("[DataSegment] " + id().name() + " -> " + (segmentID.segmentInBlock+1) + "/" + Constants.segmentsPerBlock + " " + blockIsFull);
-		if (segmentID.segmentInBlock+1 == Constants.segmentsPerBlock 
+		System.out.println("[DataSegment] " + id().name() + " -> " + (segmentID.segmentInBlock()+1) + "/" + Constants.segmentsPerBlock + " " + blockIsFull);
+		if (segmentID.segmentInBlock()+1 == Constants.segmentsPerBlock 
 				&& blockIsFull) {
 			return true;
 		}
@@ -231,6 +233,11 @@ public class DataSegment extends Block {
 		} finally {
 			unlock();
 		}
+	}
+	
+	@Override
+	protected void getFromPrimary() throws FileNotExistException, KawkabException, IOException {
+		primaryNodeService.getSegment(segmentID, this);
 	}
 	
 	/*@Override
@@ -333,7 +340,7 @@ public class DataSegment extends Block {
 		dirtyBytesLock.unlock();
 		
 		//Offset in block is equal to the start offset of the current segment + the start of the dirty bytes
-		int offset = ((DataSegmentID)this.id()).segmentInBlock * Constants.segmentSizeBytes + offsetInSegment;
+		int offset = ((DataSegmentID)this.id()).segmentInBlock() * Constants.segmentSizeBytes + offsetInSegment;
 		
 		assert offset <= Constants.dataBlockSizeBytes;
 		
@@ -430,19 +437,23 @@ public class DataSegment extends Block {
 		return Constants.segmentSizeBytes / recordSize;
 	}
 	
+	public static boolean isLastSegment(long segmentInFile, long fileSize, int recordSize) {
+		return segmentInFile == segmentInFile(fileSize, recordSize);
+	}
+	
 	public static long segmentInFile(long offsetInFile, int recordSize) {
 		// segmentInFile = recordInFile / recordsPerSegment
 		return (offsetInFile/recordSize) / recordsPerSegment(recordSize); 
 	}
 	
-	public static long blockInFile(long offsetInFile, int recordSize) {
+	public static long blockInFile(long segmentInFile) {
 		// blockInFile = segmentInFile * segmentSize / blockSize
-		return segmentInFile(offsetInFile, recordSize) * Constants.segmentSizeBytes / Constants.dataBlockSizeBytes;
+		return segmentInFile * Constants.segmentSizeBytes / Constants.dataBlockSizeBytes;
 	}
 	
-	public static int segmentInBlock(long offsetInFile, int recordSize) {
+	public static int segmentInBlock(long segmentInFile) {
 		// segmentInBlock = segmentInFile % segmentsPerBlock
-		return (int)(segmentInFile(offsetInFile, recordSize) % Constants.segmentsPerBlock);
+		return (int)(segmentInFile % Constants.segmentsPerBlock);
 	}
 	
 	public static int recordInSegment(long offsetInFile, int recordSize) {
@@ -456,6 +467,6 @@ public class DataSegment extends Block {
 	
 	private static int offsetInBlock(long offsetInFile, int recordSize) {
 		// offsetInBlock = segmentInBlock + recordInSegment + offsetInRecord
-		return (int)(segmentInBlock(offsetInFile, recordSize) + recordInSegment(offsetInFile, recordSize) + (offsetInFile % recordSize));
+		return (int)(segmentInBlock(segmentInFile(offsetInFile, recordSize)) + recordInSegment(offsetInFile, recordSize) + (offsetInFile % recordSize));
 	}
 }

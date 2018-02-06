@@ -8,11 +8,10 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 
 import kawkab.fs.commons.Constants;
+import kawkab.fs.core.exceptions.FileNotExistException;
+import kawkab.fs.core.exceptions.KawkabException;
 
 public class InodesBlock extends Block {
-	private final static String namePrefix = "inb";
-	
-	private final int blockIndex; //Not saved persistently
 	private static boolean bootstraped; //Not saved persistently
 	private Inode[] inodes; //Should be initialized in the bootstrap function only.
 	//private int version; //Inodes-block's current version number.
@@ -30,7 +29,6 @@ public class InodesBlock extends Block {
 	 */
 	InodesBlock(int blockIndex){
 		super(new InodesBlockID(blockIndex));
-		this.blockIndex = blockIndex;
 		//type = BlockType.InodeBlock;
 		//Must not initialize the "inodes" array in any constructor.
 	}
@@ -131,6 +129,11 @@ public class InodesBlock extends Block {
 		}
 		buffer.flip();
 		return new ByteArrayInputStream(buffer.array());
+	}
+	
+	@Override
+	protected void getFromPrimary()  throws FileNotExistException, KawkabException, IOException {
+		primaryNodeService.getInodesBlock((InodesBlockID)id(), this);
 	}
 
 	@Override

@@ -1,54 +1,37 @@
 package kawkab.fs.core;
 
 import kawkab.fs.commons.Constants;
-import kawkab.fs.core.Block.BlockType;
 
 /**
  * This class and its subclasses should be immutable.
+ * 
+ * The objects of this class should not last longer than one operation. BlockIDs should not be persisted. These IDs
+ * contain information that is only valid at the time of the file operation. The values may become invalid across
+ * multiple file operations.
  */
 public abstract class BlockID {
-	//All the public fields in this class must be made immutable.
-	public final long highBits;
-	public final long lowBits;
-	public final String key;
-	public final BlockType type;
+	public enum BlockType {
+		DataBlock,  // A segment in a data block 
+		InodeBlock, 
+		IbmapBlock;
+		public static final BlockType values[] = values();
+	}
 	
-	public BlockID(long highBits, long lowBits, String key, BlockType type){
-		this.highBits = highBits;
-		this.lowBits = lowBits;
+	//All the public fields in this class must be made immutable.
+	protected final String key;
+	protected final BlockType type;
+	
+	public BlockID(String key, BlockType type){
 		this.key = key;
 		this.type = type;
 	}
 	
 	public BlockID(BlockID id) {
-		this.highBits = id.highBits;
-		this.lowBits = id.lowBits;
 		this.key = id.key;
 		this.type = id.type;
 	}
 	
-	@Override
-	public boolean equals(Object blockID){
-		if (blockID == null)
-			return false;
-		
-		BlockID id;
-		try {
-			id = (BlockID) blockID;
-		}catch(Exception e){
-			return false;
-		}
-		
-		return highBits == id.highBits &&
-				lowBits == id.lowBits &&
-				key.equals(id.key) &&
-				type == id.type;
-	}
-	
-	@Override
-	public String toString() {
-		return highBits+"-"+lowBits+"-"+name();
-	}
+	public abstract boolean areEqual(BlockID blockID);
 
 	abstract public Block newBlock();
 	
@@ -64,6 +47,20 @@ public abstract class BlockID {
 	 */
 	public boolean onPrimaryNode() {
 		return primaryNodeID() == Constants.thisNodeID;
+	}
+
+	/**
+	 * @return Globally unique string for this ID that can be used in maps
+	 */
+	public String key() {
+		return key;
+	}
+
+	/**
+	 * @return Type of the block that is represented by this ID
+	 */
+	public BlockType type() {
+		return type;
 	}
 	
 	/*public Block newBlock() {

@@ -1,52 +1,41 @@
 syntax = "proto3";
 
+import "enums.proto";
+
 package kawkab;
 
 option java_package = "kawkab.fs.core.services.proto";
 option java_outer_classname = "KawkabPrimaryNode";
 
-message KBlockID {
-  int64 highBits      = 1;
-  int64 lowBits       = 2;
-  int32 segmentNumber = 3;
-  int32 type  = 4; //Corresponds to Block.BlockType enum
-  
+message KSegmentID {
+  int64 inumber        = 1;
+  int64 blockInFile    = 2;
+  int32 segmentInBlock = 3;
 }
 
-message KBlockRequest {
-  KBlockID blockID = 1;
+message KInodesBlockID {
+  int32 blockIndex   = 1;
 }
 
-message KBlockResponse {
-  enum ErrorCode {
-    SUCCESS         = 0;
-    BLOCK_NOT_EXIST = 1;
-    FAILED          = 2;
-  }
-  bytes blockBytes     = 1;
-  ErrorCode errorCode  = 2;
+message KSegmentResponse {
+  bytes segmentBytes   = 1;
+  KErrorCode errorCode = 2;
 }
 
-message KInodeRequest {
-  int64 inumber = 1;
+message KInodesBlockResponse {
+  bytes inodesBlockBytes = 1;
+  KErrorCode errorCode   = 2;
 }
 
-message KInodeResponse {
-  enum ErrorCode {
-    SUCCESS         = 0;
-    BLOCK_NOT_EXIST = 1;
-    FAILED          = 2;
-  }
-  bytes inodeBytes     = 1;
-  ErrorCode errorCode  = 2;
-}
-
-message KBlockExistsResponse {
+message KExistsResponse {
   bool exists = 1;
 }
 
 service PrimaryNode {
-  rpc GetBlock(KBlockRequest) returns (KBlockResponse) {}
-  rpc BlockExists(KBlockID) returns (KBlockExistsResponse) {}
+  rpc GetSegment(KSegmentID) returns (KSegmentResponse)   {}
+  rpc SegmentExists(KSegmentID) returns (KExistsResponse) {}
+  
+  rpc GetInodesBlock(KInodesBlockID) returns (KInodesBlockResponse) {}
+  rpc InodesBlockExists(KInodesBlockID) returns (KExistsResponse)   {}
 }
 

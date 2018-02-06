@@ -9,24 +9,32 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import kawkab.fs.commons.Constants;
+import kawkab.fs.core.exceptions.FileNotExistException;
+import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.services.PrimaryNodeServiceClient;
+
 public abstract class Block /*implements AutoCloseable*/ {
-	public enum BlockType {
-		DataBlock,  // A segment in a data block 
-		InodeBlock, 
-		IbmapBlock;
-		public static final BlockType values[] = values();
-	}
+	private static GlobalProcessor globalStore = GlobalProcessor.instance();
+	private static LocalProcessor localStore = LocalProcessor.instance();
+	protected static PrimaryNodeServiceClient primaryNodeService = PrimaryNodeServiceClient.instance();
 	
 	private final Lock lock;
+	
 	private final Lock localStoreSyncLock;
 	private final Condition syncWait; // To wait until the block is synced to the local store and canbe evicted from the cache.
+	
+	private long lastGlobalFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
+	private long lastPrimaryFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
+	private final Lock dataLoadLock; //Lock for loading data in memory, disabling other threads from reading the block until data is loaded
+	
 	private int dirtyCount; // Keeps track of the number of times the block is udpated. It helps in keeping track of the 
 	                        // updated bytes and flush only the updated bytes to the local/global store. 
 	
 	//private AtomicBoolean storedLocally;
 	//private AtomicBoolean storedGlobally;
 	
-	protected boolean loadedInMem = false; // Indicates whether this block's data has been loaded successfully from the 
+	//protected boolean loadedInMem = false; // Indicates whether this block's data has been loaded successfully from the 
 	                                       // local or the global storage. If data is loaded or the block is empty, data 
 	                                       // in this block can be updated/appended and read. Otherwise, 
 	                                       // the block cannot be updated/appended or read. 
@@ -42,8 +50,13 @@ public abstract class Block /*implements AutoCloseable*/ {
 		this.id = id;
 		//this.type = type;
 		lock = new ReentrantLock();
+		
 		localStoreSyncLock = new ReentrantLock();
 		syncWait = localStoreSyncLock.newCondition();
+		
+		lastGlobalFetchTimeMs = 0;
+		lastPrimaryFetchTimeMs = 0;
+		dataLoadLock = new ReentrantLock();
 	}
 	
 	/**
@@ -249,6 +262,76 @@ public abstract class Block /*implements AutoCloseable*/ {
 			}
 		} finally {
 			localStoreSyncLock.unlock();
+		}
+	}
+	
+	protected abstract void getFromPrimary()  throws FileNotExistException, KawkabException, IOException;
+	
+	protected void loadBlock() throws KawkabException {
+		long now = System.currentTimeMillis();
+		if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs
+				|| lastPrimaryFetchTimeMs < now - Constants.primaryFetchExpiryTimeoutMs) { // If loaded data has expired
+			try {
+				dataLoadLock.lock(); // Disable loading from concurrent threads
+				
+				now = System.currentTimeMillis();
+				
+				if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs) {
+					System.out.println("[Block] Global fetch expired: " + id);
+					
+					if (id.onPrimaryNode()) { // If this node is the primary writer of the file
+						System.out.println("[Block] Load from the local on primary: " + id);
+						
+						localStore.load(this); // Load data from the local store
+						lastGlobalFetchTimeMs = Long.MAX_VALUE; //Never expire the loaded data
+						lastPrimaryFetchTimeMs = Long.MAX_VALUE;
+						
+						return;
+					}
+					
+					/* If never fetched or the last global fetch has timed out, fetch from the global store.
+					 * Otherwise, if the last remote fetch has timed out, fetch from the remote node.
+					 * Otherwise, don't fetch, data is still fresh. 
+					 */
+					
+					try {
+						System.out.println("[Block] Load from the global: " + id);
+						
+						globalStore.load(this); // First try loading data from the global store
+						lastGlobalFetchTimeMs = now;
+						lastPrimaryFetchTimeMs = 0; //Indicates that this node has not fetched this segment from the primary node
+						
+						return;
+					} catch (FileNotExistException e) { //If the block is not in the global store yet
+						System.out.println("[Block] Not found in the global: " + id);
+						lastGlobalFetchTimeMs = 0;
+					}
+				}
+				
+				// Either primary data fetch has timed out or the global fetch was timed out but the global fetch has failed
+				// In both cases, we need to fetch from the primary node
+				
+				System.out.println("[Block] Primary fetch expired or not found from the global: " + id);
+				
+				try {
+					System.out.println("[Block] Load from the primary: " + id);
+					getFromPrimary();
+					lastGlobalFetchTimeMs = (lastGlobalFetchTimeMs==0 ? now : lastGlobalFetchTimeMs);
+					lastPrimaryFetchTimeMs = now;
+				} catch (FileNotExistException ke) {
+					// Check again from the global store because the primary may have deleted the 
+					// block after copying to the global store
+					System.out.println("[Block] Not found on the primary, trying again from the global: " + id);
+					globalStore.load(this); 
+					lastGlobalFetchTimeMs = now;
+					lastPrimaryFetchTimeMs = 0;
+				} catch (IOException ioe) {
+					System.out.println("[Block] Not found in the global and the primary: " + id);
+					throw new KawkabException(ioe);
+				}
+			} finally {
+				dataLoadLock.unlock();
+			}
 		}
 	}
 	

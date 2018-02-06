@@ -25,11 +25,11 @@ import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 
 import kawkab.fs.commons.Constants;
-import kawkab.fs.core.Block.BlockType;
+import kawkab.fs.core.BlockID.BlockType;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 
-public class S3Backend implements GlobalProcessor {
+public class S3Backend extends GlobalProcessor {
 	private AmazonS3 client;
 	private static S3Backend instance;
 	private static final String rootBucket = "kawkab-blocks"; //Cannot contain uppercase letters.
@@ -45,7 +45,7 @@ public class S3Backend implements GlobalProcessor {
 		storeWorkers = Executors.newFixedThreadPool(Constants.numGlobalStoreStoreWorkers);
 	}
 	
-	public static S3Backend instance() {	
+	public static synchronized S3Backend instance() {	
 		if (instance == null) {
 			instance = new S3Backend();
 		}
@@ -98,7 +98,7 @@ public class S3Backend implements GlobalProcessor {
 		
 		BlockID id = dstBlock.id();
 		if (id.type == BlockType.DataBlock) { //If it's dataSegment, it can be any segment in the block. GlobalStore has complete blocks.
-			int segmentInBlock = ((DataSegmentID)id).segmentInBlock;
+			int segmentInBlock = ((DataSegmentID)id).segmentInBlock();
 			rangeStart = segmentInBlock * dstBlock.sizeWhenSerialized();
 			rangeEnd = rangeStart + dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
 		}

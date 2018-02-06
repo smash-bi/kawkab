@@ -8,7 +8,6 @@ import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.services.PrimaryNodeServiceClient;
-import kawkab.fs.core.services.PrimaryNodeServiceServer;
 
 public class Cache implements BlockEvictionListener{
 	private static Cache instance;
@@ -23,7 +22,7 @@ public class Cache implements BlockEvictionListener{
 		cache = new LRUCache(this);
 		cacheLock = new ReentrantLock();
 		localStore = LocalProcessor.instance();
-		globalStore = S3Backend.instance();
+		globalStore = GlobalProcessor.instance();
 		nc = PrimaryNodeServiceClient.instance();
 	}
 	
@@ -56,7 +55,7 @@ public class Cache implements BlockEvictionListener{
 			return null;
 		
 		CachedItem cachedItem = null;
-		boolean wasCached = true;
+		//boolean wasCached = true;
 		
 		cacheLock.lock();
 		
@@ -65,7 +64,7 @@ public class Cache implements BlockEvictionListener{
 			
 			//If the block is not cached
 			if (cachedItem == null){
-				wasCached = false;
+				//wasCached = false;
 				Block block = blockID.newBlock();
 				cachedItem = new CachedItem(block);
 				cache.put(cachedItem.block().id().name(), cachedItem);
@@ -75,8 +74,11 @@ public class Cache implements BlockEvictionListener{
 		} finally {
 			cacheLock.unlock();
 		}
-			
-		try { //For cachedItem.lock()
+		
+		Block block = cachedItem.block();
+		block.loadBlock();
+		
+		/*try { //For cachedItem.lock()
 			cachedItem.lock(); //TODO: Don't acquire this lock if the cachedItem is already loaded in memory, and 
 			                   //wait for the item to get loaded if the block was cached but not already loaded.
 		
@@ -91,12 +93,12 @@ public class Cache implements BlockEvictionListener{
 			if (cachedItem != null) {
 				cachedItem.unlock();
 			}
-		}
+		}*/
 		
-		return cachedItem.block();
+		return block;
 	}
 	
-	private void loadBlockData(Block block) throws IOException, FileNotExistException, KawkabException {
+	/*private void loadBlockData(Block block) throws IOException, FileNotExistException, KawkabException {
 		System.out.println("[C] Load block: This Node: " + Constants.thisNodeID + ", primary: " + block.id().primaryNodeID() + ", block: " + block.id());
 		if (block.id().onPrimaryNode()) { //If this node is the primary node of the block
 			localStore.load(block); // Load data from the local store
@@ -111,7 +113,7 @@ public class Cache implements BlockEvictionListener{
 				} 
 			}
 		}
-	}
+	}*/
 	
 	/**
 	 * Reduces the reference count by 1. Blocks with reference count 0 are eligible for eviction.
