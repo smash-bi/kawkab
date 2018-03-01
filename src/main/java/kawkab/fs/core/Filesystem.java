@@ -4,12 +4,14 @@ import java.io.IOException;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.services.PrimaryNodeServiceServer;
 
-public class Filesystem {
+public final class Filesystem {
+	private static final Object initLock = new Object();
+	
 	private static boolean initialized;
 	private static boolean closed;
 	
@@ -25,14 +27,32 @@ public class Filesystem {
 		ns.startServer();
 	}
 	
-	public static synchronized Filesystem instance() throws KawkabException, IOException {
+	public static Filesystem instance() throws KawkabException, IOException {
 		if (instance == null) {
-			instance = new Filesystem();
+			synchronized(initLock) {
+				if (instance == null)
+					instance = new Filesystem();
+			}
 		}
 		return instance;
 	}
 	
-	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException, IOException, KawkabException{
+	/**
+	 * This function opens a file for reading and appending. If the file is opened in the append mode and the file 
+	 * doesn't exist, a new file is created. This node becomes the primary writer of a newly created file.
+	 * 
+	 * @param filename
+	 * @param mode Append mode allows to read and append the file. Read mode allows only to read the file.
+	 * @param opts Currently its just a place holder
+	 * @return A FileHandle that can be used to perform read, append, close, and delete operations on the file.
+	 * 
+	 * @throws IbmapsFullException if the system is full and no new file can be created unless an existing file is deleted
+	 * @throws IOException
+	 * @throws FileNotExistException If the file is opened in the read mode and the file does not exist in the system
+	 * @throws KawkabException
+	 * @throws InterruptedException
+	 */
+	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException, IOException, FileNotExistException, KawkabException, InterruptedException{
 		//TODO: Validate input
 		long inumber = namespace.openFile(filename, mode == FileMode.APPEND);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber);
@@ -40,11 +60,16 @@ public class Filesystem {
 		return file;
 	}
 	
-	public static int BlockSize(){
-		return Constants.segmentSizeBytes;
-	}
-	
-	public Filesystem bootstrap() throws IOException{
+	/**
+	 * This function bootstraps the filesystem on this node. It should be called once when the system is started. It
+	 * bootstraps the namespace, the ibmaps, and the inodeblocks.
+	 * 
+	 * @return
+	 * @throws IOException
+	 * @throws InterruptedException
+	 * @throws KawkabException
+	 */
+	public Filesystem bootstrap() throws IOException, InterruptedException, KawkabException {
 		if (initialized)
 			return this;
 		
@@ -56,7 +81,7 @@ public class Filesystem {
 		return this;
 	}
 	
-	public synchronized void shutdown() throws KawkabException, InterruptedException{
+	public synchronized void shutdown() throws KawkabException, InterruptedException, IOException{
 		if (closed)
 			return;
 		

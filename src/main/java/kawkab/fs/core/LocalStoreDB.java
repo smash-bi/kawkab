@@ -6,11 +6,12 @@ import java.io.IOException;
 import kawkab.fs.commons.Constants;
 import net.openhft.chronicle.map.ChronicleMap;
 
-public class LocalStoreDB {
-	
+public final class LocalStoreDB {
 	private static final String mapFilePath = Constants.basePath + "/localStoreDB/chroniclemap-"+Constants.thisNodeID;
 	private static final String mapName = "localStoreDB";
-	private ChronicleMap<String, String> map;
+	private ChronicleMap<String, String> map; // Path to ID map. A key is a block's path because the data segments belonging
+	                                          // to the same block have the same path. In this way, we save the number of
+	                                          // entries in the map.
 	
 	public LocalStoreDB() throws IOException {
 		initMap();
@@ -36,7 +37,7 @@ public class LocalStoreDB {
 	 * @return Previous location associated with blockName, or null if blockName was not already in the DB.
 	 */
 	public synchronized String put(BlockID id) {
-		System.out.println("[LSDB] Added: " + id.name());
+		//System.out.println("[LSDB] Added: " + id.name());
 		return map.put(id.localPath(), id.name());
 	}
 	
@@ -53,7 +54,7 @@ public class LocalStoreDB {
 	 * @return Whether the blockName entry exists in the DB or not
 	 */
 	public synchronized boolean exists(BlockID id) {
-		System.out.println("[LSDB] Exists: " + id.name());
+		//System.out.println("[LSDB] Exists: " + id.name());
 		return map.containsKey(id.localPath());
 	}
 	
@@ -62,7 +63,7 @@ public class LocalStoreDB {
 	 * @return Location of the blockName, or null if blockName entry was not in the DB.
 	 */
 	public synchronized String removeEntry(BlockID id) {
-		System.out.println("[LSDB] Removed: " + id.localPath());
+		//System.out.println("[LSDB] Removed: " + id.localPath());
 		return map.remove(id.localPath());
 	}
 }

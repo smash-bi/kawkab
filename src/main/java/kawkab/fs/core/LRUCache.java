@@ -6,7 +6,7 @@ import java.util.Map.Entry;
 import kawkab.fs.commons.Constants;
 
 @SuppressWarnings("serial")
-public class LRUCache extends LinkedHashMap<String, CachedItem> {
+public final class LRUCache extends LinkedHashMap<String, CachedItem> {
 	private BlockEvictionListener evictListener;
 	
 	public LRUCache(BlockEvictionListener evictListener){

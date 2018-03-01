@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class KeyedLock {
+public final class KeyedLock {
 	private Map<String, KeyLock> locks = new HashMap<String, KeyLock>();
 
 	public void lock(String key) {

@@ -58,7 +58,7 @@ public final class DataSegmentID extends BlockID {
 	}
 	
 	public static String name(long inumber, long blockInFile, int segmentInBlock) {
-		return String.format("%016x-%016x-%08x", inumber, blockInFile, segmentInBlock);
+		return String.format("DS%d-%d-%d", inumber, blockInFile, segmentInBlock);
 	}
 
 	@Override
@@ -109,6 +109,6 @@ public final class DataSegmentID extends BlockID {
 	
 	@Override
 	public String toString() {
-		return inumber+"-"+blockInFile+"-"+segmentInBlock+"-"+name();
+		return name();
 	}
 }

@@ -21,7 +21,7 @@ public final class IbmapBlockID extends BlockID {
 	
 	@Override
 	public Block newBlock() {
-		return new Ibmap((int)mapNum);
+		return new Ibmap(this);
 	}
 
 	public static String name(int blockIndex) {
@@ -59,5 +59,9 @@ public final class IbmapBlockID extends BlockID {
 	@Override
 	public String toString() {
 		return name(mapNum);
+	}
+
+	public int blockIndex() {
+		return mapNum;
 	}
 }

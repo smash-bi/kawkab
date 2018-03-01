@@ -1,6 +1,6 @@
 package kawkab.fs.core.zookeeper;
 
-public class ZKClusterConfig {
+public final class ZKClusterConfig {
 	private int id;
 	private String servers;
 	private int connectRetrySleepMs = 1000;

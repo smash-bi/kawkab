@@ -12,7 +12,9 @@ import kawkab.fs.core.exceptions.FileAlreadyExistsException;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 
-public class NamespaceService {
+public final class NamespaceService {
+	private static final Object initLock = new Object();
+	
 	private static NamespaceService instance; //There must be only one instance of 
 	private final static String pathPrefix = "/KawkabFiles/";
 	private ZKService zkclient;
@@ -29,7 +31,10 @@ public class NamespaceService {
 	
 	public static NamespaceService instance() throws KawkabException {
 		if (instance == null)
-			instance = new NamespaceService();
+			synchronized(initLock) {
+				if (instance == null)
+					instance = new NamespaceService();
+			}
 		return instance;
 	}
 	

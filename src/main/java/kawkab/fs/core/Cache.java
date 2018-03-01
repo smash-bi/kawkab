@@ -4,52 +4,52 @@ import java.io.IOException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import kawkab.fs.commons.Constants;
-import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.services.PrimaryNodeServiceClient;
 
 public class Cache implements BlockEvictionListener{
+	private static final Object initLock = new Object(); 
+	
 	private static Cache instance;
 	private LRUCache cache;
 	private Lock cacheLock;
-	private LocalProcessor localStore;
-	private GlobalProcessor globalStore;
-	private PrimaryNodeServiceClient nc;
+	private LocalStoreManager localStoreManager;
 	private volatile boolean closing = false;
 	
-	private Cache(){
-		cache = new LRUCache(this);
+	private Cache() throws IOException{
 		cacheLock = new ReentrantLock();
-		localStore = LocalProcessor.instance();
-		globalStore = GlobalProcessor.instance();
-		nc = PrimaryNodeServiceClient.instance();
+		localStoreManager = LocalStoreManager.instance();
+		cache = new LRUCache(this);
 	}
 	
-	public static Cache instance(){
+	public static Cache instance() throws IOException{
 		if (instance == null) {
-			instance = new Cache();
+			synchronized(initLock) {
+				instance = new Cache();
+			}
 		}
 		
 		return instance;
 	}
 	
-	public void createBlock(Block block) throws IOException {
-		localStore.storeLocally(block);
-	}
+	/*public void createBlock(Block block) throws IOException, InterruptedException {
+		localStoreManager.createBlock(block);
+	}*/
 	
 	/**
 	 * An acquired block cannot be evicted from the cache. The cache keeps the
 	 * reference count of all the acquired blocks.
+	 * 
+	 * If the function throws an exception, the caller must call the releaseBlock() function to release the block.
 	 * 
 	 * @param blockID
 	 * @param type
 	 * @return
 	 * @throws IOException 
 	 * @throws KawkabException 
+	 * @throws InterruptedException 
 	 */
-	public Block acquireBlock(BlockID blockID) throws IOException, KawkabException {
-		System.out.println("[C] acquire: " + blockID);
+	public Block acquireBlock(BlockID blockID, boolean isNewBlock) throws IOException, KawkabException, InterruptedException {
+		//System.out.println("[C] acquire: " + blockID);
 		
 		if (closing)
 			return null;
@@ -60,7 +60,7 @@ public class Cache implements BlockEvictionListener{
 		cacheLock.lock();
 		
 		try { //For cacheLock.lock()
-			cachedItem = cache.get(blockID.key);
+			cachedItem = cache.get(blockID.key());
 			
 			//If the block is not cached
 			if (cachedItem == null){
@@ -76,7 +76,11 @@ public class Cache implements BlockEvictionListener{
 		}
 		
 		Block block = cachedItem.block();
-		block.loadBlock();
+		if (isNewBlock) { //Not mutually exclusive because only one of the threads can create a new block because we have only one writer
+			localStoreManager.createBlock(block);
+		} else {
+			block.loadBlock();
+		}
 		
 		/*try { //For cachedItem.lock()
 			cachedItem.lock(); //TODO: Don't acquire this lock if the cachedItem is already loaded in memory, and 
@@ -121,43 +125,46 @@ public class Cache implements BlockEvictionListener{
 	 * @throws KawkabException 
 	 */
 	public void releaseBlock(BlockID blockID) throws KawkabException {
-		System.out.println("[C] Release block: " + blockID);
+		//System.out.println("[C] Release block: " + blockID);
 		
 		CachedItem cachedItem = null;
 		cacheLock.lock();
-		//try { //For cachedItem.lock()
 			try { //For cacheLock.lock()
-				cachedItem = cache.get(blockID.key);
+				cachedItem = cache.get(blockID.key());
 				
 				if (cachedItem == null) {
-					System.out.println(" Releasing non-existing block: " + blockID.key);
+					System.out.println(" Releasing non-existing block: " + blockID.key());
+					
+					assert cachedItem != null; //To exit the system during testing
+					return;
 				}
 				
-				assert cachedItem != null;
-				cachedItem.decrementRefCnt();
+				if (blockID.onPrimaryNode()) {
+					//cachedItem.lock(); try { //FIXME: Do we need a lock here???
+					if (cachedItem.block().isLocalDirty()) {
+						assert cachedItem.block().id().onPrimaryNode();
+						
+						localStoreManager.store(cachedItem.block()); // The call is non-blocking
+						//FIXME: What to do with the exception?
+					}
+				}
+				
+				cachedItem.decrementRefCnt(); // No need to acquire cacheLock because the incrementRefCnt() and
+				                              // decrementRefCnt() functions are only called while holding the cacheLock.
 			} finally {
 				cacheLock.unlock();
 			}
 			
-			if (blockID.onPrimaryNode()) {
-				//cachedItem.lock(); try { //FIXME: Do we need a lock here???
-				if (cachedItem.block().dirty()) {
-					localStore.store(cachedItem.block()); //FIXME: What to do with the exception?
-					
-				}
-				//} finally {
-				//	cachedItem.unlock();
-				//}
-			}
+			
 	}
 	
 	public void flush() throws KawkabException { //
 		for (CachedItem cached : cache.values()) {
 			//We need to close all the readers and writers before we can empty the cache.
 			//TODO: Wait until the reference count for the cached object becomes zero.
-			if (cached.block().dirty()) {
+			if (cached.block().isLocalDirty()) {
 				//cached.block().storeToDisk();
-				localStore.store(cached.block());
+				localStoreManager.store(cached.block());
 			}
 		}
 	}
@@ -168,9 +175,12 @@ public class Cache implements BlockEvictionListener{
 		cacheLock.lock();
 		cache.clear();
 		cacheLock.unlock();
-		localStore.stop();
+		localStoreManager.stop();
 	}
 
+	/**
+	 * The cache calls this function when it is evicting a block
+	 */
 	@Override
 	public void beforeEviction(CachedItem cachedItem) {
 		Block block = cachedItem.block();

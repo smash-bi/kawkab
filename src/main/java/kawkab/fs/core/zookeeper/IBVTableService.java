@@ -10,6 +10,8 @@ import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.KawkabException;
 
 public class IBVTableService {
+	private static final Object initLock = new Object();
+	
 	private Map<Long, Long> versions; //Map of <inodesBlock ID, version number> pairs 
 	private static IBVTableService instance;
 	private final static String pathPrefix = "/KawkabInodesBlocksVersions/";
@@ -26,7 +28,10 @@ public class IBVTableService {
 	
 	public static IBVTableService instance() throws KawkabException {
 		if (instance == null)
-			instance = new IBVTableService();
+			synchronized(initLock) {
+				if (instance == null)
+					instance = new IBVTableService();
+			}
 		return instance;
 	}
 	

@@ -13,7 +13,7 @@ import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 
-public class Inode {
+public final class Inode {
 	//FIXME: fileSize can be internally staled. This is because append() is a two step process. 
 	// The FileHandle first calls append and then calls updateSize to update the fileSize. Ideally, 
 	// We should update the fileSize immediately after adding a new block. The fileSize is not being
@@ -22,7 +22,7 @@ public class Inode {
 	private volatile long fileSize;
 	private int recordSize = 1; //Temporarily set to 1 until we implement reading/writing records
 	private boolean dirty; //not saved persistently
-	private Cache cache = Cache.instance();
+	private static Cache cache;
 	
 	public static final long maxFileSize;
 	static {
@@ -32,6 +32,12 @@ public class Inode {
 		//	blocks += Commons.maxBlocksCount(i);
 		//}
 		maxFileSize = Long.MAX_VALUE;//blocks * Constants.blockSegmentSizeBytes;
+		
+		try {
+			cache = Cache.instance();
+		} catch (IOException e) {
+			e.printStackTrace(); //FIXME: Handle exception properly
+		}
 	}
 	
 	//The constructor is private to disable creating the object externally.
@@ -54,7 +60,7 @@ public class Inode {
 	}
 	
 	public int read(final byte[] buffer, final int length, final long offsetInFile) throws InvalidFileOffsetException, 
-					IllegalArgumentException, IOException, KawkabException{
+					IllegalArgumentException, IOException, KawkabException, InterruptedException{
 		//TODO: Check for input bounds
 		if (length <= 0)
 			throw new IllegalArgumentException("Given length is 0.");
@@ -82,7 +88,7 @@ public class Inode {
 			
 			DataSegment curSegment = null;
 			try {
-				curSegment = (DataSegment)cache.acquireBlock(curSegId);
+				curSegment = (DataSegment)cache.acquireBlock(curSegId, false);
 				bytes = curSegment.read(buffer, bufferOffset, toRead, curOffsetInFile);
 			} catch (InvalidFileOffsetException e) {
 				e.printStackTrace();
@@ -114,9 +120,10 @@ public class Inode {
 	 * @throws InvalidFileOffsetException 
 	 * @throws IOException 
 	 * @throws KawkabException 
+	 * @throws InterruptedException 
 	 */
 	public int append(final byte[] data, int offset, final int length) throws MaxFileSizeExceededException, 
-				InvalidFileOffsetException, IOException, KawkabException{
+				InvalidFileOffsetException, IOException, KawkabException, InterruptedException{
 		int remaining = length;
 		int appended = 0;
 		long fileSize = this.fileSize;
@@ -152,7 +159,7 @@ public class Inode {
 			// to throw an exception if the file already exists.
 			DataSegment seg = null;
 			try {
-				seg = (DataSegment)cache.acquireBlock(lastSegID);
+				seg = (DataSegment)cache.acquireBlock(lastSegID, false);
 				bytes = seg.append(data, curOffset, toAppend, fileSize);
 			} finally {
 				if (seg != null) {
@@ -192,8 +199,10 @@ public class Inode {
 	 * @throws IndexBlockFullException
 	 * @throws InvalidFileOffsetException
 	 * @throws IOException
+	 * @throws InterruptedException 
+	 * @throws KawkabException 
 	 */
-	BlockID createNewBlock(final long fileSize) throws MaxFileSizeExceededException, IndexBlockFullException, InvalidFileOffsetException, IOException{
+	BlockID createNewBlock(final long fileSize) throws MaxFileSizeExceededException, IndexBlockFullException, InvalidFileOffsetException, IOException, InterruptedException, KawkabException{
 		//long blocksCount = (long)Math.ceil(1.0*fileSize / Constants.dataBlockSizeBytes);
 		if (fileSize + Constants.segmentSizeBytes > maxFileSize){
 			throw new MaxFileSizeExceededException();
@@ -208,8 +217,13 @@ public class Inode {
 		assert segmentInBlock == 0;
 		
 		DataSegmentID dataSegmentID = new DataSegmentID(inumber, blockInFile, segmentInBlock);
-		DataSegment block = new DataSegment(dataSegmentID);
-		cache.createBlock(block);
+		//DataSegment block = new DataSegment(dataSegmentID);
+		//cache.createBlock(block);
+		try {
+			cache.acquireBlock(dataSegmentID, true);
+		} finally {
+			cache.releaseBlock(dataSegmentID);
+		}
 		
 		//System.out.println(String.format("Created blk: %d, fileSize=%d", blockNumber, fileSize));
 		

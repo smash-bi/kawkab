@@ -7,7 +7,7 @@ import kawkab.fs.core.Inode;
 import kawkab.fs.core.NodeInfo;
 import kawkab.fs.core.zookeeper.ZKClusterConfig;
 
-public class Constants {
+public final class Constants {
 	//TODO: Read constants and properties from a given configuration file.
 	
 	static {
@@ -16,8 +16,6 @@ public class Constants {
 	
 	public static int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
 	public static int nodesInSystem = 2; //FIXME: Get this from a configuration file or ZooKeeper
-	
-	public static final long maxBlocksPerLocalDevice = 1000;
 	
 	//Default data block size in bytes
 	public static final int dataBlockSizeBytes    = 16*1024*1024;
@@ -34,20 +32,21 @@ public class Constants {
 	//Small inodesBlockSize shows better writes performance, perhaps due to locks in the InodesBlocks. The down side
 	//is that small size files consume more disk resources.
 	public static final int inodesBlockSizeBytes = 5120; //dataBlockSizeBytes; 
-	public static final int inodeSizeBytes = Inode.inodesSize();
+	public static final int inodeSizeBytes = 64;//Inode.inodesSize();
 	public static final int inodesPerBlock = inodesBlockSizeBytes/inodeSizeBytes;
 	//FIXME: Calculate this based on the maximum number of files supported by a machine
 	public static final int inodeBlocksPerMachine = (int)(1.0/inodesPerBlock*ibmapBlockSizeBytes*ibmapsPerMachine*8.0);//inodesPerMachine/inodesPerBlock 
-	public static int inodeBlocksRangeStart = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
+	public static final int inodeBlocksRangeStart = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
 																					 //Blocks start with ID 0.
 	
-	public static int maxBlocksInCache = 100; //Size of the cache in number of blocks
-	public static int globalFetchExpiryTimeoutMs = 2500; //Expire data fetched from the global store after dataExpiryTimeoutMs
-	public static int primaryFetchExpiryTimeoutMs = 500; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
+	public static final int maxBlocksPerLocalDevice = 10000 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
+	public static final int maxBlocksInCache = 10000; //Size of the cache in number of blocks
+	public static final int globalFetchExpiryTimeoutMs = 2500; //Expire data fetched from the global store after dataExpiryTimeoutMs
+	public static final int primaryFetchExpiryTimeoutMs = 500; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
 	public static final int syncThreadsPerDevice = 2;
-	public static final int numGlobalStoreLoadWorkers = 1;
-	public static final int numGlobalStoreStoreWorkers = 1;
+	public static final int numWorkersStoreToGlobal = 2;
+	//public static final int numWorkersLoadFromGlobal = 5;
 	
 	public static final String basePath = "fs";
 	public static final String ibmapsPath = basePath+"/ibmaps";
@@ -61,7 +60,7 @@ public class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkMainServers = "10.0.1.100:2181,10.0.1.100:2182,10.0.1.100:2183";
+	public static final String zkMainServers = "10.10.0.11:2181,10.10.0.11:2182,10.10.0.11:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
 	public static final ZKClusterConfig zkMainCluster = 
@@ -69,7 +68,7 @@ public class Constants {
 	
 	
 	//minio settings
-	public static final String[] minioServers = {"http://10.0.1.100:9000"};
+	public static final String[] minioServers = {"http://10.10.0.11:9000"};
 	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
@@ -103,22 +102,26 @@ public class Constants {
 		System.out.println(String.format("Inode blocks per machine . = %d", inodeBlocksPerMachine));
 		System.out.println(String.format("Inode blocks total size MB = %.3f", inodeBlocksPerMachine*inodesBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Inode blocks range start . = %d", inodeBlocksRangeStart));
+		System.out.println(String.format("Max blocks per local device= %d", maxBlocksPerLocalDevice));
 	}
 	
 	private static void init() {
-		String nodeID = System.getenv("kawkabNodeID");
+		String nodeID = System.getenv("NodeID");
 		if (nodeID == null) {
-			thisNodeID = 1;
-		} else {
-			thisNodeID = Integer.parseInt(nodeID);
+			System.out.println("Environment variable \"NodeID\" is not set.");
+			System.exit(1);
 		}
 		
-		nodesMap = new HashMap<Integer, NodeInfo>();
-		nodesMap.put(1, new NodeInfo(1, "10.0.1.100"));
-		nodesMap.put(2, new NodeInfo(1, "10.0.7.3"));
+		thisNodeID = Integer.parseInt(nodeID);
+		nodesMap = new HashMap<Integer, NodeInfo>();  //Map of <NodeID, NodeInfo(NodeID, IP)> 
+		nodesMap.put(0, new NodeInfo(0, "10.10.0.12"));
+		nodesMap.put(1, new NodeInfo(1, "10.10.0.13"));
+		nodesMap.put(2, new NodeInfo(2, "10.10.0.14"));
+		nodesMap.put(3, new NodeInfo(3, "10.10.0.15"));
 	}
 	
 	private static void verify() {
+		printConfig();
 		assert thisNodeID >= 0;
 		
 		assert inodesBlockSizeBytes % inodesPerBlock == 0;
@@ -129,5 +132,8 @@ public class Constants {
 		
 		assert minioAccessKey.length() >= 5; //From minio documentation
 		assert minioSecretKey.length() >= 8; //From minio documentation
+		
+		assert maxBlocksPerLocalDevice > inodeBlocksPerMachine + ibmapsPerMachine;
+		//assert maxBlocksPerLocalDevice > maxBlocksInCache;
 	}
 }

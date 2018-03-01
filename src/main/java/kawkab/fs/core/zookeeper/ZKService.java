@@ -11,7 +11,9 @@ import org.apache.zookeeper.KeeperException;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.KawkabException;
 
-public class ZKService {
+public final class ZKService {
+	private static final Object initLock = new Object();
+	
 	private Map<Integer, CuratorFramework> clients;
 	private static ZKService instance;
 	
@@ -21,7 +23,10 @@ public class ZKService {
 	
 	public static ZKService instance() {
 		if (instance == null) {
-			instance = new ZKService();
+			synchronized(initLock) {
+				if (instance == null)
+					instance = new ZKService();
+			}
 		}
 		
 		return instance;
@@ -49,7 +54,7 @@ public class ZKService {
 	}
 	
 	public void addNode(int zkClusterID, String path, byte[] data) throws KeeperException, KawkabException { //TODO: Change KawkabException to proper type
-		System.out.println("[ZKService] Adding node " + path);
+		//System.out.println("[ZKService] Adding node " + path);
 		
 		CuratorFramework client = clients.get(zkClusterID);
 		if (client == null)
@@ -66,7 +71,7 @@ public class ZKService {
 	}
 	
 	public byte[] getData(int zkClusterID, String path) throws KeeperException, KawkabException { //TODO: Change KawkabException to proper type
-		System.out.println("Get node " + path);
+		//System.out.println("[ZKS] Get node " + path);
 		
 		CuratorFramework client = clients.get(zkClusterID);
 		if (client == null)

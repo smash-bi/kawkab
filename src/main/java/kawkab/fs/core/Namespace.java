@@ -12,6 +12,8 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.zookeeper.NamespaceService;
 
 public class Namespace {
+	private static final Object initLock = new Object();
+	
 	//private PersistentMap filesMap;
 	private NamespaceService ns;
 	private Cache cache;
@@ -21,17 +23,21 @@ public class Namespace {
 	private static Namespace instance;
 	
 	
-	private Namespace() throws KawkabException {
+	private Namespace() throws KawkabException, IOException {
 		cache = Cache.instance();
 		locks = new KeyedLock();
 		lastIbmapUsed = Constants.ibmapBlocksRangeStart;
 		ns = NamespaceService.instance();
 	}
 	
-	public static Namespace instance() throws KawkabException {
+	public static Namespace instance() throws KawkabException, IOException {
 		if (instance == null){
-			instance = new Namespace();
+			synchronized(initLock) {
+				if (instance == null)
+					instance = new Namespace();
+			}
 		}
+		
 		return instance;
 	}
 	
@@ -42,8 +48,9 @@ public class Namespace {
 	 *          filesystem has reached the maximum number of files limit.
 	 * @throws IOException 
 	 * @throws KawkabException 
+	 * @throws InterruptedException 
 	 */
-	public long openFile(String filename, boolean appendMode) throws IbmapsFullException, IOException, InvalidFileModeException, KawkabException {
+	public long openFile(String filename, boolean appendMode) throws IbmapsFullException, IOException, InvalidFileModeException, FileNotExistException, KawkabException, InterruptedException {
 		long inumber = -1L;
 		
 		//Lock namespace for the given filename
@@ -102,8 +109,9 @@ public class Namespace {
 	 * @throws IbmapsFullException
 	 * @throws IOException 
 	 * @throws KawkabException 
+	 * @throws InterruptedException 
 	 */
-	private long getNewInumber() throws IbmapsFullException, IOException, KawkabException {
+	private long getNewInumber() throws IbmapsFullException, IOException, KawkabException, InterruptedException {
 		long inumber;
 		int mapNum = lastIbmapUsed;
 		while(true){ //Iterate over the ibmap blocks.
@@ -114,7 +122,7 @@ public class Namespace {
 			
 			try {
 				System.out.println("[N] Map number: " + mapNum);
-				ibmap = (Ibmap)(cache.acquireBlock(id));
+				ibmap = (Ibmap)(cache.acquireBlock(id, false));
 				inumber = ibmap.nextInode();
 				if (inumber >= 0)
 					break;
@@ -142,8 +150,9 @@ public class Namespace {
 	 * @throws IbmapsFullException
 	 * @throws IOException 
 	 * @throws KawkabException 
+	 * @throws InterruptedException 
 	 */
-	private long createNewFile() throws IbmapsFullException, IOException, KawkabException{
+	private long createNewFile() throws IbmapsFullException, IOException, KawkabException, InterruptedException{
 		long inumber = getNewInumber();
 		
 		int blockIndex = InodesBlock.blockIndexFromInumber(inumber);
@@ -152,7 +161,7 @@ public class Namespace {
 		try {
 			System.out.println("[N] Inodes Block: " + blockIndex + ", inumber: " + inumber + ", primary: " + Commons.primaryWriterID(inumber));
 			
-			inodes = (InodesBlock)cache.acquireBlock(id);
+			inodes = (InodesBlock)cache.acquireBlock(id, false);
 			inodes.initInode(inumber);
 		} finally {
 			if (inodes != null) {

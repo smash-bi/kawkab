@@ -19,12 +19,19 @@ public final class FileHandle {
 	private long inumber;
 	private FileMode fileMode;
 	private long readOffsetInFile;
-	private Cache cache;
+	private static Cache cache;
+	
+	static {
+		try {
+			cache = cache.instance();
+		} catch (IOException e) { //FIXME: Handle the exception properly
+			e.printStackTrace();
+		}
+	}
 	
 	public FileHandle(long inumber, FileMode mode){
 		this.inumber = inumber;
 		this.fileMode = mode;
-		this.cache = Cache.instance();
 	}
 	
 	/**
@@ -34,8 +41,9 @@ public final class FileHandle {
 	 * @return Number of bytes read from the file
 	 * @throws IOException 
 	 * @throws KawkabException 
+	 * @throws InterruptedException 
 	 */
-	public synchronized int read(byte[] buffer, int length) throws IOException, IllegalArgumentException, KawkabException {
+	public synchronized int read(byte[] buffer, int length) throws IOException, IllegalArgumentException, KawkabException, InterruptedException {
 		/*1. Borrow InodesBlock from cache
 		    2. Acquire InodesBlock lock
 		      3. Get the pointer to the dataBlock or the indirectBlock
@@ -50,14 +58,14 @@ public final class FileHandle {
 		    11. Read data
 		  12. Return DataBlock to the cache*/
 		int blockIndex = (int)(inumber / Constants.inodesPerBlock);
-		System.out.println("[FH] inodeBlock: " + blockIndex);
+		//System.out.println("[FH] inodeBlock: " + blockIndex);
 		BlockID id = new InodesBlockID(blockIndex);
 		
 		Inode inode = null;
 		long fileSize = 0;
 		InodesBlock block = null;
 		try {
-			block = (InodesBlock)cache.acquireBlock(id);
+			block = (InodesBlock)cache.acquireBlock(id, false);
 			block.lock();
 			inode = block.getInode(inumber);
 			fileSize = inode.fileSize();
@@ -187,10 +195,11 @@ public final class FileHandle {
 	 * @throws InvalidFileOffsetException 
 	 * @throws IOException 
 	 * @throws KawkabException 
+	 * @throws InterruptedException 
 	 */
 	public synchronized int append(byte[] data, int offset, int length) throws OutOfMemoryException, 
 									MaxFileSizeExceededException, InvalidFileOffsetException, 
-									IOException, KawkabException{
+									IOException, KawkabException, InterruptedException{
 		/*- File Append
 		  1. Borrow InodesBlock from the cache
 		    2. Acquire InodesBlock lock
@@ -226,7 +235,7 @@ public final class FileHandle {
 		
 		InodesBlock block = null;
 		try {
-			block = (InodesBlock)cache.acquireBlock(id);
+			block = (InodesBlock)cache.acquireBlock(id, false);
 			//block.lock();
 			//try {
 				//TODO: 3. If file is currently being updated, wait on an updateCondition
@@ -259,15 +268,16 @@ public final class FileHandle {
 	/**
 	 * @return Returns file size in bytes.
 	 * @throws KawkabException 
+	 * @throws InterruptedException 
 	 */
-	public synchronized long size() throws KawkabException{
+	public synchronized long size() throws KawkabException, InterruptedException{
 		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
 		long size = 0;
 		BlockID id = new InodesBlockID(inodesBlockIdx);
 		
 		InodesBlock block = null;
 		try {
-			block = (InodesBlock) cache.acquireBlock(id);
+			block = (InodesBlock) cache.acquireBlock(id, false);
 			size = block.fileSize(inumber);
 		} catch (IOException e) {
 			e.printStackTrace();

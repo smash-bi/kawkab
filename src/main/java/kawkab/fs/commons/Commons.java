@@ -7,7 +7,7 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Base64;
 
-public class Commons {
+public final class Commons {
 	public static String uuidToString(long uuidHigh, long uuidLow){
 		byte[] id = new byte[16];
 		ByteBuffer buffer = ByteBuffer.wrap(id);

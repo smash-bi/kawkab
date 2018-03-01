@@ -7,6 +7,8 @@ import kawkab.fs.commons.Constants;
 import net.openhft.chronicle.map.ChronicleMap;
 
 public class PersistentMap {
+	private static final Object initLock = new Object();
+	
 	private static PersistentMap instance;
 	private ChronicleMap<String, Long> map;
 	
@@ -27,7 +29,10 @@ public class PersistentMap {
 	
 	public static PersistentMap instance() throws IOException{
 		if (instance == null) {
-			instance = new PersistentMap();
+			synchronized(initLock) {
+				if (instance == null)
+					instance = new PersistentMap();
+			}
 		}
 		
 		return instance;

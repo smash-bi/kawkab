@@ -4,7 +4,7 @@ import java.io.File;
 
 import kawkab.fs.commons.Constants;
 
-public class InodesBlockID extends BlockID{
+public final class InodesBlockID extends BlockID{
 	private final static String namePrefix = "I";
 	private final int blockIndex;
 	
@@ -24,7 +24,7 @@ public class InodesBlockID extends BlockID{
 
 	@Override
 	public Block newBlock() {
-		return new InodesBlock(blockIndex);
+		return new InodesBlock(this);
 	}
 	
 	public static String name(int blockIndex) {

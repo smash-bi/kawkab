@@ -18,8 +18,8 @@ public abstract class BlockID {
 	}
 	
 	//All the public fields in this class must be made immutable.
-	protected final String key;
-	protected final BlockType type;
+	private final String key;
+	private final BlockType type;
 	
 	public BlockID(String key, BlockType type){
 		this.key = key;

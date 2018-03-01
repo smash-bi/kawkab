@@ -17,7 +17,7 @@ import kawkab.fs.core.exceptions.InodeNumberOutOfRangeException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.KawkabException;
 
-public class Ibmap extends Block{
+public final class Ibmap extends Block{
 	private static final int bitsPerByte = Byte.SIZE;
 	
 	private final int blockIndex; //Not saved persistently
@@ -33,9 +33,12 @@ public class Ibmap extends Block{
 	/**
 	 * @param blockIndex Index of the Ibmap block for the current machine.
 	 */
-	Ibmap(int blockIndex) {
-		super(new IbmapBlockID(blockIndex));
-		this.blockIndex = blockIndex;
+	Ibmap(IbmapBlockID id) {
+		super(id);
+		this.blockIndex = id.blockIndex();
+		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
+		bitset = BitSet.valueOf(bytes);
+		markDirty();
 	}
 	
 	/**
@@ -198,8 +201,10 @@ public class Ibmap extends Block{
 	 * path localPath().
 	 * 
 	 * @throws IOException
+	 * @throws InterruptedException 
+	 * @throws KawkabException 
 	 */
-	static void bootstrap() throws IOException{
+	static void bootstrap() throws IOException, InterruptedException, KawkabException{
 		if (bootstraped)
 			return;
 		
@@ -211,18 +216,23 @@ public class Ibmap extends Block{
 		
 		//LocalStore storage = LocalStore.instance();
 		Cache cache = Cache.instance();
-		int offset = Constants.ibmapBlocksRangeStart;
 		int rangeStart = Constants.ibmapBlocksRangeStart;
 		int rangeEnd = rangeStart + Constants.ibmapsPerMachine;
 		for(int i=rangeStart; i<rangeEnd; i++){
-			Ibmap ibmap = new Ibmap(i);
+			IbmapBlockID id = new IbmapBlockID(i);
+			try {
+				cache.acquireBlock(id, true); // This will create a new block in the local store. Moreover, the block is marked dirty in the constructor.
+			} finally {
+				cache.releaseBlock(id);
+			}
+			
+			/*Ibmap ibmap = new Ibmap(i);
 			ibmap.bitset = new BitSet(Constants.ibmapBlockSizeBytes*8);
 			
 			File file = new File(ibmap.id().localPath());
 			if (!file.exists()) {
-				//storage.writeBlock(ibmap);
 				cache.createBlock(ibmap);
-			}
+			}*/
 		}
 		
 		bootstraped = true;

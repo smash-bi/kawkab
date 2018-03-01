@@ -11,7 +11,7 @@ import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 
-public class InodesBlock extends Block {
+public final class InodesBlock extends Block {
 	private static boolean bootstraped; //Not saved persistently
 	private Inode[] inodes; //Should be initialized in the bootstrap function only.
 	//private int version; //Inodes-block's current version number.
@@ -24,13 +24,28 @@ public class InodesBlock extends Block {
 	 * @param blockIndex The block number, starting from zero, of this inodesBlock. Although the
 	 *         inodesBlocks are sharded across machines, the blockIndex is relative to the whole
 	 *         system, not relative to this machine.
-	 * at param version This the version number of this inodesBlock. The current version number should be retrieved
+	 * @param version This the version number of this inodesBlock. The current version number should be retrieved
 	 *        from the inodesBlock version table (IBV table).
 	 */
-	InodesBlock(int blockIndex){
-		super(new InodesBlockID(blockIndex));
+	InodesBlock(InodesBlockID id){
+		super(id);
+		
+		inodes = new Inode[Constants.inodesPerBlock];
+		int blockIndex = id.blockIndex();
+		for (int j=0; j<Constants.inodesPerBlock; j++) {
+			long inumber = blockIndex*Constants.inodesPerBlock + j;
+			initInode(inumber);
+		}
+		
+		markDirty();
+		
 		//type = BlockType.InodeBlock;
 		//Must not initialize the "inodes" array in any constructor.
+	}
+	
+	void initInode(long inumber){
+		int inodeNumber = inodeIdxFromInumber(inumber);
+		inodes[inodeNumber] = new Inode(inumber);
 	}
 	
 	/**
@@ -53,14 +68,6 @@ public class InodesBlock extends Block {
 		return inodes[inodeNumber].fileSize();
 	}
 	
-	void initInode(long inumber){
-		int inodeNumber = inodeIdxFromInumber(inumber);
-		
-		lock();
-		inodes[inodeNumber] = new Inode(inumber);
-		unlock();
-	}
-	
 	@Override
 	public boolean shouldStoreGlobally() {
 		return true;
@@ -70,9 +77,9 @@ public class InodesBlock extends Block {
 	public void loadFrom(ByteBuffer buffer) throws IOException {
 		lock();
 		try {
-			inodes = new Inode[Constants.inodesPerBlock];
+			//inodes = new Inode[Constants.inodesPerBlock];
 			for(int i=0; i<Constants.inodesPerBlock; i++){
-				inodes[i] = new Inode(0);
+				//inodes[i] = new Inode(0);
 				inodes[i].loadFrom(buffer);
 			}
 		} finally {
@@ -208,8 +215,10 @@ public class InodesBlock extends Block {
 	/**
 	 * Creates inodeBlocks on local disk belonging to this machine.
 	 * @throws IOException
+	 * @throws InterruptedException 
+	 * @throws KawkabException 
 	 */
-	static void bootstrap() throws IOException{
+	static void bootstrap() throws IOException, InterruptedException, KawkabException{
 		if (bootstraped)
 			return;
 		
@@ -225,18 +234,11 @@ public class InodesBlock extends Block {
 		int rangeStart = Constants.inodeBlocksRangeStart;
 		int rangeEnd = rangeStart + Constants.inodeBlocksPerMachine;
 		for(int i=rangeStart; i<rangeEnd; i++){
-			InodesBlock block = new InodesBlock(i);
-			block.inodes = new Inode[Constants.inodesPerBlock];
-			for (int j=0; j<Constants.inodesPerBlock; j++) {
-				long inumber = i*Constants.inodesPerBlock + j;
-				block.inodes[j] = new Inode(inumber);
-			}
-			
-			File file = new File(block.id().localPath());
-			if (!file.exists()) {
-				//storage.writeBlock(block);
-				cache.createBlock(block);
-				count++;
+			InodesBlockID id = new InodesBlockID(i);
+			try {
+				cache.acquireBlock(id, true);
+			} finally {
+				cache.releaseBlock(id);
 			}
 		}
 		

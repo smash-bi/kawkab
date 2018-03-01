@@ -15,7 +15,7 @@ import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 
-public class DataSegment extends Block {
+public final class DataSegment extends Block {
 	//private MappedByteBuffer buffer;
 	//private SeekableByteChannel channel;
 	private byte[] bytes;
@@ -29,7 +29,7 @@ public class DataSegment extends Block {
 	private final Lock dirtyBytesLock;
 	
 	/**
-	 * The constructor should not create a new file in the underlying filesystem. This constructor
+	 * The constructor should not create a new file in the local storage. This constructor
 	 * does not reads data from the underlying file. Instead, use loadFrom and storeTo 
 	 * functions for that purpose.
 	 * 
@@ -38,11 +38,12 @@ public class DataSegment extends Block {
 	 */
 	DataSegment(DataSegmentID segmentID) {
 		super(segmentID);
-		bytes = new byte[0];
+		bytes = new byte[Constants.segmentSizeBytes];
 		dirtyBytesStart = Constants.segmentSizeBytes; //The variable is updated to correct value in adjustDirtyOffsets()
 		dirtyBytesLength = 0; //The variable is updated to correct value in adjustDirtyOffsets()
 		dirtyBytesLock = new ReentrantLock();
 		this.segmentID = segmentID;
+		markDirty();
 		//System.out.println(" Opened block: " + name());
 	}
 	
@@ -187,9 +188,9 @@ public class DataSegment extends Block {
 	
 	@Override
 	public boolean shouldStoreGlobally() {
-		System.out.println("[DataSegment] " + id().name() + " -> " + (segmentID.segmentInBlock()+1) + "/" + Constants.segmentsPerBlock + " " + blockIsFull);
-		if (segmentID.segmentInBlock()+1 == Constants.segmentsPerBlock 
-				&& blockIsFull) {
+		//System.out.println("[DS] " + id().name() + " -> " + (segmentID.segmentInBlock()+1) + "/" + Constants.segmentsPerBlock + " " + blockIsFull);
+		if (segmentID.segmentInBlock()+1 == Constants.segmentsPerBlock // If it is the last segment in the block 
+				&& blockIsFull) { // and the segment is full
 			return true;
 		}
 		
@@ -221,7 +222,7 @@ public class DataSegment extends Block {
 	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		lock();
 		try {
-			bytes = new byte[Constants.segmentSizeBytes];
+			//bytes = new byte[Constants.segmentSizeBytes];
 			ByteBuffer buffer = ByteBuffer.wrap(bytes);
 			
 			int bytesRead = Commons.readFrom(channel, buffer); 
