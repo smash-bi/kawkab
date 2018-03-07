@@ -117,7 +117,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 		
 		if (block.markInLocalQueue()) { //The block is already in the queue
-			System.out.println("[LSM] Block already in the local queue: " + block.id());
+			//System.out.println("[LSM] Block already in the local queue: " + block.id());
 			return;
 		}
 		

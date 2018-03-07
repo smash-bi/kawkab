@@ -41,7 +41,7 @@ public final class S3Backend implements GlobalBackend{
 		long rangeEnd = dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
 		
 		BlockID id = dstBlock.id();
-		if (id.type() == BlockType.DataBlock) { //If it's dataSegment, it can be any segment in the block. GlobalStore has complete blocks.
+		if (id.type() == BlockType.DATA_SEGMENT) { //If it's dataSegment, it can be any segment in the block. GlobalStore has complete blocks.
 			int segmentInBlock = ((DataSegmentID)id).segmentInBlock();
 			rangeStart = segmentInBlock * dstBlock.sizeWhenSerialized();
 			rangeEnd = rangeStart + dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
@@ -102,7 +102,7 @@ public final class S3Backend implements GlobalBackend{
 	@Override
 	public void storeToGlobal(Block srcBlock) throws KawkabException {
 		BlockID id = srcBlock.id(); 
-		System.out.println("[S3] Storing to global: " + id.localPath());
+		//System.out.println("[S3] Storing to global: " + id.localPath());
 		
 		String path = id.localPath();
 		File file = new File(path);

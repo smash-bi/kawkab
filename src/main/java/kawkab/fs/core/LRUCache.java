@@ -16,7 +16,7 @@ public final class LRUCache extends LinkedHashMap<String, CachedItem> {
 	
 	@Override
 	protected boolean removeEldestEntry(Entry<String, CachedItem> eldest) {
-		if (!(super.size() >= Constants.maxBlocksInCache))
+		if (super.size() < Constants.maxBlocksInCache)
 			return false;
 		
 		CachedItem toEvict = eldest.getValue();

@@ -38,7 +38,6 @@ public final class Ibmap extends Block{
 		this.blockIndex = id.blockIndex();
 		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
 		bitset = BitSet.valueOf(bytes);
-		markDirty();
 	}
 	
 	/**
@@ -174,7 +173,7 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	protected void getFromPrimary()  throws FileNotExistException, KawkabException, IOException {
+	protected void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException {
 		throw new KawkabException(new OperationNotSupportedException());
 	}
 
@@ -220,10 +219,14 @@ public final class Ibmap extends Block{
 		int rangeEnd = rangeStart + Constants.ibmapsPerMachine;
 		for(int i=rangeStart; i<rangeEnd; i++){
 			IbmapBlockID id = new IbmapBlockID(i);
-			try {
-				cache.acquireBlock(id, true); // This will create a new block in the local store. Moreover, the block is marked dirty in the constructor.
-			} finally {
-				cache.releaseBlock(id);
+			File file = new File(id.localPath());
+			if (!file.exists()) {
+				try {
+					Block block = cache.acquireBlock(id, true); // This will create a new block in the local store.
+					block.markDirty();
+				} finally {
+					cache.releaseBlock(id);
+				}
 			}
 			
 			/*Ibmap ibmap = new Ibmap(i);
@@ -241,20 +244,6 @@ public final class Ibmap extends Block{
 	boolean bootstraped(){
 		return bootstraped;
 	}
-	
-	/*@Override
-	String name() {
-		return id.name();
-	}
-	
-	static String name(int blockIndex) {
-		return IbmapBlockID.name(blockIndex);
-	}
-	
-	@Override
-	String localPath(){
-		return id.localPath();
-	}*/
 	
 	static void shutdown(){
 		System.out.println("Closing Ibmaps");

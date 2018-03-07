@@ -15,7 +15,7 @@ public final class Constants {
 	}
 	
 	public static int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
-	public static int nodesInSystem = 2; //FIXME: Get this from a configuration file or ZooKeeper
+	public static int nodesInSystem = 4; //FIXME: Get this from a configuration file or ZooKeeper
 	
 	//Default data block size in bytes
 	public static final int dataBlockSizeBytes    = 16*1024*1024;
@@ -39,8 +39,8 @@ public final class Constants {
 	public static final int inodeBlocksRangeStart = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
 																					 //Blocks start with ID 0.
 	
-	public static final int maxBlocksPerLocalDevice = 10000 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
-	public static final int maxBlocksInCache = 10000; //Size of the cache in number of blocks
+	public static final int maxBlocksPerLocalDevice = 30000 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
+	public static final int maxBlocksInCache = 30000; //Size of the cache in number of blocks
 	public static final int globalFetchExpiryTimeoutMs = 2500; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	public static final int primaryFetchExpiryTimeoutMs = 500; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
@@ -60,7 +60,7 @@ public final class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkMainServers = "10.10.0.11:2181,10.10.0.11:2182,10.10.0.11:2183";
+	public static final String zkMainServers = "10.10.0.1:2181,10.10.0.1:2182,10.10.0.1:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
 	public static final ZKClusterConfig zkMainCluster = 
@@ -68,7 +68,7 @@ public final class Constants {
 	
 	
 	//minio settings
-	public static final String[] minioServers = {"http://10.10.0.11:9000"};
+	public static final String[] minioServers = {"http://10.10.0.1:9000"};
 	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
@@ -89,7 +89,7 @@ public final class Constants {
 		System.out.println(String.format("Num. of segments per block = %d", segmentsPerBlock));
 		System.out.println(String.format("Direct blocks per inode .. = %d", directBlocksPerInode));
 		//System.out.println(String.format("Pointers per index block . = %d", numPointersInIndexBlock));
-		System.out.println(String.format("Maximum file size MB ..... = %.3f", Inode.maxFileSize/1024.0/1024.0));
+		System.out.println(String.format("Maximum file size MB ..... = %.3f", Inode.MAXFILESIZE/1024.0/1024.0));
 		System.out.println();
 		System.out.println(String.format("Ibmap block size MB ...... = %.3f", ibmapBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Ibmap blocks per machine . = %d", ibmapsPerMachine));
@@ -114,10 +114,10 @@ public final class Constants {
 		
 		thisNodeID = Integer.parseInt(nodeID);
 		nodesMap = new HashMap<Integer, NodeInfo>();  //Map of <NodeID, NodeInfo(NodeID, IP)> 
-		nodesMap.put(0, new NodeInfo(0, "10.10.0.12"));
-		nodesMap.put(1, new NodeInfo(1, "10.10.0.13"));
-		nodesMap.put(2, new NodeInfo(2, "10.10.0.14"));
-		nodesMap.put(3, new NodeInfo(3, "10.10.0.15"));
+		nodesMap.put(0, new NodeInfo(0, "10.10.0.2"));
+		nodesMap.put(1, new NodeInfo(1, "10.10.0.3"));
+		nodesMap.put(2, new NodeInfo(2, "10.10.0.4"));
+		nodesMap.put(3, new NodeInfo(3, "10.10.0.5"));
 	}
 	
 	private static void verify() {

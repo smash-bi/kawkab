@@ -10,7 +10,7 @@ public final class IbmapBlockID extends BlockID {
 	private final int mapNum;
 	
 	public IbmapBlockID(int mapNum) {
-		super(name(mapNum) ,BlockType.IbmapBlock);
+		super(name(mapNum) ,BlockType.IBMAP_BLOCK);
 		this.mapNum = mapNum;
 	}
 	

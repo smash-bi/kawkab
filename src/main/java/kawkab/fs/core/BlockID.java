@@ -6,19 +6,18 @@ import kawkab.fs.commons.Constants;
  * This class and its subclasses should be immutable.
  * 
  * The objects of this class should not last longer than one operation. BlockIDs should not be persisted. These IDs
- * contain information that is only valid at the time of the file operation. The values may become invalid across
- * multiple file operations.
+ * contain information that should be considered valid only at the time of the file operation.
  */
 public abstract class BlockID {
 	public enum BlockType {
-		DataBlock,  // A segment in a data block 
-		InodeBlock, 
-		IbmapBlock;
+		DATA_SEGMENT, 
+		INODES_BLOCK, 
+		IBMAP_BLOCK;
 		public static final BlockType values[] = values();
 	}
 	
-	//All the public fields in this class must be made immutable.
-	private final String key;
+	
+	private final String key; // A globally unique key based on the unique name of the block
 	private final BlockType type;
 	
 	public BlockID(String key, BlockType type){
@@ -62,21 +61,4 @@ public abstract class BlockID {
 	public BlockType type() {
 		return type;
 	}
-	
-	/*public Block newBlock() {
-		//TODO: Use an alternate solution where BlockIDs are of different types and they
-		//create only one type of blocks.
-		Block block;
-		if (type == BlockType.IbmapBlock) {
-			block = new Ibmap((int)lowBits);
-		} else if (type == BlockType.InodeBlock) {
-			block = new InodesBlock((int)lowBits);
-		} else if (type == BlockType.DataBlock) {
-			block = new DataBlock(this);
-		} else {
-			throw new IllegalArgumentException("Block type is invalid: " + type);
-		}
-		
-		return block;
-	}*/
 }

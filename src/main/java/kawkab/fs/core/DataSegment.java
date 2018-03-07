@@ -16,34 +16,30 @@ import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 
 public final class DataSegment extends Block {
-	//private MappedByteBuffer buffer;
-	//private SeekableByteChannel channel;
 	private byte[] bytes;
 	
-	//Keeps track of the offset and length of dirty bytes
-	private int dirtyBytesStart;
-	private int dirtyBytesLength;
-	private boolean blockIsFull; //Sets to true only when the block becomes full in an append operation.
 	private DataSegmentID segmentID;
 	
-	private final Lock dirtyBytesLock;
+	//Keeps track of the offset and length of dirty bytes
+	private int dirtyBytesStart;  // Offset of the dirty bytes that have not been synced to the local store yet
+	private int dirtyBytesLength; // Number of the dirty bytes
+	private boolean blockIsFull;  // Sets to true only when the block becomes full in an append operation.
+	private final Lock dirtyBytesLock; // To atomically update dirty bytes start and length
 	
 	/**
 	 * The constructor should not create a new file in the local storage. This constructor
 	 * does not reads data from the underlying file. Instead, use loadFrom and storeTo 
 	 * functions for that purpose.
 	 * 
-	 * This constructor should not create the bytes array. It is created in loadFrom function.
 	 * @param uuid
 	 */
 	DataSegment(DataSegmentID segmentID) {
 		super(segmentID);
 		bytes = new byte[Constants.segmentSizeBytes];
-		dirtyBytesStart = Constants.segmentSizeBytes; //The variable is updated to correct value in adjustDirtyOffsets()
+		dirtyBytesStart = Constants.segmentSizeBytes; //This initial value is important for the correct functioning of appendOffsetInBlock()
 		dirtyBytesLength = 0; //The variable is updated to correct value in adjustDirtyOffsets()
 		dirtyBytesLock = new ReentrantLock();
 		this.segmentID = segmentID;
-		markDirty();
 		//System.out.println(" Opened block: " + name());
 	}
 	
@@ -61,21 +57,9 @@ public final class DataSegment extends Block {
 		
 		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
 		int capacity = Constants.segmentSizeBytes - offsetInBlock;
-		
 		int toAppend = length <= capacity ? length : capacity;
 		
-		//long t = System.nanoTime();
 		System.arraycopy(data, offset, bytes, offsetInBlock, toAppend);
-		//long elapsed = (System.nanoTime() - t)/1000;
-		//System.out.println("elaped: " + elapsed);
-		
-		//buffer.position(offsetInBlock);
-		//buffer.put(data, offset, toAppend);
-		
-
-		/*ByteBuffer buffer = ByteBuffer.wrap(data, offset, toAppend);
-		channel.position(offsetInBlock);
-		int written = channel.write(buffer);*/
 		
 		adjustDirtyOffsets(offsetInBlock, toAppend);
 		markDirty();
@@ -84,8 +68,6 @@ public final class DataSegment extends Block {
 		if (offsetInBlock+toAppend == Constants.segmentSizeBytes) {
 			blockIsFull = true;
 		}
-		
-		//System.out.println("  Append: " + name() + " - " + toAppend);
 		
 		return toAppend;
 	}
@@ -182,13 +164,9 @@ public final class DataSegment extends Block {
 		return readSize;
 	}
 	
-	BlockID uuid(){
-		return id();
-	}
-	
 	@Override
 	public boolean shouldStoreGlobally() {
-		//System.out.println("[DS] " + id().name() + " -> " + (segmentID.segmentInBlock()+1) + "/" + Constants.segmentsPerBlock + " " + blockIsFull);
+		// Store in the global store only if this is the last segment of the block and this segment is full
 		if (segmentID.segmentInBlock()+1 == Constants.segmentsPerBlock // If it is the last segment in the block 
 				&& blockIsFull) { // and the segment is full
 			return true;
@@ -225,7 +203,7 @@ public final class DataSegment extends Block {
 			//bytes = new byte[Constants.segmentSizeBytes];
 			ByteBuffer buffer = ByteBuffer.wrap(bytes);
 			
-			int bytesRead = Commons.readFrom(channel, buffer); 
+			Commons.readFrom(channel, buffer); 
 			
 			//FIXME: What if the number of bytes read is less than the block size?
 			//if (bytesRead < bytes.length)
@@ -237,7 +215,7 @@ public final class DataSegment extends Block {
 	}
 	
 	@Override
-	protected void getFromPrimary() throws FileNotExistException, KawkabException, IOException {
+	protected void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
 		primaryNodeService.getSegment(segmentID, this);
 	}
 	
@@ -334,6 +312,9 @@ public final class DataSegment extends Block {
 		return new ByteArrayInputStream(bytes);
 	}
 	
+	/**
+	 * Returns the append offset with respect to the start of the block instead of the segment
+	 */
 	@Override
 	public int appendOffsetInBlock() {
 		dirtyBytesLock.lock();
@@ -348,6 +329,12 @@ public final class DataSegment extends Block {
 		return offset;
 	}
 	
+	/**
+	 * Updates the dirty bytes start and length
+	 * 
+	 * @param currentAppendPosition
+	 * @param length
+	 */
 	public void adjustDirtyOffsets(int currentAppendPosition, int length) {
 		dirtyBytesLock.lock();
 		
@@ -434,38 +421,64 @@ public final class DataSegment extends Block {
 		return id().toString();
 	}
 	
+	/**
+	 * Number of records of the given size that can fit in a segment
+	 * @param recordSize
+	 * @return
+	 */
 	public static int recordsPerSegment(int recordSize) {
 		return Constants.segmentSizeBytes / recordSize;
 	}
 	
+	/**
+	 * Is the given segment the last segment in the block
+	 */
 	public static boolean isLastSegment(long segmentInFile, long fileSize, int recordSize) {
 		return segmentInFile == segmentInFile(fileSize, recordSize);
 	}
 	
+	/**
+	 * Returns the segment number in the file that contains the given offset in the file
+	 */
 	public static long segmentInFile(long offsetInFile, int recordSize) {
-		// segmentInFile = recordInFile / recordsPerSegment
+		// segmentInFile := recordInFile / recordsPerSegment
 		return (offsetInFile/recordSize) / recordsPerSegment(recordSize); 
 	}
 	
+	/**
+	 * Returns the block number in the file that contains the given segment number in the file
+	 */
 	public static long blockInFile(long segmentInFile) {
-		// blockInFile = segmentInFile * segmentSize / blockSize
+		// blockInFile := segmentInFile x segmentSize / blockSize
 		return segmentInFile * Constants.segmentSizeBytes / Constants.dataBlockSizeBytes;
 	}
 	
+	/**
+	 * Returns the segment number in the block that corresponds to the given segment number in the file
+	 */
 	public static int segmentInBlock(long segmentInFile) {
-		// segmentInBlock = segmentInFile % segmentsPerBlock
+		// segmentInBlock := segmentInFile % segmentsPerBlock
 		return (int)(segmentInFile % Constants.segmentsPerBlock);
 	}
 	
+	/**
+	 * Returns the record number in its segment that contains the given offset in the file
+	 */
 	public static int recordInSegment(long offsetInFile, int recordSize) {
 		return (int)(offsetInFile/recordSize) % recordsPerSegment(recordSize);
 	}
 	
+	/**
+	 * Converts the offset in file to the offset in the segemnt
+	 */
 	public static int offsetInSegment(long offsetInFile, int recordSize) {
 		// offsetInSegment = recordInSegment + offsetInRecord
 		return (int)(recordInSegment(offsetInFile, recordSize) + (offsetInFile % recordSize));
 	}
 	
+	/**
+	 * Converts the offset in the file to the offset in the block
+	 */
 	private static int offsetInBlock(long offsetInFile, int recordSize) {
 		// offsetInBlock = segmentInBlock + recordInSegment + offsetInRecord
 		return (int)(segmentInBlock(segmentInFile(offsetInFile, recordSize)) + recordInSegment(offsetInFile, recordSize) + (offsetInFile % recordSize));

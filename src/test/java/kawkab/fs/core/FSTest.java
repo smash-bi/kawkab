@@ -46,7 +46,7 @@ public final class FSTest {
 		//tester.testFileSeek();
 		tester.testShutdown();
 		
-		Thread.sleep(5000);
+		//Thread.sleep(5000);
 	}
 	
 	/*public void testConfiguration(){
@@ -357,11 +357,13 @@ public final class FSTest {
 		
 		Random rand = new Random(0);
 		int bufSize = Constants.segmentSizeBytes;
-		long dataSize = 1L*2*1024*1024*1024;//1000*1000L*64L*bufSize + 3;
+		long dataSize = 5L*1024*1024*1024;//1000*1000L*64L*bufSize + 3;
 		long appended = 0;
 		
 		byte[] writeBuf = new byte[bufSize];
 		rand.nextBytes(writeBuf);
+		
+		long initSize = file.size();
 		
 		long startTime = System.currentTimeMillis();
 		while(appended < dataSize) {
@@ -373,7 +375,7 @@ public final class FSTest {
 		double sizeMB = appended/1024.0/1024.0;
 		double speed = sizeMB/durSec;
 		
-		System.out.println(String.format("Data size = %.0fMB, Write speed = %.0fMB/s", sizeMB, speed));
+		System.out.println(String.format("Data size = %.0fMB, Write speed = %.0fMB/s, File size = %dMB, %d, %d", sizeMB, speed, file.size()/1024/1024, initSize, file.inumber()));
 	}
 	
 	private void testWritePerformanceConcurrentFiles() throws IbmapsFullException, OutOfMemoryException, 
@@ -559,7 +561,7 @@ public final class FSTest {
 	
 	private void testConcurrentReadWrite() throws IbmapsFullException, OutOfMemoryException, 
 	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
-		final int numWorkers = 20;
+		final int numWorkers = 10;
 		final int numFiles = 100;
 		final int numTasks = 50;
 		final int appendSize = 13 * 1024 * 1024;
@@ -579,7 +581,7 @@ public final class FSTest {
 						byte[] buffer = new byte[bufferSize];
 						
 						for (int j=0; j<numTasks; j++) {
-							String fname = "CRWTest-"+rand.nextInt(numFiles);
+							String fname = "CRWTestss-"+rand.nextInt(numFiles);
 							FileHandle file = null;
 							
 							FileMode mode = rand.nextBoolean() ? FileMode.APPEND : FileMode.READ;

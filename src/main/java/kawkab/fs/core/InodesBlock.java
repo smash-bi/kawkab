@@ -36,16 +36,11 @@ public final class InodesBlock extends Block {
 			long inumber = blockIndex*Constants.inodesPerBlock + j;
 			initInode(inumber);
 		}
-		
-		markDirty();
-		
-		//type = BlockType.InodeBlock;
-		//Must not initialize the "inodes" array in any constructor.
 	}
 	
-	void initInode(long inumber){
-		int inodeNumber = inodeIdxFromInumber(inumber);
-		inodes[inodeNumber] = new Inode(inumber);
+	protected void initInode(long inumber) {
+		int inumberIdx = inodeIdxFromInumber(inumber);
+		inodes[inumberIdx] = new Inode(inumber);
 	}
 	
 	/**
@@ -91,9 +86,9 @@ public final class InodesBlock extends Block {
 	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		lock();
 		try {
-			inodes = new Inode[Constants.inodesPerBlock];
+			//inodes = new Inode[Constants.inodesPerBlock];
 			for(int i=0; i<Constants.inodesPerBlock; i++){
-				inodes[i] = new Inode(0);
+				//inodes[i] = new Inode(0);
 				inodes[i].loadFrom(channel);
 			}
 		} finally {
@@ -139,7 +134,7 @@ public final class InodesBlock extends Block {
 	}
 	
 	@Override
-	protected void getFromPrimary()  throws FileNotExistException, KawkabException, IOException {
+	protected void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException {
 		primaryNodeService.getInodesBlock((InodesBlockID)id(), this);
 	}
 
@@ -198,20 +193,6 @@ public final class InodesBlock extends Block {
 		}
 	}*/
 	
-	/*@Override
-	String name() {
-		return id.name();
-	}
-	
-	public static String name(int blockIndex){
-		return InodesBlockID.name(blockIndex);
-	}
-	
-	@Override
-	String localPath(){
-		return id.localPath();
-	}*/
-	
 	/**
 	 * Creates inodeBlocks on local disk belonging to this machine.
 	 * @throws IOException
@@ -235,10 +216,14 @@ public final class InodesBlock extends Block {
 		int rangeEnd = rangeStart + Constants.inodeBlocksPerMachine;
 		for(int i=rangeStart; i<rangeEnd; i++){
 			InodesBlockID id = new InodesBlockID(i);
-			try {
-				cache.acquireBlock(id, true);
-			} finally {
-				cache.releaseBlock(id);
+			File file = new File(id.localPath());
+			if (!file.exists()) {
+				try {
+					Block block = cache.acquireBlock(id, true); // Create a new block in the local store
+					block.markDirty(); // Mark the new block as dirty to write the initialized inodes
+				} finally {
+					cache.releaseBlock(id);
+				}
 			}
 		}
 		

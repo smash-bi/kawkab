@@ -9,7 +9,7 @@ public final class InodesBlockID extends BlockID{
 	private final int blockIndex;
 	
 	public InodesBlockID(int blockIndex) {
-		super(name(blockIndex) ,BlockType.InodeBlock);
+		super(name(blockIndex) ,BlockType.INODES_BLOCK);
 		this.blockIndex = blockIndex;
 	}
 	

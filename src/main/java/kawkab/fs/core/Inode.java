@@ -18,20 +18,16 @@ public final class Inode {
 	// The FileHandle first calls append and then calls updateSize to update the fileSize. Ideally, 
 	// We should update the fileSize immediately after adding a new block. The fileSize is not being
 	// updated immediately to allow concurrent reading and writing to the same dataBlock.
+	
 	private long inumber;
 	private volatile long fileSize;
 	private int recordSize = 1; //Temporarily set to 1 until we implement reading/writing records
 	private boolean dirty; //not saved persistently
 	private static Cache cache;
 	
-	public static final long maxFileSize;
+	public static final long MAXFILESIZE;
 	static {
-		//Calculate the maximum number of blocks that a file can span.
-		//long blocks = Constants.directBlocksPerInode;
-		//for(int i=1; i<=3; i++){ //Add the number of blocks for each index levels of 1, 2, and 3.
-		//	blocks += Commons.maxBlocksCount(i);
-		//}
-		maxFileSize = Long.MAX_VALUE;//blocks * Constants.blockSegmentSizeBytes;
+		MAXFILESIZE = Long.MAX_VALUE;//blocks * Constants.blockSegmentSizeBytes;
 		
 		try {
 			cache = Cache.instance();
@@ -40,15 +36,13 @@ public final class Inode {
 		}
 	}
 	
-	//The constructor is private to disable creating the object externally.
-	Inode(long inumber/*, int recordSize*/){
+	protected Inode(long inumber/*, int recordSize*/){
 		this.inumber = inumber;
 		//this.recordSize = recordSize;
 	}
 	
 	/**
-	 * @param offsetInFile
-	 * @return The ID of the segment that contains the given offsetInFile
+	 * Returns the ID of the segment that contains the given offset in file
 	 * @throws IOException
 	 */
 	private BlockID getByFileOffset(long offsetInFile) throws IOException {
@@ -59,9 +53,20 @@ public final class Inode {
 		return new DataSegmentID(inumber, blockInFile, segmentInBlock);
 	}
 	
+	/**
+	 * Performs the read operation. Single writer and multiple readers are allowed to write and read concurrently. 
+	 * @param buffer
+	 * @param length
+	 * @param offsetInFile
+	 * @return
+	 * @throws InvalidFileOffsetException
+	 * @throws IllegalArgumentException
+	 * @throws IOException
+	 * @throws KawkabException
+	 * @throws InterruptedException
+	 */
 	public int read(final byte[] buffer, final int length, final long offsetInFile) throws InvalidFileOffsetException, 
 					IllegalArgumentException, IOException, KawkabException, InterruptedException{
-		//TODO: Check for input bounds
 		if (length <= 0)
 			throw new IllegalArgumentException("Given length is 0.");
 		
@@ -204,7 +209,7 @@ public final class Inode {
 	 */
 	BlockID createNewBlock(final long fileSize) throws MaxFileSizeExceededException, IndexBlockFullException, InvalidFileOffsetException, IOException, InterruptedException, KawkabException{
 		//long blocksCount = (long)Math.ceil(1.0*fileSize / Constants.dataBlockSizeBytes);
-		if (fileSize + Constants.segmentSizeBytes > maxFileSize){
+		if (fileSize + Constants.segmentSizeBytes > MAXFILESIZE){
 			throw new MaxFileSizeExceededException();
 		}
 		

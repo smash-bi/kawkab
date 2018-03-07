@@ -78,7 +78,7 @@ public final class FileHandle {
 		
 		if (readOffsetInFile + length > fileSize)
 			throw new IllegalArgumentException(String.format(
-					"Read length exceeds file length: Read offset=%d, read length=%d, file length=%d.",
+					"Read length exceeds file length: Read offset=%d, read length=%d, file size=%d.",
 					readOffsetInFile, length, fileSize));
 		
 		int bytesRead = 0;
@@ -233,9 +233,9 @@ public final class FileHandle {
 		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
 		BlockID id = new InodesBlockID(inodesBlockIdx);
 		
-		InodesBlock block = null;
+		InodesBlock inodesBlock = null;
 		try {
-			block = (InodesBlock)cache.acquireBlock(id, false);
+			inodesBlock = (InodesBlock)cache.acquireBlock(id, false);
 			//block.lock();
 			//try {
 				//TODO: 3. If file is currently being updated, wait on an updateCondition
@@ -244,21 +244,21 @@ public final class FileHandle {
 			//	block.unlock();
 			//}
 			
-			Inode inode = block.getInode(inumber);
+			Inode inode = inodesBlock.getInode(inumber);
 			appendedBytes = inode.append(data, offset, length);
 			
 			if (appendedBytes > 0) {
 				try {
-					block.lock();
+					inodesBlock.lock();
 					inode.updateSize(appendedBytes);
-					block.markDirty();
+					inodesBlock.markDirty();
 				} finally {
-					block.unlock();
+					inodesBlock.unlock();
 				}
 			}
 		} finally {
-			if (block != null) {
-				cache.releaseBlock(block.id());
+			if (inodesBlock != null) {
+				cache.releaseBlock(inodesBlock.id());
 			}
 		}
 		
@@ -298,4 +298,7 @@ public final class FileHandle {
 		return readOffsetInFile;
 	}
 	
+	public long inumber() { // For debugging only
+		return inumber;
+	}
 }

@@ -47,7 +47,7 @@ public class GlobalStoreManager {
 	
 	public void store(Block srcBlock, SyncCompleteListener listener) {
 		if (srcBlock.markInGlobalQueue()) { // The block is already in the queue or being processed
-			System.out.println("[GSM] Already in queue: " + srcBlock.id());
+			//System.out.println("[GSM] Already in queue: " + srcBlock.id());
 			return;
 		}
 		

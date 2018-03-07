@@ -21,7 +21,7 @@ public final class DataSegmentID extends BlockID {
 	 * @param loadFromPrimary Loading from the primary node is enabled or not
 	 */
 	public DataSegmentID(long inumber, long blockInFile, int segmentInBlock) {
-		super(name(inumber, blockInFile, segmentInBlock), BlockType.DataBlock);
+		super(name(inumber, blockInFile, segmentInBlock), BlockType.DATA_SEGMENT);
 		this.inumber = inumber;
 		this.blockInFile = blockInFile;
 		this.segmentInBlock = segmentInBlock;
