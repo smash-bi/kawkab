@@ -39,10 +39,11 @@ public final class Constants {
 	public static final int inodeBlocksRangeStart = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
 																					 //Blocks start with ID 0.
 	
-	public static final int maxBlocksPerLocalDevice = 30000 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
-	public static final int maxBlocksInCache = 30000; //Size of the cache in number of blocks
-	public static final int globalFetchExpiryTimeoutMs = 2500; //Expire data fetched from the global store after dataExpiryTimeoutMs
-	public static final int primaryFetchExpiryTimeoutMs = 500; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
+	public static final int maxBlocksPerLocalDevice = 20480 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
+	public static final int maxBlocksInCache        = 200; //Size of the cache in number of blocks
+	
+	public static final int globalFetchExpiryTimeoutMs  = 3000; //Expire data fetched from the global store after dataExpiryTimeoutMs
+	//public static final int primaryFetchExpiryTimeoutMs = 5000; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
 	public static final int syncThreadsPerDevice = 2;
 	public static final int numWorkersStoreToGlobal = 2;

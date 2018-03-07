@@ -7,8 +7,10 @@ import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amazonaws.ClientConfiguration;
+import com.amazonaws.SdkBaseException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
@@ -19,6 +21,7 @@ import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.s3.model.S3ObjectInputStream;
 
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.BlockID.BlockType;
@@ -36,7 +39,7 @@ public final class S3Backend implements GlobalBackend{
 	}
 	
 	@Override
-	public void loadFromGlobal(Block dstBlock) throws FileNotExistException, KawkabException {
+	public void loadFromGlobal(final Block dstBlock) throws FileNotExistException, KawkabException {
 		long rangeStart = 0;
 		long rangeEnd = dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
 		
@@ -54,43 +57,54 @@ public final class S3Backend implements GlobalBackend{
 		getReq.setRange(rangeStart, rangeEnd);
 		
 		S3Object obj = null;
-		int retries = 10;
+		int retries = 3;
 		Random rand = new Random();
 		while(retries-- > 0) {
 			try {
 				obj = client.getObject(getReq); // client is an S3 client
 				break;
-			} catch (AmazonS3Exception ae) { // If the block does not exist in S3, it throws NoSucKey error code
-				if (ae.getErrorCode().equals("NoSuchKey")) {
-					throw new FileNotExistException("S3 NoSuckKey: " + path);
-				} else { // Otherwise, we should try again.
-					if (retries == 1)
-						throw new KawkabException(ae);
-					try {
-						Thread.sleep((100+(rand.nextLong()%400)));
-					} catch (InterruptedException e) {
-						throw new KawkabException(e);
+			} catch (SdkBaseException ae) { // If the block does not exist in S3, it throws NoSucKey error code
+				if (ae instanceof AmazonS3Exception) {
+					
+					if (((AmazonS3Exception)ae).getErrorCode().equals("NoSuchKey")) {
+						throw new FileNotExistException("S3 NoSuckKey: " + path);
 					}
 				}
-			} catch (Exception e) { //FIXME: Exception type is used for debugging here.
+				
 				if (retries == 1)
-					throw new KawkabException(e);
+					throw new KawkabException(ae);
 				try {
-					Thread.sleep((100+(rand.nextLong()%400)));
-				} catch (InterruptedException e1) {
-					throw new KawkabException(e1);
+					long sleepMs = (100+(Math.abs(rand.nextLong())%400));
+					System.out.println(String.format("[S3] Load from the global store failed for %s, retyring in %d ms...",
+							dstBlock.id().toString(),sleepMs));
+					Thread.sleep(sleepMs);
+				} catch (InterruptedException e) {
+					throw new KawkabException(e);
 				}
 			}
 		}
 		
-		
-		ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(obj.getObjectContent()));
+		S3ObjectInputStream is = obj.getObjectContent();
+		ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(is));
 		
 		try {
 			dstBlock.loadFrom(chan);
 		} catch (IOException e) {
 			e.printStackTrace();
+		} finally {
+			try {
+				chan.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			try {
+				is.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
+		
+		
 		
 		//TODO: Verify that the block does not exist locally. If it exists, should we overwrite the block?
 		//File file = new File(dstBlock.localPath());
@@ -100,7 +114,7 @@ public final class S3Backend implements GlobalBackend{
 	}
 	
 	@Override
-	public void storeToGlobal(Block srcBlock) throws KawkabException {
+	public void storeToGlobal(final Block srcBlock) throws KawkabException {
 		BlockID id = srcBlock.id(); 
 		//System.out.println("[S3] Storing to global: " + id.localPath());
 		

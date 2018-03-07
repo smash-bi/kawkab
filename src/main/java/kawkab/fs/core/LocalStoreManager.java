@@ -50,6 +50,12 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		startWorkers();
 	}
 	
+	/**
+	 * Start the workers that store blocks in the local store
+	 * 
+	 * We are not using ExecutorService because we want the same worker to store the same block. We want to assign
+	 * work based on the blocks, which is not easily achievable using ExecutorService.
+	 */
 	private void startWorkers() {
 		storeQs = new LinkedBlockingQueue[numWorkers];
 		for(int i=0; i<numWorkers; i++) {
@@ -69,11 +75,14 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 	}
 	
+	/**
+	 * The workers poll the same queue 
+	 */
 	private void runStoreWorker(LinkedBlockingQueue<Block> reqs) {
 		while(working) {
 			Block block = null;
 			try {
-				block = reqs.poll(1, TimeUnit.SECONDS);
+				block = reqs.poll(2, TimeUnit.SECONDS); // Doing bounded waits to shutdown the system
 			} catch (InterruptedException e1) {
 				if (!working) {
 					break;
@@ -90,6 +99,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			}
 		}
 		
+		// Perform the remaining tasks in the queue
 		Block block = null;
 		while( (block = reqs.poll()) != null) {
 			try {
@@ -106,6 +116,15 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * queue after local storage is completed.
 	 * 
 	 * Repeated calls for the same block are coalesced by the block itself. See block.appendOffsetInBlock() function.
+	 * If the block is already in the queue, it is not added again. This works because (1) the worker checks that if
+	 * the dirty count is non-zero, it tries to add the block again in the queue, (2) the thread that has updated
+	 * the block first increments the dirty count and then tries to add in the queue. So the race between the worker
+	 * thread and the block-writer thread always result in adding at least one more job in the queue.
+	 * 
+	 * It may happen that the block is added in the queue by the block-writer, but the competing worker has finished
+	 * syncing all the dirty bytes. In this case, there will be an extra job in the queue. However, the block will not
+	 * by updated redundantly because the worker checks the dirty count before performing the store operation. If the
+	 * dirty count is zero, it ignores the job.
 	 * 
 	 * @param block The block to store locally, and potentially globally
 	 * @throws KawkabException if the localStore has already received the stop signal for shutting down.
@@ -116,7 +135,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			throw new KawkabException("LocalProcessor has already received stop signal.");
 		}
 		
-		if (block.markInLocalQueue()) { //The block is already in the queue
+		if (block.markInLocalQueue()) { //The block is already in the queue, the block should not be added again.
 			//System.out.println("[LSM] Block already in the local queue: " + block.id());
 			return;
 		}
@@ -127,15 +146,20 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		storeQs[queueNum].add(block);
 	}
 	
+	/**
+	 * 
+	 * @param block
+	 * @throws KawkabException
+	 */
 	private void processStoreRequest(Block block) throws KawkabException {
 		//System.out.println("[LSM] Store block: " + block.id().name());
 		
 		int dirtyCount = block.localDirtyCount();
 		
-		// This functions works correctly in combination with the store(block) function only if the same block is always 
+		// WARNING! This functions works correctly in combination with the store(block) function only if the same block is always 
 		// assigned to the same worker thread.
 		
-		if (dirtyCount == 0) { 
+		if (dirtyCount == 0) {
 			block.clearInLocalQueue();
 			return;
 		}
@@ -162,6 +186,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 	}
 	
+	/**
+	 * Creates a new file in the underlying file system.
+	 */
 	public void createBlock(Block block) throws IOException, InterruptedException {
 		//System.out.println("[LSM] Create block: " + block.id() + ", available storePermits: " + storePermits.availablePermits());
 		storePermits.acquire();

@@ -45,7 +45,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	private final Condition localSyncWait; // To wait until the block is synced to the local store and canbe evicted from the cache.
 	
 	private long lastGlobalFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
-	private long lastPrimaryFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
+	//private long lastPrimaryFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
 	private final Lock dataLoadLock; //Lock for loading data in memory, disabling other threads from reading the block until data is loaded
 	
 	private AtomicInteger globalDirtyCnt;
@@ -77,7 +77,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 		localSyncWait = localStoreSyncLock.newCondition();
 		
 		lastGlobalFetchTimeMs = 0;
-		lastPrimaryFetchTimeMs = 0;
+		//lastPrimaryFetchTimeMs = 0;
 		dataLoadLock = new ReentrantLock();
 		
 		localDirtyCnt  = new AtomicInteger(0);
@@ -332,8 +332,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 		
 		long now = System.currentTimeMillis();
 		
-		if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs // If the last fetch from the global store has expired
-				|| lastPrimaryFetchTimeMs < now - Constants.primaryFetchExpiryTimeoutMs) { // or if the last fetch from the primary node has expired
+		if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
 			try {
 				dataLoadLock.lock(); // Prevent loading from concurrent readers
 				
@@ -341,11 +340,12 @@ public abstract class Block /*implements AutoCloseable*/ {
 				
 				if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
 					try {
-						System.out.println("[B] Load from the global: " + id);
+						//System.out.println("[B] Load from the global: " + id);
 						
 						globalStoreManager.load(this); // First try loading data from the global store
-						lastGlobalFetchTimeMs = now;
-						lastPrimaryFetchTimeMs = 0; //Indicates that this node has not fetched this segment from the primary node
+						lastGlobalFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store. 
+																// InodeBlocks are updated to the global store (not treating as an append only system).
+						//lastPrimaryFetchTimeMs = 0; //Indicates that this node has not fetched this block from the primary node
 						
 						return;
 						//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
@@ -353,29 +353,26 @@ public abstract class Block /*implements AutoCloseable*/ {
 						System.out.println("[B] Not found in the global: " + id);
 						lastGlobalFetchTimeMs = 0; // Failed to fetch from the global store
 					}
-				}
 				
-				// Either primary data fetch has timed out or the global fetch was timed out but the global fetch has failed
-				// In both cases, we need to fetch from the primary node
-				
-				//System.out.println("[B] Primary fetch expired or not found from the global: " + id);
-				
-				try {
-					//System.out.println("[B] Load from the primary: " + id);
-					loadBlockFromPrimary(); // Fetch from the primary node
-					lastPrimaryFetchTimeMs = now;
-					if (lastGlobalFetchTimeMs == 0) // Set to now if the global fetch has failed
-						lastGlobalFetchTimeMs = now;
-				} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
-					// Check again from the global store because the primary may have deleted the 
-					// block after copying to the global store
-					System.out.println("[B] Not found on the primary, trying again from the global: " + id);
-					globalStoreManager.load(this); 
-					lastGlobalFetchTimeMs = now;
-					lastPrimaryFetchTimeMs = 0;
-				} catch (IOException ioe) {
-					System.out.println("[B] Not found in the global and the primary: " + id);
-					throw new KawkabException(ioe);
+					//System.out.println("[B] Primary fetch expired or not found from the global: " + id);
+					
+					try {
+						System.out.println("[B] Loading from the primary: " + id);
+						loadBlockFromPrimary(); // Fetch from the primary node
+						//lastPrimaryFetchTimeMs = now;
+						if (lastGlobalFetchTimeMs == 0) // Set to now if the global fetch has failed
+							lastGlobalFetchTimeMs = now;
+					} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
+						// Check again from the global store because the primary may have deleted the 
+						// block after copying to the global store
+						System.out.println("[B] Not found on the primary, trying again from the global: " + id);
+						globalStoreManager.load(this); 
+						lastGlobalFetchTimeMs = Long.MAX_VALUE;
+						//lastPrimaryFetchTimeMs = 0;
+					} catch (IOException ioe) {
+						System.out.println("[B] Not found in the global and the primary: " + id);
+						throw new KawkabException(ioe);
+					}
 				}
 			} finally {
 				dataLoadLock.unlock();
@@ -411,7 +408,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 						globalStoreManager.load(this); // Load from the global store if failed to load from the local store
 					}
 					
-					lastPrimaryFetchTimeMs = Long.MAX_VALUE;
+					//lastPrimaryFetchTimeMs = Long.MAX_VALUE;
 					lastGlobalFetchTimeMs = Long.MAX_VALUE; // Once data is loaded on the primary, it should not expired because 
 				                                        // the concurrent readers/writer read/modify the same block in the cache.
 				}

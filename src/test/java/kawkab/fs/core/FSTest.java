@@ -562,8 +562,8 @@ public final class FSTest {
 	private void testConcurrentReadWrite() throws IbmapsFullException, OutOfMemoryException, 
 	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
 		final int numWorkers = 10;
-		final int numFiles = 100;
-		final int numTasks = 50;
+		final int numFiles = 500;
+		final int numTasks = 500;
 		final int appendSize = 13 * 1024 * 1024;
 		final int bufferSize = Constants.dataBlockSizeBytes/2;
 		Thread[] workers = new Thread[numWorkers];
@@ -580,8 +580,8 @@ public final class FSTest {
 						Filesystem fs = Filesystem.instance();
 						byte[] buffer = new byte[bufferSize];
 						
-						for (int j=0; j<numTasks; j++) {
-							String fname = "CRWTestss-"+rand.nextInt(numFiles);
+						for (int nTask=0; nTask<numTasks; nTask++) {
+							String fname = "CRWTestH-"+rand.nextInt(numFiles);
 							FileHandle file = null;
 							
 							FileMode mode = rand.nextBoolean() ? FileMode.APPEND : FileMode.READ;
@@ -589,15 +589,15 @@ public final class FSTest {
 							try {
 								file = fs.open(fname, mode, new FileOptions());
 							} catch (InvalidFileModeException | FileNotExistException e) {
-								System.out.println("\t["+workerID+"] Skipping file: " + fname);
-								j--;
+								System.out.println("\t<"+workerID+"> Skipping file: " + fname);
+								nTask--;
 								continue;
 							}
 							
 							if (mode == FileMode.APPEND) {
 								long sizeMB = (file.size() + appendSize)/1024/1024;
 								
-								System.out.println("\t<"+workerID+"> Writing file: " + fname + " up to " + sizeMB + " MB");
+								System.out.println("\t<"+workerID+"> Task: " + nTask + ", Writing file: " + fname + " up to " + sizeMB + " MB");
 								int appended = 0;
 								while(appended < appendSize) {
 									int toWrite = (int)(appended+bufferSize <= appendSize ? bufferSize : appendSize - appended);
@@ -610,7 +610,7 @@ public final class FSTest {
 								long dataSize = file.size();
 								long read = 0;
 								
-								System.out.println("\t<"+workerID+"> Reading file: " + fname + " up to " + (dataSize/1024/1024) + " MB");
+								System.out.println("\t<"+workerID+"> Task: \" + nTask + \", Reading file: " + fname + " up to " + (dataSize/1024/1024) + " MB");
 								
 								while(read < dataSize) {
 									int toRead = (int)(read+bufferSize < dataSize ? bufferSize : dataSize - read);

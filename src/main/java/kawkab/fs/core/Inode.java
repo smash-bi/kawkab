@@ -145,7 +145,7 @@ public final class Inode {
 			int lastSegCapacity = Constants.segmentSizeBytes - (int)(fileSize % Constants.segmentSizeBytes);
 			
 			//if (fileSize % Constants.dataBlockSizeBytes == 0) {
-			if ((int)(fileSize % Constants.dataBlockSizeBytes) == 0) { // if last block is full
+			if ((int)(fileSize % Constants.dataBlockSizeBytes) == 0) { // if the last block is full
 				try {
 					lastSegID = createNewBlock(fileSize);
 					lastSegCapacity = Constants.segmentSizeBytes;

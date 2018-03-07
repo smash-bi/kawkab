@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.KawkabException;
 
 /**
@@ -116,7 +117,10 @@ public class Cache implements BlockEvictionListener{
 			cachedItem.incrementRefCnt();
 		} finally {                 // FIXME: Catch any exceptions and decrement the reference count before throwing  
 			cacheLock.unlock();     //        the exception. Change the caller functions to not release the block in 
-		}                           //        the case of an exception.
+		                            //        the case of an exception.
+		}
+		
+		assert cache.size() <= Constants.maxBlocksInCache;
 		
 		Block block = cachedItem.block();
 		if (createNewBlock) { //Not mutually exclusive because only one of the threads can create a new block as we have only one writer.

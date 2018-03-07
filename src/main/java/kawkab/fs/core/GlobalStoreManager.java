@@ -11,7 +11,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 public class GlobalStoreManager {
 	private static final Object initLock = new Object();
 	//private ExecutorService loadWorkers;
-	private ExecutorService storeWorkers; // To store blocks in the global store
+	private ExecutorService storeWorkers; // To store blocks in the global store. FIXME: Change similar to the LocalStoreManager so that same block is assigned to the same worker.
 	private GlobalBackend backend; // To interact with the global store
 	
 	private static GlobalStoreManager instance;
