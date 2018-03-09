@@ -80,7 +80,7 @@ public class GlobalStoreManager {
 		
 		count = srcBlock.clearAndGetGlobalDirty(count);
 		if (count > 0) {
-			System.out.println("[GSM] Global bit dirty, resubmitting block: " + srcBlock.id());
+			//System.out.println("[GSM] Global bit dirty, resubmitting block: " + srcBlock.id());
 			store(srcBlock, listener);
 			return;
 		}

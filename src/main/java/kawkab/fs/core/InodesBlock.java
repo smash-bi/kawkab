@@ -69,6 +69,11 @@ public final class InodesBlock extends Block {
 	}
 	
 	@Override
+	public boolean evictLocallyOnMemoryEviction() {
+		return false;
+	}
+	
+	@Override
 	public void loadFrom(ByteBuffer buffer) throws IOException {
 		lock();
 		try {

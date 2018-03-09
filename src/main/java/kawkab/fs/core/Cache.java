@@ -183,6 +183,7 @@ public class Cache implements BlockEvictionListener{
 	 * The caller already has the cacheLock acquired when this function is called.
 	 * 
 	 * The reference count for the cachedItem is zero. Otherwise, this function cannot be called.
+	 * @throws KawkabException 
 	 */
 	@Override
 	public void beforeEviction(CachedItem cachedItem) {
@@ -192,7 +193,8 @@ public class Cache implements BlockEvictionListener{
 	                                  // lead to performance problems because the thread sleeps while holding
 	                                  // the cacheLock. The lock cannot be released because otherwise another
 	                                  // thread can come and may acquire the block.
-		} catch (InterruptedException e) {
+			localStore.notifyEvictedFromCache(cachedItem.block());
+		} catch (InterruptedException | KawkabException e) {
 			e.printStackTrace();
 		}
 	}

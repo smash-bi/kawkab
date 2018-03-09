@@ -581,7 +581,7 @@ public final class FSTest {
 						byte[] buffer = new byte[bufferSize];
 						
 						for (int nTask=0; nTask<numTasks; nTask++) {
-							String fname = "CRWTestH-"+rand.nextInt(numFiles);
+							String fname = "CRWTestD-"+rand.nextInt(numFiles);
 							FileHandle file = null;
 							
 							FileMode mode = rand.nextBoolean() ? FileMode.APPEND : FileMode.READ;
@@ -597,7 +597,7 @@ public final class FSTest {
 							if (mode == FileMode.APPEND) {
 								long sizeMB = (file.size() + appendSize)/1024/1024;
 								
-								System.out.println("\t<"+workerID+"> Task: " + nTask + ", Writing file: " + fname + " up to " + sizeMB + " MB");
+								//System.out.println("\t<"+workerID+"> Task: " + nTask + ", Writing file: " + fname + " up to " + sizeMB + " MB");
 								int appended = 0;
 								while(appended < appendSize) {
 									int toWrite = (int)(appended+bufferSize <= appendSize ? bufferSize : appendSize - appended);
@@ -610,7 +610,7 @@ public final class FSTest {
 								long dataSize = file.size();
 								long read = 0;
 								
-								System.out.println("\t<"+workerID+"> Task: \" + nTask + \", Reading file: " + fname + " up to " + (dataSize/1024/1024) + " MB");
+								//System.out.println("\t<"+workerID+"> Task: \" + nTask + \", Reading file: " + fname + " up to " + (dataSize/1024/1024) + " MB");
 								
 								while(read < dataSize) {
 									int toRead = (int)(read+bufferSize < dataSize ? bufferSize : dataSize - read);
@@ -625,7 +625,6 @@ public final class FSTest {
 								}
 							}
 						}
-						
 					} catch (KawkabException | IOException | IbmapsFullException | InterruptedException | 
 							OutOfMemoryException | MaxFileSizeExceededException | InvalidFileOffsetException e) {
 						e.printStackTrace();

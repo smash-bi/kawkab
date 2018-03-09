@@ -61,10 +61,10 @@ public class Namespace {
 			try {
 				inumber = ns.getInumber(filename);
 			} catch(FileNotExistException fnee) {     //If the file does not exist
-				System.out.println("[NS] File not found: " + filename);
+				//System.out.println("[NS] File not found: " + filename);
 				
 				if (appendMode) { //Create file if the file is opened in the append mode.
-					System.out.println("[NS] Creating new file: " + filename);
+					//System.out.println("[NS] Creating new file: " + filename);
 					inumber = createNewFile();
 					//filesMap.put(filename, inumber);
 					
@@ -121,7 +121,7 @@ public class Namespace {
 			Ibmap ibmap = null;
 			
 			try {
-				System.out.println("[N] Map number: " + mapNum);
+				//System.out.println("[NS] Map number: " + mapNum);
 				ibmap = (Ibmap)(cache.acquireBlock(id, false));
 				inumber = ibmap.nextInode();
 				if (inumber >= 0)
@@ -157,15 +157,15 @@ public class Namespace {
 		
 		int blockIndex = InodesBlock.blockIndexFromInumber(inumber);
 		BlockID id = new InodesBlockID(blockIndex);
-		InodesBlock inodes = null;
+		InodesBlock inodesBlock = null;
 		try {
-			System.out.println("[N] Inodes Block: " + blockIndex + ", inumber: " + inumber + ", primary: " + Commons.primaryWriterID(inumber));
+			//System.out.println("[NS] Inodes Block: " + blockIndex + ", inumber: " + inumber + ", primary: " + Commons.primaryWriterID(inumber));
 			
-			inodes = (InodesBlock)cache.acquireBlock(id, false);
-			inodes.initInode(inumber);
+			inodesBlock = (InodesBlock)cache.acquireBlock(id, false);
+			inodesBlock.initInode(inumber);
 		} finally {
-			if (inodes != null) {
-				cache.releaseBlock(inodes.id());
+			if (inodesBlock != null) {
+				cache.releaseBlock(inodesBlock.id());
 			}
 		}
 		

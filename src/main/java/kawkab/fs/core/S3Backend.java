@@ -59,51 +59,59 @@ public final class S3Backend implements GlobalBackend{
 		S3Object obj = null;
 		int retries = 3;
 		Random rand = new Random();
-		while(retries-- > 0) {
-			try {
-				obj = client.getObject(getReq); // client is an S3 client
-				break;
-			} catch (SdkBaseException ae) { // If the block does not exist in S3, it throws NoSucKey error code
-				if (ae instanceof AmazonS3Exception) {
+		try {
+			while(retries-- > 0) {
+				try {
+					obj = client.getObject(getReq); // client is an S3 client
+					break;
+				} catch (SdkBaseException ae) { // If the block does not exist in S3, it throws NoSucKey error code
+					if (ae instanceof AmazonS3Exception) {
+						
+						if (((AmazonS3Exception)ae).getErrorCode().equals("NoSuchKey")) {
+							throw new FileNotExistException("S3 NoSuckKey: " + path);
+						}
+					}
 					
-					if (((AmazonS3Exception)ae).getErrorCode().equals("NoSuchKey")) {
-						throw new FileNotExistException("S3 NoSuckKey: " + path);
+					if (retries == 1)
+						throw new KawkabException(ae);
+					try {
+						long sleepMs = (100+(Math.abs(rand.nextLong())%400));
+						System.out.println(String.format("[S3] Load from the global store failed for %s, retyring in %d ms...",
+								dstBlock.id().toString(),sleepMs));
+						Thread.sleep(sleepMs);
+					} catch (InterruptedException e) {
+						throw new KawkabException(e);
 					}
 				}
-				
-				if (retries == 1)
-					throw new KawkabException(ae);
+			}
+			
+			S3ObjectInputStream is = obj.getObjectContent();
+			ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(is));
+			
+			try {
+				dstBlock.loadFrom(chan);
+			} catch (IOException e) {
+				e.printStackTrace();
+			} finally {
 				try {
-					long sleepMs = (100+(Math.abs(rand.nextLong())%400));
-					System.out.println(String.format("[S3] Load from the global store failed for %s, retyring in %d ms...",
-							dstBlock.id().toString(),sleepMs));
-					Thread.sleep(sleepMs);
-				} catch (InterruptedException e) {
-					throw new KawkabException(e);
+					chan.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				try {
+					is.close();
+				} catch (IOException e) {
+					e.printStackTrace();
 				}
 			}
-		}
-		
-		S3ObjectInputStream is = obj.getObjectContent();
-		ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(is));
-		
-		try {
-			dstBlock.loadFrom(chan);
-		} catch (IOException e) {
-			e.printStackTrace();
 		} finally {
-			try {
-				chan.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-			try {
-				is.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+			if (obj != null)
+				try {
+					obj.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 		}
-		
 		
 		
 		//TODO: Verify that the block does not exist locally. If it exists, should we overwrite the block?

@@ -19,7 +19,7 @@ public final class Constants {
 	
 	//Default data block size in bytes
 	public static final int dataBlockSizeBytes    = 16*1024*1024;
-	public static final int segmentsPerBlock      = 16;
+	public static final int segmentsPerBlock      = 1;
 	public static final int segmentSizeBytes = dataBlockSizeBytes/segmentsPerBlock;
 	public static final int directBlocksPerInode = 0;
 	//public static final int numPointersInIndexBlock = blockSegmentSizeBytes/IndexBlock.pointerSizeBytes;
@@ -39,14 +39,14 @@ public final class Constants {
 	public static final int inodeBlocksRangeStart = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
 																					 //Blocks start with ID 0.
 	
-	public static final int maxBlocksPerLocalDevice = 20480 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
-	public static final int maxBlocksInCache        = 200; //Size of the cache in number of blocks
+	public static final int maxBlocksPerLocalDevice = 200 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
+	public static final int maxBlocksInCache        = 100; //Size of the cache in number of blocks
 	
 	public static final int globalFetchExpiryTimeoutMs  = 3000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	//public static final int primaryFetchExpiryTimeoutMs = 5000; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
-	public static final int syncThreadsPerDevice = 2;
-	public static final int numWorkersStoreToGlobal = 2;
+	public static final int syncThreadsPerDevice = 1;
+	public static final int numWorkersStoreToGlobal = 1;
 	//public static final int numWorkersLoadFromGlobal = 5;
 	
 	public static final String basePath = "fs";

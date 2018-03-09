@@ -176,6 +176,11 @@ public final class DataSegment extends Block {
 	}
 	
 	@Override
+	public boolean evictLocallyOnMemoryEviction() {
+		return shouldStoreGlobally();
+	}
+	
+	@Override
 	public void loadFrom(ByteBuffer buffer) throws IOException {
 		if (buffer.remaining() < Constants.segmentSizeBytes) {
 			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "

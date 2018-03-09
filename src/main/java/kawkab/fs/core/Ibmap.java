@@ -65,7 +65,7 @@ public final class Ibmap extends Block{
 	
 	private long bitIdxToInumber(int ibmapIdx, int bitIndex){
 		long inumber = (8L*ibmapIdx*Constants.ibmapBlockSizeBytes) + bitIndex;
-		System.out.println("[Ibmap] blockIdx: " + ibmapIdx + ", bitIdx: " + bitIndex + ", inumber: " + inumber);
+		//System.out.println("[Ibmap] blockIdx: " + ibmapIdx + ", bitIdx: " + bitIndex + ", inumber: " + inumber);
 		return inumber;
 	}
 	
@@ -99,6 +99,11 @@ public final class Ibmap extends Block{
 	@Override
 	public boolean shouldStoreGlobally() {
 		return true;
+	}
+	
+	@Override
+	public boolean evictLocallyOnMemoryEviction() {
+		return false;
 	}
 	
 	@Override

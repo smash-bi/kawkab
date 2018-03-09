@@ -216,23 +216,24 @@ public final class Inode {
 		//long blockNumber = fileSize/Constants.blockSegmentSizeBytes; //Zero based block number;
 		
 		long segmentInFile = DataSegment.segmentInFile(fileSize, recordSize);
-		int segmentInBlock = DataSegment.segmentInBlock(segmentInFile);
 		long blockInFile = DataSegment.blockInFile(segmentInFile);
+		int segmentInBlock = DataSegment.segmentInBlock(segmentInFile);
 		
 		assert segmentInBlock == 0;
 		
-		DataSegmentID dataSegmentID = new DataSegmentID(inumber, blockInFile, segmentInBlock);
+		DataSegmentID dsid = new DataSegmentID(inumber, blockInFile, segmentInBlock);
 		//DataSegment block = new DataSegment(dataSegmentID);
 		//cache.createBlock(block);
 		try {
-			cache.acquireBlock(dataSegmentID, true);
+			Block seg = cache.acquireBlock(dsid, true);
+			seg.markDirty();
 		} finally {
-			cache.releaseBlock(dataSegmentID);
+			cache.releaseBlock(dsid);
 		}
 		
 		//System.out.println(String.format("Created blk: %d, fileSize=%d", blockNumber, fileSize));
 		
-		return dataSegmentID;
+		return dsid;
 	}
 	
 	public long fileSize(){

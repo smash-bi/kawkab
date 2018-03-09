@@ -7,13 +7,15 @@ import kawkab.fs.commons.Constants;
 import net.openhft.chronicle.map.ChronicleMap;
 
 public final class LocalStoreDB {
+	private final int maxSize;
 	private static final String mapFilePath = Constants.basePath + "/localStoreDB/chroniclemap-"+Constants.thisNodeID;
 	private static final String mapName = "localStoreDB";
 	private ChronicleMap<String, String> map; // Path to ID map. A key is a block's path because the data segments belonging
 	                                          // to the same block have the same path. In this way, we save the number of
 	                                          // entries in the map.
 	
-	public LocalStoreDB() throws IOException {
+	public LocalStoreDB(int maxSize) throws IOException {
+		this.maxSize = maxSize;
 		initMap();
 	}
 	
@@ -29,7 +31,7 @@ public final class LocalStoreDB {
 			    .name(mapName)
 			    .averageKeySize(72)
 			    .averageValueSize(32)
-			    .entries(1000000)
+			    .entries(maxSize+100)
 			    .createPersistedTo(new File(mapFilePath));
 	}
 	
@@ -38,7 +40,13 @@ public final class LocalStoreDB {
 	 */
 	public synchronized String put(BlockID id) {
 		//System.out.println("[LSDB] Added: " + id.name());
-		return map.put(id.localPath(), id.name());
+		String ret = map.putIfAbsent(id.localPath(), id.name());
+		if (ret != null)
+			System.out.println(map.size());
+		
+		assert map.size() <= maxSize;
+		
+		return ret;
 	}
 	
 	/**
@@ -64,6 +72,11 @@ public final class LocalStoreDB {
 	 */
 	public synchronized String removeEntry(BlockID id) {
 		//System.out.println("[LSDB] Removed: " + id.localPath());
+		System.out.println("\t"+map.size());
 		return map.remove(id.localPath());
+	}
+	
+	public synchronized int size() {
+		return map.size();
 	}
 }

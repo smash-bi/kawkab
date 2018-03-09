@@ -44,8 +44,16 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		globalProc = GlobalStoreManager.instance();
 		numWorkers = Constants.syncThreadsPerDevice;
 		
+		storedFilesMap = new LocalStoreDB(maxBlocks);
 		storePermits = new Semaphore(maxBlocks);
-		storedFilesMap = new LocalStoreDB();
+		
+		int inLocalSystem = storedFilesMap.size();
+		assert inLocalSystem <= maxBlocks;
+		try {
+			storePermits.acquire(inLocalSystem);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 		
 		startWorkers();
 	}
@@ -166,7 +174,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		try {
 			storeBlock(block);
-			storedFilesMap.put(block.id()); //FIXME: What if an error occurs here. Should we remove the locally stored block?
+			//storedFilesMap.put(block.id()); //FIXME: What if an error occurs here. Should we remove the locally stored block?
 			
 			if (block.shouldStoreGlobally()) {
 				globalProc.store(block, this);
@@ -191,6 +199,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 */
 	public void createBlock(Block block) throws IOException, InterruptedException {
 		//System.out.println("[LSM] Create block: " + block.id() + ", available storePermits: " + storePermits.availablePermits());
+		
+		System.out.println("\t\tAvailable permits: " + storePermits.availablePermits());
+		
 		storePermits.acquire();
 		
 		File file = new File(block.id().localPath());
@@ -272,7 +283,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		 * 
 		*/
 		
-		if (!block.isInCache()) {
+		System.out.println("[LSM] Finished storing to global: " + block.id().localPath());
+		
+		if (!block.isInCache() && block.evictLocallyOnMemoryEviction()) {
 			// Block is not cached. Therefore, the cache will not delete the block.
 			// The block is in the local store and it can be deleted.
 			// Therefore, mark that the block can be evicted from the local store.
@@ -281,9 +294,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	}
 	
 	public void notifyEvictedFromCache(Block block) throws KawkabException {
-		System.out.println("[LSM] Evicted from cache.");
+		//System.out.println("[LSM] Evicted from cache.");
 		
-		if (block.globalDirtyCount() == 0) {
+		if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
 			evict(block);
 		}
 		
@@ -293,12 +306,12 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	}
 	
 	private void evict(Block block) throws KawkabException {
-		if (!block.isInLocal())
+		if (block.id().onPrimaryNode() && !block.isInLocal())
 			return;
 		
 		BlockID id = block.id();
 		
-		System.out.println("[LSM] Evict: " + id);
+		System.out.println("[LSM] Evict locally: " + id);
 		
 		storedFilesMap.removeEntry(id);
 		

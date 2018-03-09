@@ -36,21 +36,24 @@ public final class ZKService {
 		if (clients.containsKey(cluster.id()))
 			return;
 		
+		CuratorFramework client = null;
+		
 		ExponentialBackoffRetry retryPolicy = new ExponentialBackoffRetry(Constants.connectRetrySleepMs, Constants.connectMaxRetries);
-		CuratorFramework client = CuratorFrameworkFactory.builder()  //There should be only one instance of the framework for each cluster
-				.retryPolicy(retryPolicy)
-				.connectString(cluster.servers())
-				.build();
-		client.start(); //Connect to ZooKeeper
 		
 		try {
+			client = CuratorFrameworkFactory.builder()  //There should be only one instance of the framework for each cluster
+					.retryPolicy(retryPolicy)
+					.connectString(cluster.servers())
+					.build();
+			client.start(); //Connect to ZooKeeper
 			client.blockUntilConnected();
+			clients.put(cluster.id(), client);
 		} catch(Exception e) {
 			e.printStackTrace();
+			if (client != null)
+				client.close();
 			return;
 		}
-		
-		clients.put(cluster.id(), client);
 	}
 	
 	public void addNode(int zkClusterID, String path, byte[] data) throws KeeperException, KawkabException { //TODO: Change KawkabException to proper type

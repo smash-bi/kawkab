@@ -47,7 +47,7 @@ public final class NamespaceService {
 	 * @throws KawkabException Any other exception
 	 */
 	public void addFile(String filename, long inumber) throws FileAlreadyExistsException, KawkabException {
-		System.out.println("[NSS] Adding file in the namespace: " + filename);
+		//System.out.println("[NSS] Adding file in the namespace: " + filename);
 		String path = fixPath(filename);
 		
 		try {

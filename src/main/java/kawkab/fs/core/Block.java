@@ -175,8 +175,8 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * Increment the local and global dirty counts.
 	 */
 	public void markDirty() {
-		localDirtyCnt.incrementAndGet();
 		globalDirtyCnt.incrementAndGet();
+		localDirtyCnt.incrementAndGet();
 	}
 	
 	/**
@@ -268,6 +268,8 @@ public abstract class Block /*implements AutoCloseable*/ {
 	public boolean clearInGlobalQueue() {
 		return inGlobalQueue.getAndSet(false);
 	}
+	
+	public abstract boolean evictLocallyOnMemoryEviction();
 	
 	public void lock(){
 		lock.lock();
