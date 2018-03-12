@@ -21,9 +21,13 @@ public class Cache implements BlockEvictionListener{
 	private volatile boolean closing = false;
 	
 	private Cache() throws IOException{
+		System.out.println("Initializing cache..." );
+		
 		cacheLock = new ReentrantLock();
 		localStore = LocalStoreManager.instance();
 		cache = new LRUCache(this);
+		
+		System.out.println("Local store instance: " + localStore.hashCode());
 	}
 	
 	public static Cache instance() throws IOException {
@@ -34,6 +38,8 @@ public class Cache implements BlockEvictionListener{
 				}
 			}
 		}
+		
+		System.out.println("\t\t\t\t\t\t"+instance.hashCode());
 		
 		return instance;
 	}
@@ -101,16 +107,17 @@ public class Cache implements BlockEvictionListener{
 		                  // same block.
 		
 		try { // To unlock the cache
-			if (!createNewBlock) {
+			if (createNewBlock) {
+				if (cache.containsKey(blockID.key())) {
+					throw new KawkabException("Block already exists: " + blockID);
+				}
+			} else {
 				cachedItem = cache.get(blockID.key()); // Try acquiring the block from the memory
 			}
 			
-			//TODO: To discuss: Should we check in every time and throw an exception if isNewBlock is true and a reference to the
-			//      block already exists in the cache?
-			
 			if (cachedItem == null){ // If the block is not cached
-				Block block = blockID.newBlock(); // Creates a new block object 
-				cachedItem = new CachedItem(block);
+				Block block = blockID.newBlock();   // Creates a new block object to save in the cache
+				cachedItem = new CachedItem(block); // Wrap the object in a cached item
 				cache.put(cachedItem.block().id().name(), cachedItem);
 			}
 			
@@ -125,6 +132,7 @@ public class Cache implements BlockEvictionListener{
 		Block block = cachedItem.block();
 		if (createNewBlock) { //Not mutually exclusive because only one of the threads can create a new block as we have only one writer.
 			              // Otherwise, we should acquire a lock.
+			//System.out.println("\t"+hashCode()+" " + localStore.hashCode());
 			localStore.createBlock(block);
 		} else {
 			block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock function

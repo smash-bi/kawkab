@@ -99,10 +99,6 @@ public final class Commons {
     	return Constants.thisNodeID; //FIXME: Get the id of the current node in a proper way. 
     }
     
-    public int nodesCount() {
-    	return Constants.nodesInSystem;
-    }
-    
     public static int primaryWriterID(long inumber) {
 		long inodeBlocksPerIbmap = Constants.ibmapBlockSizeBytes * Byte.SIZE;
 		long ibmapNum = inumber / inodeBlocksPerIbmap;

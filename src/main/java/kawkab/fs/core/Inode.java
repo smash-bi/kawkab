@@ -27,7 +27,7 @@ public final class Inode {
 	
 	public static final long MAXFILESIZE;
 	static {
-		MAXFILESIZE = Long.MAX_VALUE;//blocks * Constants.blockSegmentSizeBytes;
+		MAXFILESIZE = Constants.maxFileSizeBytes;//blocks * Constants.blockSegmentSizeBytes;
 		
 		try {
 			cache = Cache.instance();

@@ -12,8 +12,8 @@ import kawkab.fs.core.services.PrimaryNodeServiceServer;
 public final class Filesystem {
 	private static final Object initLock = new Object();
 	
-	private static boolean initialized;
-	private static boolean closed;
+	private static volatile boolean initialized;
+	private static volatile boolean closed;
 	
 	public enum FileMode { READ, APPEND }
 	
@@ -70,14 +70,17 @@ public final class Filesystem {
 	 * @throws KawkabException
 	 */
 	public Filesystem bootstrap() throws IOException, InterruptedException, KawkabException {
-		if (initialized)
+		if (initialized) {
+			System.out.println("\tFilesystem is already bootstraped, not doing it again...");
 			return this;
+		}
+		
+		initialized = true;
 		
 		InodesBlock.bootstrap();
 		Ibmap.bootstrap();
 		namespace.bootstrap();
 		
-		initialized = true;
 		return this;
 	}
 	

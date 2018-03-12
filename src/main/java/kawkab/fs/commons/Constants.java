@@ -3,7 +3,6 @@ package kawkab.fs.commons;
 import java.util.HashMap;
 import java.util.Map;
 
-import kawkab.fs.core.Inode;
 import kawkab.fs.core.NodeInfo;
 import kawkab.fs.core.zookeeper.ZKClusterConfig;
 
@@ -15,13 +14,14 @@ public final class Constants {
 	}
 	
 	public static int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
-	public static int nodesInSystem = 4; //FIXME: Get this from a configuration file or ZooKeeper
 	
 	//Default data block size in bytes
 	public static final int dataBlockSizeBytes    = 16*1024*1024;
 	public static final int segmentsPerBlock      = 1;
 	public static final int segmentSizeBytes = dataBlockSizeBytes/segmentsPerBlock;
 	public static final int directBlocksPerInode = 0;
+	
+	public static final long maxFileSizeBytes = Long.MAX_VALUE;
 	//public static final int numPointersInIndexBlock = blockSegmentSizeBytes/IndexBlock.pointerSizeBytes;
 	
 	//Ibmap blocks range for this machine
@@ -31,7 +31,7 @@ public final class Constants {
 
 	//Small inodesBlockSize shows better writes performance, perhaps due to locks in the InodesBlocks. The down side
 	//is that small size files consume more disk resources.
-	public static final int inodesBlockSizeBytes = 5120; //dataBlockSizeBytes; 
+	public static final int inodesBlockSizeBytes = 16*1024; //dataBlockSizeBytes; 
 	public static final int inodeSizeBytes = 64;//Inode.inodesSize();
 	public static final int inodesPerBlock = inodesBlockSizeBytes/inodeSizeBytes;
 	//FIXME: Calculate this based on the maximum number of files supported by a machine
@@ -61,7 +61,7 @@ public final class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkMainServers = "10.10.0.1:2181,10.10.0.1:2182,10.10.0.1:2183";
+	public static final String zkMainServers = "10.20.0.5:2181,10.20.0.5:2182,10.20.0.5:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
 	public static final ZKClusterConfig zkMainCluster = 
@@ -69,7 +69,7 @@ public final class Constants {
 	
 	
 	//minio settings
-	public static final String[] minioServers = {"http://10.10.0.1:9000"};
+	public static final String[] minioServers = {"http://10.20.0.5:9000"};
 	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
@@ -84,13 +84,12 @@ public final class Constants {
 	
 	public static void printConfig(){
 		System.out.println(String.format("This node ID ............. = %d",thisNodeID));
-		System.out.println(String.format("Nodes in system .......... = %d",nodesInSystem));
 		System.out.println(String.format("Data block size MB ....... = %.3f",dataBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Data block segment size MB = %.3f",segmentSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Num. of segments per block = %d", segmentsPerBlock));
 		System.out.println(String.format("Direct blocks per inode .. = %d", directBlocksPerInode));
 		//System.out.println(String.format("Pointers per index block . = %d", numPointersInIndexBlock));
-		System.out.println(String.format("Maximum file size MB ..... = %.3f", Inode.MAXFILESIZE/1024.0/1024.0));
+		System.out.println(String.format("Maximum file size MB ..... = %.3f", maxFileSizeBytes/1024.0/1024.0));
 		System.out.println();
 		System.out.println(String.format("Ibmap block size MB ...... = %.3f", ibmapBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Ibmap blocks per machine . = %d", ibmapsPerMachine));
@@ -115,10 +114,8 @@ public final class Constants {
 		
 		thisNodeID = Integer.parseInt(nodeID);
 		nodesMap = new HashMap<Integer, NodeInfo>();  //Map of <NodeID, NodeInfo(NodeID, IP)> 
-		nodesMap.put(0, new NodeInfo(0, "10.10.0.2"));
-		nodesMap.put(1, new NodeInfo(1, "10.10.0.3"));
-		nodesMap.put(2, new NodeInfo(2, "10.10.0.4"));
-		nodesMap.put(3, new NodeInfo(3, "10.10.0.5"));
+		nodesMap.put(0, new NodeInfo(0, "10.20.0.6"));
+		nodesMap.put(1, new NodeInfo(1, "10.20.0.7"));
 	}
 	
 	private static void verify() {
@@ -135,6 +132,6 @@ public final class Constants {
 		assert minioSecretKey.length() >= 8; //From minio documentation
 		
 		assert maxBlocksPerLocalDevice > inodeBlocksPerMachine + ibmapsPerMachine;
-		//assert maxBlocksPerLocalDevice > maxBlocksInCache;
+		assert maxBlocksPerLocalDevice > maxBlocksInCache;
 	}
 }

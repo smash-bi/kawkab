@@ -21,9 +21,9 @@ public final class FileHandle {
 	private long readOffsetInFile;
 	private static Cache cache;
 	
-	static {
+	static { //Using static block to catch the exception during initialization
 		try {
-			cache = cache.instance();
+			cache = Cache.instance();
 		} catch (IOException e) { //FIXME: Handle the exception properly
 			e.printStackTrace();
 		}

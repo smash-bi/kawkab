@@ -38,15 +38,13 @@ public final class LocalStoreDB {
 	/**
 	 * @return Previous location associated with blockName, or null if blockName was not already in the DB.
 	 */
-	public synchronized String put(BlockID id) {
+	public synchronized void put(BlockID id) {
 		//System.out.println("[LSDB] Added: " + id.name());
-		String ret = map.putIfAbsent(id.localPath(), id.name());
-		if (ret != null)
-			System.out.println(map.size());
 		
-		assert map.size() <= maxSize;
+		assert map.size()+1 <= maxSize;
+		assert !map.containsKey(id.localPath());
 		
-		return ret;
+		map.put(id.localPath(), id.name());
 	}
 	
 	/**
@@ -72,7 +70,6 @@ public final class LocalStoreDB {
 	 */
 	public synchronized String removeEntry(BlockID id) {
 		//System.out.println("[LSDB] Removed: " + id.localPath());
-		System.out.println("\t"+map.size());
 		return map.remove(id.localPath());
 	}
 	

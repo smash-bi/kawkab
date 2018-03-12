@@ -6,7 +6,6 @@ import java.io.RandomAccessFile;
 import java.nio.channels.SeekableByteChannel;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -55,6 +54,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			e.printStackTrace();
 		}
 		
+		System.out.println("Initializing local store manager");
+		
 		startWorkers();
 	}
 	
@@ -90,7 +91,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		while(working) {
 			Block block = null;
 			try {
-				block = reqs.poll(2, TimeUnit.SECONDS); // Doing bounded waits to shutdown the system
+				block = reqs.take();
 			} catch (InterruptedException e1) {
 				if (!working) {
 					break;
@@ -200,9 +201,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	public void createBlock(Block block) throws IOException, InterruptedException {
 		//System.out.println("[LSM] Create block: " + block.id() + ", available storePermits: " + storePermits.availablePermits());
 		
-		System.out.println("\t\tAvailable permits: " + storePermits.availablePermits());
-		
 		storePermits.acquire();
+		
+		System.out.println("\t\t Permits: " + storePermits.availablePermits() + ", map: " + storedFilesMap.size());
 		
 		File file = new File(block.id().localPath());
 		File parent = file.getParentFile();
@@ -283,7 +284,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		 * 
 		*/
 		
-		System.out.println("[LSM] Finished storing to global: " + block.id().localPath());
+		//System.out.println("[LSM] Finished storing to global: " + block.id().localPath());
 		
 		if (!block.isInCache() && block.evictLocallyOnMemoryEviction()) {
 			// Block is not cached. Therefore, the cache will not delete the block.
@@ -294,8 +295,6 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	}
 	
 	public void notifyEvictedFromCache(Block block) throws KawkabException {
-		//System.out.println("[LSM] Evicted from cache.");
-		
 		if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
 			evict(block);
 		}
@@ -321,6 +320,11 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 		
 		block.unsetInLocalStore();
+		
+		int mapSize = storedFilesMap.size();
+		int permits = storePermits.availablePermits();
+		System.out.println("\t\t\t\t\t\t Evict: Permits: " + permits + ", map: " + mapSize);
+		
 		storePermits.release();
 	}
 	
@@ -335,6 +339,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		for (int i=0; i<numWorkers; i++) {
 			//workers[i].interrupt();
 			try {
+				workers[i].interrupt();
 				workers[i].join();
 			} catch (InterruptedException e) {
 				e.printStackTrace();
@@ -342,7 +347,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 	}
 
-	public boolean exists(BlockID id) {
+	public boolean exists(BlockID id) { // FIXME: This function needs to be synchronized with the createNewBlock and evict functions
 		return storedFilesMap.exists(id);
 	}
 }

@@ -561,7 +561,11 @@ public final class FSTest {
 	
 	private void testConcurrentReadWrite() throws IbmapsFullException, OutOfMemoryException, 
 	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
-		final int numWorkers = 10;
+		System.out.println("-----------------------------------------------------------------");
+		System.out.println("       Concurrent Read Write Test");
+		System.out.println("-----------------------------------------------------------------");
+		
+		final int numWorkers = 1;
 		final int numFiles = 500;
 		final int numTasks = 500;
 		final int appendSize = 13 * 1024 * 1024;
@@ -581,7 +585,7 @@ public final class FSTest {
 						byte[] buffer = new byte[bufferSize];
 						
 						for (int nTask=0; nTask<numTasks; nTask++) {
-							String fname = "CRWTestD-"+rand.nextInt(numFiles);
+							String fname = "CRWTest1C-"+rand.nextInt(numFiles);
 							FileHandle file = null;
 							
 							FileMode mode = rand.nextBoolean() ? FileMode.APPEND : FileMode.READ;
@@ -589,7 +593,7 @@ public final class FSTest {
 							try {
 								file = fs.open(fname, mode, new FileOptions());
 							} catch (InvalidFileModeException | FileNotExistException e) {
-								System.out.println("\t<"+workerID+"> Skipping file: " + fname);
+								//System.out.println("\t<"+workerID+"> Skipping file: " + fname);
 								nTask--;
 								continue;
 							}
@@ -597,7 +601,7 @@ public final class FSTest {
 							if (mode == FileMode.APPEND) {
 								long sizeMB = (file.size() + appendSize)/1024/1024;
 								
-								//System.out.println("\t<"+workerID+"> Task: " + nTask + ", Writing file: " + fname + " up to " + sizeMB + " MB");
+								System.out.println("\t<"+workerID+"> Task: " + nTask + ", Writing file: " + fname + " up to " + sizeMB + " MB");
 								int appended = 0;
 								while(appended < appendSize) {
 									int toWrite = (int)(appended+bufferSize <= appendSize ? bufferSize : appendSize - appended);
@@ -610,7 +614,7 @@ public final class FSTest {
 								long dataSize = file.size();
 								long read = 0;
 								
-								//System.out.println("\t<"+workerID+"> Task: \" + nTask + \", Reading file: " + fname + " up to " + (dataSize/1024/1024) + " MB");
+								System.out.println("\t<"+workerID+"> Task: \" + nTask + \", Reading file: " + fname + " up to " + (dataSize/1024/1024) + " MB");
 								
 								while(read < dataSize) {
 									int toRead = (int)(read+bufferSize < dataSize ? bufferSize : dataSize - read);
