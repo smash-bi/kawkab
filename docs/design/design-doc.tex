@@ -228,7 +228,9 @@ information is stored in a distributed key-value store such as ZooKeeper, where
 the keys are the node IDs and the values are the inumber-ranges assigned to the
 nodes.  A distributed KV store does not become the performance bottleneck in
 this case because the nodes' churn rate is very low.  The system ensures that
-the inumber-ranges assigned to different nodes are disjoint.
+the inumber-ranges assigned to different nodes are disjoint. [This functinlaity
+is not implemented yet. Currently the partitioning is static in which a 
+predifined size partition is assigned to a node based on its node ID.]
 
 
 %[TBD: How to ensure that the ranges are non-overlapping?]
@@ -244,19 +246,19 @@ the inumber-ranges assigned to different nodes are disjoint.
 
 \subsection{Inodes and Inode-blocks} 
 
-Each node is assigned a fixed number of \textit{index-node blocks}
-(\textit{inode blocks})  where an inode-block is a fixed size structure
-consisting of fixed number of \textit{index-nodes} (\textit{inodes}).  An inode
+Each node is assigned a predefined number of \textit{index-node blocks}
+(\textit{inodes blocks}) where an inodes-block is a fixed size structure
+consisting of a number of \textit{index-nodes} (\textit{inodes}).  An inode
 is the main structure that keeps track of the file metadata that associates
 data blocks with the files.
 
 
 \subtopic{Inode:} Kawkab stores metadata of a file in a fixed size structure
 called \textit{index node} or \textit{inode}. An inode is uniquely identified by
-the \textit{inumber} assigned to the file with the inode is associated.
+the \textit{inumber} assigned to the file with which the inode is associated.
 
-The metadata stored in an inode includes the current file size and other
-information such as file creation time. Moreover, the inode includes
+An inode contains metadata information that includes the current file size 
+and other information such as file creation time. In addition, an inode includes
 the IDs of the blocks that store the data-index of the file.
 \hl{TBD: More about index storage when we add time series index in the
 filesystem.}
@@ -299,7 +301,7 @@ filesystem.}
 
 \subtopic{Inode Blocks:} A collection of inodes are stored in a fixed size
 structure called \textit{inode block}. An inode block consists of a fixed
-number of a series of inodes. 
+number of a continuous series of inodes. 
 
 
 \subtopic{Locating an inode-block:} An inode-block is uniquely identified by
