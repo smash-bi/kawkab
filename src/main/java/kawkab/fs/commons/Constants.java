@@ -49,6 +49,8 @@ public final class Constants {
 	public static final int numWorkersStoreToGlobal = 2;
 	//public static final int numWorkersLoadFromGlobal = 5;
 	
+	public static final int grpcClientFrameSize = segmentSizeBytes+100; //Frame size to use when fetching blocks from primary nodes
+	
 	public static final String basePath = "fs";
 	public static final String ibmapsPath = basePath+"/ibmaps";
 	public static final String inodeBlocksPath = basePath+"/inodes";
