@@ -76,7 +76,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 		localStoreSyncLock = new ReentrantLock();
 		localSyncWait = localStoreSyncLock.newCondition();
 		
-		lastGlobalFetchTimeMs = 0;
+		lastGlobalFetchTimeMs = 0; //This must be initialized to zero so that the block can be loaded on a non-primary node
 		//lastPrimaryFetchTimeMs = 0;
 		dataLoadLock = new ReentrantLock();
 		
@@ -194,7 +194,8 @@ public abstract class Block /*implements AutoCloseable*/ {
 	}
 	
 	/**
-	 * Reduces the local dirty count by the given count value. If the count becomes zero, the function 
+	 * Reduces the local dirty count by the given count value. If the count becomes zero, the function signals any
+	 * appender that is waiting for this block to be evicted from the cache. 
 	 */
 	public int clearAndGetLocalDirty(int count) {
 		int cnt = localDirtyCnt.addAndGet(-count);
@@ -208,6 +209,9 @@ public abstract class Block /*implements AutoCloseable*/ {
 			} finally {
 				localStoreSyncLock.unlock();
 			}
+			
+			// There can be only one thread waiting because the cache blocks other threads before calling the 
+			// waitUntilSynced() function.
 		}
 		
 		return cnt;
@@ -298,8 +302,8 @@ public abstract class Block /*implements AutoCloseable*/ {
 			try {
 				localStoreSyncLock.lock();
 				
-				System.out.println("[B] Cache is full. Waiting until this block is synced to the local store: " + id);
-				while (localDirtyCnt.get() > 0) {
+				System.out.println("[B] Waiting to evict until this block is synced to the local store: " + id + ", cnt: " + localDirtyCnt.get());
+				while (localDirtyCnt.get() > 0 || inLocalQueue.get()) { // Wait until the block is in local queue or the block is dirty
 					localSyncWait.await();
 				}
 				

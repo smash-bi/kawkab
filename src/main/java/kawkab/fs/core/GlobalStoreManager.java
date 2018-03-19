@@ -1,8 +1,6 @@
 package kawkab.fs.core;
 
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -51,7 +49,7 @@ public class GlobalStoreManager {
 		workers = new Thread[numWorkers];
 		for (int i=0; i<workers.length; i++) {
 			final int workerID = i;
-			workers[i] = new Thread("LocalStoreThread-"+i) {
+			workers[i] = new Thread("GlobalStoreWorker-"+i) {
 				public void run() {
 					runStoreWorker(storeQs[workerID]);
 				}
@@ -63,30 +61,33 @@ public class GlobalStoreManager {
 	
 	/**
 	 * This is a blocking function.
-	 * @param destBlock
+	 * .
+	 * @param block Destination block in which data will be loaded.
 	 * @throws FileNotExistException
 	 * @throws KawkabException
 	 */
-	public void load(Block destBlock) throws FileNotExistException, KawkabException {
+	public void load(Block block) throws FileNotExistException, KawkabException {
 		//TODO: Limit the number of load requests, probably using semaphore
 		
-		backend.loadFromGlobal(destBlock);
+		backend.loadFromGlobal(block);
 	}
 	
-	public void store(Block srcBlock, SyncCompleteListener listener) throws KawkabException {
+	public void store(Block block, SyncCompleteListener listener) throws KawkabException {
 		if (!working) {
-			throw new KawkabException("LocalProcessor has already received stop signal.");
+			throw new KawkabException("GlobalStoreManager has already received stop signal.");
 		}
 		
-		if (srcBlock.markInGlobalQueue()) { // The block is already in the queue or being processed
-			//System.out.println("[GSM] Already in queue: " + srcBlock.id());
+		if (block.markInGlobalQueue()) { // The block is already in the queue or being processed
+			//System.out.println("\t\t[GSM] Skip: " + block.id());
 			return;
 		}
 		
-		//Load balance between workers, but assign same worker to the same block.
-		int queueNum = Math.abs(srcBlock.id().key().hashCode()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
+		//System.out.println("\t\t\t[GSM] Enque: " + block.id());
 		
-		storeQs[queueNum].add(new Task(srcBlock, listener));
+		//Load balance between workers, but assign same worker to the same block.
+		int queueNum = Math.abs(block.id().key().hashCode()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
+		
+		storeQs[queueNum].add(new Task(block, listener));
 	}
 	
 	/**
@@ -125,30 +126,44 @@ public class GlobalStoreManager {
 	}
 	
 	private void storeToGlobal(Task task) throws KawkabException {
-		Block srcBlock = task.block;
-		int count = srcBlock.globalDirtyCount();
+		Block block = task.block;
+		int count = block.globalDirtyCount();
 		
-		assert count > 0; // count must be greater than zero because the block is added in the queue only if its dirty count is non-zero.
+		//assert count > 0; // count must be greater than zero because the block is added in the queue only if its dirty count is non-zero.
+		
+		// It may happen that the count is equal to zero. For example, assume dirty count is 1. The worker thread preempts 
+		// just before getting the current dirty count. The appender modifies the block and increments the dirty count to two.
+		// The worker preempts just before executing the line "block.markInGlobalQueue()" in this class's store() function.
+		// The worker thread resumes, get the dirty count to be 2, stores to the global store, clears the dirty count,
+		// which becomes zero. The worker clears the inGlobalQueue flag, notifiesStoreComplete() and returns. Now the
+		// dirty count is zero. The appender wakes up, checks block.markInGlobalQueue, which turns out to be previously
+		// false. Therefore, the appender adds the block again in the queue, even though now the dirty count is zero.
+		// Therefore, we can reach this line in code when the dirty count is zero.
 		
 		boolean successful = true;
-		try {
-			backend.storeToGlobal(srcBlock);
-		} catch (KawkabException e) {
-			e.printStackTrace();
-			successful = false;
+		if (count > 0) {
+			try {
+				backend.storeToGlobal(block);
+			} catch (KawkabException e) {
+				e.printStackTrace();
+				successful = false;
+			}
 		}
 		
-		srcBlock.clearInGlobalQueue(); //This must be cleared before clearing the dirt bit. Otherwise, we may miss a block update.
+		block.clearInGlobalQueue(); // We must get the current dirty count after clearing the inQueue flag because a
+		                               // concurrent writer may want to add the block in the queue. If the concurrent
+									   // writer fails to add in the queue, then this worker should add the block in the
+									   // if the dirty count is non-zero.
 		
-		count = srcBlock.clearAndGetGlobalDirty(count);
+		count = block.clearAndGetGlobalDirty(count);
 		if (count > 0) {
-			//System.out.println("[GSM] Global bit dirty, resubmitting block: " + srcBlock.id());
-			store(srcBlock, task.listener);
+			System.out.println("[GSM] Global bit dirty, resubmitting block: " + block.id());
+			store(block, task.listener);
 			return;
 		}
 		
 		try {
-			task.listener.notifyStoreComplete(srcBlock, successful);
+			task.listener.notifyStoreComplete(block, successful);
 		} catch (KawkabException e) {
 			e.printStackTrace();
 		}
@@ -164,7 +179,7 @@ public class GlobalStoreManager {
 		
 		for (int i=0; i<numWorkers; i++) {
 			try {
-				workers[i].interrupt();
+				//workers[i].interrupt();
 				workers[i].join();
 			} catch (InterruptedException e) {
 				e.printStackTrace();

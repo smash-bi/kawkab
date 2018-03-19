@@ -26,8 +26,6 @@ public class Cache implements BlockEvictionListener{
 		cacheLock = new ReentrantLock();
 		localStore = LocalStoreManager.instance();
 		cache = new LRUCache(this);
-		
-		System.out.println("Local store instance: " + localStore.hashCode());
 	}
 	
 	public static Cache instance() throws IOException {
@@ -38,8 +36,6 @@ public class Cache implements BlockEvictionListener{
 				}
 			}
 		}
-		
-		System.out.println("\t\t\t\t\t\t"+instance.hashCode());
 		
 		return instance;
 	}
@@ -107,12 +103,13 @@ public class Cache implements BlockEvictionListener{
 		                  // same block.
 		
 		try { // To unlock the cache
-			if (createNewBlock) {
-				if (cache.containsKey(blockID.key())) {
-					throw new KawkabException("Block already exists: " + blockID);
-				}
-			} else {
-				cachedItem = cache.get(blockID.key()); // Try acquiring the block from the memory
+			cachedItem = cache.get(blockID.key()); // Try acquiring the block from the memory
+			
+			if (createNewBlock && cachedItem != null) {
+				cachedItem.incrementRefCnt(); // FIXME: This will be removed from here when we properly handle the exception, 
+				                              // such that the caller don't have to release the block in the case of an exception.
+				System.out.println("Block already exists: " + blockID);
+				throw new KawkabException("Block already exists: " + blockID);
 			}
 			
 			if (cachedItem == null){ // If the block is not cached
@@ -129,10 +126,22 @@ public class Cache implements BlockEvictionListener{
 		
 		assert cache.size() <= Constants.maxBlocksInCache;
 		
+		// FIXME: Barging cannot happen between the writer that creates a new block and the readers that read the newly created
+		// block. This is because the file size is updated only after appending some data and the data can only be
+		// appended after creating the new block, which includes creating a new file in the local store.
+		
 		Block block = cachedItem.block();
 		if (createNewBlock) { //Not mutually exclusive because only one of the threads can create a new block as we have only one writer.
 			              // Otherwise, we should acquire a lock.
-			//System.out.println("\t"+hashCode()+" " + localStore.hashCode());
+			//System.out.println("\t Creating new block: " + blockID);
+			
+			// The writer creates a block and later loads the block from the local store to write data. This incurs an
+			// extra access to the local store. We can prevent this by updating the lastLocalFetchTime in the Block
+			// immediately after creating the block. However, it should not be done in the constructor. Instead, it
+			// should be done here, just before or after calling localStore.createBlock(block) function.
+			// This is a good location because all the new blocks has pass through this line. This is a bad location
+			// because this is not cache specific task.
+			
 			localStore.createBlock(block);
 		} else {
 			block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock function

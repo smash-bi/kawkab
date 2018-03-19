@@ -301,4 +301,8 @@ public final class FileHandle {
 	public long inumber() { // For debugging only
 		return inumber;
 	}
+	
+	public FileMode mode() {
+		return fileMode;
+	}
 }

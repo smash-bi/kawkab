@@ -224,9 +224,11 @@ public final class Inode {
 		DataSegmentID dsid = new DataSegmentID(inumber, blockInFile, segmentInBlock);
 		//DataSegment block = new DataSegment(dataSegmentID);
 		//cache.createBlock(block);
+		//System.out.println("\t\t\t\tCreating block: " + dsid + ", inumber: " + inumber);
 		try {
 			Block seg = cache.acquireBlock(dsid, true);
-			seg.markDirty();
+			// seg.markDirty(); // We don't need to mark the segment as dirty because the new segment is created on
+			                    // in the local store and there are no dirty bytes yet.
 		} finally {
 			cache.releaseBlock(dsid);
 		}

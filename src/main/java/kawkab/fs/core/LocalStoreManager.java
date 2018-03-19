@@ -140,14 +140,19 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * @throws NullPointerException
 	 */
 	public void store(Block block) throws KawkabException {
+		// WARNING! This functions works correctly in combination with the processStoreRequest(block) function only if the 
+		// same block is assigned always to the same worker thread.
+		
 		if (!working) {
 			throw new KawkabException("LocalProcessor has already received stop signal.");
 		}
 		
 		if (block.markInLocalQueue()) { //The block is already in the queue, the block should not be added again.
-			//System.out.println("[LSM] Block already in the local queue: " + block.id());
+			//System.out.println("[LSM] Skipping: " + block.id());
 			return;
 		}
+		
+		//System.out.println("\t[LSM] Enque: " + block.id());
 		
 		//Load balance between workers, but assign same worker to the same block.
 		int queueNum = Math.abs(block.id().key().hashCode()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
@@ -156,54 +161,64 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	}
 	
 	/**
+	 * This function in combination with the store(block) function works correctly for concurrent (a) single worker per block
+	 * that syncs the block, and (b) multiple writers that modify/append the block (inodeBlocks are modified concurrently
+	 * by many threads, dataSegments are only appended). The writers can concurrently try to add the block in the queue.
+	 * If the block is already in the queue, the block is not added in the queue. This is done through getAndSet(true) in the
+	 * block.markInLocalQueue() function. In the case of a race between the 
 	 * 
 	 * @param block
 	 * @throws KawkabException
 	 */
 	private void processStoreRequest(Block block) throws KawkabException {
-		//System.out.println("[LSM] Store block: " + block.id().name());
-		
 		int dirtyCount = block.localDirtyCount();
 		
-		// WARNING! This functions works correctly in combination with the store(block) function only if the same block is always 
-		// assigned to the same worker thread.
+		// WARNING! This functions works correctly in combination with the store(block) function only if the same block 
+		// is assigned always to the same worker thread.
 		
-		if (dirtyCount == 0) {
-			block.clearInLocalQueue();
-			return;
-		}
+		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
 		
-		try {
-			storeBlock(block);
-			//storedFilesMap.put(block.id()); //FIXME: What if an error occurs here. Should we remove the locally stored block?
+		if (dirtyCount > 0) {
+			try {
+				syncLocally(block);
+			} catch (IOException e) {
+				e.printStackTrace();
+				//FIXME: What should we do here? Should we return?
+			}
 			
 			if (block.shouldStoreGlobally()) {
 				globalProc.store(block, this);
+			} else {
+				block.clearInLocalQueue();
+				if (block.clearAndGetLocalDirty(dirtyCount) > 0) {
+					store(block);
+				}
+				
+				return;
 			}
-		} catch (IOException e) {
-			e.printStackTrace();
 		}
 		
-		block.clearInLocalQueue();
+		block.clearAndGetLocalDirty(dirtyCount);
 		
-		int cnt = block.clearAndGetLocalDirty(dirtyCount);
+		// We clear the inLocalQueue flag when the global store has finished uploading. This is to mutually exclude updating
+		// the local file while concurrently uploading to the global store. If this happens, S3 API throws an exception
+		// that the MD5 hash of the file has changed.
 		
-		//System.out.println("[LSM] Cleared to " + cnt + ", block: " + block.id());
-		
-		if (cnt > 0) {
+		/*block.clearInLocalQueue(); //This is now done in the notifyStoreComplete function
+		if (block.clearAndGetLocalDirty(dirtyCount) > 0) {
 			store(block);
-		}
+		}*/
 	}
 	
 	/**
 	 * Creates a new file in the underlying file system.
+	 * 
+	 * Multiple writers can call this function concurrently. However, only one writer per block should call this function.
+	 * The function assumes that the cache prevents multiple writers from creating the same new block.
 	 */
 	public void createBlock(Block block) throws IOException, InterruptedException {
-		//System.out.println("[LSM] Create block: " + block.id() + ", available storePermits: " + storePermits.availablePermits());
 		
-		storePermits.acquire();
-		
-		System.out.println("\t\t Permits: " + storePermits.availablePermits() + ", map: " + storedFilesMap.size());
+		storePermits.acquire(); // This provides an upper limit on the number of blocks that can be created locally.
 		
 		File file = new File(block.id().localPath());
 		File parent = file.getParentFile();
@@ -211,12 +226,12 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			parent.mkdirs();
 		}
 		
-		storeBlock(block);
+		syncLocally(block);
 		storedFilesMap.put(block.id());
 		block.setInLocalStore(); //Mark the block as locally saved
 	}
 	
-	private void storeBlock(Block block) throws IOException {
+	private void syncLocally(Block block) throws IOException {
 		//FIXME: This creates a new file if it does not already exist. We should prevent that in order to make sure that
 		//first we create a file and do proper accounting for the file.
 		
@@ -284,7 +299,19 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		 * 
 		*/
 		
-		//System.out.println("[LSM] Finished storing to global: " + block.id().localPath());
+		block.clearInLocalQueue(); // We have to do it so that either the current executing 
+		                           // thread or the appender can add the block in the local queue
+		
+		if (block.clearAndGetLocalDirty(0) > 0) {	// We have to check the count again. We cannot simply call localDirtyCount() 
+													// because we need to notify any thread waiting for the block to be removed 
+													// from the local queue.
+													// Otherwise, a block can be evicted from the cache while the block is still being synced to the local store.
+			//System.out.println("[LSM] Local dirty. Adding again: " + block.id());
+			store(block);
+			return;
+		}
+		
+		//System.out.println("[LSM] Finished storing to global: " + block.id());
 		
 		if (!block.isInCache() && block.evictLocallyOnMemoryEviction()) {
 			// Block is not cached. Therefore, the cache will not delete the block.
@@ -295,13 +322,11 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	}
 	
 	public void notifyEvictedFromCache(Block block) throws KawkabException {
+		block.unsetInCache();
+		
 		if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
 			evict(block);
 		}
-		
-		block.unsetInCache(); // We must set this flag after eviction. Otherwise, the global store thread may race
-		                         // with this thread to evict the block, which will result in deleting a non-existing block.
-								 // Moreover, it will free an extra storePermit.
 	}
 	
 	private void evict(Block block) throws KawkabException {
@@ -310,9 +335,11 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		BlockID id = block.id();
 		
-		System.out.println("[LSM] Evict locally: " + id);
+		//System.out.println("[LSM] Evict locally: " + id);
 		
-		storedFilesMap.removeEntry(id);
+		if (storedFilesMap.removeEntry(id) == null) { //The cache and the global store race to evict this block.
+			return;
+		}
 		
 		File file = new File(id.localPath());
 		if (!file.delete()) {
@@ -321,9 +348,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		block.unsetInLocalStore();
 		
-		int mapSize = storedFilesMap.size();
-		int permits = storePermits.availablePermits();
-		System.out.println("\t\t\t\t\t\t Evict: Permits: " + permits + ", map: " + mapSize);
+		//int mapSize = storedFilesMap.size();
+		//int permits = storePermits.availablePermits();
+		//System.out.println("\t\t\t\t\t\t Evict: Permits: " + permits + ", map: " + mapSize);
 		
 		storePermits.release();
 	}

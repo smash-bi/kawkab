@@ -42,9 +42,14 @@ public final class LocalStoreDB {
 		//System.out.println("[LSDB] Added: " + id.name());
 		
 		assert map.size()+1 <= maxSize;
-		assert !map.containsKey(id.localPath());
 		
-		map.put(id.localPath(), id.name());
+		String prev = map.put(id.localPath(), id.name());
+		
+		if (prev != null) {
+			System.out.println("\t Block already exists in the localstore: " + id);
+		}
+		
+		assert prev == null;
 	}
 	
 	/**

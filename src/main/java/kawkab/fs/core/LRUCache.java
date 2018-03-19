@@ -35,6 +35,9 @@ public final class LRUCache extends LinkedHashMap<String, CachedItem> {
 					if (count == size) {//FIXME: We just added the time. We should not remove this item.
 						System.out.println("\t\t\t ---> Evicting just added block.");
 					}
+					
+					System.out.println("[LRUC] Cannot evict " + toEvict.block().id() + ", evicting: " + altToEvict.block().id());
+					
 					super.remove(entry.getKey());
 					evictListener.beforeEviction(altToEvict);
 					

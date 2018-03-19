@@ -565,13 +565,14 @@ public final class FSTest {
 		System.out.println("       Concurrent Read Write Test");
 		System.out.println("-----------------------------------------------------------------");
 		
-		final int numWorkers = 1;
-		final int numFiles = 500;
-		final int numTasks = 500;
-		final int appendSize = 13 * 1024 * 1024;
+		final int numWorkers = 10;
+		final int numFiles = 100;
+		final int numTasks = 100;
+		final int appendSize = 2*Constants.segmentSizeBytes/3;
 		final int bufferSize = Constants.dataBlockSizeBytes/2;
 		Thread[] workers = new Thread[numWorkers];
 		final Random rand = new Random(Constants.thisNodeID);
+		final String prefix = "CRWTestL-";
 		
 		Filesystem.instance().bootstrap();
 		
@@ -585,9 +586,8 @@ public final class FSTest {
 						byte[] buffer = new byte[bufferSize];
 						
 						for (int nTask=0; nTask<numTasks; nTask++) {
-							String fname = "CRWTest1C-"+rand.nextInt(numFiles);
 							FileHandle file = null;
-							
+							String fname = prefix+rand.nextInt(numFiles);
 							FileMode mode = rand.nextBoolean() ? FileMode.APPEND : FileMode.READ;
 							
 							try {
@@ -614,6 +614,91 @@ public final class FSTest {
 								long dataSize = file.size();
 								long read = 0;
 								
+								System.out.println("\t<"+workerID+"> Task: " + nTask + ", Reading file: " + fname + " up to " + (dataSize/1024/1024) + " MB");
+								
+								while(read < dataSize) {
+									int toRead = (int)(read+bufferSize < dataSize ? bufferSize : dataSize - read);
+									int bytes = 0;
+									try {
+										bytes = file.read(buffer, toRead);
+									} catch (IOException | IllegalArgumentException | KawkabException | InterruptedException e) {
+										e.printStackTrace();
+										break;
+									}
+									read += bytes;
+								}
+							}
+						}
+					} catch (KawkabException | IOException | IbmapsFullException | InterruptedException | 
+							OutOfMemoryException | MaxFileSizeExceededException | InvalidFileOffsetException e) {
+						e.printStackTrace();
+					}
+				}
+			};
+			
+			workers[i].start();
+		}
+		
+		for (int i=0; i<numWorkers; i++) {
+			workers[i].join();
+		}
+	}
+	
+	private void testConcurrentReadWriteLastBlock() throws IbmapsFullException, OutOfMemoryException, 
+	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
+		System.out.println("-----------------------------------------------------------------");
+		System.out.println("       Concurrent Read Write Test");
+		System.out.println("-----------------------------------------------------------------");
+		
+		final int numWorkers = 10;
+		final int numFiles = 1;
+		final int numTasks = 1000;
+		final int appendSize = Constants.segmentSizeBytes/3; // An odd append size to test reading existing block as well as newly created block
+		final int bufferSize = Constants.dataBlockSizeBytes/2;
+		Thread[] workers = new Thread[numWorkers];
+		final Random rand = new Random(Constants.thisNodeID);
+		
+		Filesystem.instance().bootstrap();
+		
+		for(int i=0; i<numWorkers; i++) {
+			final int id = i;
+			workers[i] = new Thread("Test-worker-"+i) {
+				int workerID = id;
+				public void run() {
+					try {
+						Filesystem fs = Filesystem.instance();
+						byte[] buffer = new byte[bufferSize];
+						
+						for (int nTask=0; nTask<numTasks; nTask++) {
+							String fname = "CRWLBTest-"+rand.nextInt(numFiles);
+							FileHandle file = null;
+							
+							FileMode mode = workerID == 0 ? FileMode.APPEND : FileMode.READ;
+							
+							try {
+								file = fs.open(fname, mode, new FileOptions());
+							} catch (InvalidFileModeException | FileNotExistException e) {
+								//System.out.println("\t<"+workerID+"> Skipping file: " + fname);
+								nTask--;
+								continue;
+							}
+							
+							if (mode == FileMode.APPEND) {
+								long sizeMB = (file.size() + appendSize)/1024/1024;
+								
+								System.out.println("\t<"+workerID+"> Task: " + nTask + ", Writing file: " + fname + " up to " + sizeMB + " MB");
+								int appended = 0;
+								while(appended < appendSize) {
+									int toWrite = (int)(appended+bufferSize <= appendSize ? bufferSize : appendSize - appended);
+									rand.nextBytes(buffer);
+									appended += file.append(buffer, 0, toWrite);
+									//rand.nextBytes(writeBuf);
+								}
+							} else {
+								file.seekBytes(file.size()-1);
+								long dataSize = 1;
+								long read = 0;
+								
 								System.out.println("\t<"+workerID+"> Task: \" + nTask + \", Reading file: " + fname + " up to " + (dataSize/1024/1024) + " MB");
 								
 								while(read < dataSize) {
@@ -637,6 +722,10 @@ public final class FSTest {
 			};
 			
 			workers[i].start();
+			
+			if (i == 0) { //Allow the writer to write some data
+				Thread.sleep(1000);
+			}
 		}
 		
 		for (int i=0; i<numWorkers; i++) {

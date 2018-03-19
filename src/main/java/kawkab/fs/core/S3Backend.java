@@ -130,7 +130,7 @@ public final class S3Backend implements GlobalBackend{
 		File file = new File(path);
 		client.putObject(rootBucket, path, file);
 		
-		//System.out.println("\t[S3] >>> Finished store to global: " + id.localPath());
+		//System.out.println("\t[S3] >>> Finished store to global: " + id.localPath());   
 	}
 	
 	private AmazonS3 newS3Client() {

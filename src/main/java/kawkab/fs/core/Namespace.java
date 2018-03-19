@@ -1,8 +1,9 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileAlreadyExistsException;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -20,6 +21,8 @@ public class Namespace {
 	private int lastIbmapUsed;
 	private KeyedLock locks;
 	
+	private Map<Long, Boolean> openedFiles; //Map<inumber, appendMode>
+	
 	private static Namespace instance;
 	
 	
@@ -27,6 +30,7 @@ public class Namespace {
 		cache = Cache.instance();
 		locks = new KeyedLock();
 		lastIbmapUsed = Constants.ibmapBlocksRangeStart;
+		openedFiles = new ConcurrentHashMap<Long, Boolean>();
 		ns = NamespaceService.instance();
 	}
 	
@@ -50,7 +54,8 @@ public class Namespace {
 	 * @throws KawkabException 
 	 * @throws InterruptedException 
 	 */
-	public long openFile(String filename, boolean appendMode) throws IbmapsFullException, IOException, InvalidFileModeException, FileNotExistException, KawkabException, InterruptedException {
+	public long openFile(String filename, boolean appendMode) throws IbmapsFullException, IOException, InvalidFileModeException, 
+														FileNotExistException, KawkabException, InterruptedException {
 		long inumber = -1L;
 		
 		//Lock namespace for the given filename
@@ -61,41 +66,50 @@ public class Namespace {
 			try {
 				inumber = ns.getInumber(filename);
 			} catch(FileNotExistException fnee) {     //If the file does not exist
-				//System.out.println("[NS] File not found: " + filename);
-				
 				if (appendMode) { //Create file if the file is opened in the append mode.
 					//System.out.println("[NS] Creating new file: " + filename);
 					inumber = createNewFile();
-					//filesMap.put(filename, inumber);
 					
 					try {
 						ns.addFile(filename, inumber);
+						
+						//System.out.println("[N] Created a new file: " + filename + ", inumber: " + inumber);
 					} catch (FileAlreadyExistsException faee) { // If the file already exists, e.g., because another 
 						                                     // node created the same file with different inumber
 						releaseInumber(inumber);
 						
-						inumber = ns.getInumber(filename); // We may get another exception if another node deletes 
-						                                   // the file immediately after creating the file. In that case,
-						                                   // the exception will be passed to the caller.
+						throw new InvalidFileModeException(
+								"Cannot create and open the file in the append mode. Another writer on this node or on another node has already created teh file.");
 					}
 				} else { //if the file cannot be created due to not being opened in the append mode.
 					throw fnee;
 				}
 			}
 			
-			//if the file is opened in append mode and this node is not the primary file writer
-			if (appendMode && Commons.primaryWriterID(inumber) != Constants.thisNodeID) {
-				throw new InvalidFileModeException(
-						"Cannot open file in the append mode. Inumber of the file is out of range of this node's range.");
-			}
-			
 			//TODO: update openFilesTable
 			
+			if (appendMode) {
+				openAppendFile(inumber);
+			}
 		} finally {
 			locks.unlock(filename);
 		}
 		
 		return inumber;
+	}
+	
+	/**
+	 * FIXME: This function is not finalized. This need to be updated to implement proper openFilesTable.
+	 * 
+	 * @param inumber
+	 * @throws InvalidFileModeException
+	 */
+	private void openAppendFile(long inumber) throws InvalidFileModeException {
+		Boolean alreadyOpened = openedFiles.put(inumber, true);
+		
+		if (alreadyOpened != null && alreadyOpened == true) {
+			throw new InvalidFileModeException("File is already opened in the append mode.");
+		}
 	}
 	
 	private void releaseInumber(long inumber) {

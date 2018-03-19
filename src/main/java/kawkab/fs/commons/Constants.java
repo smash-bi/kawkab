@@ -16,8 +16,8 @@ public final class Constants {
 	public static int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
 	
 	//Default data block size in bytes
-	public static final int dataBlockSizeBytes    = 16*1024*1024;
-	public static final int segmentsPerBlock      = 1;
+	public static final int dataBlockSizeBytes = 3*1024*1024;
+	public static final int segmentsPerBlock = 1;
 	public static final int segmentSizeBytes = dataBlockSizeBytes/segmentsPerBlock;
 	public static final int directBlocksPerInode = 0;
 	
@@ -25,28 +25,28 @@ public final class Constants {
 	//public static final int numPointersInIndexBlock = blockSegmentSizeBytes/IndexBlock.pointerSizeBytes;
 	
 	//Ibmap blocks range for this machine
-	public static final int ibmapBlockSizeBytes = 16*1024; //FIXME: using a small number for testing
+	public static final int ibmapBlockSizeBytes = 1*1024; //FIXME: using a small number for testing
 	public static final int ibmapsPerMachine = 1; //FIXME: Calculate this based on the maximum number of files supported per machine
 	public static int ibmapBlocksRangeStart = thisNodeID*ibmapsPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
 
 	//Small inodesBlockSize shows better writes performance, perhaps due to locks in the InodesBlocks. The down side
 	//is that small size files consume more disk resources.
-	public static final int inodesBlockSizeBytes = 16*1024; //dataBlockSizeBytes; 
-	public static final int inodeSizeBytes = 64;//Inode.inodesSize();
+	public static final int inodesBlockSizeBytes = 1*1024; //dataBlockSizeBytes; 
+	public static final int inodeSizeBytes = 32;//Inode.inodesSize();
 	public static final int inodesPerBlock = inodesBlockSizeBytes/inodeSizeBytes;
 	//FIXME: Calculate this based on the maximum number of files supported by a machine
 	public static final int inodeBlocksPerMachine = (int)(1.0/inodesPerBlock*ibmapBlockSizeBytes*ibmapsPerMachine*8.0);//inodesPerMachine/inodesPerBlock 
 	public static final int inodeBlocksRangeStart = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
 																					 //Blocks start with ID 0.
 	
-	public static final int maxBlocksPerLocalDevice = 200 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
+	public static final int maxBlocksPerLocalDevice = 10510 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
 	public static final int maxBlocksInCache        = 100; //Size of the cache in number of blocks
 	
 	public static final int globalFetchExpiryTimeoutMs  = 3000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	//public static final int primaryFetchExpiryTimeoutMs = 5000; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
-	public static final int syncThreadsPerDevice = 1;
-	public static final int numWorkersStoreToGlobal = 1;
+	public static final int syncThreadsPerDevice = 2;
+	public static final int numWorkersStoreToGlobal = 2;
 	//public static final int numWorkersLoadFromGlobal = 5;
 	
 	public static final String basePath = "fs";
@@ -61,7 +61,7 @@ public final class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkMainServers = "10.20.0.5:2181,10.20.0.5:2182,10.20.0.5:2183";
+	public static final String zkMainServers = "10.0.7.3:2181,10.0.7.3:2182,10.0.7.3:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
 	public static final ZKClusterConfig zkMainCluster = 
@@ -69,7 +69,7 @@ public final class Constants {
 	
 	
 	//minio settings
-	public static final String[] minioServers = {"http://10.20.0.5:9000"};
+	public static final String[] minioServers = {"http://10.0.7.3:9000"};
 	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
@@ -114,8 +114,8 @@ public final class Constants {
 		
 		thisNodeID = Integer.parseInt(nodeID);
 		nodesMap = new HashMap<Integer, NodeInfo>();  //Map of <NodeID, NodeInfo(NodeID, IP)> 
-		nodesMap.put(0, new NodeInfo(0, "10.20.0.6"));
-		nodesMap.put(1, new NodeInfo(1, "10.20.0.7"));
+		nodesMap.put(0, new NodeInfo(0, "10.0.7.4"));
+		nodesMap.put(1, new NodeInfo(1, "10.0.7.5"));
 	}
 	
 	private static void verify() {
