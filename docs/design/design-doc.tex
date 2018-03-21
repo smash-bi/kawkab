@@ -16,6 +16,12 @@
 
 \usepackage[table,xcdraw]{xcolor}
 
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\algblockdefx[Struct]{Struct}{EndStruct}%
+  [1]{Begin Journal Entry: #1 }%
+  {End Entry}
+
 \definecolor{NavyBlue}{cmyk}{0.94,0.54,0,0.5}
 \definecolor{BrickRed}{cmyk}{0.16,0.89,0.61,0.2}
 \usepackage{url}
@@ -66,7 +72,7 @@
 \hline
 \rowcolor[HTML]{EFEFEF} 
 Date             & Description  & Participants  \\ \hline
- March 20, 2018  & Added section "Current Distributed Design" & Sajjad \\ \hline
+ March 20, 2018  & Restructured the docuemtn and added the section ``Current Distributed Design'' & Sajjad \\ \hline
  March 03, 2017  & Kawkab single node design           & Sajjad  \\ \hline
  March 10, 2017  & - Added sections 3 and 4, about the distributed design of Kawkab& \\ 
                  & - Updated architecture diagram & Sajjad  \\ \hline
@@ -80,20 +86,21 @@ Date             & Description  & Participants  \\ \hline
 
 Kawkab is a distributed filsesystem developed to efficiently manage large
 amounts of streaming data. Unlike traditional filesystem that are designed for
-bulk data transfers in the context of Big Data, Kawkab manages the storage for
-fast streaming data with the focus on memory management, read/write
+bulk data transfers in the context of Big Data, Kawkab manages the storage of
+fast streaming data with the primary focus on memory management, read and write
 performance, and scalability.
 
 
-Kawkab's design is mainly motivated from the design approach of a standard Unix filesystem.
-However, unlike a disk-based traditional filesystem, Kawkab is an append only
-system  and the location of the blocks is not fixed to a specific storage
-medium. Kawkab assumes the availability of an extensible backend storage that
-can store large volumes of data. Unlike other distributed filesystems such
-as Tachyon, Kawkab enables reading most recent data of the files even if the
-last block of the file is not full and sealed. 
-%The reasons to follow the Unix filesystem is to control the memory usage of the
-%system and make the system memory efficient.
+Kawkab's design is mainly motivated from the design approach of a standard Unix
+filesystem.  However, unlike a disk-based traditional filesystem, Kawkab is an
+append only system,  and the location of the blocks is not fixed to a specific
+storage medium. Kawkab assumes the availability of an extensible backend or
+\textit{global storage} that can store large volumes of data. Unlike other
+distributed filesystems such as Tachyon, Kawkab allows to read most recent data
+of the files even if the last block of the file is not completely filled with
+the file's data. 
+%The reasons to follow the Unix filesystem is to control the memory usage of
+%the system and make the system memory efficient.
 
 Kawkab is designed for the single writer and multiple readers use case. Kawkab
 allows only one node at a time to perform file append operations. Moreover,
@@ -101,37 +108,58 @@ the file appender is restricted to be a distinguished node that created
 the file. Other nodes can only read the files.
 
 
+This document describes the architecture and design of Kawkab. 
+
+\section{Workload}
+
+Kawkab is specifically designed for fast streaming data workload, which is
+common in financial industry.  The workload may consist of unstructured blobs
+or structured records.  Kawkab supports data writing only at the end of the
+file, i.e., Kawkab is an append-only filesystem. The readers are allowed to
+read from any file location, including the most recent data written in the
+file.  However, the most recent data can be read with some bounded staleness.
+The workload may consist of any ratio of read and write requests.  Readers are
+allowed to read data from any node in the system. However, a file writer can
+only writer through a specific node in Kawkab.  The clients can concurrently
+read and write large volumes of files. However, only one writer is allowed per
+file at a time. Multiple readers and the writer can concurrently read and write
+the file at the same time.
+
+%Todo: Data access frequency and size, number of readers per node, number of
+%nodes where readers are located $\ldots$.
+
+
 
 
 \section{Architecture} 
 
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=0.6\columnwidth]{{figures/architecture.png}}
-    \caption{Kawkab architecture.}
-   \label{fig:architecture}
-\end{figure}
+%\begin{figure}[t]
+%    \centering
+%    \includegraphics[width=0.7\columnwidth]{{figures/architecture.png}}
+%    \caption{Kawkab architecture}
+%   \label{fig:architecture}
+%\end{figure}
 
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.5\columnwidth]{{figures/linear-space.png}}
-    \caption{Filesystem is designed as a very large storage space organized in fixed size blocks.}
+    \caption{Filesystem is designed as a very large storage space organized in fixed size blocks}
    \label{fig:storage-space}
 \end{figure}
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.5\columnwidth]{{figures/blocks-layout.png}}
-    \caption{Relationship between different types of blocks.}
+    \includegraphics[width=0.4\columnwidth]{{figures/blocks-layout.png}}
+    \caption{Relationship between different types of blocks}
    \label{fig:blocks-layout}
 \end{figure}
 
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.7\columnwidth]{{figures/file-index-design.png}}
-    \caption{File directory and file index.}
+    \includegraphics[width=0.5\columnwidth]{{figures/file-index-design.png}}
+    \caption{File directory and file index}
    \label{fig:data-structures}
 \end{figure}
 
@@ -419,6 +447,36 @@ last directory. To avoid weird file names, we use the modified version of
 Base64 encoding that only uses the readable characters in the encoded string.
 
 
+
+
+\subsection{File Access Patterns}
+
+\subtopic{File Writes:} Kawkab allows only one writer at a time to write the
+file. The first client that opens the file becomes the distinguished writer of
+the file until the writer closes the file. Only the distinguished writer is
+then allowed to append to the file. Moreover, the node where the client is
+located becomes the \textit{primary node} of the file.  The other nodes may
+fetch recent appends from the primary node when the data is not replicated in
+the global storage.
+
+If an existing writer fails, another client can become the distinguished writer
+by successfully opening the file for writing. If the writer closes the file,
+another writer can open the file and become the distinguished
+writer\footnote{In the Smash's use case, files are never closed.}. However,
+Kawkab allows only one file writer at a time.
+
+Each append request consists of small number of bytes, e.g., less than 100 bytes.
+
+\subtopic{File Reads:}
+Kawkab allows multiple readers to read at the same time. If the data block
+is not located locally in the system, the data block is fetched from the global storage if
+it is available. If the data block is not available in the global storage, the data block
+is fetched from the node where the file-writer is located.
+
+
+
+
+
 \section{Memory and Storage Management}
 
 Kawkab divides storage in three categories: main memory, local storage, and global
@@ -561,12 +619,12 @@ acceptable threshold with the increase in the number of nodes in the Kawkab clus
 \end{itemize}
 
 
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=0.4\columnwidth]{{figures/block-diagram.png}}
-    \caption{[TBD: caption] Block diagram.}
-   \label{fig:block-diagram}
-\end{figure}
+%\begin{figure}[t]
+%    \centering
+%    \includegraphics[width=0.4\columnwidth]{{figures/block-diagram.png}}
+%    \caption{[TBD: caption] Block diagram.}
+%   \label{fig:block-diagram}
+%\end{figure}
 
 
 
@@ -963,7 +1021,15 @@ locate the required segment on the primary node.
 
 \section{Distributed Design of Kawkab}
 
-\hl{Todo: Need to be revised.}
+This section describes the complete distributed design of Kawkab. Kawkab
+supports reading incomplete blocks of data and assumes immutable global
+storage. Kawkab introduces multi-version inode-blocks and data blocks to
+support these features. This section details the complete distributed design of
+Kawkab. However, some of the features are not implemented in the current
+version of Kawkab, e.g., indirect blocks for data indexing and multi-version
+blocks. The currently implemented distributed design  is described in
+Section~\ref{sec:cd}.
+
 
 \subsection{Distributed Metadata and Namespace}
 
@@ -1079,23 +1145,23 @@ change frequently, all the nodes cache this information during bootstrap. If
 the information is updated due to node failures, all the nodes are updated to
 reflect the changes in their cache.
 
-\section{Inodes-blocks' Storage}
+\subsection{Inodes-blocks' Storage}
 
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.9\columnwidth]{{figures/architecture.png}}
-    \caption{Kawkab architecture.}
+    \includegraphics[width=0.83\columnwidth]{{figures/architecture.png}}
+    \caption{Kawkab architecture}
    \label{fig:architecture}
 \end{figure}
 
-
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=0.5\columnwidth]{{figures/blocks-layout.png}}
-    \caption{Relationship between different types of blocks.}
-   \label{fig:blocks-layout}
-\end{figure}
+%
+%\begin{figure}[t]
+%    \centering
+%    \includegraphics[width=0.5\columnwidth]{{figures/blocks-layout.png}}
+%    \caption{Relationship between different types of blocks.}
+%   \label{fig:blocks-layout}
+%\end{figure}
 
 
 
@@ -1216,7 +1282,7 @@ used when a new node joins or when the recent data is not required for file
 reads. Below, first we describe the distributed map and then we discuss the
 pub-sub approach for version changes propagation.
 
-\subsection{Inodes-block-versions Table}
+\subsubsection{Inodes-block-versions Table}
 
 Adding version numbers for the inode blocks require keeping track of the
 current version number for each inodes block. Therefore, we introduce a global
@@ -1259,7 +1325,7 @@ supposed to be mainly used when a new node joins the Kawkab cluster or when a no
 reads non-recent data from the file.
 
 
-\subsection{Versions Propagation Using Pub-sub Channels}
+\subsubsection{Versions Propagation Using Pub-sub Channels}
 
 Limiting the frequency of updates to the inodes-blocks adds staleness in the
 data stored in the IBV table. Therefore, we add a pub-sub system in Kawkab that
@@ -1277,7 +1343,7 @@ become the bottleneck, or use a specialized system such as Apache Kafka and
 Chronicle Queues.
 
 
-\subsection{Reading Unfinished Blocks}
+\subsubsection{Reading Unfinished Blocks}
 
 Unlike other system~\cite{}, Kawkab allows the readers to read unfinished data
 blocks. The readers can either read unfinished blocks from the global store, or
@@ -1312,7 +1378,7 @@ This is because a reader may read stale inode and try to read the older version
 of the block even though the newer version is available in the global store.
 
 
-\subtopic{Propagating Current Last-block's Version:}
+\subtopic{Propagating Last-block's Current Version:}
 The current version of a file's last block is stored in the inode of the file.
 Therefore, the readers require the most recent inode in order to read the
 latest version of the data block. Kawkab provides pub-sub channels to propagate
@@ -1332,6 +1398,17 @@ of readers in the system.
 
 
 \section{Current Distributed Design}
+\label{sec:cd}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.7\columnwidth]{{figures/current-design.png}}
+    \caption{Design of Kawkab in the current implementation}
+   \label{fig:current-design}
+\end{figure}
+
+
+
 
 Kawkab filesystem design is built around three types of blocks: ibmaps,
 inodes-blocks, and data blocks. These blocks have different access patterns and
@@ -1348,6 +1425,8 @@ implementation lacks multi-version inodes-blocks and data blocks functionality.
 Therefore, in the current implementation, we relax our assumption about the
 global store and assume that the store supports object rewrites, which allows
 us to update and rewrite inodes-blocks in the global store.
+Figure~\ref{fig:current-design} shows the architecture of Kawkab in the
+current implementation.
 
 %Following is the detail of the design we have followed in
 %the current implementation to work without multi-version blocks.
@@ -1525,33 +1604,6 @@ from the primary node.
 %- Synchronization between the cache, the local store and the global store managers
 
 
-\section{Workload}
-
-\subsection{File Access Patterns}
-
-\subtopic{File Writes:} Kawkab allows only one writer at a time to
-write the file. The first client that opens the file becomes the distinguished
-writer of the file. Only the distinguished writer is then allowed to append to
-the file. Moreover, the node where the client is located becomes the primary
-node of the file.  The other nodes may fetch recent appends from the primary
-node when the data is not replicated in the global storage.
-
-If an existing writer fails, another client can become the distinguished writer
-by successfully opening the file for writing. If the writer closes the file,
-another writer can open the file and become the distinguished
-writer\footnote{In the Smash's use case, files are never closed.}. However,
-Kawkab allows only one file writer at a time.
-
-Each append request consists of small number of bytes, e.g., less than 100 bytes.
-
-\subtopic{File Reads:}
-Kawkab allows multiple readers to read at the same time. If the data block
-is not located locally in the system, the data block is fetched from the global storage if
-it is available. If the data block is not available in the global storage, the data block
-is fetched from the node where the file-writer is located.
-
-Todo: Data access frequency and size, number of readers per node, number of
-nodes where readers are located $\ldots$.
 
 
 
@@ -1592,7 +1644,7 @@ nodes where readers are located $\ldots$.
 %- The inode change is published to the subscribers periodically.
 %
 
-- TODO: Node failures. Now we have multiple levels when a failure can happen.
+%- TODO: Node failures. Now we have multiple levels when a failure can happen.
 
 %- To discuss: When to delete the older version data blocks? What if a reader tries to read a 
 %  partially filled data block from the global store, but the block has been deleted because
@@ -1653,47 +1705,53 @@ nodes where readers are located $\ldots$.
 %  will require copying everything using the new inumber and then deleting the
 %  previous one.
 
-\section{Extensible Indexing}
 
-\hl{Note: This section is incomplete.}
+\section{Future Work}
 
-Kawkab is an append-only system. Each append is performed at the end of the file.
-However, a file can be read from any location. When a client opens a file,
-it is returned a FileHandle. The FileHandle contains a read pointer that indicates
-the current position in the file from where the data will be read. The read
-pointer can be moved to any position in the file using any of the following
-ways: 
-
-\begin{enumerate}
-  \item Move to an absolute byte offset in the file.
-  \item Give a timestamp T:
-  \begin{itemize}
-    \item Move to the first byte of the closest block that has the append time equal to
-          or \textit{before} T.
-    \item Move to the first byte of the closest block that has the append time equal to
-          or \textit{after} T.
-  \end{itemize}
-\end{enumerate}
-
-In order to find the data block that contains the given byte or timestamp, Kawkab
-performs binary search over the index in the inode.
-
-Todo:
-
-\begin{itemize}
-  \item Indexing within a block
-  \item Time range queries
-\end{itemize}
-
-%  - How data is indexed
-% - How data is retrieved given a byte offset
- % - How data is retrieved given a timestamp
+The current design of Kawkab allows to read files using file offset only.
+Moreover, the current design does not include the proper failure handling 
+model of file operations. Below we give high level overview of these two 
+features that will be added in Kawkab in the future.
 
 
+\subsection{Extensible Indexing}
 
+Currently Kawkab allows the readers to read files from a specific
+byte number in the file. Extensible indexing will allow accessing structured
+data through at a given index such as timestamp. Moreover, extensible indexing
+will support pluggable indexing for different types of files.
 
-
-\section{Fault Tolerance}
+%Kawkab is an append-only system. Each append is performed at the end of the file.
+%However, a file can be read from any location. When a client opens a file,
+%it is returned a FileHandle. The FileHandle contains a read pointer that indicates
+%the current position in the file from where the data will be read. The read
+%pointer can be moved to any position in the file using any of the following
+%ways: 
+%
+%\begin{enumerate}
+%  \item Move to an absolute byte offset in the file.
+%  \item Given a timestamp T:
+%  \begin{itemize}
+%    \item Move to the first byte of the closest block that has the append time equal to
+%          or \textit{before} T
+%    \item Move to the first byte of the closest block that has the append time equal to
+%          or \textit{after} T
+%  \end{itemize}
+%\end{enumerate}
+%
+%In order to find the data block that contains the given byte or timestamp, Kawkab
+%performs binary search over the index in the inode.
+%
+%\begin{itemize}
+%  \item Indexing within a block
+%  \item Time range queries
+%\end{itemize}
+%
+%%  - How data is indexed
+%% - How data is retrieved given a byte offset
+% % - How data is retrieved given a timestamp
+%
+\subsection{Fault Tolerance}
 
 Several operations in Kawkab consist of multiple stages while the operations need 
 to be atomic. For example, an append operation consist of updating data in-memory and
@@ -1713,35 +1771,56 @@ in the file system.
 Following is the journal entry for an append operation that does not cause creation
 of a new inodes-block version and new data block:
 
-\begin{itemize}
+\begin{algorithm}
+\caption{Journal entries}
+\begin{algorithmic}[1]
+\item[]
+\Struct{\textbf{For an append operation}} 
+\State Data to append
+\State New file size
+\State Append data block
+\State Update inodes-block: Update file size in the inode
+\EndStruct
+\item[]
 
-\item Begin
-\item Data to append
-\item New file size
-\item Append data block
-\item Update inodes-block: Update file size in the inode
-\item End
+\Struct{\textbf{For creating a new data block}}
+\State Data to append
+\State New file size
+\State Create data block locally
+\State Append data in the first segment
+\State Schedule to copy recently completed block block to the global store
+\State Schedule to copy inodes block to the global store
+\State Update inode: File size and last block version
+\State Update IBV-table with the new inodes-block version
+\State Send updates to pub-sub channels if there are any subscribers.
+\EndStruct
+\end{algorithmic}
+\end{algorithm}
 
-\end{itemize}
 
 
-Following is the journal entry that results in creating a new data block.
+\section{Summary}
+Kawkab is a distributed filesystem that is designed to handle large volumes
+of streaming data that is common in financial industry. Kawkab can efficiently
+handle fast incoming data by utilizing a hierarchy of storage mediums:
+main memory, local storage such as SSDs, and a global storage such as Amazon S3.
+These storage mediums provides a hierarchy of read and write latencies.
+Kawkab uses the hierarchy to handle bursts of high data ingestion rate.
+In this document, we have detailed the distributed design of Kawkab.
 
-\begin{itemize}
+The current implementation of Kawkab runs on multiple nodes, accesses
+a global storage through an S3 client library, allows reading data from
+primary nodes, and supports reading and writing data in binary format.
+The current version does not support reading incomplete blocks from the
+global storage, which may restrict a node from opening a large number
+of files on the same node.
+The next version of Kawkab will include multi-version blocks that
+will allow the nodes to move incomplete blocks to the global store. Moreover,
+the next version will include the mechanism to read blocks with lower
+staleness. In the future, Kawkab will include structured files, extensible
+indexing, and operation level journaling for high fault tolerance.
 
-\item Begin
-\item Data to append
-\item New file size
-\item Create data block locally
-\item Append data in the first segment
-\item Schedule to copy recently completed block block to the global store
-\item Schedule to copy inodes block to the global store
-\item Update inode: File size and last block version
-\item Update IBV-table with the new inodes-block version
-\item Send updates to pub-sub channels if there are any subscribers.
-\item End
 
-\end{itemize}
 
 
 %\subsection{Scalability}
