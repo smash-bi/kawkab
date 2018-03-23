@@ -346,10 +346,10 @@ public abstract class Block /*implements AutoCloseable*/ {
 				
 				if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
 					try {
-						//System.out.println("[B] Load from the global: " + id);
+						System.out.println("[B] Load from the global: " + id);
 						
 						globalStoreManager.load(this); // First try loading data from the global store
-						lastGlobalFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store. 
+						lastGlobalFetchTimeMs = now; // Never expire data fetched from the global store. 
 																// InodeBlocks are updated to the global store (not treating as an append only system).
 						//lastPrimaryFetchTimeMs = 0; //Indicates that this node has not fetched this block from the primary node
 						
@@ -360,7 +360,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 						lastGlobalFetchTimeMs = 0; // Failed to fetch from the global store
 					}
 				
-					//System.out.println("[B] Primary fetch expired or not found from the global: " + id);
+					System.out.println("[B] Primary fetch expired or not found from the global: " + id);
 					
 					try {
 						System.out.println("[B] Loading from the primary: " + id);
@@ -373,7 +373,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 						// block after copying to the global store
 						System.out.println("[B] Not found on the primary, trying again from the global: " + id);
 						globalStoreManager.load(this); 
-						lastGlobalFetchTimeMs = Long.MAX_VALUE;
+						lastGlobalFetchTimeMs = now;
 						//lastPrimaryFetchTimeMs = 0;
 					} catch (IOException ioe) {
 						System.out.println("[B] Not found in the global and the primary: " + id);

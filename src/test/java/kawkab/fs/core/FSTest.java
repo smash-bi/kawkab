@@ -36,17 +36,17 @@ public final class FSTest {
 		//tester.testMultipleReaders();
 		//tester.testMultipleFiles();
 		//tester.testWritePerformance();
-		//tester.testWritePerformanceConcurrentFiles();
+		tester.testWritePerformanceConcurrentFiles();
 		//tester.testReadPerformance();
 		//tester.testReadPerfMultiReadersSameFile();
 		
-		tester.testConcurrentReadWrite();
+		//tester.testConcurrentReadWrite();
 		
 		//tester.testVeryLargeReadWrite();
 		//tester.testFileSeek();
-		tester.testShutdown();
 		
-		//Thread.sleep(5000);
+		Thread.sleep(5000);
+		tester.testShutdown();
 	}
 	
 	/*public void testConfiguration(){

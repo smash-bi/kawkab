@@ -16,6 +16,8 @@ import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 
 public final class DataSegment extends Block {
+	private final static int recordSize = Constants.recordSize; //Temporarily set to 1 until we implement reading/writing records
+	
 	private byte[] bytes;
 	
 	private DataSegmentID segmentID;
@@ -55,7 +57,8 @@ public final class DataSegment extends Block {
 		assert offset >= 0;
 		assert offset < data.length;
 		
-		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
 		int capacity = Constants.segmentSizeBytes - offsetInBlock;
 		int toAppend = length <= capacity ? length : capacity;
 		
@@ -73,7 +76,8 @@ public final class DataSegment extends Block {
 	}
 	
 	synchronized int writeLong(long data, long offsetInFile) throws IOException{
-		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
 		int capacity = Constants.segmentSizeBytes - offsetInBlock;
 		int longSize = Long.BYTES;
 		if (capacity < longSize)
@@ -91,7 +95,8 @@ public final class DataSegment extends Block {
 	synchronized long readLong(long offsetInFile) throws InvalidFileOffsetException, IOException{
 		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
 		
-		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
 		int blockSize = Constants.segmentSizeBytes;
 		
 		if (offsetInBlock >= blockSize || 
@@ -105,7 +110,8 @@ public final class DataSegment extends Block {
 	}
 	
 	synchronized int writeInt(int data, long offsetInFile) throws IOException{
-		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
 		int capacity = Constants.segmentSizeBytes - offsetInBlock;
 		int intSize = Integer.BYTES;
 		if (capacity < intSize)
@@ -125,7 +131,8 @@ public final class DataSegment extends Block {
 		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
 		
 		int blockSize = Constants.segmentSizeBytes;
-		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
 		if (offsetInBlock >= blockSize || 
 				offsetInBlock+4 >= blockSize || offsetInBlock < 0) {
 			throw new InvalidFileOffsetException(
@@ -152,7 +159,8 @@ public final class DataSegment extends Block {
 	synchronized int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile) 
 			throws InvalidFileOffsetException, IOException{
 		int blockSize = Constants.segmentSizeBytes;
-		int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
+		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
 		if (offsetInBlock >= blockSize || offsetInBlock < 0) {
 			throw new InvalidFileOffsetException(
 					String.format("Given file offset %d is outside of the block. Block size = %d bytes.",

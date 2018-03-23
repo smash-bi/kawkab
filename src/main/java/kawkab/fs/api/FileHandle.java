@@ -57,6 +57,10 @@ public final class FileHandle {
 		  10. Borrow DataBlock from the cache
 		    11. Read data
 		  12. Return DataBlock to the cache*/
+		
+		if (length > buffer.length)
+			throw new IllegalArgumentException("Read data size is greater than the given buffer size.");
+		
 		int blockIndex = (int)(inumber / Constants.inodesPerBlock);
 		//System.out.println("[FH] inodeBlock: " + blockIndex);
 		BlockID id = new InodesBlockID(blockIndex);

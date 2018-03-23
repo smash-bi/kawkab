@@ -226,6 +226,7 @@ public final class InodesBlock extends Block {
 				try {
 					Block block = cache.acquireBlock(id, true); // Create a new block in the local store
 					block.markDirty(); // Mark the new block as dirty to write the initialized inodes
+					count++;
 				} finally {
 					cache.releaseBlock(id);
 				}

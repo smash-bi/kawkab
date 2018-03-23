@@ -171,6 +171,6 @@ public final class S3Backend implements GlobalBackend{
 	@Override
 	public void shutdown() {
 		System.out.println("Closing S3 backend ...");
-		client.shutdown();
+		//client.shutdown();
 	}
 }

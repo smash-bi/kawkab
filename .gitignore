@@ -3,5 +3,5 @@ bin
 .project
 /target/
 zookeeper-*
-fs
-minio
+/fs
+/minio

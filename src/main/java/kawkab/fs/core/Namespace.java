@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileAlreadyExistsException;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -78,8 +79,9 @@ public class Namespace {
 						                                     // node created the same file with different inumber
 						releaseInumber(inumber);
 						
-						throw new InvalidFileModeException(
-								"Cannot create and open the file in the append mode. Another writer on this node or on another node has already created teh file.");
+						inumber = ns.getInumber(filename); // We may get another exception if another node deletes 
+                        // the file immediately after creating the file. In that case,
+						// the exception will be passed to the caller.
 					}
 				} else { //if the file cannot be created due to not being opened in the append mode.
 					throw fnee;
@@ -87,6 +89,12 @@ public class Namespace {
 			}
 			
 			//TODO: update openFilesTable
+			
+			//if the file is opened in append mode and this node is not the primary file writer
+			if (appendMode && Commons.primaryWriterID(inumber) != Constants.thisNodeID) {
+				throw new InvalidFileModeException(
+						"Cannot open file in the append mode. Inumber of the file is out of range of this node's range.");
+}
 			
 			if (appendMode) {
 				openAppendFile(inumber);

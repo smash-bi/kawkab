@@ -1,6 +1,7 @@
 package kawkab.fs.core;
 
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -73,9 +74,9 @@ public class GlobalStoreManager {
 	}
 	
 	public void store(Block block, SyncCompleteListener listener) throws KawkabException {
-		if (!working) {
+		/*if (!working) {
 			throw new KawkabException("GlobalStoreManager has already received stop signal.");
-		}
+		}*/
 		
 		if (block.markInGlobalQueue()) { // The block is already in the queue or being processed
 			//System.out.println("\t\t[GSM] Skip: " + block.id());
@@ -94,18 +95,21 @@ public class GlobalStoreManager {
 	 * The workers poll the same queue 
 	 */
 	private void runStoreWorker(LinkedBlockingQueue<Task> reqs) {
-		while(working) {
+		while(true) {
 			Task task = null;
 			try {
-				task = reqs.take();
+				task = reqs.poll(3, TimeUnit.SECONDS);
 			} catch (InterruptedException e1) {
 				if (!working) {
 					break;
 				}
 			}
 		
-			if (task == null)
+			if (task == null) {
+				if (!working)
+					break;
 				continue;
+			}
 			
 			try {
 				storeToGlobal(task);
@@ -126,6 +130,8 @@ public class GlobalStoreManager {
 	}
 	
 	private void storeToGlobal(Task task) throws KawkabException {
+		//System.out.println("[GSM] Storing: " + task.block.id());
+		
 		Block block = task.block;
 		int count = block.globalDirtyCount();
 		

@@ -21,7 +21,7 @@ public final class Inode {
 	
 	private long inumber;
 	private volatile long fileSize;
-	private int recordSize = 1; //Temporarily set to 1 until we implement reading/writing records
+	private int recordSize = Constants.recordSize; //Temporarily set to 1 until we implement reading/writing records
 	private boolean dirty; //not saved persistently
 	private static Cache cache;
 	
@@ -78,7 +78,7 @@ public final class Inode {
 		int remaining = length;
 		long curOffsetInFile = offsetInFile;
 		
-		while(remaining > 0 && curOffsetInFile < fileSize) {
+		while(remaining > 0 && curOffsetInFile < fileSize && bufferOffset<buffer.length) {
 			//System.out.println("  Read at offset: " + offsetInFile);
 			BlockID curSegId = getByFileOffset(curOffsetInFile);
 			
@@ -87,9 +87,15 @@ public final class Inode {
 			long segNumber = DataSegment.segmentInFile(curOffsetInFile, recordSize);
 			long nextSegStart = (segNumber + 1) * Constants.segmentSizeBytes;
 			int toRead = (int)(curOffsetInFile+remaining <= nextSegStart ? remaining : nextSegStart - curOffsetInFile);
+			//int offsetInSeg = DataSegment.offsetInSegment(curOffsetInFile, recordSize);
+			//int canReadFromSeg = Constants.segmentSizeBytes - offsetInSeg;
+			//int toRead = (int)(remaining >= canReadFromSeg ? canReadFromSeg : remaining);
 			int bytes = 0;
 			
-			//System.out.println(String.format("Seg=%d, bufOffset=%d, toRead=%d, offInFile=%d",segNumber, bufferOffset, toRead, curOffsetInFile));
+			// System.out.println(String.format("Seg=%s, bufLen=%d, bufOffset=%d, toRead=%d, offInFile=%d, remInBuf=%d,dataRem=%d",
+			//     curSegId.toString(), buffer.length, bufferOffset, toRead, curOffsetInFile, buffer.length-bufferOffset,remaining));
+			
+			assert bufferOffset+toRead <= buffer.length;
 			
 			DataSegment curSegment = null;
 			try {

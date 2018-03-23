@@ -6,6 +6,7 @@ import java.io.RandomAccessFile;
 import java.nio.channels.SeekableByteChannel;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -21,9 +22,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private final int numWorkers;               // Number of worker threads and number of reqsQs
 	private LinkedBlockingQueue<Block> storeQs[]; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks locally
-	private volatile boolean working = true;    // To stop accepting new requests after working is false
 	private LocalStoreDB storedFilesMap;        // Contains the paths and IDs of the blocks that are currently stored locally
 	private Semaphore storePermits;
+	private volatile boolean working = true;
 	
 	private static LocalStoreManager instance;
 	
@@ -88,18 +89,21 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * The workers poll the same queue 
 	 */
 	private void runStoreWorker(LinkedBlockingQueue<Block> reqs) {
-		while(working) {
+		while(true) {
 			Block block = null;
 			try {
-				block = reqs.take();
+				block = reqs.poll(3, TimeUnit.SECONDS);
 			} catch (InterruptedException e1) {
 				if (!working) {
 					break;
 				}
 			}
 		
-			if (block == null)
+			if (block == null) {
+				if (!working)
+					break;
 				continue;
+			}
 			
 			try {
 				processStoreRequest(block);
@@ -107,6 +111,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				e.printStackTrace();
 			}
 		}
+		
+		
 		
 		// Perform the remaining tasks in the queue
 		Block block = null;
@@ -143,9 +149,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		// WARNING! This functions works correctly in combination with the processStoreRequest(block) function only if the 
 		// same block is assigned always to the same worker thread.
 		
-		if (!working) {
+		/*if (!working) {
 			throw new KawkabException("LocalProcessor has already received stop signal.");
-		}
+		}*/
 		
 		if (block.markInLocalQueue()) { //The block is already in the queue, the block should not be added again.
 			//System.out.println("[LSM] Skipping: " + block.id());
@@ -358,15 +364,15 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	public void stop() {
 		System.out.println("Closing LocalProcessor...");
 		
-		working = false;
-		
 		if (workers == null)
 			return;
+		
+		working = false;
 		
 		for (int i=0; i<numWorkers; i++) {
 			//workers[i].interrupt();
 			try {
-				workers[i].interrupt();
+				//workers[i].interrupt();
 				workers[i].join();
 			} catch (InterruptedException e) {
 				e.printStackTrace();

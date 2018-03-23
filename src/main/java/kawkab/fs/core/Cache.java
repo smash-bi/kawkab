@@ -18,7 +18,6 @@ public class Cache implements BlockEvictionListener{
 	private LRUCache cache; // An extended LinkedHashMap that implements removeEldestEntry()
 	private Lock cacheLock; // Cache level locking
 	private LocalStoreManager localStore;
-	private volatile boolean closing = false;
 	
 	private Cache() throws IOException{
 		System.out.println("Initializing cache..." );
@@ -94,9 +93,6 @@ public class Cache implements BlockEvictionListener{
 	public Block acquireBlock(BlockID blockID, boolean createNewBlock) throws IOException, KawkabException, InterruptedException {
 		//System.out.println("[C] acquire: " + blockID);
 		
-		if (closing)
-			return null; // FIXME: Throw an exception
-		
 		CachedItem cachedItem = null;
 		
 		cacheLock.lock(); // Lock the whole cache. This is necessary to prevent from creating multiple references to the
@@ -115,7 +111,7 @@ public class Cache implements BlockEvictionListener{
 			if (cachedItem == null){ // If the block is not cached
 				Block block = blockID.newBlock();   // Creates a new block object to save in the cache
 				cachedItem = new CachedItem(block); // Wrap the object in a cached item
-				cache.put(cachedItem.block().id().name(), cachedItem);
+				cache.put(blockID.key(), cachedItem);
 			}
 			
 			cachedItem.incrementRefCnt();
@@ -234,7 +230,6 @@ public class Cache implements BlockEvictionListener{
 	
 	public void shutdown() throws KawkabException {
 		System.out.println("Closing cache.");
-		closing = true;
 		flush();
 		cacheLock.lock();
 		cache.clear();

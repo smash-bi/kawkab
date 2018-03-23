@@ -49,7 +49,7 @@ public final class Constants {
 	public static final int numWorkersStoreToGlobal = 2;
 	//public static final int numWorkersLoadFromGlobal = 5;
 	
-	public static final int grpcClientFrameSize = segmentSizeBytes+100; //Frame size to use when fetching blocks from primary nodes
+	public static final int grpcClientFrameSize = dataBlockSizeBytes > 4194304 ? dataBlockSizeBytes+2048 : 4194304; //Frame size to use when fetching blocks from primary nodes, at least 4MB
 	
 	public static final String basePath = "fs";
 	public static final String ibmapsPath = basePath+"/ibmaps";
@@ -63,15 +63,17 @@ public final class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkMainServers = "10.0.7.3:2181,10.0.7.3:2182,10.0.7.3:2183";
+	public static final String zkMainServers = "10.10.0.1:2181,10.10.0.1:2182,10.10.0.1:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
 	public static final ZKClusterConfig zkMainCluster = 
 			new ZKClusterConfig(zkMainClusterID, zkMainServers, connectRetrySleepMs, connectMaxRetries);
 	
+	public static final int recordSize = 1; //Temporary record size until we implement structured files
+	
 	
 	//minio settings
-	public static final String[] minioServers = {"http://10.0.7.3:9000"};
+	public static final String[] minioServers = {"http://10.10.0.1:9000"};
 	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
@@ -116,8 +118,11 @@ public final class Constants {
 		
 		thisNodeID = Integer.parseInt(nodeID);
 		nodesMap = new HashMap<Integer, NodeInfo>();  //Map of <NodeID, NodeInfo(NodeID, IP)> 
-		nodesMap.put(0, new NodeInfo(0, "10.0.7.4"));
-		nodesMap.put(1, new NodeInfo(1, "10.0.7.5"));
+		nodesMap.put(0, new NodeInfo(0, "10.10.0.2"));
+		nodesMap.put(1, new NodeInfo(1, "10.10.0.3"));
+		nodesMap.put(2, new NodeInfo(1, "10.10.0.4"));
+		nodesMap.put(3, new NodeInfo(1, "10.10.0.5"));
+		nodesMap.put(4, new NodeInfo(1, "10.10.0.6"));
 	}
 	
 	private static void verify() {

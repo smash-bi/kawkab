@@ -94,6 +94,6 @@ public final class Filesystem {
 		Ibmap.shutdown();
 		InodesBlock.shutdown();
 		Cache.instance().shutdown();
-		
+		GlobalStoreManager.instance().shutdown();
 	}
 }
