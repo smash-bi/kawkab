@@ -407,8 +407,10 @@ Structured files are read and appended using fixed-size structures
 called \textit{records}. A record is a user-defined structure that
 the user provides during the file creation process.
 For simplicity and correctness, Kawkab does not allow mixing the file
-types~\footnote{Todo: We need to detect the type of record in each operation. We
-should not allow mixed record structure in a file.}, i.e., mixing binary and
+types,
+%~\footnote{Todo: We need to detect the type of record in each operation. We
+%should not allow mixed record structure in a file.}
+i.e., mixing binary and
 structured files and mixing different record structures for the same file.
 %Kawkab supports two types of file append and
 %read operations. Files can be appended using a given blob of bytes or using
@@ -570,16 +572,16 @@ the defined threshold.
 In the local storage, the blocks are saved as individual files. The actual
 file location in the local storage is based on the block ID.
 
-- TODO: Blocks eviction policy: a complicated LRU policy that is based on the
-  access pattern of the main memory cache. It also needs a probabilistic
-  data structure that encodes the IDs of all the locally stored blocks.
-
-- TODO: Impact of small file sizes: slows down performance.
-
-- TODO: Impact of a large number of files in one directory in the underlying storage
-
-- TODO: What if the local storage is full?
-
+%- TODO: Blocks eviction policy: a complicated LRU policy that is based on the
+%  access pattern of the main memory cache. It also needs a probabilistic
+%  data structure that encodes the IDs of all the locally stored blocks.
+%
+%- TODO: Impact of small file sizes: slows down performance.
+%
+%- TODO: Impact of a large number of files in one directory in the underlying storage
+%
+%- TODO: What if the local storage is full?
+%
 
 \subsection{Global storage}
 
@@ -689,8 +691,10 @@ distributed table. We need to keep the open count globally. The open-files
 table can also be used to store the IDs of the file readers that should be
 notified when the primary node of the file changes.}}~\footnote{Open-files
 table is currently not implemented properly. It merely prevents opening
-a file by multiple writers. TODO: How the system prevents multiple writers
-for the same file?}
+a file by multiple writers. 
+%TODO: How the system prevents multiple writers
+%for the same file?
+}
 
 
 \subsection{File Append}
@@ -745,7 +749,7 @@ loss if the last unfinished block remains not full for an extended period.}}
 
 \subtopic{Appending Records:} Kawkab supports two types of append operations. A
 file can be appended either using a list of bytes, or using a user defined
-records~\footnote{Todo: How to ensure that the records are well structured?}.
+records.%~\footnote{Todo: How to ensure that the records are well structured?}.
 In the later case, a record is a fixed size structure that has a user defined
 key. Kawkab uses the key to create the data index for the file. For timestamp
 based index, it is required that each record's key must be greater than or
@@ -1123,7 +1127,7 @@ updated after each file append operation to reflect the changes in the file
 size and the other metadata (e.g., last modified time).  Therefore, inodes need
 to be made consistent across all the readers of the file.
 
-\hl{Todo: How the nodes read data blocks and inodes-blocks from the other nodes.}
+%\hl{Todo: How the nodes read data blocks and inodes-blocks from the other nodes.}
 
 %Kawkab uses a simple publish-subscribe system to propagate the inodes' updates
 %across the nodes where the file-readers are located. Each node with
@@ -1706,6 +1710,34 @@ from the primary node.
 %  previous one.
 
 
+\begin{algorithm}[ht]
+\label{alg:journal}
+\caption{Write-ahead log's journal entries to tolerate failures during append operations}
+\begin{algorithmic}[1]
+\item[]
+\Struct{\textbf{For an append operation}} 
+\State Data to append
+\State New file size
+\State Append data block
+\State Update inodes-block: Update file size in the inode
+\EndStruct
+\item[]
+
+\Struct{\textbf{For creating a new data block without creating a new data block}}
+\State Data to append
+\State New file size
+\State Create data block locally
+\State Append data in the first segment
+\State Schedule to copy recently completed block block to the global store
+\State Schedule to copy inodes block to the global store
+\State Update inode: File size and last block version
+\State Update IBV-table with the new inodes-block version
+\State Send updates to pub-sub channels if there are any subscribers.
+\EndStruct
+\end{algorithmic}
+\end{algorithm}
+
+
 \section{Future Work}
 
 The current design of Kawkab allows to read files using file offset only.
@@ -1768,34 +1800,10 @@ in the file system.
 
 \subsection{Append Operation}
 
-Following is the journal entry for an append operation that does not cause creation
-of a new inodes-block version and new data block:
+Table~\ref{alg:journal} shows (i) the journal entry for an append operation that does not cause creation
+of a new inodes-block version and new data block, and (ii) the journal entry for an append
+operation that creates a new data block.
 
-\begin{algorithm}
-\caption{Journal entries}
-\begin{algorithmic}[1]
-\item[]
-\Struct{\textbf{For an append operation}} 
-\State Data to append
-\State New file size
-\State Append data block
-\State Update inodes-block: Update file size in the inode
-\EndStruct
-\item[]
-
-\Struct{\textbf{For creating a new data block}}
-\State Data to append
-\State New file size
-\State Create data block locally
-\State Append data in the first segment
-\State Schedule to copy recently completed block block to the global store
-\State Schedule to copy inodes block to the global store
-\State Update inode: File size and last block version
-\State Update IBV-table with the new inodes-block version
-\State Send updates to pub-sub channels if there are any subscribers.
-\EndStruct
-\end{algorithmic}
-\end{algorithm}
 
 
 
