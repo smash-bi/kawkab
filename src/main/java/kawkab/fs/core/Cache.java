@@ -140,6 +140,7 @@ public class Cache implements BlockEvictionListener{
 		// block. This is because the file size is updated only after appending some data and the data can only be
 		// appended after creating the new block, which includes creating a new file in the local store.
 		
+		long t = System.nanoTime();
 		Block block = cachedItem.block();
 		if (createNewBlock) { //Not mutually exclusive because only one of the threads can create a new block as we have only one writer.
 			              // Otherwise, we should acquire a lock.
@@ -157,6 +158,7 @@ public class Cache implements BlockEvictionListener{
 			block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock function
 			                   // deals with concurrency. Therefore, we don't need to provide mutual exclusion here.
 		}
+		loadStats.putValue((System.nanoTime()-t)/1000);
 		
 		return block;
 	}
@@ -173,6 +175,8 @@ public class Cache implements BlockEvictionListener{
 		//System.out.println("[C] Release block: " + blockID);
 		
 		//try {
+		
+		long t = System.nanoTime();
 		
 		CachedItem cachedItem = null;
 		cacheLock.lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
@@ -199,6 +203,8 @@ public class Cache implements BlockEvictionListener{
 			                              // decrementRefCnt() functions are only called while holding the cacheLock.
 		} finally {
 			cacheLock.unlock();
+			
+			releaseStats.putValue((System.nanoTime()-t)/1000);
 		}
 			
 		/*} finally {
@@ -265,9 +271,10 @@ public class Cache implements BlockEvictionListener{
 	
 	public void shutdown() throws KawkabException {
 		System.out.println("Closing cache. Current size = "+cache.size());
-		System.out.printf("AcquireStats: %s\n", acquireStats);
-		System.out.print("GC duration stats: ");
-		GCMonitor.printStats();
+		System.out.printf("AcquireStats (us): %s\n", acquireStats);
+		System.out.printf("ReleaseStats (us): %s\n", releaseStats);
+		System.out.printf("LoadStats (us): %s\n", loadStats);
+		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
 		flush();
 		localStore.stop();
 	}

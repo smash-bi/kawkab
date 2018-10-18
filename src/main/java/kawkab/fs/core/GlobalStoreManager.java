@@ -34,9 +34,9 @@ public class GlobalStoreManager {
 		
 		startWorkers();
 		
-		System.out.println("*********** WARNING!!! ****************");
-		System.out.println(" Transfers to the global store is disabled for debugging purposes");
-		System.out.println("***************************************");
+		System.out.println("\t\t*********** WARNING!!! ****************");
+		System.out.println("\t\t Transfers to the global store is disabled for debugging purposes");
+		System.out.println("\t\t***************************************");
 	}
 	
 	/**

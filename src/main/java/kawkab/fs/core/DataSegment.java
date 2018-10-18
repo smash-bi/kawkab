@@ -1,6 +1,5 @@
 package kawkab.fs.core;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
@@ -20,7 +19,8 @@ import kawkab.fs.core.exceptions.KawkabException;
 public final class DataSegment extends Block {
 	private final static int recordSize = Constants.recordSize; //Temporarily set to 1 until we implement reading/writing records
 	
-	private byte[] bytes;
+	//private byte[] bytes;
+	private ByteBuffer dataBuf;
 	
 	private DataSegmentID segmentID;
 	
@@ -44,7 +44,7 @@ public final class DataSegment extends Block {
 	DataSegment(DataSegmentID segmentID) {
 		super(segmentID);
 		this.segmentID = segmentID;
-		bytes = new byte[Constants.segmentSizeBytes];
+		//bytes = new byte[Constants.segmentSizeBytes];
 		dirtyBytesStart = Constants.segmentSizeBytes; //This initial value is important for the correct functioning of appendOffsetInBlock()
 		dirtyBytesLength = 0; //The variable is updated to correct value in adjustDirtyOffsets()
 		dirtyBytesLock = new ReentrantLock();
@@ -71,7 +71,10 @@ public final class DataSegment extends Block {
 		int capacity = Constants.segmentSizeBytes - offsetInSegment;
 		int toAppend = length <= capacity ? length : capacity;
 		
-		System.arraycopy(data, offset, bytes, offsetInSegment, toAppend);
+		//System.arraycopy(data, offset, bytes, offsetInSegment, toAppend);
+		dataBuf.clear();
+		dataBuf.position(offsetInSegment);
+		dataBuf.put(data, offset, length);
 		
 		adjustDirtyOffsets(offsetInSegment, toAppend);
 		markDirty();
@@ -179,7 +182,12 @@ public final class DataSegment extends Block {
 		}
 		
 		int readSize = offsetInBlock+length <= blockSize ? length : blockSize-offsetInBlock;
-		System.arraycopy(bytes, offsetInBlock, dstBuffer, dstBufferOffset, readSize);
+		//System.arraycopy(bytes, offsetInBlock, dstBuffer, dstBufferOffset, readSize);
+		
+		dataBuf.clear();
+		dataBuf.position(offsetInBlock);
+		dataBuf.get(dstBuffer, dstBufferOffset, length);
+		
 		return readSize;
 	}
 	
@@ -200,15 +208,18 @@ public final class DataSegment extends Block {
 	}
 	
 	@Override
-	public synchronized void loadFrom(ByteBuffer buffer) throws IOException {
-		if (buffer.remaining() < Constants.segmentSizeBytes) {
+	public synchronized void loadFrom(ByteBuffer srcBuffer) throws IOException {
+		if (srcBuffer.remaining() < Constants.segmentSizeBytes) {
 			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
-					+ "Have %d, needed %d.",buffer.remaining(), Constants.segmentSizeBytes));
+					+ "Have %d, needed %d.",srcBuffer.remaining(), Constants.segmentSizeBytes));
 		}
 		
-		bytes = new byte[Constants.segmentSizeBytes];
-		//ByteBuffer buffer = ByteBuffer.wrap(bytes);
-		buffer.get(bytes);
+		//bytes = new byte[Constants.segmentSizeBytes];
+		//buffer.get(bytes);
+		
+		dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
+		dataBuf.put(srcBuffer);
+		
 		//FIXME: What if the number of bytes read is less than the block size?
 		//if (bytesRead < bytes.length)
 		//	throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
@@ -217,10 +228,13 @@ public final class DataSegment extends Block {
 	
 	@Override
 	public synchronized void loadFrom(ReadableByteChannel channel) throws IOException {
-		//bytes = new byte[Constants.segmentSizeBytes];
+		/*bytes = new byte[Constants.segmentSizeBytes];
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
+		Commons.readFrom(channel, buffer);*/ 
 		
-		Commons.readFrom(channel, buffer); 
+		dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
+		Commons.readFrom(channel, dataBuf);
+		
 		
 		//FIXME: What if the number of bytes read is less than the block size?
 		//if (bytesRead < bytes.length)
@@ -331,13 +345,22 @@ public final class DataSegment extends Block {
 		
 		
 		try {
-			ByteBuffer buffer = ByteBuffer.wrap(bytes, dirtyBytesOffset, dirtyBytesSize);
-			int remaining = buffer.remaining();
-			bytesWritten = Commons.writeTo(channel, buffer);
+			/*ByteBuffer buffer = ByteBuffer.wrap(bytes, dirtyBytesOffset, dirtyBytesSize);
+			int size = buffer.remaining();
+			bytesWritten = Commons.writeTo(channel, buffer);*/
 			
-			if (bytesWritten < remaining) {
+			
+			dataBuf.position(dirtyBytesOffset);
+			dataBuf.limit(dirtyBytesSize);
+			int size = dataBuf.remaining();
+			while(bytesWritten < size) {
+	    		bytesWritten += channel.write(dataBuf);
+	    	}
+			dataBuf.clear();
+			
+			if (bytesWritten < size) {
 				throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
-						+ "%d bytes out of %d.",bytesWritten, remaining));
+						+ "%d bytes out of %d.",bytesWritten, size));
 			}
 		} catch (IOException e) { 
 			dirtyBytesLock.lock();
@@ -356,12 +379,17 @@ public final class DataSegment extends Block {
 	@Override
 	public int storeFullTo(WritableByteChannel channel) throws IOException {
 		int bytesWritten = 0;
-		ByteBuffer buffer = ByteBuffer.wrap(bytes);
-		bytesWritten = Commons.writeTo(channel, buffer);
+		//int size = bytes.length;
+		//ByteBuffer buffer = ByteBuffer.wrap(bytes);
+		//bytesWritten = Commons.writeTo(channel, buffer);
 		
-		if (bytesWritten < bytes.length) {
+		dataBuf.clear();
+		int size = dataBuf.remaining();
+		bytesWritten = Commons.writeTo(channel, dataBuf);
+		
+		if (bytesWritten < size) {
 			throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
-					+ "%d bytes out of %d.",bytesWritten, bytes.length));
+					+ "%d bytes out of %d.",bytesWritten, size));
 		}
 		
 		return bytesWritten;
@@ -369,7 +397,9 @@ public final class DataSegment extends Block {
 	
 	@Override
 	public synchronized ByteString byteString() {
-		return ByteString.copyFrom(bytes); //TODO: Send only usable bytes instead of sending the complete segment
+		//return ByteString.copyFrom(bytes); //TODO: Send only usable bytes instead of sending the complete segment
+		dataBuf.clear();
+		return ByteString.copyFrom(dataBuf);
 	}
 	
 	/**
@@ -455,7 +485,8 @@ public final class DataSegment extends Block {
 	
 	@Override
 	public void cleanup() throws IOException {
-		bytes = null;
+		//bytes = null;
+		dataBuf = null;
 	}
 
 	@Override

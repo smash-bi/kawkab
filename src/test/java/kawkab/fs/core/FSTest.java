@@ -33,8 +33,8 @@ public final class FSTest {
 		//tester.testBlocksCreation();
 		tester.testSmallReadWrite();
 		//tester.testSmallRead();
-		//tester.testLargeReadWrite();
-		//tester.testMultipleReaders();
+		tester.testLargeReadWrite();
+		tester.testMultipleReaders();
 		//tester.testMultipleFiles();
 		//tester.testWritePerformance();
 		tester.testWritePerformanceConcurrentFiles();
@@ -387,7 +387,7 @@ public final class FSTest {
 		
 		Filesystem fs = Filesystem.instance().bootstrap();
 		
-		int numWriters = 16;
+		int numWriters = 6;
 		Thread[] workers = new Thread[numWriters];
 		final int bufSize = 10*1024; //Constants.segmentSizeBytes;//8*1024*1024;
 		final long dataSize = 1L*500*1024*1024;
@@ -419,7 +419,7 @@ public final class FSTest {
 							int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
 							long s = System.currentTimeMillis();
 							appended += file.append(writeBuf, 0, toWrite);
-							stats.putValue((System.currentTimeMillis()-s)/1);
+							stats.putValue((System.currentTimeMillis()-s));
 							//rand.nextBytes(writeBuf);
 						}
 						
@@ -428,7 +428,7 @@ public final class FSTest {
 						double speed = sizeMB/durSec;
 						thr[id] = (long)speed;
 						
-						System.out.println(String.format("File %d: Data size = %.0fMB, Write speed = %.0fMB/s, stats: %s", id, sizeMB, speed, stats));
+						System.out.println(String.format("File %d: Data size = %.0fMB, Write speed = %.0fMB/s, stats (ms): %s", id, sizeMB, speed, stats));
 					} catch (Exception e){
 						e.printStackTrace();
 						return;
