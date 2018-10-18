@@ -1,15 +1,17 @@
 package kawkab.fs.core;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
+import com.google.protobuf.ByteString;
 
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -49,7 +51,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	private final Lock dataLoadLock; //Lock for loading data in memory, disabling other threads from reading the block until data is loaded
 	
 	private AtomicInteger globalDirtyCnt;
-	private AtomicInteger localDirtyCnt; // Keeps track of the number of times the block is udpated. It helps in keeping track of the 
+	private AtomicLong localDirtyCnt; // Keeps track of the number of times the block is udpated. It helps in keeping track of the 
 	                        // updated bytes and flush only the updated bytes to the local/global store. 
 	                        // TODO: Change this to a dirty bit. This can be achieved by an AtomicBoolean instead of
 	                        // an AtomicInteger
@@ -80,7 +82,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 		//lastPrimaryFetchTimeMs = 0;
 		dataLoadLock = new ReentrantLock();
 		
-		localDirtyCnt  = new AtomicInteger(0);
+		localDirtyCnt  = new AtomicLong(0);
 		globalDirtyCnt = new AtomicInteger(0);
 		inLocalQueue   = new AtomicBoolean(false);
 		inGlobalQueue  = new AtomicBoolean(false);
@@ -140,11 +142,11 @@ public abstract class Block /*implements AutoCloseable*/ {
 	// abstract int fromInputStream(InputStream in) throws IOException;
 	
 	/**
-	 * Returns a ByteArrayInputStream that wraps around the byte[] containing the block in bytes. GlobalStoreManager
-	 * calls this function to store the block in the global store. Note that no guarantees are made about the concurrent
+	 * Returns a ByteArrayInputStream that wraps around the byte[] containing the block in bytes. PrimaryNodeService
+	 * calls this function to transfer data to the remote readers.Note that no guarantees are made about the concurrent
 	 * modification of the block while the block is read from the stream.
 	 */
-	public abstract ByteArrayInputStream getInputStream();
+	public abstract ByteString byteString();
 
 	/**
 	 * LocalStoreManger calls this function to set the position of the FileChannel before calling block.storeTo(channel)
@@ -175,8 +177,8 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * Increment the local and global dirty counts.
 	 */
 	public void markDirty() {
-		globalDirtyCnt.incrementAndGet();
 		localDirtyCnt.incrementAndGet();
+		globalDirtyCnt.incrementAndGet();
 	}
 	
 	/**
@@ -189,16 +191,18 @@ public abstract class Block /*implements AutoCloseable*/ {
 	/**
 	 * @return Returns the current value of the local dirty count
 	 */
-	public int localDirtyCount() {
+	public long localDirtyCount() {
 		return localDirtyCnt.get();
 	}
 	
 	/**
-	 * Reduces the local dirty count by the given count value. If the count becomes zero, the function signals any
-	 * appender that is waiting for this block to be evicted from the cache. 
+	 * Decrements the local dirty count by the given count value. If the count becomes zero, the function signals any
+	 * appender that is waiting for this block to be evicted from the cache.
+	 * 
+	 * @returns the updated value of the dirtyCounter for the local store
 	 */
-	public int clearAndGetLocalDirty(int count) {
-		int cnt = localDirtyCnt.addAndGet(-count);
+	public long decAndGetLocalDirty(long count) {
+		long cnt = localDirtyCnt.addAndGet(-count);
 		
 		assert cnt >= 0;
 		
@@ -229,7 +233,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * Clears the mark that the block is in a queue for persistence in the global store.
 	 * @return
 	 */
-	public int clearAndGetGlobalDirty(int count) {
+	public int decAndGetGlobalDirty(int count) {
 		return globalDirtyCnt.addAndGet(-count);
 	}
 	
@@ -302,16 +306,24 @@ public abstract class Block /*implements AutoCloseable*/ {
 			try {
 				localStoreSyncLock.lock();
 				
-				System.out.println("[B] Waiting to evict until this block is synced to the local store: " + id + ", cnt: " + localDirtyCnt.get());
 				while (localDirtyCnt.get() > 0 || inLocalQueue.get()) { // Wait until the block is in local queue or the block is dirty
+					System.out.println("[B] Waiting to evict until this block is synced to the local store: " + id + ", cnt: " + localDirtyCnt.get() + ", inLocalQueue="+inLocalQueue.get());
 					localSyncWait.await();
 				}
-				
 				System.out.println("[B] Block synced, now evicting: " + id);
 			} finally {
 				localStoreSyncLock.unlock();
 			}
 		}
+	}
+	
+	/**
+	 * Helper function to load the block from the global store
+	 * @throws FileNotExistException
+	 * @throws KawkabException
+	 */
+	protected void loadFromGlobal() throws FileNotExistException, KawkabException {
+		globalStoreManager.load(this);
 	}
 	
 	/**
@@ -325,7 +337,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 */
 	protected void loadBlock() throws FileNotExistException, KawkabException, IOException {
 		if (id.onPrimaryNode()) { // If this node is the primary writer of the file
-			onPrimaryLoadBlock();
+			loadBlockOnPrimary();
 			return;
 		}
 		
@@ -387,6 +399,15 @@ public abstract class Block /*implements AutoCloseable*/ {
 	}
 	
 	/**
+	 * Load block on the current non-primary node
+	 * 
+	 * @throws FileNotExistException
+	 * @throws KawkabException
+	 * @throws IOException
+	 */
+	protected abstract void loadBlockNonPrimary() throws FileNotExistException, KawkabException, IOException;
+	
+	/**
 	 * Helper function: Loads the block from the local or the global store. This code runs only on the primary node
 	 * of this block.
 	 * 
@@ -394,8 +415,8 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * @throws KawkabException
 	 * @throws IOException
 	 */
-	private void onPrimaryLoadBlock() throws FileNotExistException, KawkabException, IOException {
-		if (!id.onPrimaryNode()) {
+	private void loadBlockOnPrimary() throws FileNotExistException, KawkabException, IOException {
+		if (!id.onPrimaryNode()) { //FIXME: Do we need to check again? First time this is checked in the loadBlock().
 			throw new KawkabException("Unexpected execution path. This node is not the primary node of this block: " + 
 																		id() + ", primary node: " + id.primaryNodeID());
 		}
@@ -405,7 +426,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 			try {
 				dataLoadLock.lock(); // Disable loading from concurrent threads
 				//Load only if it is not already loaded
-				if (lastGlobalFetchTimeMs == 0) { // Prevent concurrent loads.
+				if (lastGlobalFetchTimeMs == 0) { // Prevent subsequent loads from other threads
 				
 					//System.out.println("[B] On primary. Load from the LOCAL store: " + id);
 					

@@ -116,7 +116,7 @@ public class Namespace {
 		Boolean alreadyOpened = openedFiles.put(inumber, true);
 		
 		if (alreadyOpened != null && alreadyOpened == true) {
-			throw new InvalidFileModeException("File is already opened in the append mode.");
+			throw new InvalidFileModeException("File is already opened in the append mode; inumber="+inumber);
 		}
 	}
 	

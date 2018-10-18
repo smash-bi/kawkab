@@ -1,11 +1,15 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Stats;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.utils.GCMonitor;
 
 /**
  * An LRU cache for Block objects. The objects are acquired and released using BlockIDs. This class is singleton and
@@ -18,6 +22,11 @@ public class Cache implements BlockEvictionListener{
 	private LRUCache cache; // An extended LinkedHashMap that implements removeEldestEntry()
 	private Lock cacheLock; // Cache level locking
 	private LocalStoreManager localStore;
+	
+	// For debugging purposes
+	private Stats acquireStats = new Stats();
+	private Stats releaseStats = new Stats();
+	private Stats loadStats = new Stats();
 	
 	private Cache() throws IOException{
 		System.out.println("Initializing cache..." );
@@ -95,9 +104,10 @@ public class Cache implements BlockEvictionListener{
 		
 		CachedItem cachedItem = null;
 		
+		
+		
 		cacheLock.lock(); // Lock the whole cache. This is necessary to prevent from creating multiple references to the
 		                  // same block.
-		
 		try { // To unlock the cache
 			cachedItem = cache.get(blockID.key()); // Try acquiring the block from the memory
 			
@@ -109,7 +119,11 @@ public class Cache implements BlockEvictionListener{
 			}
 			
 			if (cachedItem == null){ // If the block is not cached
+				long t = System.nanoTime();
 				Block block = blockID.newBlock();   // Creates a new block object to save in the cache
+				t = (System.nanoTime() - t)/1000;
+				acquireStats.putValue(t);
+
 				cachedItem = new CachedItem(block); // Wrap the object in a cached item
 				cache.put(blockID.key(), cachedItem);
 			}
@@ -158,34 +172,38 @@ public class Cache implements BlockEvictionListener{
 	public void releaseBlock(BlockID blockID) throws KawkabException {
 		//System.out.println("[C] Release block: " + blockID);
 		
+		//try {
+		
 		CachedItem cachedItem = null;
 		cacheLock.lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
-			try { //For cacheLock.lock()
-				cachedItem = cache.get(blockID.key());
+		
+		try { //For cacheLock.lock()
+			cachedItem = cache.get(blockID.key());
+			
+			if (cachedItem == null) {
+				System.out.println(" Releasing non-existing block: " + blockID.key());
 				
-				if (cachedItem == null) {
-					System.out.println(" Releasing non-existing block: " + blockID.key());
-					
-					assert cachedItem != null; //To exit the system during testing
-					return;
-				}
-				
-				if (blockID.onPrimaryNode()) { // Persist blocks only through the primary node
-					if (cachedItem.block().isLocalDirty()) {  // If the dirty bit for the local store is set
-						localStore.store(cachedItem.block()); // The call is non-blocking. Multiple threads are allowed 
-															  // to add the same block in the queue.
-						
-						// FIXME: What to do with the exception?
-					}
-				}
-				
-				cachedItem.decrementRefCnt(); // No need to acquire cacheLock because the incrementRefCnt() and
-				                              // decrementRefCnt() functions are only called while holding the cacheLock.
-			} finally {
-				cacheLock.unlock();
+				assert cachedItem != null; //To exit the system during testing
+				return;
 			}
 			
+			if (blockID.onPrimaryNode() && cachedItem.block().isLocalDirty()) { // Persist blocks only through the primary node
+				// If the dirty bit for the local store is set
+				localStore.store(cachedItem.block()); // The call is non-blocking. Multiple threads are allowed 
+														  // to add the same block in the queue.
+				// FIXME: What to do with the exception?
+				
+			}
 			
+			cachedItem.decrementRefCnt(); // No need to acquire any lock for the cachedItem because the incrementRefCnt() and
+			                              // decrementRefCnt() functions are only called while holding the cacheLock.
+		} finally {
+			cacheLock.unlock();
+		}
+			
+		/*} finally {
+			
+		}*/
 	}
 	
 	/**
@@ -200,6 +218,7 @@ public class Cache implements BlockEvictionListener{
 	 */
 	@Override
 	public void beforeEviction(CachedItem cachedItem) {
+		System.out.println("Evicting from cache: "+cachedItem.block().id());
 		Block block = cachedItem.block();
 		try {
 			block.waitUntilSynced();  // FIXME: This is a blocking call and the cacheLock is locked. This may
@@ -217,23 +236,39 @@ public class Cache implements BlockEvictionListener{
 	 * 
 	 * @throws KawkabException
 	 */
-	public void flush() throws KawkabException { 
-		for (CachedItem cached : cache.values()) {
-			//We need to close all the readers and writers before we can empty the cache.
-			//TODO: Wait until the reference count for the cached object becomes zero.
-			if (cached.block().isLocalDirty()) {
-				//cached.block().storeToDisk();
-				localStore.store(cached.block());
+	public void flush() throws KawkabException {
+		cacheLock.lock();
+		try {
+			Iterator<Map.Entry<String, CachedItem>> itr = cache.entrySet().iterator();
+			while (itr.hasNext()) {
+				//We need to close all the readers and writers before we can empty the cache.
+				//TODO: Wait until the reference count for the cached object becomes zero.
+				CachedItem cachedItem = itr.next().getValue();
+				//beforeEviction(cachedItem);
+				Block block = cachedItem.block();
+				if (block.id().onPrimaryNode() && block.isLocalDirty()) {
+					localStore.store(block);
+					try {
+						block.waitUntilSynced();
+						localStore.notifyEvictedFromCache(block);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+				itr.remove();
 			}
+			assert cache.size() == 0;
+		} finally {
+			cacheLock.unlock();
 		}
 	}
 	
 	public void shutdown() throws KawkabException {
-		System.out.println("Closing cache.");
+		System.out.println("Closing cache. Current size = "+cache.size());
+		System.out.printf("AcquireStats: %s\n", acquireStats);
+		System.out.print("GC duration stats: ");
+		GCMonitor.printStats();
 		flush();
-		cacheLock.lock();
-		cache.clear();
-		cacheLock.unlock();
 		localStore.stop();
 	}
 }

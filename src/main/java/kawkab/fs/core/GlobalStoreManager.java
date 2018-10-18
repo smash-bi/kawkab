@@ -33,6 +33,10 @@ public class GlobalStoreManager {
 		backend = new S3Backend();
 		
 		startWorkers();
+		
+		System.out.println("*********** WARNING!!! ****************");
+		System.out.println(" Transfers to the global store is disabled for debugging purposes");
+		System.out.println("***************************************");
 	}
 	
 	/**
@@ -147,29 +151,29 @@ public class GlobalStoreManager {
 		// Therefore, we can reach this line in code when the dirty count is zero.
 		
 		boolean successful = true;
-		if (count > 0) {
+		/*if (count > 0) {
 			try {
 				backend.storeToGlobal(block);
 			} catch (KawkabException e) {
 				e.printStackTrace();
 				successful = false;
 			}
-		}
+		}*/ //FIXME: Uncomment this block. It is commented for debugging only
 		
 		block.clearInGlobalQueue(); // We must get the current dirty count after clearing the inQueue flag because a
 		                               // concurrent writer may want to add the block in the queue. If the concurrent
 									   // writer fails to add in the queue, then this worker should add the block in the
 									   // if the dirty count is non-zero.
 		
-		count = block.clearAndGetGlobalDirty(count);
+		count = block.decAndGetGlobalDirty(count);
 		if (count > 0) {
-			System.out.println("[GSM] Global bit dirty, resubmitting block: " + block.id());
+			//System.out.println("[GSM] Global bit dirty, resubmitting block: " + block.id() + ", cnt="+count);
 			store(block, task.listener);
 			return;
 		}
 		
 		try {
-			task.listener.notifyStoreComplete(block, successful);
+			task.listener.notifyGlobalStoreComplete(block, successful);
 		} catch (KawkabException e) {
 			e.printStackTrace();
 		}
@@ -192,7 +196,22 @@ public class GlobalStoreManager {
 			}
 		}
 		
+		for (int i=0; i<storeQs.length; i++) {
+			Task task = null;
+			while( (task = storeQs[i].poll()) != null) {
+				try {
+					storeToGlobal(task);
+				} catch (KawkabException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		
 		backend.shutdown();
+		
+		for (int i=0; i<storeQs.length; i++) {
+			assert storeQs[i].size() == 0;
+		}
 	}
 	
 	private class Task {

@@ -8,6 +8,8 @@ import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.google.protobuf.ByteString;
+
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -25,8 +27,12 @@ public final class DataSegment extends Block {
 	//Keeps track of the offset and length of dirty bytes
 	private int dirtyBytesStart;  // Offset of the dirty bytes that have not been synced to the local store yet
 	private int dirtyBytesLength; // Number of the dirty bytes
-	private boolean blockIsFull;  // Sets to true only when the block becomes full in an append operation.
+	private boolean segmentIsFull;  // Sets to true only when the block becomes full in an append operation.
 	private final Lock dirtyBytesLock; // To atomically update dirty bytes start and length
+	private long lastGlobalFetchTimeMs; // Clock time in ms when the block was last loaded. This must be initialized 
+										// to zero when the block is first created in memory.
+	private final Lock dataLoadLock; //Lock for loading data in memory, disabling other threads from reading the block until data is loaded
+	//private int bytesFilled; //Number of valid bytes in the segment, starting from the first byte
 	
 	/**
 	 * The constructor should not create a new file in the local storage. This constructor
@@ -37,11 +43,14 @@ public final class DataSegment extends Block {
 	 */
 	DataSegment(DataSegmentID segmentID) {
 		super(segmentID);
+		this.segmentID = segmentID;
 		bytes = new byte[Constants.segmentSizeBytes];
 		dirtyBytesStart = Constants.segmentSizeBytes; //This initial value is important for the correct functioning of appendOffsetInBlock()
 		dirtyBytesLength = 0; //The variable is updated to correct value in adjustDirtyOffsets()
 		dirtyBytesLock = new ReentrantLock();
-		this.segmentID = segmentID;
+		dataLoadLock = new ReentrantLock();
+		lastGlobalFetchTimeMs = 0;
+		
 		//System.out.println(" Opened block: " + name());
 	}
 	
@@ -58,24 +67,26 @@ public final class DataSegment extends Block {
 		assert offset < data.length;
 		
 		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
-		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
-		int capacity = Constants.segmentSizeBytes - offsetInBlock;
+		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
+		int capacity = Constants.segmentSizeBytes - offsetInSegment;
 		int toAppend = length <= capacity ? length : capacity;
 		
-		System.arraycopy(data, offset, bytes, offsetInBlock, toAppend);
+		System.arraycopy(data, offset, bytes, offsetInSegment, toAppend);
 		
-		adjustDirtyOffsets(offsetInBlock, toAppend);
+		adjustDirtyOffsets(offsetInSegment, toAppend);
 		markDirty();
 		
 		//Mark block as full
-		if (offsetInBlock+toAppend == Constants.segmentSizeBytes) {
-			blockIsFull = true;
+		if (offsetInSegment+toAppend == Constants.segmentSizeBytes) {
+			segmentIsFull = true;
 		}
+		
+		//bytesFilled += toAppend;
 		
 		return toAppend;
 	}
 	
-	synchronized int writeLong(long data, long offsetInFile) throws IOException{
+	/*synchronized int writeLong(long data, long offsetInFile) throws IOException{
 		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
 		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
 		int capacity = Constants.segmentSizeBytes - offsetInBlock;
@@ -90,9 +101,9 @@ public final class DataSegment extends Block {
 		markDirty();
 		
 		return longSize;
-	}
+	}*/
 	
-	synchronized long readLong(long offsetInFile) throws InvalidFileOffsetException, IOException{
+	/*synchronized long readLong(long offsetInFile) throws InvalidFileOffsetException, IOException{
 		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
 		
 		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
@@ -107,9 +118,9 @@ public final class DataSegment extends Block {
 		
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		return buffer.getLong(offsetInBlock);
-	}
+	}*/
 	
-	synchronized int writeInt(int data, long offsetInFile) throws IOException{
+	/*synchronized int writeInt(int data, long offsetInFile) throws IOException{
 		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
 		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
 		int capacity = Constants.segmentSizeBytes - offsetInBlock;
@@ -125,9 +136,9 @@ public final class DataSegment extends Block {
 		markDirty();
 		
 		return intSize;
-	}
+	}*/
 	
-	synchronized int readInt(long offsetInFile) throws InvalidFileOffsetException, IOException{
+	/*synchronized int readInt(long offsetInFile) throws InvalidFileOffsetException, IOException{
 		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
 		
 		int blockSize = Constants.segmentSizeBytes;
@@ -145,7 +156,7 @@ public final class DataSegment extends Block {
 		
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		return buffer.getInt(offsetInBlock);
-	}
+	}*/
 	
 	/**
 	 * @param dstBuffer output buffer
@@ -173,10 +184,10 @@ public final class DataSegment extends Block {
 	}
 	
 	@Override
-	public boolean shouldStoreGlobally() {
+	public synchronized boolean shouldStoreGlobally() {
 		// Store in the global store only if this is the last segment of the block and this segment is full
 		if (segmentID.segmentInBlock()+1 == Constants.segmentsPerBlock // If it is the last segment in the block 
-				&& blockIsFull) { // and the segment is full
+				&& segmentIsFull) { // and the segment is full
 			return true;
 		}
 		
@@ -189,47 +200,92 @@ public final class DataSegment extends Block {
 	}
 	
 	@Override
-	public void loadFrom(ByteBuffer buffer) throws IOException {
+	public synchronized void loadFrom(ByteBuffer buffer) throws IOException {
 		if (buffer.remaining() < Constants.segmentSizeBytes) {
 			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
 					+ "Have %d, needed %d.",buffer.remaining(), Constants.segmentSizeBytes));
 		}
 		
-		lock();
-		try {
-			bytes = new byte[Constants.segmentSizeBytes];
-			//ByteBuffer buffer = ByteBuffer.wrap(bytes);
-			buffer.get(bytes);
-			//FIXME: What if the number of bytes read is less than the block size?
-			//if (bytesRead < bytes.length)
-			//	throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
-			//			+ "%d bytes out of %d.",bytesRead,bytes.length));
-		} finally {
-			unlock();
-		}
+		bytes = new byte[Constants.segmentSizeBytes];
+		//ByteBuffer buffer = ByteBuffer.wrap(bytes);
+		buffer.get(bytes);
+		//FIXME: What if the number of bytes read is less than the block size?
+		//if (bytesRead < bytes.length)
+		//	throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
+		//			+ "%d bytes out of %d.",bytesRead,bytes.length));
 	}
 	
 	@Override
-	public void loadFrom(ReadableByteChannel channel) throws IOException {
-		lock();
-		try {
-			//bytes = new byte[Constants.segmentSizeBytes];
-			ByteBuffer buffer = ByteBuffer.wrap(bytes);
-			
-			Commons.readFrom(channel, buffer); 
-			
-			//FIXME: What if the number of bytes read is less than the block size?
-			//if (bytesRead < bytes.length)
-			//	throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
-			//			+ "%d bytes out of %d.",bytesRead,bytes.length));
-		} finally {
-			unlock();
-		}
+	public synchronized void loadFrom(ReadableByteChannel channel) throws IOException {
+		//bytes = new byte[Constants.segmentSizeBytes];
+		ByteBuffer buffer = ByteBuffer.wrap(bytes);
+		
+		Commons.readFrom(channel, buffer); 
+		
+		//FIXME: What if the number of bytes read is less than the block size?
+		//if (bytesRead < bytes.length)
+		//	throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
+		//			+ "%d bytes out of %d.",bytesRead,bytes.length));
 	}
 	
 	@Override
-	protected void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
+	protected synchronized void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
 		primaryNodeService.getSegment(segmentID, this);
+	}
+	
+	@Override
+	protected synchronized void loadBlockNonPrimary() throws FileNotExistException, KawkabException, IOException {
+		/* If never fetched or the last global-fetch has timed out, fetch from the global store.
+		 * Otherwise, if the last primary-fetch has timed out, fetch from the primary node.
+		 * Otherwise, don't fetch, data is still fresh. 
+		 */
+		
+		long now = System.currentTimeMillis();
+		
+		if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
+			try {
+				dataLoadLock.lock(); // Prevent loading from concurrent readers
+				
+				now = System.currentTimeMillis();
+				
+				if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
+					try {
+						System.out.println("[B] Load from the global: " + id());
+						
+						loadFromGlobal(); // First try loading data from the global store
+						lastGlobalFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store. 
+																// InodeBlocks are updated to the global store (not treating as an append only system).
+						return;
+						//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
+					} catch (FileNotExistException e) { //If the block is not in the global store yet
+						System.out.println("[B] Not found in the global: " + id());
+						lastGlobalFetchTimeMs = 0; // Failed to fetch from the global store
+					}
+				
+					System.out.println("[B] Primary fetch expired or not found from the global: " + id());
+					
+					try {
+						System.out.println("[B] Loading from the primary: " + id());
+						loadBlockFromPrimary(); // Fetch from the primary node
+						//lastPrimaryFetchTimeMs = now;
+						if (lastGlobalFetchTimeMs == 0) // Set to now if the global fetch has failed
+							lastGlobalFetchTimeMs = now;
+					} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
+						// Check again from the global store because the primary may have deleted the 
+						// block after copying to the global store
+						System.out.println("[B] Not found on the primary, trying again from the global: " + id());
+						loadFromGlobal(); 
+						lastGlobalFetchTimeMs = now;
+						//lastPrimaryFetchTimeMs = 0;
+					} catch (IOException ioe) {
+						System.out.println("[B] Not found in the global and the primary: " + id());
+						throw new KawkabException(ioe);
+					}
+				}
+			} finally {
+				dataLoadLock.unlock();
+			}
+		}
 	}
 	
 	/*@Override
@@ -256,7 +312,7 @@ public final class DataSegment extends Block {
 	}*/
 	
 	@Override
-	public int storeTo(WritableByteChannel channel) throws IOException {
+	public synchronized int storeTo(WritableByteChannel channel) throws IOException {
 		int bytesWritten = 0;
 		
 		dirtyBytesLock.lock();
@@ -274,7 +330,6 @@ public final class DataSegment extends Block {
 		dirtyBytesLock.unlock();
 		
 		
-		lock();
 		try {
 			ByteBuffer buffer = ByteBuffer.wrap(bytes, dirtyBytesOffset, dirtyBytesSize);
 			int remaining = buffer.remaining();
@@ -294,9 +349,6 @@ public final class DataSegment extends Block {
 
 			throw e;
 		}
-		finally {
-			unlock();
-		}
 		
 		return bytesWritten;
 	}
@@ -304,25 +356,20 @@ public final class DataSegment extends Block {
 	@Override
 	public int storeFullTo(WritableByteChannel channel) throws IOException {
 		int bytesWritten = 0;
-		lock();
-		try {
-			ByteBuffer buffer = ByteBuffer.wrap(bytes);
-			bytesWritten = Commons.writeTo(channel, buffer);
-			
-			if (bytesWritten < bytes.length) {
-				throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
-						+ "%d bytes out of %d.",bytesWritten, bytes.length));
-			}
-		} finally {
-			unlock();
+		ByteBuffer buffer = ByteBuffer.wrap(bytes);
+		bytesWritten = Commons.writeTo(channel, buffer);
+		
+		if (bytesWritten < bytes.length) {
+			throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
+					+ "%d bytes out of %d.",bytesWritten, bytes.length));
 		}
 		
 		return bytesWritten;
 	}
 	
 	@Override
-	public ByteArrayInputStream getInputStream() {
-		return new ByteArrayInputStream(bytes);
+	public synchronized ByteString byteString() {
+		return ByteString.copyFrom(bytes); //TODO: Send only usable bytes instead of sending the complete segment
 	}
 	
 	/**
@@ -348,7 +395,7 @@ public final class DataSegment extends Block {
 	 * @param currentAppendPosition
 	 * @param length
 	 */
-	public void adjustDirtyOffsets(int currentAppendPosition, int length) {
+	private void adjustDirtyOffsets(int currentAppendPosition, int length) {
 		dirtyBytesLock.lock();
 		
 		if(currentAppendPosition < dirtyBytesStart) { //This will be true when the segment is loaded and no append is done yet
@@ -411,24 +458,6 @@ public final class DataSegment extends Block {
 		bytes = null;
 	}
 
-	/*@Override
-	String name() {
-		return id.name();
-	}
-	
-	static String name(long inumber, long blockNumber, int segmentInBlock){
-		return DataSegmentID.name(inumber, blockNumber, segmentInBlock);
-	}
-	
-	@Override
-	String localPath() {
-		return localPath(id);
-	}
-	
-	private static String localPath(BlockID id) {
-		return id.localPath();
-	}*/
-
 	@Override
 	public String toString(){
 		return id().toString();
@@ -478,7 +507,7 @@ public final class DataSegment extends Block {
 	 * Returns the record number in its segment that contains the given offset in the file
 	 */
 	public static int recordInSegment(long offsetInFile, int recordSize) {
-		return (int)(offsetInFile/recordSize) % recordsPerSegment(recordSize);
+		return (int)((offsetInFile/recordSize) % recordsPerSegment(recordSize));
 	}
 	
 	/**
@@ -494,6 +523,6 @@ public final class DataSegment extends Block {
 	 */
 	private static int offsetInBlock(long offsetInFile, int recordSize) {
 		// offsetInBlock = segmentInBlock + recordInSegment + offsetInRecord
-		return (int)(segmentInBlock(segmentInFile(offsetInFile, recordSize)) + recordInSegment(offsetInFile, recordSize) + (offsetInFile % recordSize));
+		return (int)((segmentInBlock(segmentInFile(offsetInFile, recordSize)) + recordInSegment(offsetInFile, recordSize) + (offsetInFile % recordSize)));
 	}
 }

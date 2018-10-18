@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
+import java.util.concurrent.atomic.AtomicLong;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
@@ -20,7 +21,7 @@ public final class Inode {
 	// updated immediately to allow concurrent reading and writing to the same dataBlock.
 	
 	private long inumber;
-	private volatile long fileSize;
+	private AtomicLong fileSize = new AtomicLong(0);
 	private int recordSize = Constants.recordSize; //Temporarily set to 1 until we implement reading/writing records
 	private boolean dirty; //not saved persistently
 	private static Cache cache;
@@ -70,7 +71,7 @@ public final class Inode {
 		if (length <= 0)
 			throw new IllegalArgumentException("Given length is 0.");
 		
-		if (offsetInFile + length > fileSize)
+		if (offsetInFile + length > fileSize.get())
 			throw new IllegalArgumentException(String.format("File offset + read length is greater "
 					+ "than file size: %d + %d > %d", offsetInFile,length,fileSize));
 		
@@ -78,7 +79,7 @@ public final class Inode {
 		int remaining = length;
 		long curOffsetInFile = offsetInFile;
 		
-		while(remaining > 0 && curOffsetInFile < fileSize && bufferOffset<buffer.length) {
+		while(remaining > 0 && curOffsetInFile < fileSize.get() && bufferOffset<buffer.length) {
 			//System.out.println("  Read at offset: " + offsetInFile);
 			BlockID curSegId = getByFileOffset(curOffsetInFile);
 			
@@ -137,7 +138,7 @@ public final class Inode {
 				InvalidFileOffsetException, IOException, KawkabException, InterruptedException{
 		int remaining = length;
 		int appended = 0;
-		long fileSize = this.fileSize;
+		long fileSize = this.fileSize.get();
 		
 		BlockID lastSegID = null;
 		int curOffset = offset;
@@ -197,7 +198,8 @@ public final class Inode {
 	 */
 	public void updateSize(final int appendLength) {
 		//FIXME: This function should be part of the append function and should be called atomically with append.
-		fileSize += appendLength;
+		//fileSize += appendLength;
+		fileSize.addAndGet(appendLength);
 		dirty = true;
 	}
 	
@@ -232,6 +234,8 @@ public final class Inode {
 		//cache.createBlock(block);
 		//System.out.println("\t\t\t\tCreating block: " + dsid + ", inumber: " + inumber);
 		try {
+			//System.out.printf("fs=%d, block=%s\n", fileSize, dsid);
+			
 			Block seg = cache.acquireBlock(dsid, true);
 			// seg.markDirty(); // We don't need to mark the segment as dirty because the new segment is created on
 			                    // in the local store and there are no dirty bytes yet.
@@ -245,7 +249,7 @@ public final class Inode {
 	}
 	
 	public long fileSize(){
-		return fileSize;
+		return fileSize.get();
 	}
 	
 	void loadFrom(final ByteBuffer buffer) throws IOException {
@@ -255,7 +259,7 @@ public final class Inode {
 		}
 		
 		inumber = buffer.getLong();
-		fileSize = buffer.getLong();
+		fileSize.set(buffer.getLong());
 		recordSize = buffer.getInt();
 	}
 	
@@ -272,8 +276,10 @@ public final class Inode {
 		
 		buffer.flip();
 		inumber = buffer.getLong();
-		fileSize = buffer.getLong();
+		fileSize.set(buffer.getLong());
 		recordSize = buffer.getInt();
+		
+		//System.out.printf("\tLoaded: %d -> %d\n", inumber, fileSize);
 	}
 	
 	/*
@@ -293,6 +299,8 @@ public final class Inode {
 					+ "%d bytes out of %d.",bytesWritten, Constants.inodeSizeBytes));
 		}
 		
+		//System.out.printf("Store: %d -> %d\n", inumber, fileSize);
+		
 		return bytesWritten;
 	}
 	
@@ -300,7 +308,7 @@ public final class Inode {
 		int start = buffer.position();
 		
 		buffer.putLong(inumber);
-		buffer.putLong(fileSize);
+		buffer.putLong(fileSize.get());
 		buffer.putInt(recordSize);
 		
 		int written = buffer.position() - start;

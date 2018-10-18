@@ -70,7 +70,7 @@ public final class FileHandle {
 		InodesBlock block = null;
 		try {
 			block = (InodesBlock)cache.acquireBlock(id, false);
-			block.lock();
+			block.lock(); // To read the current file size, which can be updated by a concurrent writer
 			inode = block.getInode(inumber);
 			fileSize = inode.fileSize();
 		} finally {

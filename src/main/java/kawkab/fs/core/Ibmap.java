@@ -10,6 +10,8 @@ import java.util.BitSet;
 
 import javax.naming.OperationNotSupportedException;
 
+import com.google.protobuf.ByteString;
+
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -131,6 +133,11 @@ public final class Ibmap extends Block{
 		bitset = BitSet.valueOf(bytes);
 	}
 	
+	@Override
+	protected void loadBlockNonPrimary() throws FileNotExistException, KawkabException, IOException {
+		assert false;
+	}
+	
 	/*@Override
 	public int fromInputStream(InputStream in) throws IOException {
 		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
@@ -173,8 +180,8 @@ public final class Ibmap extends Block{
 	}
 
 	@Override
-	public ByteArrayInputStream getInputStream() {
-		return new ByteArrayInputStream(bitset.toByteArray());
+	public ByteString byteString() {
+		return ByteString.copyFrom(bitset.toByteArray());
 	}
 	
 	@Override

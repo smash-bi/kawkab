@@ -7,6 +7,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 
+import com.google.protobuf.ByteString;
+
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
@@ -122,7 +124,7 @@ public final class InodesBlock extends Block {
 	}
 	
 	@Override 
-	public ByteArrayInputStream getInputStream() {
+	public ByteString byteString() {
 		//TODO: This function takes extra memory to serialize inodes in an input stream. We need an alternate
 		//method for this purpose.
 		ByteBuffer buffer = ByteBuffer.allocate(inodes.length * Constants.inodeSizeBytes);
@@ -135,13 +137,16 @@ public final class InodesBlock extends Block {
 			unlock();
 		}
 		buffer.flip();
-		return new ByteArrayInputStream(buffer.array());
+		return ByteString.copyFrom(buffer.array());
 	}
 	
 	@Override
 	protected void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException {
 		primaryNodeService.getInodesBlock((InodesBlockID)id(), this);
 	}
+	
+	@Override
+	protected void loadBlockNonPrimary() throws FileNotExistException, KawkabException, IOException {}
 
 	@Override
 	public int appendOffsetInBlock() {

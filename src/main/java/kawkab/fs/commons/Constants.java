@@ -5,6 +5,7 @@ import java.util.Map;
 
 import kawkab.fs.core.NodeInfo;
 import kawkab.fs.core.zookeeper.ZKClusterConfig;
+import kawkab.fs.utils.GCMonitor;
 
 public final class Constants {
 	//TODO: Read constants and properties from a given configuration file.
@@ -16,9 +17,9 @@ public final class Constants {
 	public static int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
 	
 	//Default data block size in bytes
-	public static final int dataBlockSizeBytes = 3*1024*1024;
-	public static final int segmentsPerBlock = 1;
-	public static final int segmentSizeBytes = dataBlockSizeBytes/segmentsPerBlock;
+	public static final int dataBlockSizeBytes = 50*1024*1024;
+	public static final int segmentSizeBytes = 1*1024*1024;
+	public static final int segmentsPerBlock = dataBlockSizeBytes/segmentSizeBytes;
 	public static final int directBlocksPerInode = 0;
 	
 	public static final long maxFileSizeBytes = Long.MAX_VALUE;
@@ -32,21 +33,21 @@ public final class Constants {
 	//Small inodesBlockSize shows better writes performance, perhaps due to locks in the InodesBlocks. The down side
 	//is that small size files consume more disk resources.
 	public static final int inodesBlockSizeBytes = 1*1024; //dataBlockSizeBytes; 
-	public static final int inodeSizeBytes = 32;//Inode.inodesSize();
+	public static final int inodeSizeBytes = 64;//Inode.inodesSize();
 	public static final int inodesPerBlock = inodesBlockSizeBytes/inodeSizeBytes;
 	//FIXME: Calculate this based on the maximum number of files supported by a machine
 	public static final int inodeBlocksPerMachine = (int)(1.0/inodesPerBlock*ibmapBlockSizeBytes*ibmapsPerMachine*8.0);//inodesPerMachine/inodesPerBlock 
 	public static final int inodeBlocksRangeStart = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
 																					 //Blocks start with ID 0.
 	
-	public static final int maxBlocksPerLocalDevice = 10510 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
-	public static final int maxBlocksInCache        = 100; //Size of the cache in number of blocks
+	public static final int maxBlocksPerLocalDevice = 20510 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
+	public static final int maxBlocksInCache        = 20000; //Size of the cache in number of blocks
 	
 	public static final int globalFetchExpiryTimeoutMs  = 3000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	//public static final int primaryFetchExpiryTimeoutMs = 5000; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
 	public static final int syncThreadsPerDevice = 2;
-	public static final int numWorkersStoreToGlobal = 2;
+	public static final int numWorkersStoreToGlobal = 8;
 	//public static final int numWorkersLoadFromGlobal = 5;
 	
 	public static final int grpcClientFrameSize = dataBlockSizeBytes > 4194304 ? dataBlockSizeBytes+2048 : 4194304; //Frame size to use when fetching blocks from primary nodes, at least 4MB
@@ -63,7 +64,7 @@ public final class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkMainServers = "10.10.0.1:2181,10.10.0.1:2182,10.10.0.1:2183";
+	public static final String zkMainServers = "10.10.0.13:2181,10.10.0.13:2182,10.10.0.13:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
 	public static final ZKClusterConfig zkMainCluster = 
@@ -73,7 +74,7 @@ public final class Constants {
 	
 	
 	//minio settings
-	public static final String[] minioServers = {"http://10.10.0.1:9000"};
+	public static final String[] minioServers = {"http://10.10.0.13:9000"};
 	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
@@ -107,6 +108,8 @@ public final class Constants {
 		System.out.println(String.format("Inode blocks total size MB = %.3f", inodeBlocksPerMachine*inodesBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Inode blocks range start . = %d", inodeBlocksRangeStart));
 		System.out.println(String.format("Max blocks per local device= %d", maxBlocksPerLocalDevice));
+		System.out.println();
+		System.out.println(String.format("Max blocks in cache ...... = %d", maxBlocksInCache));
 	}
 	
 	private static void init() {
@@ -118,11 +121,13 @@ public final class Constants {
 		
 		thisNodeID = Integer.parseInt(nodeID);
 		nodesMap = new HashMap<Integer, NodeInfo>();  //Map of <NodeID, NodeInfo(NodeID, IP)> 
-		nodesMap.put(0, new NodeInfo(0, "10.10.0.2"));
-		nodesMap.put(1, new NodeInfo(1, "10.10.0.3"));
-		nodesMap.put(2, new NodeInfo(1, "10.10.0.4"));
-		nodesMap.put(3, new NodeInfo(1, "10.10.0.5"));
-		nodesMap.put(4, new NodeInfo(1, "10.10.0.6"));
+		nodesMap.put(0, new NodeInfo(0, "10.10.0.14"));
+		nodesMap.put(1, new NodeInfo(1, "10.10.0.15"));
+//		nodesMap.put(2, new NodeInfo(1, "10.10.0.4"));
+//		nodesMap.put(3, new NodeInfo(1, "10.10.0.5"));
+//		nodesMap.put(4, new NodeInfo(1, "10.10.0.6"));
+		
+		GCMonitor.initialize();
 	}
 	
 	private static void verify() {

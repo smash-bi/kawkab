@@ -55,7 +55,7 @@ public final class PrimaryNodeService extends PrimaryNodeImplBase {
 		
 		ByteString blockBytes = null;
 		try {
-			blockBytes = getBlock(bid);
+			blockBytes = getData(bid);
 			if (blockBytes == null)
 				ec = KErrorCode.BLOCK_NOT_EXIST;
 		} catch (IOException | KawkabException e) {
@@ -90,7 +90,7 @@ public final class PrimaryNodeService extends PrimaryNodeImplBase {
 		
 		ByteString blockBytes = null;
 		try {
-			blockBytes = getBlock(bid);
+			blockBytes = getData(bid);
 			if (blockBytes == null)
 				ec = KErrorCode.BLOCK_NOT_EXIST;
 		} catch (IOException | KawkabException e) {
@@ -107,12 +107,12 @@ public final class PrimaryNodeService extends PrimaryNodeImplBase {
 		responseObserver.onCompleted(); //Finished dealing with the RPC
 	}
 	
-	private ByteString getBlock(BlockID bid) throws IOException, KawkabException {
+	private ByteString getData(BlockID bid) throws IOException, KawkabException {
 		Block block = null;
 		ByteString blockBytes = null;
 		try {
 			block = cache.acquireBlock(bid, false);
-			blockBytes = ByteString.readFrom(block.getInputStream());
+			blockBytes = block.byteString();
 		} catch(FileNotExistException | InterruptedException e) {
 			blockBytes = null;
 		} finally {

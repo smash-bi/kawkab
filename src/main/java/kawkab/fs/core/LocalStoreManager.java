@@ -92,7 +92,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		while(true) {
 			Block block = null;
 			try {
-				block = reqs.poll(3, TimeUnit.SECONDS);
+				block = reqs.poll(2, TimeUnit.SECONDS);
 			} catch (InterruptedException e1) {
 				if (!working) {
 					break;
@@ -177,7 +177,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * @throws KawkabException
 	 */
 	private void processStoreRequest(Block block) throws KawkabException {
-		int dirtyCount = block.localDirtyCount();
+		long dirtyCount = block.localDirtyCount();
 		
 		// WARNING! This functions works correctly in combination with the store(block) function only if the same block 
 		// is assigned always to the same worker thread.
@@ -195,8 +195,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			if (block.shouldStoreGlobally()) {
 				globalProc.store(block, this);
 			} else {
-				block.clearInLocalQueue();
-				if (block.clearAndGetLocalDirty(dirtyCount) > 0) {
+				if (updateLocalDirty(block, dirtyCount) > 0) {
 					store(block);
 				}
 				
@@ -204,16 +203,93 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			}
 		}
 		
-		block.clearAndGetLocalDirty(dirtyCount);
+		//System.out.println("dirtyCount=0, skipping submittingToGlobal: " + block.id());
+		updateLocalDirty(block, dirtyCount);
+		//block.decAndGetLocalDirty(dirtyCount);
 		
 		// We clear the inLocalQueue flag when the global store has finished uploading. This is to mutually exclude updating
 		// the local file while concurrently uploading to the global store. If this happens, S3 API throws an exception
-		// that the MD5 hash of the file has changed.
+		// that the MD5 hash of the file has changed. Now we update this flag in notifyStoreComplete() function.
 		
 		/*block.clearInLocalQueue(); //This is now done in the notifyStoreComplete function
 		if (block.clearAndGetLocalDirty(dirtyCount) > 0) {
 			store(block);
 		}*/
+	}
+	
+	private long updateLocalDirty(Block block, long dirtyCount) {
+		block.clearInLocalQueue();	// We have to do it so that either the current executing 
+									// thread or the appender can add the block in the local queue
+		return block.decAndGetLocalDirty(dirtyCount);
+	}
+	
+	@Override
+	public void notifyGlobalStoreComplete(Block block, boolean successful) throws KawkabException {
+		// Called by the global store manager when it is done with storing the block in the global store
+		
+		/* if not successful, add in some queue to retry later
+		 * 
+		 * atomically increment dirty count
+		 * if dirty count after increment is 2 (dirty count's initial value is 0), this means
+		 * the block is not in cache and the block is persisted globally. Therefore, the block can be
+		 * deleted from the local store.
+		 * 
+		*/
+		
+		long dirtyCount = updateLocalDirty(block, 0);
+		if (dirtyCount > 0) {// We have to check the count again. We cannot simply call localDirtyCount() 
+													// because we need to notify any thread waiting for the block to be removed 
+													// from the local queue.
+													// Otherwise, a block can be evicted from the cache while the block is still being synced to the local store.
+			//System.out.println("[LSM] Local dirty. Adding again: " + block.id() + ", cnt="+dirtyCount);
+			store(block);
+			return;
+		}
+		
+		//System.out.println("[LSM] Finished storing to global: " + block.id());
+		
+		if (!block.isInCache() && block.evictLocallyOnMemoryEviction()) {
+			// Block is not cached. Therefore, the cache will not delete the block.
+			// The block is in the local store and it can be deleted.
+			// Therefore, mark that the block can be evicted from the local store.
+			evict(block);
+		}
+	}
+	
+	public void notifyEvictedFromCache(Block block) throws KawkabException {
+		block.unsetInCache();
+		
+		if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
+			evict(block);
+		} else {
+			//TODO: Add in canBeEvicted list. Also, remove from the canBeEvicted list if the block becomes dirty again
+		}
+	}
+	
+	private void evict(Block block) throws KawkabException {
+		if (block.id().onPrimaryNode() && !block.isInLocal())
+			return;
+		
+		BlockID id = block.id();
+		
+		//System.out.println("[LSM] Evict locally: " + id);
+		
+		if (storedFilesMap.removeEntry(id) == null) { //The cache and the global store race to evict this block.
+			return;
+		}
+		
+		File file = new File(id.localPath());
+		if (!file.delete()) {
+			throw new KawkabException("[LSM] Unable to delete file: " + file.getAbsolutePath());
+		}
+		
+		block.unsetInLocalStore();
+		
+		//int mapSize = storedFilesMap.size();
+		//int permits = storePermits.availablePermits();
+		//System.out.println("\t\t\t\t\t\t Evict: Permits: " + permits + ", map: " + mapSize);
+		
+		storePermits.release();
 	}
 	
 	/**
@@ -233,6 +309,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 		
 		syncLocally(block);
+		//file.createNewFile();
 		storedFilesMap.put(block.id());
 		block.setInLocalStore(); //Mark the block as locally saved
 	}
@@ -294,73 +371,6 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 	}
 	
-	@Override
-	public void notifyStoreComplete(Block block, boolean successful) throws KawkabException {
-		/* if not successful, add in some queue to retry later
-		 * 
-		 * atomically increment dirty count
-		 * if dirty count after increment is 2 (dirty count's initial value is 0), this means
-		 * the block is not in cache and the block is persisted globally. Therefore, the block can be
-		 * deleted from the local store.
-		 * 
-		*/
-		
-		block.clearInLocalQueue(); // We have to do it so that either the current executing 
-		                           // thread or the appender can add the block in the local queue
-		
-		if (block.clearAndGetLocalDirty(0) > 0) {	// We have to check the count again. We cannot simply call localDirtyCount() 
-													// because we need to notify any thread waiting for the block to be removed 
-													// from the local queue.
-													// Otherwise, a block can be evicted from the cache while the block is still being synced to the local store.
-			//System.out.println("[LSM] Local dirty. Adding again: " + block.id());
-			store(block);
-			return;
-		}
-		
-		//System.out.println("[LSM] Finished storing to global: " + block.id());
-		
-		if (!block.isInCache() && block.evictLocallyOnMemoryEviction()) {
-			// Block is not cached. Therefore, the cache will not delete the block.
-			// The block is in the local store and it can be deleted.
-			// Therefore, mark that the block can be evicted from the local store.
-			evict(block);
-		}
-	}
-	
-	public void notifyEvictedFromCache(Block block) throws KawkabException {
-		block.unsetInCache();
-		
-		if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
-			evict(block);
-		}
-	}
-	
-	private void evict(Block block) throws KawkabException {
-		if (block.id().onPrimaryNode() && !block.isInLocal())
-			return;
-		
-		BlockID id = block.id();
-		
-		//System.out.println("[LSM] Evict locally: " + id);
-		
-		if (storedFilesMap.removeEntry(id) == null) { //The cache and the global store race to evict this block.
-			return;
-		}
-		
-		File file = new File(id.localPath());
-		if (!file.delete()) {
-			throw new KawkabException("[LSM] Unable to delete file: " + file.getAbsolutePath());
-		}
-		
-		block.unsetInLocalStore();
-		
-		//int mapSize = storedFilesMap.size();
-		//int permits = storePermits.availablePermits();
-		//System.out.println("\t\t\t\t\t\t Evict: Permits: " + permits + ", map: " + mapSize);
-		
-		storePermits.release();
-	}
-	
 	public void stop() {
 		System.out.println("Closing LocalProcessor...");
 		
@@ -377,6 +387,21 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
+		}
+		
+		for (int i=0; i<storeQs.length; i++) {
+			Block block = null;
+			while( (block = storeQs[i].poll()) != null) {
+				try {
+					processStoreRequest(block);
+				} catch (KawkabException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		
+		for (int i=0; i<storeQs.length; i++) {
+			assert storeQs[i].size() == 0;
 		}
 	}
 

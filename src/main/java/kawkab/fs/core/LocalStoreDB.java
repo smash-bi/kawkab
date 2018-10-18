@@ -46,10 +46,12 @@ public final class LocalStoreDB {
 		String prev = map.put(id.localPath(), id.name());
 		
 		if (prev != null) {
-			System.out.println("\t Block already exists in the localstore: " + id);
+			System.out.println("\t Block already exists in the localstore: " + id + ", "+id.localPath());
 		}
 		
 		assert prev == null;
+		
+		//System.out.println("Created block: "  + id +", "+ id.localPath());
 	}
 	
 	/**

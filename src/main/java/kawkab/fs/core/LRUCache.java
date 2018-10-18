@@ -52,4 +52,12 @@ public final class LRUCache extends LinkedHashMap<String, CachedItem> {
 		
 		return true;
 	}
+	
+	/*public CachedItem get(String key) {
+		return super.get(key);
+	}
+	
+	public CachedItem put(String key, CachedItem item) {
+		return super.put(key, item);
+	}*/
 }
