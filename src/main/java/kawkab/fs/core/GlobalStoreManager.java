@@ -33,10 +33,6 @@ public class GlobalStoreManager {
 		backend = new S3Backend();
 		
 		startWorkers();
-		
-		System.out.println("\t\t*********** WARNING!!! ****************");
-		System.out.println("\t\t Transfers to the global store is disabled for debugging purposes");
-		System.out.println("\t\t***************************************");
 	}
 	
 	/**
@@ -90,7 +86,7 @@ public class GlobalStoreManager {
 		//System.out.println("\t\t\t[GSM] Enque: " + block.id());
 		
 		//Load balance between workers, but assign same worker to the same block.
-		int queueNum = Math.abs(block.id().key().hashCode()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
+		int queueNum = Math.abs(block.id().uniqueKey().hashCode()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
 		
 		storeQs[queueNum].add(new Task(block, listener));
 	}
@@ -151,14 +147,14 @@ public class GlobalStoreManager {
 		// Therefore, we can reach this line in code when the dirty count is zero.
 		
 		boolean successful = true;
-		/*if (count > 0) {
+		if (count > 0) {
 			try {
 				backend.storeToGlobal(block);
 			} catch (KawkabException e) {
 				e.printStackTrace();
 				successful = false;
 			}
-		}*/ //FIXME: Uncomment this block. It is commented for debugging only
+		}
 		
 		block.clearInGlobalQueue(); // We must get the current dirty count after clearing the inQueue flag because a
 		                               // concurrent writer may want to add the block in the queue. If the concurrent

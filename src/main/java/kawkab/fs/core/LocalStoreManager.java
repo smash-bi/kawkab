@@ -161,7 +161,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		//System.out.println("\t[LSM] Enque: " + block.id());
 		
 		//Load balance between workers, but assign same worker to the same block.
-		int queueNum = Math.abs(block.id().key().hashCode()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
+		int queueNum = Math.abs(block.id().perBlockKey()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
 		
 		storeQs[queueNum].add(block);
 	}

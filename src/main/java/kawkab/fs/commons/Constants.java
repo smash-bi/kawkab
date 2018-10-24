@@ -17,7 +17,7 @@ public final class Constants {
 	public static int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
 	
 	//Default data block size in bytes
-	public static final int dataBlockSizeBytes = 50*1024*1024;
+	public static final int dataBlockSizeBytes = 16*1024*1024;
 	public static final int segmentSizeBytes = 1*1024*1024;
 	public static final int segmentsPerBlock = dataBlockSizeBytes/segmentSizeBytes;
 	public static final int directBlocksPerInode = 0;
@@ -46,7 +46,7 @@ public final class Constants {
 	public static final int globalFetchExpiryTimeoutMs  = 3000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	//public static final int primaryFetchExpiryTimeoutMs = 5000; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
-	public static final int syncThreadsPerDevice = 2;
+	public static final int syncThreadsPerDevice = 1;
 	public static final int numWorkersStoreToGlobal = 8;
 	//public static final int numWorkersLoadFromGlobal = 5;
 	

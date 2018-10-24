@@ -95,6 +95,11 @@ public final class DataSegmentID extends BlockID {
 		return path.toString();
 	}
 	
+	@Override
+	public int perBlockKey() {
+		return (int)((inumber<<16) | blockInFile); //FIXME: Use a hash function such as Murmur3_32
+	}
+	
 	public long inumber() {
 		return inumber;
 	}

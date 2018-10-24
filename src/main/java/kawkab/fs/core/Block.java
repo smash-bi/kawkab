@@ -60,7 +60,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	private AtomicBoolean inGlobalQueue; // The block is in a queue for global persistence
 	
 	private AtomicBoolean inLocalStore; // The blocks is currently in the local store (can be in more places as well)
-	private AtomicBoolean inCache;      // The block is in cache
+	private AtomicBoolean inCache;      // The block is in cache 
 	
 	static { // Because we need to catch the exception
 		try {

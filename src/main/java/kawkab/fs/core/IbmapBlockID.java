@@ -39,6 +39,11 @@ public final class IbmapBlockID extends BlockID {
 	}
 	
 	@Override
+	public int perBlockKey() {
+		return mapNum;
+	}
+	
+	@Override
 	public boolean areEqual(BlockID blockID){
 		if (blockID == null)
 			return false;

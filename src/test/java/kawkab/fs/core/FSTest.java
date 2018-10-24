@@ -31,10 +31,10 @@ public final class FSTest {
 		//Constants.printConfig();
 		tester.testBootstrap();
 		//tester.testBlocksCreation();
-		tester.testSmallReadWrite();
+		//tester.testSmallReadWrite();
 		//tester.testSmallRead();
 		tester.testLargeReadWrite();
-		tester.testMultipleReaders();
+		//tester.testMultipleReaders();
 		//tester.testMultipleFiles();
 		//tester.testWritePerformance();
 		tester.testWritePerformanceConcurrentFiles();
@@ -160,7 +160,7 @@ public final class FSTest {
 		
 		System.out.println("Initial file size: " + file.size());
 		
-		int dataSize = 10*Constants.dataBlockSizeBytes + 1; //1*1024*1024*1024;
+		int dataSize = 5*Constants.dataBlockSizeBytes + 1; //1*1024*1024*1024;
 		byte[] dataBuffer = new byte[dataSize];
 		new Random().nextBytes(dataBuffer);
 		
@@ -220,7 +220,7 @@ public final class FSTest {
 					
 					FileHandle file = null;
 					try {
-						file = fs.open(filename, FileMode.APPEND, opts);
+						file = fs.open(filename, FileMode.READ, opts);
 					} catch (IbmapsFullException | IOException | KawkabException | InterruptedException e) {
 						e.printStackTrace();
 						return;
@@ -387,11 +387,11 @@ public final class FSTest {
 		
 		Filesystem fs = Filesystem.instance().bootstrap();
 		
-		int numWriters = 6;
+		int numWriters = 8;
 		Thread[] workers = new Thread[numWriters];
 		final int bufSize = 10*1024; //Constants.segmentSizeBytes;//8*1024*1024;
 		final long dataSize = 1L*500*1024*1024;
-		long[] thr = new long[numWriters];
+		Stats writeStats = new Stats();
 		
 		long startTime = System.currentTimeMillis();
 		for (int i=0; i<numWriters; i++) {
@@ -424,11 +424,11 @@ public final class FSTest {
 						}
 						
 						double durSec = (System.currentTimeMillis() - startTime)/1000.0;
-						double sizeMB = appended/1024.0/1024.0;
-						double speed = sizeMB/durSec;
-						thr[id] = (long)speed;
+						double sizeMB = appended/(1024.0*1024);
+						double thr = sizeMB/durSec;
+						writeStats.putValue(thr);
 						
-						System.out.println(String.format("File %d: Data size = %.0fMB, Write speed = %.0fMB/s, stats (ms): %s", id, sizeMB, speed, stats));
+						System.out.println(String.format("File %d: Data size = %.0fMB, Write thr = %.0fMB/s, stats (ms): %s", id, sizeMB, thr, stats));
 					} catch (Exception e){
 						e.printStackTrace();
 						return;
@@ -447,22 +447,12 @@ public final class FSTest {
 			}
 		}
 		
-		long meanThr = 0;
-		long minThr = 10000;
-		long maxThr = 0;
-		for (int i=0; i<numWriters; i++) {
-			meanThr += thr[i];
-			if (thr[i] > maxThr) maxThr = thr[i];
-			if (thr[i] < minThr) minThr = thr[i];
-		}
-		long sum = meanThr;
-		meanThr = meanThr/numWriters;
-		
 		long elapsed = System.currentTimeMillis() - startTime;
-		int speed = (int)((dataSize/1024.0/1024*numWriters)/(elapsed/1000.0));
 		
-		System.out.println("Total Write speed = " + speed + " MB/s");
-		System.out.printf("Writes throughput (MB/s): total=%d, mean=%d, min=%d, max=%d, numWriters=%d, bufSize=%d\n", sum, meanThr,minThr,maxThr, numWriters,bufSize);
+		int thr = (int)((dataSize/(1024.0*1024)*numWriters)/(elapsed/1000.0));
+		
+		System.out.println("Aggregate write thr (MB/s) = " + thr);
+		System.out.printf("WriteStats: sum=%.0f, %s, bufSize=%d\n",writeStats.sum(), writeStats, bufSize);
 	}
 	
 	private void testReadPerformance() throws IOException, IbmapsFullException, OutOfMemoryException, 
@@ -518,8 +508,8 @@ public final class FSTest {
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
 		Random rand = new Random(0);
-		int bufSize = Constants.segmentSizeBytes;//8*1024*1024;
-		long dataSize = 2L*1024*1024*1024;//1000*1000L*64L*bufSize + 3;
+		int bufSize = 10*1024;//Constants.segmentSizeBytes;//8*1024*1024;
+		long dataSize = 1L*1024*1024*1024;//1000*1000L*64L*bufSize + 3;
 		long appended = file.size();
 		
 		byte[] writeBuf = new byte[bufSize];
@@ -533,7 +523,9 @@ public final class FSTest {
 		
 		System.out.println("Finished append. Staring readers.");
 		
-		int numReaders = 20;
+		long startTime = System.currentTimeMillis();
+		final Stats readStats = new Stats();
+		int numReaders = 8;
 		Thread[] readers = new Thread[numReaders];
 		for (int i=0; i<readers.length; i++){
 			readers[i] = new Thread() {
@@ -564,9 +556,10 @@ public final class FSTest {
 						read += bytes;
 					}
 					
-					double durSec = (System.currentTimeMillis() - startTime)/1000;
-					double dataMB = 1.0*read/1024/1024;
-					System.out.println(String.format("Data size: %.2f, Read Speed: %.0fMB/s", dataMB, dataMB/durSec));
+					double durSec = (System.currentTimeMillis() - startTime)/1000.0;
+					double dataMB = (1.0*read)/(1024*1024);
+					readStats.putValue(dataMB/durSec);
+					System.out.println(String.format("Data size: %.2f, Read Speed: %.2fMB/s", dataMB, dataMB/durSec));
 				}
 			};
 			
@@ -576,6 +569,10 @@ public final class FSTest {
 		for (int i=0; i<readers.length; i++){
 			readers[i].join();
 		}
+		double durSec = (System.currentTimeMillis()-startTime)/1000.0;
+		
+		System.out.println("Aggregate read throughput (MB/s): " + (dataSize/1024.0/1024*numReaders/durSec));
+		System.out.printf("Read stats (MB/s): sum=%.0f %s\n", readStats.sum(), readStats);
 	}
 	
 	private void testConcurrentReadWrite() throws IbmapsFullException, OutOfMemoryException, 

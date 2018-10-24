@@ -109,7 +109,7 @@ public class Cache implements BlockEvictionListener{
 		cacheLock.lock(); // Lock the whole cache. This is necessary to prevent from creating multiple references to the
 		                  // same block.
 		try { // To unlock the cache
-			cachedItem = cache.get(blockID.key()); // Try acquiring the block from the memory
+			cachedItem = cache.get(blockID.uniqueKey()); // Try acquiring the block from the memory
 			
 			if (createNewBlock && cachedItem != null) {
 				cachedItem.incrementRefCnt(); // FIXME: This will be removed from here when we properly handle the exception, 
@@ -125,7 +125,7 @@ public class Cache implements BlockEvictionListener{
 				acquireStats.putValue(t);
 
 				cachedItem = new CachedItem(block); // Wrap the object in a cached item
-				cache.put(blockID.key(), cachedItem);
+				cache.put(blockID.uniqueKey(), cachedItem);
 			}
 			
 			cachedItem.incrementRefCnt();
@@ -182,10 +182,10 @@ public class Cache implements BlockEvictionListener{
 		cacheLock.lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
 		
 		try { //For cacheLock.lock()
-			cachedItem = cache.get(blockID.key());
+			cachedItem = cache.get(blockID.uniqueKey());
 			
 			if (cachedItem == null) {
-				System.out.println(" Releasing non-existing block: " + blockID.key());
+				System.out.println(" Releasing non-existing block: " + blockID.uniqueKey());
 				
 				assert cachedItem != null; //To exit the system during testing
 				return;

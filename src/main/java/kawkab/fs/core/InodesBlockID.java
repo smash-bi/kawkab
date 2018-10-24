@@ -43,6 +43,11 @@ public final class InodesBlockID extends BlockID{
 	}
 	
 	@Override
+	public int perBlockKey() {
+		return blockIndex;
+	}
+	
+	@Override
 	public boolean areEqual(BlockID blockID){
 		if (blockID == null)
 			return false;

@@ -41,6 +41,12 @@ public abstract class BlockID {
 	abstract public String localPath();
 	
 	/**
+	 * @return an integer that is unique across the block type. For example, the segments of the same block has the 
+	 * same perBlockKey. Across block types, keys are not unique.
+	 */
+	abstract public int perBlockKey(); 
+	
+	/**
 	 * Determines whether this node is the primary writer of the block. 
 	 * @return
 	 */
@@ -51,7 +57,7 @@ public abstract class BlockID {
 	/**
 	 * @return Globally unique string for this ID that can be used in maps
 	 */
-	public String key() {
+	public String uniqueKey() {
 		return key;
 	}
 
