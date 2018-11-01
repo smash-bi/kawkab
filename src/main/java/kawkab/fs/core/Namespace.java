@@ -95,7 +95,9 @@ public class Namespace {
 			// writer
 			if (appendMode && Commons.primaryWriterID(inumber) != Constants.thisNodeID) {
 				throw new InvalidFileModeException(
-						"Cannot open file in the append mode. Inumber of the file is out of range of this node's range.");
+						String.format("Cannot open file in the append mode. Inumber of the file is out of range of this node's range. NodeID=%d, PrimaryWriter=%d",
+								Constants.thisNodeID, 
+								Commons.primaryWriterID(inumber)));
 			}
 
 			if (appendMode) {

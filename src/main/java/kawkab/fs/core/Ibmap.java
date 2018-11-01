@@ -101,6 +101,7 @@ public final class Ibmap extends Block{
 	@Override
 	public boolean shouldStoreGlobally() {
 		return true;
+		//return false; //FIXME: Disabled ibmaps transfer to the GlobalStore
 	}
 	
 	@Override

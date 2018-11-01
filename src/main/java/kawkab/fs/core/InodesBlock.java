@@ -67,6 +67,7 @@ public final class InodesBlock extends Block {
 	@Override
 	public boolean shouldStoreGlobally() {
 		return true;
+		//return false; //FIXME: Disabled inodesBlocks transfer to the GlobalStore
 	}
 	
 	@Override

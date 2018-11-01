@@ -160,7 +160,7 @@ public final class FSTest {
 		
 		System.out.println("Initial file size: " + file.size());
 		
-		int dataSize = 5*Constants.dataBlockSizeBytes + 1; //1*1024*1024*1024;
+		int dataSize = 2*Constants.dataBlockSizeBytes + 1; //1*1024*1024*1024;
 		byte[] dataBuffer = new byte[dataSize];
 		new Random().nextBytes(dataBuffer);
 		
@@ -387,10 +387,10 @@ public final class FSTest {
 		
 		Filesystem fs = Filesystem.instance().bootstrap();
 		
-		int numWriters = 8;
+		int numWriters = 16;
 		Thread[] workers = new Thread[numWriters];
-		final int bufSize = 10*1024; //Constants.segmentSizeBytes;//8*1024*1024;
-		final long dataSize = 1L*500*1024*1024;
+		final int bufSize = 20*1024; //Constants.segmentSizeBytes;//8*1024*1024;
+		final long dataSize = 1L*200*1024*1024;
 		Stats writeStats = new Stats();
 		
 		long startTime = System.currentTimeMillis();

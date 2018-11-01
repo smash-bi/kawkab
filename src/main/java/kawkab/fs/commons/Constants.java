@@ -32,16 +32,16 @@ public final class Constants {
 
 	//Small inodesBlockSize shows better writes performance, perhaps due to locks in the InodesBlocks. The down side
 	//is that small size files consume more disk resources.
-	public static final int inodesBlockSizeBytes = 1*1024; //dataBlockSizeBytes; 
-	public static final int inodeSizeBytes = 64;//Inode.inodesSize();
+	public static final int inodesBlockSizeBytes = 1*1000; //dataBlockSizeBytes; 
+	public static final int inodeSizeBytes = 50;//Inode.inodesSize();
 	public static final int inodesPerBlock = inodesBlockSizeBytes/inodeSizeBytes;
 	//FIXME: Calculate this based on the maximum number of files supported by a machine
-	public static final int inodeBlocksPerMachine = (int)(1.0/inodesPerBlock*ibmapBlockSizeBytes*ibmapsPerMachine*8.0);//inodesPerMachine/inodesPerBlock 
+	public static final int inodeBlocksPerMachine = (int)((8.0d*ibmapBlockSizeBytes*ibmapsPerMachine)/inodesPerBlock);//inodesPerMachine/inodesPerBlock 
 	public static final int inodeBlocksRangeStart = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
 																					 //Blocks start with ID 0.
 	
 	public static final int maxBlocksPerLocalDevice = 20510 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
-	public static final int maxBlocksInCache        = 20000; //Size of the cache in number of blocks
+	public static final int maxBlocksInCache        = 20000; //Size of the cache in number of blocks. The blocks are ibmaps, inodeBlocks, and data segments (not data blocks)
 	
 	public static final int globalFetchExpiryTimeoutMs  = 3000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	//public static final int primaryFetchExpiryTimeoutMs = 5000; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
@@ -64,7 +64,7 @@ public final class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkMainServers = "10.10.0.13:2181,10.10.0.13:2182,10.10.0.13:2183";
+	public static final String zkMainServers = "10.10.0.2:2181,10.10.0.2:2182,10.10.0.2:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
 	public static final ZKClusterConfig zkMainCluster = 
@@ -74,7 +74,7 @@ public final class Constants {
 	
 	
 	//minio settings
-	public static final String[] minioServers = {"http://10.10.0.13:9000"};
+	public static final String[] minioServers = {"http://10.10.0.2:9000"};
 	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
@@ -121,11 +121,11 @@ public final class Constants {
 		
 		thisNodeID = Integer.parseInt(nodeID);
 		nodesMap = new HashMap<Integer, NodeInfo>();  //Map of <NodeID, NodeInfo(NodeID, IP)> 
-		nodesMap.put(0, new NodeInfo(0, "10.10.0.14"));
-		nodesMap.put(1, new NodeInfo(1, "10.10.0.15"));
-//		nodesMap.put(2, new NodeInfo(1, "10.10.0.4"));
-//		nodesMap.put(3, new NodeInfo(1, "10.10.0.5"));
-//		nodesMap.put(4, new NodeInfo(1, "10.10.0.6"));
+		nodesMap.put(0, new NodeInfo(0, "10.10.0.3"));
+		nodesMap.put(1, new NodeInfo(1, "10.10.0.11"));
+		nodesMap.put(2, new NodeInfo(2, "10.10.0.12"));
+		nodesMap.put(3, new NodeInfo(3, "10.10.0.13"));
+		nodesMap.put(4, new NodeInfo(4, "10.10.0.14"));
 		
 		GCMonitor.initialize();
 	}
@@ -144,6 +144,6 @@ public final class Constants {
 		assert minioSecretKey.length() >= 8; //From minio documentation
 		
 		assert maxBlocksPerLocalDevice > inodeBlocksPerMachine + ibmapsPerMachine;
-		assert maxBlocksPerLocalDevice > maxBlocksInCache;
+		//assert maxBlocksPerLocalDevice > maxBlocksInCache;
 	}
 }

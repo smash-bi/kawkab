@@ -170,8 +170,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * This function in combination with the store(block) function works correctly for concurrent (a) single worker per block
 	 * that syncs the block, and (b) multiple writers that modify/append the block (inodeBlocks are modified concurrently
 	 * by many threads, dataSegments are only appended). The writers can concurrently try to add the block in the queue.
-	 * If the block is already in the queue, the block is not added in the queue. This is done through getAndSet(true) in the
-	 * block.markInLocalQueue() function. In the case of a race between the 
+	 * If the block is already in the queue, the block is not added again in the queue. This is done through getAndSet(true) in the
+	 * block.markInLocalQueue() function.
 	 * 
 	 * @param block
 	 * @throws KawkabException
@@ -246,7 +246,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			return;
 		}
 		
-		//System.out.println("[LSM] Finished storing to global: " + block.id());
+		System.out.println("[LSM] Finished storing to global: " + block.id());
 		
 		if (!block.isInCache() && block.evictLocallyOnMemoryEviction()) {
 			// Block is not cached. Therefore, the cache will not delete the block.

@@ -144,7 +144,7 @@ public class GlobalStoreManager {
 		// which becomes zero. The worker clears the inGlobalQueue flag, notifiesStoreComplete() and returns. Now the
 		// dirty count is zero. The appender wakes up, checks block.markInGlobalQueue, which turns out to be previously
 		// false. Therefore, the appender adds the block again in the queue, even though now the dirty count is zero.
-		// Therefore, we can reach this line in code when the dirty count is zero.
+		// Therefore, we can reach this line in the code when the dirty count is zero.
 		
 		boolean successful = true;
 		if (count > 0) {

@@ -2,13 +2,16 @@ package kawkab.fs.core;
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.atomic.AtomicInteger;
 
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.SdkBaseException;
 import com.amazonaws.auth.AWSCredentials;
@@ -20,6 +23,7 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 
@@ -31,6 +35,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 public final class S3Backend implements GlobalBackend{
 	private AmazonS3 client;
 	private static final String rootBucket = "kawkab-blocks"; //Cannot contain uppercase letters.
+	private static final String contentType = "application/octet-stream";
 	
 	public S3Backend() {
 		client = newS3Client();
@@ -128,7 +133,23 @@ public final class S3Backend implements GlobalBackend{
 		
 		String path = id.localPath();
 		File file = new File(path);
-		client.putObject(rootBucket, path, file);
+		InputStream inStream = null;
+		try {
+			inStream = new FileInputStream(file);
+		} catch (FileNotFoundException e) {
+			throw new KawkabException(e);
+		}
+		
+		ObjectMetadata metadata = new ObjectMetadata();
+		metadata.setContentLength(file.length());
+		metadata.setContentType(contentType);
+		
+		try {
+			client.putObject(rootBucket, path, inStream, metadata);
+		} catch (AmazonServiceException ase) {
+			System.out.println("Failed to upload block: " + srcBlock.id());
+			throw ase;
+		}
 		
 		//System.out.println("\t[S3] >>> Finished store to global: " + id.localPath());   
 	}

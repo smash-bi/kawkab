@@ -46,7 +46,7 @@ public final class DataSegment extends Block {
 		this.segmentID = segmentID;
 		//bytes = new byte[Constants.segmentSizeBytes];
 		dirtyBytesStart = Constants.segmentSizeBytes; //This initial value is important for the correct functioning of appendOffsetInBlock()
-		dirtyBytesLength = 0; //The variable is updated to correct value in adjustDirtyOffsets()
+		dirtyBytesLength = 0; //The variable is updated to the correct value in adjustDirtyOffsets()
 		dirtyBytesLock = new ReentrantLock();
 		dataLoadLock = new ReentrantLock();
 		lastGlobalFetchTimeMs = 0;
@@ -59,7 +59,7 @@ public final class DataSegment extends Block {
 	 * @param offset  Offset in data
 	 * @param length  Number of bytes to append: data[offset] to data[offset+length-1] inclusive.
 	 * @param offsetInFile  
-	 * @return number of bytes appended
+	 * @return number of bytes appended starting from the offset
 	 * @throws IOException 
 	 */
 	synchronized int append(byte[] data, int offset, int length, long offsetInFile) throws IOException {
@@ -74,7 +74,7 @@ public final class DataSegment extends Block {
 		//System.arraycopy(data, offset, bytes, offsetInSegment, toAppend);
 		dataBuf.clear();
 		dataBuf.position(offsetInSegment);
-		dataBuf.put(data, offset, length);
+		dataBuf.put(data, offset, toAppend);
 		
 		adjustDirtyOffsets(offsetInSegment, toAppend);
 		markDirty();
@@ -166,7 +166,7 @@ public final class DataSegment extends Block {
 	 * @param dstBufferOffset offset in the buffer to where data will be copied
 	 * @param length length of data to be read
 	 * @param offsetInBlock offset in this block from where to read data, offset starts from zero.
-	 * @return number of bytes read
+	 * @return number of bytes read starting from the offsetInFile
 	 * @throws IOException 
 	 * @throws IncorrectOffsetException 
 	 */
@@ -186,7 +186,7 @@ public final class DataSegment extends Block {
 		
 		dataBuf.clear();
 		dataBuf.position(offsetInBlock);
-		dataBuf.get(dstBuffer, dstBufferOffset, length);
+		dataBuf.get(dstBuffer, dstBufferOffset, readSize);
 		
 		return readSize;
 	}
@@ -377,7 +377,7 @@ public final class DataSegment extends Block {
 	}
 
 	@Override
-	public int storeFullTo(WritableByteChannel channel) throws IOException {
+	public synchronized int storeFullTo(WritableByteChannel channel) throws IOException {
 		int bytesWritten = 0;
 		//int size = bytes.length;
 		//ByteBuffer buffer = ByteBuffer.wrap(bytes);
@@ -398,7 +398,9 @@ public final class DataSegment extends Block {
 	@Override
 	public synchronized ByteString byteString() {
 		//return ByteString.copyFrom(bytes); //TODO: Send only usable bytes instead of sending the complete segment
-		dataBuf.clear();
+		/*dataBuf.clear();
+		ByteString str = ByteString.copyFrom(new byte[] {(byte)(segmentIsFull?1:0)});
+		return str.concat(ByteString.copyFrom(dataBuf));*/
 		return ByteString.copyFrom(dataBuf);
 	}
 	
@@ -484,7 +486,7 @@ public final class DataSegment extends Block {
 	}*/
 	
 	@Override
-	public void cleanup() throws IOException {
+	public synchronized void cleanup() throws IOException {
 		//bytes = null;
 		dataBuf = null;
 	}
