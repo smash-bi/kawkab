@@ -133,6 +133,16 @@ public final class S3Backend implements GlobalBackend{
 		
 		String path = id.localPath();
 		File file = new File(path);
+		
+		try {
+			client.putObject(rootBucket, path, file);
+		} catch (AmazonServiceException ase) {
+			System.out.println("Failed to upload block: " + srcBlock.id());
+			throw ase;
+		}
+		
+		/*String path = id.localPath();
+		File file = new File(path);
 		InputStream inStream = null;
 		try {
 			inStream = new FileInputStream(file);
@@ -149,7 +159,7 @@ public final class S3Backend implements GlobalBackend{
 		} catch (AmazonServiceException ase) {
 			System.out.println("Failed to upload block: " + srcBlock.id());
 			throw ase;
-		}
+		}*/
 		
 		//System.out.println("\t[S3] >>> Finished store to global: " + id.localPath());   
 	}

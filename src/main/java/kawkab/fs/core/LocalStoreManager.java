@@ -184,7 +184,12 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
 		
-		while (dirtyCount > 0) { 
+		if (dirtyCount == 0) { 
+			updateLocalDirty(block, dirtyCount); // To release any thread waiting for this block to be synced
+			return;
+		}
+		
+		while (dirtyCount > 0) {
 			try {
 				syncLocally(block);
 			} catch (IOException e) {
@@ -192,8 +197,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				//FIXME: What should we do here? Should we return?
 			}
 			
-			if (block.shouldStoreGlobally()) { //If it the block is the last data segment or an ibmap or an inodesBlock 
-				globalProc.store(block, this); //Add the block in the queue to be transferred to the globalStore
+			if (block.shouldStoreGlobally()) { // If it the block is the last data segment or an ibmap or an inodesBlock
+				globalProc.store(block, this); // Add the block in the queue to be transferred to the globalStore
+				block.decAndGetLocalDirty(dirtyCount); // Don't mark the block as removed from the queue in order to 
+				                                       // block the syncing to disk while transferring data to the global store
 				break;
 			} else {
 				dirtyCount = updateLocalDirty(block, dirtyCount); // If the data segment is not the last segment in the data block, 
@@ -209,7 +216,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 		
 		//System.out.println("dirtyCount=0, skipping submittingToGlobal: " + block.id());
-		updateLocalDirty(block, dirtyCount);
+		//updateLocalDirty(block, dirtyCount);
 		//block.decAndGetLocalDirty(dirtyCount);
 		
 		// We clear the inLocalQueue flag when the global store has finished uploading. This is to mutually exclude updating
