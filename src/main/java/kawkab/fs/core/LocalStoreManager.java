@@ -184,7 +184,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
 		
-		if (dirtyCount > 0) {
+		while (dirtyCount > 0) { 
 			try {
 				syncLocally(block);
 			} catch (IOException e) {
@@ -192,11 +192,16 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				//FIXME: What should we do here? Should we return?
 			}
 			
-			if (block.shouldStoreGlobally()) {
-				globalProc.store(block, this);
+			if (block.shouldStoreGlobally()) { //If it the block is the last data segment or an ibmap or an inodesBlock 
+				globalProc.store(block, this); //Add the block in the queue to be transferred to the globalStore
+				break;
 			} else {
-				if (updateLocalDirty(block, dirtyCount) > 0) {
-					store(block);
+				dirtyCount = updateLocalDirty(block, dirtyCount); // If the data segment is not the last segment in the data block, 
+				                                                  // and the segment is updated while we were syncing, resync the
+				                                                  // the segment to the localStorage. This may create head-of-line blocking for
+				                                                  // only a short duration.
+				if (dirtyCount > 0) {
+					continue;
 				}
 				
 				return;
@@ -246,7 +251,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			return;
 		}
 		
-		System.out.println("[LSM] Finished storing to global: " + block.id());
+		//System.out.println("[LSM] Finished storing to global: " + block.id());
 		
 		if (!block.isInCache() && block.evictLocallyOnMemoryEviction()) {
 			// Block is not cached. Therefore, the cache will not delete the block.

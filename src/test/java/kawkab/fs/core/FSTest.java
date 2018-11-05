@@ -389,7 +389,7 @@ public final class FSTest {
 		
 		int numWriters = 16;
 		Thread[] workers = new Thread[numWriters];
-		final int bufSize = 20*1024; //Constants.segmentSizeBytes;//8*1024*1024;
+		final int bufSize = 10*1024; //Constants.segmentSizeBytes;//8*1024*1024;
 		final long dataSize = 1L*200*1024*1024;
 		Stats writeStats = new Stats();
 		
