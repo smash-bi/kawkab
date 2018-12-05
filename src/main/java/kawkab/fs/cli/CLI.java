@@ -52,7 +52,7 @@ public final class CLI {
 	}
 
 	private void cmd() throws IOException {
-		String cmds = "Commands: open, read, apnd, exit";
+		String cmds = "Commands: open, read, apnd, size, exit";
 		
 		try (BufferedReader ir = new BufferedReader(new InputStreamReader(System.in));) {
 			System.out.println("--------------------------------");
@@ -83,6 +83,8 @@ public final class CLI {
 						parseRead(args);
 					} else if (cmd.equals("apnd")) {
 						parseAppend(args);
+					} else if (cmd.equals("size")) {
+						parseSize(args);
 					} else if (cmd.equals("exit")) {
 						break;
 					} else {
@@ -94,10 +96,29 @@ public final class CLI {
 			}
 		}
 	}
+	
+	private void parseSize(String[] args) throws IOException, OutOfMemoryException, MaxFileSizeExceededException,
+	InvalidFileOffsetException, KawkabException, InterruptedException {
+		String usage = "Usage: size <filename> ";
+		if (args.length < 2) {
+			System.out.println(usage);
+			return;
+		}
+		
+		String fname = args[1];
+		FileHandle file = null;
+		file = openedFiles.get(fname);
+		if (file == null) {
+			throw new IOException("File not opened: " + fname);
+		}
+		
+		long size = file.size();
+		System.out.println("File size = " + size + " bytes");
+	}
 
 	private void parseAppend(String[] args) throws IOException, OutOfMemoryException, MaxFileSizeExceededException,
 			InvalidFileOffsetException, KawkabException, InterruptedException {
-		String usage = "Usage: apnd <filename> <str <string> | file <filepath> | bytes <numBytes>>";
+		String usage = "Usage: apnd <filename> <str <string>> | file <filepath> | bytes <numBytes>";
 		if (args.length < 4) {
 			System.out.println(usage);
 			return;

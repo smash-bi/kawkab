@@ -70,8 +70,11 @@ public final class DataSegment extends Block {
 		int toAppend = length <= capacity ? length : capacity;
 		
 		//System.arraycopy(data, offset, bytes, offsetInSegment, toAppend);
-		dataBuf.clear();
+		
+		assert offsetInSegment == dataBuf.limit();
+		
 		dataBuf.position(offsetInSegment);
+		dataBuf.limit(offsetInSegment + toAppend);
 		dataBuf.put(data, offset, toAppend);
 		
 		adjustDirtyOffsets(offsetInSegment, toAppend);
@@ -182,7 +185,7 @@ public final class DataSegment extends Block {
 		int readSize = offsetInBlock+length <= blockSize ? length : blockSize-offsetInBlock;
 		//System.arraycopy(bytes, offsetInBlock, dstBuffer, dstBufferOffset, readSize);
 		
-		dataBuf.clear();
+		dataBuf.rewind();
 		dataBuf.position(offsetInBlock);
 		dataBuf.get(dstBuffer, dstBufferOffset, readSize);
 		
@@ -207,16 +210,25 @@ public final class DataSegment extends Block {
 	
 	@Override
 	public synchronized void loadFrom(ByteBuffer srcBuffer) throws IOException {
-		if (srcBuffer.remaining() < Constants.segmentSizeBytes) {
+		/*if (srcBuffer.remaining() < Constants.segmentSizeBytes) { // If we use a ByteBuffer to store data bytes, we send only valid bytes 
+																// to a remote node. Therefore, this check is not required if we use 
+																// ByteBuffer. Otherwise, if we use a byte array, we need to check this as 
+																// we send all the bytes regardless of their validity.
 			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
 					+ "Have %d, needed %d.",srcBuffer.remaining(), Constants.segmentSizeBytes));
-		}
+		}*/
 		
 		//bytes = new byte[Constants.segmentSizeBytes];
 		//buffer.get(bytes);
 		
+		srcBuffer.rewind();
+		
+		System.out.println("[DS] Bytes to load from the buffer = " + srcBuffer.remaining());
+		
 		dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
+		dataBuf.limit(srcBuffer.remaining());
 		dataBuf.put(srcBuffer);
+		dataBuf.rewind();
 		
 		//FIXME: What if the number of bytes read is less than the block size?
 		//if (bytesRead < bytes.length)
@@ -231,8 +243,14 @@ public final class DataSegment extends Block {
 		Commons.readFrom(channel, buffer);*/ 
 		
 		dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
-		Commons.readFrom(channel, dataBuf);
+		int loaded = Commons.readFrom(channel, dataBuf);
 		
+		assert loaded >= 0;
+		
+		dataBuf.limit(loaded);
+		dataBuf.rewind();
+		
+		System.out.printf("[DS] Loaded bytes from channel: %d, bufLimit=%d\n", loaded, dataBuf.limit());
 		
 		//FIXME: What if the number of bytes read is less than the block size?
 		//if (bytesRead < bytes.length)
@@ -246,7 +264,7 @@ public final class DataSegment extends Block {
 	}
 	
 	@Override
-	protected synchronized void loadBlockNonPrimary() throws FileNotExistException, KawkabException, IOException {
+	protected synchronized void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
 		/* If never fetched or the last global-fetch has timed out, fetch from the global store.
 		 * Otherwise, if the last primary-fetch has timed out, fetch from the primary node.
 		 * Otherwise, don't fetch, data is still fresh. 
@@ -344,12 +362,12 @@ public final class DataSegment extends Block {
 			
 			
 			dataBuf.position(dirtyBytesOffset);
-			dataBuf.limit(dirtyBytesSize);
+			//dataBuf.limit(dirtyBytesOffset+dirtyBytesSize);
 			int size = dataBuf.remaining();
 			while(bytesWritten < size) {
 	    		bytesWritten += channel.write(dataBuf);
 	    	}
-			dataBuf.clear();
+			dataBuf.rewind();
 			
 			if (bytesWritten < size) {
 				throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
@@ -366,6 +384,8 @@ public final class DataSegment extends Block {
 			throw e;
 		}
 		
+		System.out.printf("[DS] Bytes written in channel = %d, dirtyOffset=%d, dirtyLenght=%d\n", bytesWritten, dirtyBytesOffset, dirtyBytesSize);
+		
 		return bytesWritten;
 	}
 
@@ -376,7 +396,7 @@ public final class DataSegment extends Block {
 		//ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		//bytesWritten = Commons.writeTo(channel, buffer);
 		
-		dataBuf.clear();
+		dataBuf.rewind();
 		int size = dataBuf.remaining();
 		bytesWritten = Commons.writeTo(channel, dataBuf);
 		
@@ -385,15 +405,18 @@ public final class DataSegment extends Block {
 					+ "%d bytes out of %d.",bytesWritten, size));
 		}
 		
+		System.out.println("[DS] Bytes written in channel: " + bytesWritten);
+		
 		return bytesWritten;
 	}
 	
 	@Override
 	public synchronized ByteString byteString() {
 		//return ByteString.copyFrom(bytes); //TODO: Send only usable bytes instead of sending the complete segment
-		/*dataBuf.clear();
+		/*dataBuf.rewind();
 		ByteString str = ByteString.copyFrom(new byte[] {(byte)(segmentIsFull?1:0)});
 		return str.concat(ByteString.copyFrom(dataBuf));*/
+		dataBuf.rewind();
 		return ByteString.copyFrom(dataBuf);
 	}
 	

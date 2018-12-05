@@ -2,10 +2,7 @@ package kawkab.fs.core;
 
 import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.util.List;
@@ -23,7 +20,6 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.GetObjectRequest;
-import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 
@@ -35,7 +31,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 public final class S3Backend implements GlobalBackend{
 	private AmazonS3 client;
 	private static final String rootBucket = "kawkab-blocks"; //Cannot contain uppercase letters.
-	private static final String contentType = "application/octet-stream";
+	//private static final String contentType = "application/octet-stream";
 	
 	public S3Backend() {
 		client = newS3Client();

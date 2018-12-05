@@ -135,7 +135,7 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	protected void loadBlockNonPrimary() throws FileNotExistException, KawkabException, IOException {
+	protected void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
 		assert false;
 	}
 	

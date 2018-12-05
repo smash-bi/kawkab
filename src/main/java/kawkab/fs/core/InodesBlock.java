@@ -146,7 +146,7 @@ public final class InodesBlock extends Block {
 	}
 	
 	@Override
-	protected void loadBlockNonPrimary() throws FileNotExistException, KawkabException, IOException {}
+	protected void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {}
 
 	@Override
 	public int appendOffsetInBlock() {

@@ -307,8 +307,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	/**
 	 * Creates a new file in the underlying file system.
 	 * 
-	 * Multiple writers can call this function concurrently. However, only one writer per block should call this function.
-	 * The function assumes that the cache prevents multiple writers from creating the same new block.
+	 * Multiple writers can call this function concurrently. However, only one writer per block should be allowed to call this function.
+	 * The function assumes that the caller prevents multiple writers from creating the same new block.
 	 */
 	public void createBlock(Block block) throws IOException, InterruptedException {
 		
@@ -322,15 +322,15 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		syncLocally(block);
 		//file.createNewFile();
-		storedFilesMap.put(block.id());
+		storedFilesMap.put(block.id()); // storedFilesMap.put() and block.setInLocal() are not required to be atomic. This is because a  
+										// file's size is only updated when the block has been created. Therefore, a reader cannot read 
+										// a non-existing block.
 		block.setInLocalStore(); //Mark the block as locally saved
 	}
 	
 	private void syncLocally(Block block) throws IOException {
 		//FIXME: This creates a new file if it does not already exist. We should prevent that in order to make sure that
 		//first we create a file and do proper accounting for the file.
-		
-		//useBlock(); //FIXME: Limit the number of files created in the local storage.
 		
 		try(RandomAccessFile rwFile = 
                 new RandomAccessFile(block.id().localPath(), "rw")) {
@@ -384,7 +384,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	}
 	
 	public void stop() {
-		System.out.println("Closing LocalProcessor...");
+		System.out.println("Closing LocalStoreManager...");
 		
 		if (workers == null)
 			return;

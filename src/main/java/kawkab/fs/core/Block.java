@@ -362,7 +362,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 						
 						globalStoreManager.load(this); // First try loading data from the global store
 						lastGlobalFetchTimeMs = now; // Never expire data fetched from the global store. 
-																// InodeBlocks are updated to the global store (not treating as an append only system).
+																// InodeBlocks are updated to the global store (not treating as an append-only GlobalStore).
 						//lastPrimaryFetchTimeMs = 0; //Indicates that this node has not fetched this block from the primary node
 						
 						return;
@@ -405,7 +405,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * @throws KawkabException
 	 * @throws IOException
 	 */
-	protected abstract void loadBlockNonPrimary() throws FileNotExistException, KawkabException, IOException;
+	protected abstract void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException;
 	
 	/**
 	 * Helper function: Loads the block from the local or the global store. This code runs only on the primary node

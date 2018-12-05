@@ -41,7 +41,6 @@ public final class Commons {
      * 
      * @param channel Read from the channel
      * @param toBuffer Read into the buffer
-     * @param size Number of bytes to read
      * @return Total number of bytes read from the channel.
      * @throws IOException
      */
@@ -52,7 +51,8 @@ public final class Commons {
     	
     	while(readNow >= 0 && totalRead < size) {
     		readNow = channel.read(toBuffer);
-    		totalRead += readNow;
+    		if (readNow >= 0)
+    			totalRead += readNow;
     	}
     	
     	return totalRead;

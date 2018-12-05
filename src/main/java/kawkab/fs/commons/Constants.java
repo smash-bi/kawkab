@@ -17,7 +17,7 @@ public final class Constants {
 	public static int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
 	
 	//Default data block size in bytes
-	public static final int dataBlockSizeBytes = 16*1024*1024;
+	public static final int dataBlockSizeBytes = 2*1024*1024;
 	public static final int segmentSizeBytes = 1*1024*1024;
 	public static final int segmentsPerBlock = dataBlockSizeBytes/segmentSizeBytes;
 	public static final int directBlocksPerInode = 0;
@@ -64,7 +64,7 @@ public final class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkMainServers = "10.10.0.2:2181,10.10.0.2:2182,10.10.0.2:2183";
+	public static final String zkMainServers = "10.20.0.13:2181,10.20.0.13:2182,10.20.0.13:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
 	public static final ZKClusterConfig zkMainCluster = 
@@ -74,7 +74,7 @@ public final class Constants {
 	
 	
 	//minio settings
-	public static final String[] minioServers = {"http://10.10.0.2:9000"};
+	public static final String[] minioServers = {"http://10.20.0.13:9000"};
 	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
@@ -121,11 +121,8 @@ public final class Constants {
 		
 		thisNodeID = Integer.parseInt(nodeID);
 		nodesMap = new HashMap<Integer, NodeInfo>();  //Map of <NodeID, NodeInfo(NodeID, IP)> 
-		nodesMap.put(0, new NodeInfo(0, "10.10.0.3"));
-		nodesMap.put(1, new NodeInfo(1, "10.10.0.11"));
-		nodesMap.put(2, new NodeInfo(2, "10.10.0.12"));
-		nodesMap.put(3, new NodeInfo(3, "10.10.0.13"));
-		nodesMap.put(4, new NodeInfo(4, "10.10.0.14"));
+		nodesMap.put(0, new NodeInfo(0, "10.20.0.14"));
+		nodesMap.put(1, new NodeInfo(1, "10.20.0.15"));
 		
 		GCMonitor.initialize();
 	}
