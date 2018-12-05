@@ -341,61 +341,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 			return;
 		}
 		
-		// The following code is run only on a non-primary node with respect to this block
-		
-		/* If never fetched or the last global-fetch has timed out, fetch from the global store.
-		 * Otherwise, if the last primary-fetch has timed out, fetch from the primary node.
-		 * Otherwise, don't fetch, data is still fresh. 
-		 */
-		
-		long now = System.currentTimeMillis();
-		
-		if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
-			try {
-				dataLoadLock.lock(); // Prevent loading from concurrent readers
-				
-				now = System.currentTimeMillis();
-				
-				if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
-					try {
-						System.out.println("[B] Load from the global: " + id);
-						
-						globalStoreManager.load(this); // First try loading data from the global store
-						lastGlobalFetchTimeMs = now; // Never expire data fetched from the global store. 
-																// InodeBlocks are updated to the global store (not treating as an append-only GlobalStore).
-						//lastPrimaryFetchTimeMs = 0; //Indicates that this node has not fetched this block from the primary node
-						
-						return;
-						//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
-					} catch (FileNotExistException e) { //If the block is not in the global store yet
-						System.out.println("[B] Not found in the global: " + id);
-						lastGlobalFetchTimeMs = 0; // Failed to fetch from the global store
-					}
-				
-					System.out.println("[B] Primary fetch expired or not found from the global: " + id);
-					
-					try {
-						System.out.println("[B] Loading from the primary: " + id);
-						loadBlockFromPrimary(); // Fetch from the primary node
-						//lastPrimaryFetchTimeMs = now;
-						if (lastGlobalFetchTimeMs == 0) // Set to now if the global fetch has failed
-							lastGlobalFetchTimeMs = now;
-					} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
-						// Check again from the global store because the primary may have deleted the 
-						// block after copying to the global store
-						System.out.println("[B] Not found on the primary, trying again from the global: " + id);
-						globalStoreManager.load(this); 
-						lastGlobalFetchTimeMs = now;
-						//lastPrimaryFetchTimeMs = 0;
-					} catch (IOException ioe) {
-						System.out.println("[B] Not found in the global and the primary: " + id);
-						throw new KawkabException(ioe);
-					}
-				}
-			} finally {
-				dataLoadLock.unlock();
-			}
-		}
+		loadBlockOnNonPrimary();
 	}
 	
 	/**

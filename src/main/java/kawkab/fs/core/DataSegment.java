@@ -29,7 +29,7 @@ public final class DataSegment extends Block {
 	private int dirtyBytesLength; // Number of the dirty bytes
 	private boolean segmentIsFull;  // Sets to true only when the block becomes full in an append operation.
 	private final Lock dirtyBytesLock; // To atomically update dirty bytes start and length
-	private long lastGlobalFetchTimeMs; // Clock time in ms when the block was last loaded. This must be initialized 
+	private long lastFetchTimeMs; // Clock time in ms when the block was last loaded. This must be initialized 
 										// to zero when the block is first created in memory.
 	//private int bytesFilled; //Number of valid bytes in the segment, starting from the first byte
 	
@@ -47,7 +47,7 @@ public final class DataSegment extends Block {
 		dirtyBytesStart = Constants.segmentSizeBytes; //This initial value is important for the correct functioning of appendOffsetInBlock()
 		dirtyBytesLength = 0; //The variable is updated to the correct value in adjustDirtyOffsets()
 		dirtyBytesLock = new ReentrantLock();
-		lastGlobalFetchTimeMs = 0;
+		lastFetchTimeMs = 0;
 		
 		//System.out.println(" Opened block: " + name());
 	}
@@ -270,40 +270,52 @@ public final class DataSegment extends Block {
 		 * Otherwise, don't fetch, data is still fresh. 
 		 */
 		
+		/**
+		 * FIXME: The current implementation of this function is not ideal. Currently, an unfinished segment is reloaded
+		 * from a remote source after a timeout. However, a segment should only be reloaded from a remote node if the
+		 * read size exceeds the valid bytes in the loaded segment. In the current implementation, an unfinished
+		 * data segment may get loaded from the remote node unnecessarily. 
+		 */
+		
+		if (dataBuf != null && dataBuf.limit() == Constants.segmentSizeBytes) { // Never load an already loaded block if the segment is full.
+			System.out.println("[DS] Segment is full. Not loading from the segment again.");
+			return;
+		}
+		
 		long now = System.currentTimeMillis();
 		
-		if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
+		if (lastFetchTimeMs < now - Constants.dataSegmentFetchExpiryTimeoutMs) { // If the last data-fetch-time exceeds the time limit
 				
 			now = System.currentTimeMillis();
 			
-			if (lastGlobalFetchTimeMs < now - Constants.globalFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
+			if (lastFetchTimeMs < now - Constants.dataSegmentFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
 				try {
 					System.out.println("[B] Load from the global: " + id());
 					
 					loadFromGlobal(); // First try loading data from the global store
-					lastGlobalFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store. 
-															// InodeBlocks are updated to the global store (not treating as an append only system).
+					lastFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store.
 					return;
+					
 					//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
 				} catch (FileNotExistException e) { //If the block is not in the global store yet
 					System.out.println("[B] Not found in the global: " + id());
-					lastGlobalFetchTimeMs = 0; // Failed to fetch from the global store
+					lastFetchTimeMs = 0; // Failed to fetch from the global store
 				}
 			
 				System.out.println("[B] Primary fetch expired or not found from the global: " + id());
 				
 				try {
 					System.out.println("[B] Loading from the primary: " + id());
-					loadBlockFromPrimary(); // Fetch from the primary node
+					loadBlockFromPrimary(); // Fetch data from the primary node
 					//lastPrimaryFetchTimeMs = now;
-					if (lastGlobalFetchTimeMs == 0) // Set to now if the global fetch has failed
-						lastGlobalFetchTimeMs = now;
+					if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed
+						lastFetchTimeMs = now;
 				} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
 					// Check again from the global store because the primary may have deleted the 
 					// block after copying to the global store
 					System.out.println("[B] Not found on the primary, trying again from the global: " + id());
 					loadFromGlobal(); 
-					lastGlobalFetchTimeMs = now;
+					lastFetchTimeMs = now;
 					//lastPrimaryFetchTimeMs = 0;
 				} catch (IOException ioe) {
 					System.out.println("[B] Not found in the global and the primary: " + id());

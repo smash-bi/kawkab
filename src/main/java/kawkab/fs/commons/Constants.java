@@ -43,7 +43,8 @@ public final class Constants {
 	public static final int maxBlocksPerLocalDevice = 20510 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
 	public static final int maxBlocksInCache        = 20000; //Size of the cache in number of blocks. The blocks are ibmaps, inodeBlocks, and data segments (not data blocks)
 	
-	public static final int globalFetchExpiryTimeoutMs  = 3000; //Expire data fetched from the global store after dataExpiryTimeoutMs
+	public static final int dataSegmentFetchExpiryTimeoutMs  = 10000; //Expire data fetched from the global store after dataExpiryTimeoutMs
+	public static final int inodesBlockFetchExpiryTimeoutMs  = 3000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	//public static final int primaryFetchExpiryTimeoutMs = 5000; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
 	public static final int syncThreadsPerDevice = 1;

@@ -15,6 +15,8 @@ import kawkab.fs.core.exceptions.KawkabException;
 public final class InodesBlock extends Block {
 	private static boolean bootstraped; //Not saved persistently
 	private Inode[] inodes; //Should be initialized in the bootstrap function only.
+	private long lastFetchTimeMs; 	// Clock time in ms when the block was last loaded. This must be initialized 
+									// to zero when the block is first created in memory.
 	//private int version; //Inodes-block's current version number.
 	
 	/*
@@ -146,7 +148,54 @@ public final class InodesBlock extends Block {
 	}
 	
 	@Override
-	protected void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {}
+	protected synchronized void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
+		/* If never fetched or the last global-fetch has timed out, fetch from the global store.
+		 * Otherwise, if the last primary-fetch has timed out, fetch from the primary node.
+		 * Otherwise, don't fetch, data is still fresh. 
+		 */
+		
+		long now = System.currentTimeMillis();
+		
+		if (lastFetchTimeMs < now - Constants.inodesBlockFetchExpiryTimeoutMs) { // If the last data-fetch-time exceeds the time limit
+				
+			now = System.currentTimeMillis();
+			
+			if (lastFetchTimeMs < now - Constants.inodesBlockFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
+				try {
+					System.out.println("[B] Load from the global: " + id());
+					
+					loadFromGlobal(); // First try loading data from the global store
+					lastFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store.
+					return;
+					
+					//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
+				} catch (FileNotExistException e) { //If the block is not in the global store yet
+					System.out.println("[B] Not found in the global: " + id());
+					lastFetchTimeMs = 0; // Failed to fetch from the global store
+				}
+			
+				System.out.println("[B] Primary fetch expired or not found from the global: " + id());
+				
+				try {
+					System.out.println("[B] Loading from the primary: " + id());
+					loadBlockFromPrimary(); // Fetch data from the primary node
+					//lastPrimaryFetchTimeMs = now;
+					if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed
+						lastFetchTimeMs = now;
+				} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
+					// Check again from the global store because the primary may have deleted the 
+					// block after copying to the global store
+					System.out.println("[B] Not found on the primary, trying again from the global: " + id());
+					loadFromGlobal(); 
+					lastFetchTimeMs = now;
+					//lastPrimaryFetchTimeMs = 0;
+				} catch (IOException ioe) {
+					System.out.println("[B] Not found in the global and the primary: " + id());
+					throw new KawkabException(ioe);
+				}
+			}
+		}
+	}
 
 	@Override
 	public int appendOffsetInBlock() {
