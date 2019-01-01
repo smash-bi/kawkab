@@ -255,7 +255,7 @@ public final class FileHandle {
 				try {
 					inodesBlock.lock();
 					inode.updateSize(appendedBytes);
-					inodesBlock.markDirty();
+					inodesBlock.markLocalDirty();
 				} finally {
 					inodesBlock.unlock();
 				}

@@ -142,8 +142,13 @@ public final class CLI {
 				return;
 			}
 			
+			String chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+			int charLen = chars.length();
+			Random rand = new Random();
 			byte[] data = new byte[len];
-			new Random().nextBytes(data);
+			for (int i=0; i<data.length; i++) {
+				data[i] = (byte)chars.charAt(rand.nextInt(charLen));
+			}
 			appendFile(fname, data, 0, len);
 		} else if (cmd.equals("file")) {
 			appendFile(fname, args[3]);

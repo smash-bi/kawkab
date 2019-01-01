@@ -2,8 +2,10 @@ package kawkab.fs.core;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
 
 import com.google.protobuf.ByteString;
@@ -79,47 +81,53 @@ public final class InodesBlock extends Block {
 	
 	@Override
 	public void loadFrom(ByteBuffer buffer) throws IOException {
-		lock();
-		try {
-			//inodes = new Inode[Constants.inodesPerBlock];
-			for(int i=0; i<Constants.inodesPerBlock; i++){
-				//inodes[i] = new Inode(0);
-				inodes[i].loadFrom(buffer);
-			}
-		} finally {
-			unlock();
+		//inodes = new Inode[Constants.inodesPerBlock];
+		for(int i=0; i<Constants.inodesPerBlock; i++){
+			//inodes[i] = new Inode(0);
+			inodes[i].loadFrom(buffer);
+		}
+	}
+	
+	@Override
+	public void loadFromFile() throws IOException {
+		try (RandomAccessFile file = new RandomAccessFile(id.localPath(), "r");
+				SeekableByteChannel channel = file.getChannel()) {
+			channel.position(0);
+			// System.out.println("Load: "+block.localPath() + ": " + channel.position());
+			loadFrom(channel);
 		}
 	}
 	
 	@Override
 	public void loadFrom(ReadableByteChannel channel) throws IOException {
-		lock();
-		try {
-			//inodes = new Inode[Constants.inodesPerBlock];
-			for(int i=0; i<Constants.inodesPerBlock; i++){
-				//inodes[i] = new Inode(0);
-				inodes[i].loadFrom(channel);
+		//inodes = new Inode[Constants.inodesPerBlock];
+		for(int i=0; i<Constants.inodesPerBlock; i++){
+			//inodes[i] = new Inode(0);
+			inodes[i].loadFrom(channel);
+		}
+	}
+	
+	@Override
+	public int storeToFile() throws IOException {
+		try (
+				RandomAccessFile rwFile = new RandomAccessFile(id.localPath(), "rw");
+				SeekableByteChannel channel = rwFile.getChannel()
+			) {
+			channel.position(0);
+			//System.out.println("Store: "+block.id() + ": " + channel.position());
+			int bytesWritten = 0;
+			for(Inode inode : inodes) {
+				bytesWritten += inode.storeTo(channel);
 			}
-		} finally {
-			unlock();
+			return bytesWritten;
 		}
 	}
 	
 	@Override
 	public int storeTo(WritableByteChannel channel) throws IOException {
-		return storeFullTo(channel);
-	}
-	
-	@Override
-	public int storeFullTo(WritableByteChannel channel) throws IOException {
 		int bytesWritten = 0;
-		lock();
-		try {
-			for(Inode inode : inodes) {
-				bytesWritten += inode.storeTo(channel);
-			}
-		} finally {
-			unlock();
+		for(Inode inode : inodes) {
+			bytesWritten += inode.storeTo(channel);
 		}
 		
 		return bytesWritten;
@@ -130,13 +138,8 @@ public final class InodesBlock extends Block {
 		//TODO: This function takes extra memory to serialize inodes in an input stream. We need an alternate
 		//method for this purpose.
 		ByteBuffer buffer = ByteBuffer.allocate(inodes.length * Constants.inodeSizeBytes);
-		lock();
-		try {
-			for(Inode inode : inodes) {
-				inode.storeTo(buffer);
-			}
-		} finally {
-			unlock();
+		for(Inode inode : inodes) {
+			inode.storeTo(buffer);
 		}
 		buffer.flip();
 		return ByteString.copyFrom(buffer.array());
@@ -165,7 +168,6 @@ public final class InodesBlock extends Block {
 					System.out.println("[B] Load from the global: " + id());
 					
 					loadFromGlobal(); // First try loading data from the global store
-					lastFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store.
 					return;
 					
 					//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
@@ -279,7 +281,7 @@ public final class InodesBlock extends Block {
 			if (!file.exists()) {
 				try {
 					Block block = cache.acquireBlock(id, true); // Create a new block in the local store
-					block.markDirty(); // Mark the new block as dirty to write the initialized inodes
+					block.markLocalDirty(); // Mark the new block as dirty to write the initialized inodes
 					count++;
 				} finally {
 					cache.releaseBlock(id);

@@ -274,12 +274,12 @@ public final class Inode {
 					+ "%d bytes out of %d.",bytesRead,inodeSizeBytes));
 		}
 		
-		buffer.flip();
+		buffer.rewind();
 		inumber = buffer.getLong();
 		fileSize.set(buffer.getLong());
 		recordSize = buffer.getInt();
 		
-		//System.out.printf("\tLoaded: %d -> %d\n", inumber, fileSize);
+		//System.out.printf("\tLoaded inode: %d -> %d\n", inumber, fileSize.get());
 	}
 	
 	/*
@@ -289,8 +289,8 @@ public final class Inode {
 	int storeTo(final WritableByteChannel channel) throws IOException {
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.inodeSizeBytes);
 		storeTo(buffer);
-		buffer.flip();
-		buffer.limit(buffer.capacity());
+		buffer.rewind();
+		//buffer.limit(buffer.capacity());
 		
 		int bytesWritten = Commons.writeTo(channel, buffer);
 		
@@ -299,7 +299,7 @@ public final class Inode {
 					+ "%d bytes out of %d.",bytesWritten, Constants.inodeSizeBytes));
 		}
 		
-		//System.out.printf("Store: %d -> %d\n", inumber, fileSize);
+		//System.out.printf("Stored inode: %d -> %d\n", inumber, fileSize.get());
 		
 		return bytesWritten;
 	}

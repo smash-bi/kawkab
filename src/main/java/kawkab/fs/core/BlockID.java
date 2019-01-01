@@ -42,7 +42,9 @@ public abstract class BlockID {
 	
 	/**
 	 * @return an integer that is unique across the block type. For example, the segments of the same block has the 
-	 * same perBlockKey. Across block types, keys are not unique.
+	 * same perBlockKey.
+	 * 
+	 * Keys are not unique across block types.
 	 */
 	abstract public int perBlockKey(); 
 	

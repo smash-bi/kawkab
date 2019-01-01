@@ -34,7 +34,7 @@ import kawkab.fs.core.services.PrimaryNodeServiceClient;
  */
 
 public abstract class Block /*implements AutoCloseable*/ {
-	private final BlockID id;
+	protected final BlockID id;
 	
 	private static GlobalStoreManager globalStoreManager; // Backend store such as S3
 	private static LocalStoreManager localStoreManager;  // Local store such as local SSD
@@ -46,7 +46,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	private final Lock localStoreSyncLock; // Lock to prevent cache eviction before syncing to the local store
 	private final Condition localSyncWait; // To wait until the block is synced to the local store and canbe evicted from the cache.
 	
-	private long lastGlobalFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
+	//private long lastGlobalFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
 	//private long lastPrimaryFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
 	private final Lock dataLoadLock; //Lock for loading data in memory, disabling other threads from reading the block until data is loaded
 	
@@ -61,6 +61,8 @@ public abstract class Block /*implements AutoCloseable*/ {
 	
 	private AtomicBoolean inLocalStore; // The blocks is currently in the local store (can be in more places as well)
 	private AtomicBoolean inCache;      // The block is in cache 
+	
+	private boolean isLoaded; //If the block bytes are already loaded; used only on the primary node
 	
 	static { // Because we need to catch the exception
 		try {
@@ -78,7 +80,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 		localStoreSyncLock = new ReentrantLock();
 		localSyncWait = localStoreSyncLock.newCondition();
 		
-		lastGlobalFetchTimeMs = 0; //This must be initialized to zero so that the block can be loaded on a non-primary node
+		//lastGlobalFetchTimeMs = 0; //This must be initialized to zero so that the block can be loaded on a non-primary node
 		//lastPrimaryFetchTimeMs = 0;
 		dataLoadLock = new ReentrantLock();
 		
@@ -98,6 +100,14 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 */
 	protected abstract boolean shouldStoreGlobally();
 
+	/**
+	 * Load the content of the block from the local file
+	 * 
+	 * @param buffer
+	 * @throws IOException
+	 */
+	public abstract void loadFromFile() throws IOException;
+	
 	/**
 	 * Load the content of the block from the given ByteBuffer
 	 * 
@@ -125,13 +135,19 @@ public abstract class Block /*implements AutoCloseable*/ {
 	public abstract int storeTo(WritableByteChannel channel)  throws IOException;
 	
 	/**
+	 * Stores the block in a file.
+	 * @return Number of bytes written in the file.
+	 */
+	public abstract int storeToFile() throws IOException;
+	
+	/**
 	 * Stores the complete block in the channel.
 	 * 
 	 * @param channel
 	 * @return Number of bytes written to the channel.
 	 * @throws IOException
 	 */
-	public abstract int storeFullTo(WritableByteChannel channel) throws IOException;
+	//public abstract int storeFullTo(WritableByteChannel channel) throws IOException;
 	
 	/**
 	 * Loads contents of this block from InputStream in.
@@ -174,10 +190,16 @@ public abstract class Block /*implements AutoCloseable*/ {
 	}
 	
 	/**
-	 * Increment the local and global dirty counts.
+	 * Increment the local dirty counts.
 	 */
-	public void markDirty() {
+	public void markLocalDirty() {
 		localDirtyCnt.incrementAndGet();
+	}
+	
+	/**
+	 * Increment the global dirty counts.
+	 */
+	public void markGlobalDirty() {
 		globalDirtyCnt.incrementAndGet();
 	}
 	
@@ -368,22 +390,22 @@ public abstract class Block /*implements AutoCloseable*/ {
 		}
 		
 		//Load only if the block is not already loaded
-		if (lastGlobalFetchTimeMs == 0) {
+		if (!isLoaded) {
 			try {
 				dataLoadLock.lock(); // Disable loading from concurrent threads
 				//Load only if it is not already loaded
-				if (lastGlobalFetchTimeMs == 0) { // Prevent subsequent loads from other threads
+				if (!isLoaded) { // Prevent subsequent loads from other threads
 				
 					//System.out.println("[B] On primary. Load from the LOCAL store: " + id);
 					
 					if (!localStoreManager.load(this)) { // Load data from the local store
-						System.out.println("[B] On primary: Load from the GLOBAL store: " + id);
-						globalStoreManager.load(this); // Load from the global store if failed to load from the local store
+						System.out.println("[B] On primary: Loading from the GLOBAL STORE: " + id);
+						loadFromGlobal(); // Load from the global store if failed to load from the local store
 					}
 					
 					//lastPrimaryFetchTimeMs = Long.MAX_VALUE;
-					lastGlobalFetchTimeMs = Long.MAX_VALUE; // Once data is loaded on the primary, it should not expired because 
-				                                        // the concurrent readers/writer read/modify the same block in the cache.
+					isLoaded = true; //Once data is loaded on the primary, it should not expired because 
+				                     // the concurrent readers/writer read/modify the same block in the cache.
 				}
 			} finally {
 				dataLoadLock.unlock();
@@ -419,4 +441,5 @@ public abstract class Block /*implements AutoCloseable*/ {
 	public boolean isInCache() {
 		return inCache.get();
 	}
+	
 }

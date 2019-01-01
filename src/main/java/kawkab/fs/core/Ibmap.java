@@ -10,6 +10,7 @@ import java.util.BitSet;
 
 import javax.naming.OperationNotSupportedException;
 
+import com.google.common.io.Files;
 import com.google.protobuf.ByteString;
 
 import kawkab.fs.commons.Commons;
@@ -53,7 +54,7 @@ public final class Ibmap extends Block{
 		try {
 			bitIdx = bitset.nextClearBit(0);
 			bitset.set(bitIdx);
-			markDirty();
+			markLocalDirty();
 		} catch(IndexOutOfBoundsException e){
 			return -1;
 		} finally {
@@ -92,7 +93,7 @@ public final class Ibmap extends Block{
 		lock();
 		try{
 			bitset.clear(bitIdx);     //mark the bit as unused
-			markDirty();
+			markLocalDirty();
 		}finally{
 			unlock();
 		}
@@ -123,13 +124,19 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
+	public void loadFromFile() throws IOException {
+		byte[] bytes = Files.toByteArray(new File(id.localPath()));
+		bitset = BitSet.valueOf(bytes);
+	}
+	
+	@Override
 	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		int bytesRead = Commons.readFrom(channel, buffer);
-		if (bytesRead < bytes.length)
-			throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
-					+ "%d bytes out of %d.",bytesRead,bytes.length));
+		/*if (bytesRead < bytes.length)
+			throw new InsufficientResourcesException(String.format("[I] Full block is not loaded. Loaded "
+					+ "%d/%d bytes for block I%d.",bytesRead,bytes.length, blockIndex));*/
 		
 		bitset = BitSet.valueOf(bytes);
 	}
@@ -160,22 +167,26 @@ public final class Ibmap extends Block{
 	}*/
 	
 	@Override
-	public int storeTo(WritableByteChannel channel) throws IOException {
-		return storeFullTo(channel);
+	public int storeToFile() throws IOException {
+		byte[] bytes = bitset.toByteArray();
+		File file = new File(id.localPath());
+		Files.write(bytes, file);
+		return bytes.length;
 	}
 	
 	@Override
-	public int storeFullTo(WritableByteChannel channel) throws IOException {
+	public int storeTo(WritableByteChannel channel) throws IOException {
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.ibmapBlockSizeBytes);
 		buffer.put(bitset.toByteArray());
-		buffer.flip();
-		buffer.limit(buffer.capacity());
+		buffer.rewind();
 		
 		int bytesWritten = Commons.writeTo(channel, buffer);
 		if (bytesWritten < buffer.capacity()) {
-			throw new InsufficientResourcesException(String.format("Full block is not strored. Stored "
-					+ "%d bytes out of %d.",bytesWritten, buffer.capacity()));
+			throw new InsufficientResourcesException(String.format("[I] Full block is not strored. Stored "
+					+ "%d/%d bytes.",bytesWritten, buffer.capacity()));
 		}
+		
+		//System.out.printf("[I%d] Stored bytes %d\n", blockIndex, bytesWritten);
 		
 		return bytesWritten;
 	}
@@ -236,7 +247,7 @@ public final class Ibmap extends Block{
 			if (!file.exists()) {
 				try {
 					Block block = cache.acquireBlock(id, true); // This will create a new block in the local store.
-					block.markDirty();
+					block.markLocalDirty();
 				} finally {
 					cache.releaseBlock(id);
 				}

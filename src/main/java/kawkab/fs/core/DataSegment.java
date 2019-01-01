@@ -1,11 +1,12 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.protobuf.ByteString;
 
@@ -25,12 +26,14 @@ public final class DataSegment extends Block {
 	private DataSegmentID segmentID;
 	
 	//Keeps track of the offset and length of dirty bytes
-	private int dirtyBytesStart;  // Offset of the dirty bytes that have not been synced to the local store yet
-	private int dirtyBytesLength; // Number of the dirty bytes
+	//private int dirtyBytesStart;  // Offset of the dirty bytes that have not been synced to the local store yet
+	//private int dirtyBytesLength; // Number of the dirty bytes
 	private boolean segmentIsFull;  // Sets to true only when the block becomes full in an append operation.
-	private final Lock dirtyBytesLock; // To atomically update dirty bytes start and length
+	//private final Lock dirtyBytesLock; // To atomically update dirty bytes start and length
 	private long lastFetchTimeMs; // Clock time in ms when the block was last loaded. This must be initialized 
 										// to zero when the block is first created in memory.
+	private AtomicInteger limit;
+	private AtomicInteger dirtyOffset;
 	//private int bytesFilled; //Number of valid bytes in the segment, starting from the first byte
 	
 	/**
@@ -44,10 +47,12 @@ public final class DataSegment extends Block {
 		super(segmentID);
 		this.segmentID = segmentID;
 		//bytes = new byte[Constants.segmentSizeBytes];
-		dirtyBytesStart = Constants.segmentSizeBytes; //This initial value is important for the correct functioning of appendOffsetInBlock()
-		dirtyBytesLength = 0; //The variable is updated to the correct value in adjustDirtyOffsets()
-		dirtyBytesLock = new ReentrantLock();
+		//dirtyBytesStart = Constants.segmentSizeBytes; //This initial value is important for the correct functioning of appendOffsetInBlock()
+		//dirtyBytesLength = 0; //The variable is updated to the correct value in adjustDirtyOffsets()
+		//dirtyBytesLock = new ReentrantLock();
 		lastFetchTimeMs = 0;
+		limit = new AtomicInteger(0);
+		dirtyOffset = new AtomicInteger(0);
 		
 		//System.out.println(" Opened block: " + name());
 	}
@@ -77,8 +82,10 @@ public final class DataSegment extends Block {
 		dataBuf.limit(offsetInSegment + toAppend);
 		dataBuf.put(data, offset, toAppend);
 		
-		adjustDirtyOffsets(offsetInSegment, toAppend);
-		markDirty();
+		limit.addAndGet(toAppend); //Limit has to be updated before adjusting the marker for the dirty bytes.
+		
+		//adjustDirtyOffsets(offsetInSegment, toAppend);
+		markLocalDirty();
 		
 		//Mark block as full
 		if (offsetInSegment+toAppend == Constants.segmentSizeBytes) {
@@ -89,78 +96,6 @@ public final class DataSegment extends Block {
 		
 		return toAppend;
 	}
-	
-	/*synchronized int writeLong(long data, long offsetInFile) throws IOException{
-		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
-		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
-		int capacity = Constants.segmentSizeBytes - offsetInBlock;
-		int longSize = Long.BYTES;
-		if (capacity < longSize)
-			return 0;
-		
-		ByteBuffer buffer = ByteBuffer.wrap(bytes);
-		buffer.putLong(offsetInBlock, data);
-
-		adjustDirtyOffsets(offsetInBlock, longSize);
-		markDirty();
-		
-		return longSize;
-	}*/
-	
-	/*synchronized long readLong(long offsetInFile) throws InvalidFileOffsetException, IOException{
-		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
-		
-		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
-		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
-		int blockSize = Constants.segmentSizeBytes;
-		
-		if (offsetInBlock >= blockSize || 
-				offsetInBlock+Long.BYTES > blockSize || offsetInBlock < 0)
-			throw new InvalidFileOffsetException(
-					String.format("File Offset %d is invalid. Data block size = %d bytes.", 
-							offsetInBlock, blockSize));
-		
-		ByteBuffer buffer = ByteBuffer.wrap(bytes);
-		return buffer.getLong(offsetInBlock);
-	}*/
-	
-	/*synchronized int writeInt(int data, long offsetInFile) throws IOException{
-		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
-		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
-		int capacity = Constants.segmentSizeBytes - offsetInBlock;
-		int intSize = Integer.BYTES;
-		if (capacity < intSize)
-			return 0;
-		
-		//buffer.putInt(offsetInBlock, data);
-		
-		ByteBuffer buffer = ByteBuffer.wrap(bytes);
-		buffer.putInt(offsetInBlock, data);
-		adjustDirtyOffsets(offsetInBlock, intSize);
-		markDirty();
-		
-		return intSize;
-	}*/
-	
-	/*synchronized int readInt(long offsetInFile) throws InvalidFileOffsetException, IOException{
-		//int blockOffset = (int)(fileOffsetBytes % Constants.dataBlockSizeBytes);
-		
-		int blockSize = Constants.segmentSizeBytes;
-		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
-		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
-		if (offsetInBlock >= blockSize || 
-				offsetInBlock+4 >= blockSize || offsetInBlock < 0) {
-			throw new InvalidFileOffsetException(
-					String.format("File Offset %d is invalid. Data block size = %d bytes.", 
-							offsetInBlock, blockSize));
-		}
-		
-		//file.seek(offsetInBlock);
-		//return file.readInt();
-		
-		ByteBuffer buffer = ByteBuffer.wrap(bytes);
-		return buffer.getInt(offsetInBlock);
-	}*/
 	
 	/**
 	 * @param dstBuffer output buffer
@@ -209,31 +144,16 @@ public final class DataSegment extends Block {
 	}
 	
 	@Override
-	public synchronized void loadFrom(ByteBuffer srcBuffer) throws IOException {
-		/*if (srcBuffer.remaining() < Constants.segmentSizeBytes) { // If we use a ByteBuffer to store data bytes, we send only valid bytes 
-																// to a remote node. Therefore, this check is not required if we use 
-																// ByteBuffer. Otherwise, if we use a byte array, we need to check this as 
-																// we send all the bytes regardless of their validity.
-			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
-					+ "Have %d, needed %d.",srcBuffer.remaining(), Constants.segmentSizeBytes));
-		}*/
-		
-		//bytes = new byte[Constants.segmentSizeBytes];
-		//buffer.get(bytes);
-		
-		srcBuffer.rewind();
-		
-		System.out.println("[DS] Bytes to load from the buffer = " + srcBuffer.remaining());
-		
-		dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
-		dataBuf.limit(srcBuffer.remaining());
-		dataBuf.put(srcBuffer);
-		dataBuf.rewind();
-		
-		//FIXME: What if the number of bytes read is less than the block size?
-		//if (bytesRead < bytes.length)
-		//	throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
-		//			+ "%d bytes out of %d.",bytesRead,bytes.length));
+	public synchronized void loadFromFile() throws IOException {
+		try (
+				RandomAccessFile file = new RandomAccessFile(id.localPath(), "r");
+				SeekableByteChannel channel = file.getChannel()
+			) {
+			
+			channel.position(segmentID.segmentInBlock() * Constants.segmentSizeBytes);
+			// System.out.println("Load: "+block.localPath() + ": " + channel.position());
+			loadFrom(channel);
+		}
 	}
 	
 	@Override
@@ -250,7 +170,43 @@ public final class DataSegment extends Block {
 		dataBuf.limit(loaded);
 		dataBuf.rewind();
 		
-		System.out.printf("[DS] Loaded bytes from channel: %d, bufLimit=%d\n", loaded, dataBuf.limit());
+		limit.set(loaded);
+		dirtyOffset.set(loaded);
+		
+		//System.out.printf("[DS] Loaded bytes from channel: %d, bufLimit=%d\n", loaded, dataBuf.limit());
+		
+		//FIXME: What if the number of bytes read is less than the block size?
+		//if (bytesRead < bytes.length)
+		//	throw new InsufficientResourcesException(String.format("Full block is not loaded. Loaded "
+		//			+ "%d bytes out of %d.",bytesRead,bytes.length));
+	}
+	
+	@Override
+	public synchronized void loadFrom(ByteBuffer srcBuffer) throws IOException {
+		/*if (srcBuffer.remaining() < Constants.segmentSizeBytes) { // If we use a ByteBuffer to store data bytes, we send only valid bytes 
+																// to a remote node. Therefore, this check is not required if we use 
+																// ByteBuffer. Otherwise, if we use a byte array, we need to check this as 
+																// we send all the bytes regardless of their validity.
+			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
+					+ "Have %d, needed %d.",srcBuffer.remaining(), Constants.segmentSizeBytes));
+		}*/
+		
+		//bytes = new byte[Constants.segmentSizeBytes];
+		//buffer.get(bytes);
+		
+		srcBuffer.rewind();
+		
+		System.out.println("[DS] Bytes to load from the buffer = " + srcBuffer.remaining());
+		
+		int length = srcBuffer.remaining();
+		
+		dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
+		dataBuf.limit(length);
+		dataBuf.put(srcBuffer);
+		dataBuf.rewind();
+		
+		limit.set(length);
+		dirtyOffset.set(length);
 		
 		//FIXME: What if the number of bytes read is less than the block size?
 		//if (bytesRead < bytes.length)
@@ -278,7 +234,7 @@ public final class DataSegment extends Block {
 		 */
 		
 		if (dataBuf != null && dataBuf.limit() == Constants.segmentSizeBytes) { // Never load an already loaded block if the segment is full.
-			System.out.println("[DS] Segment is full. Not loading from the segment again.");
+			System.out.println("[DS] Segment is full. Not loading the segment again.");
 			return;
 		}
 		
@@ -349,10 +305,20 @@ public final class DataSegment extends Block {
 	}*/
 	
 	@Override
-	public synchronized int storeTo(WritableByteChannel channel) throws IOException {
-		int bytesWritten = 0;
-		
-		dirtyBytesLock.lock();
+	public int storeToFile() throws IOException {
+		try (
+				RandomAccessFile rwFile = new RandomAccessFile(id.localPath(), "rw");
+				SeekableByteChannel channel = rwFile.getChannel()
+			) {
+			channel.position(appendOffsetInBlock());
+			//System.out.println("Store: "+block.id() + ": " + channel.position());
+			return storeTo(channel);
+		}
+	}
+	
+	@Override
+	public int storeTo(WritableByteChannel channel) throws IOException {
+		/*dirtyBytesLock.lock();
 			int dirtyBytesOffset = dirtyBytesStart;
 			int dirtyBytesSize   = dirtyBytesLength;
 	
@@ -364,44 +330,43 @@ public final class DataSegment extends Block {
 			dirtyBytesStart += dirtyBytesSize;
 			dirtyBytesLength -= dirtyBytesSize;		
 		
-		dirtyBytesLock.unlock();
+		dirtyBytesLock.unlock();*/
 		
 		
+		ByteBuffer buf = dataBuf.asReadOnlyBuffer();
+		buf.position(dirtyOffset.get());
+		buf.limit(limit.get());
+		int size = buf.remaining();
+		int bytesWritten = 0;
 		try {
-			/*ByteBuffer buffer = ByteBuffer.wrap(bytes, dirtyBytesOffset, dirtyBytesSize);
-			int size = buffer.remaining();
-			bytesWritten = Commons.writeTo(channel, buffer);*/
-			
-			
-			dataBuf.position(dirtyBytesOffset);
-			//dataBuf.limit(dirtyBytesOffset+dirtyBytesSize);
-			int size = dataBuf.remaining();
 			while(bytesWritten < size) {
-	    		bytesWritten += channel.write(dataBuf);
+	    		bytesWritten += channel.write(buf);
 	    	}
-			dataBuf.rewind();
-			
-			if (bytesWritten < size) {
-				throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
-						+ "%d bytes out of %d.",bytesWritten, size));
-			}
-		} catch (IOException e) { 
-			dirtyBytesLock.lock();
+		} catch (IOException e) {
+			/*dirtyBytesLock.lock();
 
 			dirtyBytesStart -= dirtyBytesSize;   // We can reverse the changes because always the same worker thread in the LocalProcessor
 			dirtyBytesLength += dirtyBytesSize;  // locally stores the segments of the same file
 
-			dirtyBytesLock.unlock();
+			dirtyBytesLock.unlock();*/
 
 			throw e;
 		}
 		
-		System.out.printf("[DS] Bytes written in channel = %d, dirtyOffset=%d, dirtyLenght=%d\n", bytesWritten, dirtyBytesOffset, dirtyBytesSize);
+		if (bytesWritten < size) {
+			//FIXME: What should we do in this situation???
+			throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
+					+ "%d bytes out of %d.",bytesWritten, size));
+		}
+		
+		dirtyOffset.addAndGet(bytesWritten);
+		
+		//System.out.printf("[DS] Bytes written in channel = %d, dirtyOffset=%d, dirtyLenght=%d\n", bytesWritten, dirtyBytesOffset, dirtyBytesSize);
 		
 		return bytesWritten;
 	}
 
-	@Override
+	/*@Override
 	public synchronized int storeFullTo(WritableByteChannel channel) throws IOException {
 		int bytesWritten = 0;
 		//int size = bytes.length;
@@ -420,16 +385,15 @@ public final class DataSegment extends Block {
 		System.out.println("[DS] Bytes written in channel: " + bytesWritten);
 		
 		return bytesWritten;
-	}
+	}*/
 	
 	@Override
-	public synchronized ByteString byteString() {
-		//return ByteString.copyFrom(bytes); //TODO: Send only usable bytes instead of sending the complete segment
-		/*dataBuf.rewind();
-		ByteString str = ByteString.copyFrom(new byte[] {(byte)(segmentIsFull?1:0)});
-		return str.concat(ByteString.copyFrom(dataBuf));*/
-		dataBuf.rewind();
-		return ByteString.copyFrom(dataBuf);
+	public ByteString byteString() {
+		ByteBuffer buf = dataBuf.asReadOnlyBuffer();
+		int size = limit.get();
+		buf.limit(size);
+		buf.rewind();
+		return ByteString.copyFrom(buf, size);
 	}
 	
 	/**
@@ -437,12 +401,12 @@ public final class DataSegment extends Block {
 	 */
 	@Override
 	public int appendOffsetInBlock() {
-		dirtyBytesLock.lock();
-		int offsetInSegment = dirtyBytesLength > 0 ? dirtyBytesStart : 0;
-		dirtyBytesLock.unlock();
+		//dirtyBytesLock.lock();
+		//int offsetInSegment = dirtyBytesLength > 0 ? dirtyBytesStart : 0;
+		//dirtyBytesLock.unlock();
 		
 		//Offset in block is equal to the start offset of the current segment + the start of the dirty bytes
-		int offset = segmentID.segmentInBlock() * Constants.segmentSizeBytes + offsetInSegment;
+		int offset = segmentID.segmentInBlock() * Constants.segmentSizeBytes + dirtyOffset.get();
 		
 		assert offset <= Constants.dataBlockSizeBytes;
 		
@@ -455,7 +419,7 @@ public final class DataSegment extends Block {
 	 * @param currentAppendPosition
 	 * @param length
 	 */
-	private void adjustDirtyOffsets(int currentAppendPosition, int length) {
+	/*private void adjustDirtyOffsets(int currentAppendPosition, int length) {
 		dirtyBytesLock.lock();
 		
 		if(currentAppendPosition < dirtyBytesStart) { //This will be true when the segment is loaded and no append is done yet
@@ -466,7 +430,7 @@ public final class DataSegment extends Block {
 			dirtyBytesLength += (currentAppendPosition + length) - (dirtyBytesStart + dirtyBytesLength);
 		
 		dirtyBytesLock.unlock();
-	}
+	}*/
 	
 	@Override
 	public int memorySizeBytes() {

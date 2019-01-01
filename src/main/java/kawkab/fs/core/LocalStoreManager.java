@@ -25,6 +25,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private LocalStoreDB storedFilesMap;        // Contains the paths and IDs of the blocks that are currently stored locally
 	private Semaphore storePermits;
 	private volatile boolean working = true;
+	private FileLocks fileLocks;
 	
 	private static LocalStoreManager instance;
 	
@@ -46,6 +47,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		storedFilesMap = new LocalStoreDB(maxBlocks);
 		storePermits = new Semaphore(maxBlocks);
+		
+		fileLocks = FileLocks.instance();
 		
 		int inLocalSystem = storedFilesMap.size();
 		assert inLocalSystem <= maxBlocks;
@@ -184,35 +187,45 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
 		
-		if (dirtyCount == 0) { 
-			updateLocalDirty(block, dirtyCount); // To release any thread waiting for this block to be synced
+		if (dirtyCount == 0) {
+			block.clearInLocalQueue();
+			block.decAndGetLocalDirty(0); // To release any thread waiting for this block to be synced
 			return;
 		}
 		
-		while (dirtyCount > 0) {
-			try {
-				syncLocally(block);
-			} catch (IOException e) {
-				e.printStackTrace();
-				//FIXME: What should we do here? Should we return?
-			}
-			
-			if (block.shouldStoreGlobally()) { // If it the block is the last data segment or an ibmap or an inodesBlock
-				globalProc.store(block, this); // Add the block in the queue to be transferred to the globalStore
-				block.decAndGetLocalDirty(dirtyCount); // Don't mark the block as removed from the queue in order to 
-				                                       // block the syncing to disk while transferring data to the global store
-				break;
-			} else {
-				dirtyCount = updateLocalDirty(block, dirtyCount); // If the data segment is not the last segment in the data block, 
+		try {
+			fileLocks.lockFile(block.id());
+		} catch (InterruptedException e1) {
+			e1.printStackTrace();
+			fileLocks.unlockFile(block.id());
+			//FIXME: What should we do here? Should we return?
+			return;
+		}
+		
+		try {
+			boolean globalDirty = false;
+			while (dirtyCount > 0) {
+				try {
+					//syncLocally(block);
+					block.storeToFile();
+					block.markGlobalDirty();
+					globalDirty = true;
+				} catch (IOException e) {
+					e.printStackTrace();
+					//FIXME: What should we do here? Should we return?
+				}
+				
+				dirtyCount = block.decAndGetLocalDirty(dirtyCount); // If the data segment is not the last segment in the data block, 
 				                                                  // and the segment is updated while we were syncing, resync the
 				                                                  // the segment to the localStorage. This may create head-of-line blocking for
 				                                                  // only a short duration.
-				if (dirtyCount > 0) {
-					continue;
-				}
-				
-				return;
 			}
+			
+			if (globalDirty && block.shouldStoreGlobally()) { // If it the block is the last data segment or an ibmap or an inodesBlock
+				globalProc.store(block, this); // Add the block in the queue to be transferred to the globalStore
+			} 
+		} finally {
+			fileLocks.unlockFile(block.id());
 		}
 		
 		//System.out.println("dirtyCount=0, skipping submittingToGlobal: " + block.id());
@@ -223,17 +236,17 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		// the local file while concurrently uploading to the global store. If this happens, S3 API throws an exception
 		// that the MD5 hash of the file has changed. Now we update this flag in notifyStoreComplete() function.
 		
-		/*block.clearInLocalQueue(); //This is now done in the notifyStoreComplete function
-		if (block.clearAndGetLocalDirty(dirtyCount) > 0) {
+		block.clearInLocalQueue();
+		if (block.decAndGetLocalDirty(0) > 0) {
 			store(block);
-		}*/
+		}
 	}
 	
-	private long updateLocalDirty(Block block, long dirtyCount) {
+	/*private long updateLocalDirty(Block block, long dirtyCount) {
 		block.clearInLocalQueue();	// We have to do it so that either the current executing 
 									// thread or the appender can add the block in the local queue
 		return block.decAndGetLocalDirty(dirtyCount);
-	}
+	}*/
 	
 	@Override
 	public void notifyGlobalStoreComplete(Block block, boolean successful) throws KawkabException {
@@ -248,15 +261,17 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		 * 
 		*/
 		
-		long dirtyCount = updateLocalDirty(block, 0);
+		long dirtyCount = block.decAndGetLocalDirty(0);
 		if (dirtyCount > 0) {// We have to check the count again. We cannot simply call localDirtyCount() 
-													// because we need to notify any thread waiting for the block to be removed 
-													// from the local queue.
-													// Otherwise, a block can be evicted from the cache while the block is still being synced to the local store.
+							// because we need to notify any thread waiting for the block to be removed 
+							// from the local queue.
+							// Otherwise, a block can be evicted from the cache while the block is still being synced to the local store.
 			//System.out.println("[LSM] Local dirty. Adding again: " + block.id() + ", cnt="+dirtyCount);
 			store(block);
 			return;
-		}
+		} /*else {
+			System.out.println("[LSM] Local NOT dirty. Skipping: " + block.id() + ", cnt="+dirtyCount);
+		}*/
 		
 		//System.out.println("[LSM] Finished storing to global: " + block.id());
 		
@@ -320,27 +335,27 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			parent.mkdirs();
 		}
 		
-		syncLocally(block);
-		//file.createNewFile();
+		//syncLocally(block);
+		file.createNewFile();
 		storedFilesMap.put(block.id()); // storedFilesMap.put() and block.setInLocal() are not required to be atomic. This is because a  
 										// file's size is only updated when the block has been created. Therefore, a reader cannot read 
 										// a non-existing block.
 		block.setInLocalStore(); //Mark the block as locally saved
 	}
 	
-	private void syncLocally(Block block) throws IOException {
+	/*private void syncLocally(Block block) throws IOException {
 		//FIXME: This creates a new file if it does not already exist. We should prevent that in order to make sure that
 		//first we create a file and do proper accounting for the file.
 		
-		try(RandomAccessFile rwFile = 
-                new RandomAccessFile(block.id().localPath(), "rw")) {
-			try (SeekableByteChannel channel = rwFile.getChannel()) {
-				channel.position(block.appendOffsetInBlock());
-				//System.out.println("Store: "+block.id() + ": " + channel.position());
-				block.storeTo(channel);
-			}
+		try (
+				RandomAccessFile rwFile = new RandomAccessFile(block.id().localPath(), "rw");
+				SeekableByteChannel channel = rwFile.getChannel()
+			) {
+			channel.position(block.appendOffsetInBlock());
+			//System.out.println("Store: "+block.id() + ": " + channel.position());
+			block.storeTo(channel);
 		}
-	}
+	}*/
 	
 	/**
 	 * This is a blocking function. The block is loaded from the local store if the block is available in it. Otherwise,
@@ -350,7 +365,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * @param block The block to load from the local/global store.
 	 * @throws FileNotExistException If the block 
 	 * @throws KawkabException
-	 * @return false if the block is not available in the local store. Returns true if the block is loaded successfuly
+	 * @return false if the block is not available in the local store. Returns true if the block is loaded successfully
 	 * from the local store.
 	 */
 	public boolean load(Block block) throws FileNotExistException,KawkabException {
@@ -373,14 +388,16 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	}
 	
 	private void loadBlock(Block block) throws IOException {
-		try(RandomAccessFile file = 
-                new RandomAccessFile(block.id().localPath(), "r")) {
-			try (SeekableByteChannel channel = file.getChannel()) {
-				channel.position(block.appendOffsetInBlock());
-				//System.out.println("Load: "+block.localPath() + ": " + channel.position());
-				block.loadFrom(channel);
-			}
-		}
+		/*try(
+				RandomAccessFile file = new RandomAccessFile(block.id().localPath(), "r");
+				SeekableByteChannel channel = file.getChannel()
+            ) {
+			channel.position(block.offsetInBlock()); 
+			//System.out.println("Load: "+block.localPath() + ": " + channel.position());
+			block.loadFrom(channel);
+		}*/
+		
+		block.loadFromFile();
 	}
 	
 	public void stop() {
@@ -400,7 +417,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				e.printStackTrace();
 			}
 		}
-		
+		System.out.println("Stopped workers, checking for any remaining jobs.");
 		for (int i=0; i<storeQs.length; i++) {
 			Block block = null;
 			while( (block = storeQs[i].poll()) != null) {

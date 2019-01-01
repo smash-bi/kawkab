@@ -387,10 +387,10 @@ public final class FSTest {
 		
 		Filesystem fs = Filesystem.instance().bootstrap();
 		
-		int numWriters = 16;
+		int numWriters = 1;
 		Thread[] workers = new Thread[numWriters];
-		final int bufSize = 10*1024; //Constants.segmentSizeBytes;//8*1024*1024;
-		final long dataSize = 1L*200*1024*1024;
+		final int bufSize = 1*1024; //Constants.segmentSizeBytes;//8*1024*1024;
+		final long dataSize = 10L*1024*1024*1024;
 		Stats writeStats = new Stats();
 		
 		long startTime = System.currentTimeMillis();

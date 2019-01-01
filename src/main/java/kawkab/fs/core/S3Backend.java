@@ -1,8 +1,10 @@
 package kawkab.fs.core;
 
 import java.io.BufferedInputStream;
-import java.io.File;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.util.List;
@@ -20,6 +22,7 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 
@@ -31,12 +34,16 @@ import kawkab.fs.core.exceptions.KawkabException;
 public final class S3Backend implements GlobalBackend{
 	private AmazonS3 client;
 	private static final String rootBucket = "kawkab-blocks"; //Cannot contain uppercase letters.
-	//private static final String contentType = "application/octet-stream";
+	private byte[] buffer;
+	private FileLocks fileLocks;
+	private static final String contentType = "application/octet-stream";
 	
 	public S3Backend() {
 		client = newS3Client();
 		createRootBucket();
 		listExistingBuckets();
+		fileLocks = FileLocks.instance();
+		buffer = new byte[(Math.max(Constants.dataBlockSizeBytes, Constants.inodesBlockSizeBytes))];
 	}
 	
 	@Override
@@ -57,107 +64,105 @@ public final class S3Backend implements GlobalBackend{
 		GetObjectRequest getReq = new GetObjectRequest(rootBucket, path);
 		getReq.setRange(rangeStart, rangeEnd);
 		
-		S3Object obj = null;
 		int retries = 3;
 		Random rand = new Random();
-		try {
-			while(retries-- > 0) {
-				try {
-					obj = client.getObject(getReq); // client is an S3 client
-					break;
-				} catch (SdkBaseException ae) { // If the block does not exist in S3, it throws NoSucKey error code
-					if (ae instanceof AmazonS3Exception) {
-						
-						if (((AmazonS3Exception)ae).getErrorCode().equals("NoSuchKey")) {
-							throw new FileNotExistException("S3 NoSuckKey: " + path);
-						}
-					}
+		
+		while(retries-- > 0) {
+			try (
+					S3Object obj = client.getObject(getReq); // client is an S3 client
+					S3ObjectInputStream is = obj.getObjectContent();
+					ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(is));
+				) {
+					dstBlock.loadFrom(chan);
+				break;
+			} catch (SdkBaseException | IOException ae) { // If the block does not exist in S3, it throws NoSucKey error code
+				if (ae instanceof AmazonS3Exception) {
 					
-					if (retries == 1)
-						throw new KawkabException(ae);
-					try {
-						long sleepMs = (100+(Math.abs(rand.nextLong())%400));
-						System.out.println(String.format("[S3] Load from the global store failed for %s, retyring in %d ms...",
-								dstBlock.id().toString(),sleepMs));
-						Thread.sleep(sleepMs);
-					} catch (InterruptedException e) {
-						throw new KawkabException(e);
+					if (((AmazonS3Exception)ae).getErrorCode().equals("NoSuchKey")) {
+						throw new FileNotExistException("S3 NoSuckKey: " + path);
 					}
 				}
-			}
-			
-			S3ObjectInputStream is = obj.getObjectContent();
-			ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(is));
-			
-			try {
-				dstBlock.loadFrom(chan);
-			} catch (IOException e) {
-				e.printStackTrace();
-			} finally {
+				
+				if (retries == 1)
+					throw new KawkabException(ae);
+				
 				try {
-					chan.close();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-				try {
-					is.close();
-				} catch (IOException e) {
-					e.printStackTrace();
+					long sleepMs = (100+(Math.abs(rand.nextLong())%400));
+					System.out.println(String.format("[S3] Load from the global store failed for %s, retyring in %d ms...",
+							dstBlock.id().toString(),sleepMs));
+					Thread.sleep(sleepMs);
+				} catch (InterruptedException e) {
+					throw new KawkabException(e);
 				}
 			}
-		} finally {
-			if (obj != null)
-				try {
-					obj.close();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
 		}
-		
-		
-		//TODO: Verify that the block does not exist locally. If it exists, should we overwrite the block?
-		//File file = new File(dstBlock.localPath());
-		//client.getObject(getReq, file);
 		
 		//System.out.println("[S3] Loading from global: " + id.name());
 	}
 	
 	@Override
 	public void storeToGlobal(final Block srcBlock) throws KawkabException {
-		BlockID id = srcBlock.id(); 
 		//System.out.println("[S3] Storing to global: " + id.localPath());
 		
-		String path = id.localPath();
-		File file = new File(path);
-		
-		try {
-			client.putObject(rootBucket, path, file);
-		} catch (AmazonServiceException ase) {
-			System.out.println("Failed to upload block: " + srcBlock.id());
-			throw ase;
-		}
-		
-		/*String path = id.localPath();
-		File file = new File(path);
-		InputStream inStream = null;
-		try {
-			inStream = new FileInputStream(file);
-		} catch (FileNotFoundException e) {
+		/*try {
+			fileLocks.lockFile(srcBlock.id());		
+		} catch (InterruptedException e) {
 			throw new KawkabException(e);
 		}
 		
-		ObjectMetadata metadata = new ObjectMetadata();
-		metadata.setContentLength(file.length());
-		metadata.setContentType(contentType);
-		
-		try {
-			client.putObject(rootBucket, path, inStream, metadata);
+		try (InputStream istream = Files.asByteSource(new File(srcBlock.id().localPath())).openBufferedStream()) {
+			int length = (int) new File(srcBlock.id().localPath()).length();
+			ObjectMetadata metadata = new ObjectMetadata();
+			metadata.setContentLength(length);
+			metadata.setContentType(contentType);
+			
+			client.putObject(rootBucket, srcBlock.id().localPath(), istream, metadata);
 		} catch (AmazonServiceException ase) {
 			System.out.println("Failed to upload block: " + srcBlock.id());
 			throw ase;
+		} catch (IOException e) {
+			throw new KawkabException(e);
+		} finally {
+			fileLocks.unlockFile(srcBlock.id());
 		}*/
 		
-		//System.out.println("\t[S3] >>> Finished store to global: " + id.localPath());   
+		
+		int length = 0;
+		try(
+				RandomAccessFile raf = new RandomAccessFile(srcBlock.id().localPath(), "r");
+            ) {
+			
+			length = (int)raf.length(); //Block size in Kawkab is an integer
+			
+			try {
+				fileLocks.lockFile(srcBlock.id());
+				raf.readFully(buffer, 0, length);		
+			} catch (InterruptedException e) {
+				throw new KawkabException(e);
+			} finally {
+				fileLocks.unlockFile(srcBlock.id());
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+			throw new KawkabException(e);
+		}
+		
+		try (InputStream istream = new ByteArrayInputStream(buffer, 0, length)) {
+			ObjectMetadata metadata = new ObjectMetadata();
+			metadata.setContentLength(length);
+			metadata.setContentType(contentType);
+			try {
+				client.putObject(rootBucket, srcBlock.id().localPath(), istream, metadata);
+			} catch (AmazonServiceException ase) {
+				System.out.println("Failed to upload block: " + srcBlock.id());
+				throw ase;
+			}
+		} catch (IOException e) {
+			throw new KawkabException(e);
+		}
+		
+		
+		//System.out.println("\t[S3] >>> Finished store to global: " + id);   
 	}
 	
 	private AmazonS3 newS3Client() {
