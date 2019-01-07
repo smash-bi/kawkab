@@ -69,7 +69,7 @@ public final class FileHandle {
 		long fileSize = 0;
 		InodesBlock block = null;
 		try {
-			block = (InodesBlock)cache.acquireBlock(id, false);
+			block = (InodesBlock)cache.acquireBlock(id);
 			block.lock(); // To read the current file size, which can be updated by a concurrent writer
 			inode = block.getInode(inumber);
 			fileSize = inode.fileSize();
@@ -239,7 +239,7 @@ public final class FileHandle {
 		
 		InodesBlock inodesBlock = null;
 		try {
-			inodesBlock = (InodesBlock)cache.acquireBlock(id, false);
+			inodesBlock = (InodesBlock)cache.acquireBlock(id);
 			//block.lock();
 			//try {
 				//TODO: 3. If file is currently being updated, wait on an updateCondition
@@ -281,7 +281,7 @@ public final class FileHandle {
 		
 		InodesBlock block = null;
 		try {
-			block = (InodesBlock) cache.acquireBlock(id, false);
+			block = (InodesBlock) cache.acquireBlock(id);
 			size = block.fileSize(inumber);
 		} catch (IOException e) {
 			e.printStackTrace();

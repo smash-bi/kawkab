@@ -114,7 +114,7 @@ public final class InodesBlock extends Block {
 				SeekableByteChannel channel = rwFile.getChannel()
 			) {
 			channel.position(0);
-			//System.out.println("Store: "+block.id() + ": " + channel.position());
+			//System.out.println("Store: "+id() + ": " + channel.position());
 			int bytesWritten = 0;
 			for(Inode inode : inodes) {
 				bytesWritten += inode.storeTo(channel);
@@ -264,6 +264,8 @@ public final class InodesBlock extends Block {
 		if (bootstraped)
 			return;
 		
+		System.out.println("Bootstrap InodesBlocks");
+		
 		File folder = new File(Constants.inodeBlocksPath);
 		if (!folder.exists()){
 			System.out.println("  Creating folder: " + folder.getAbsolutePath());
@@ -271,21 +273,26 @@ public final class InodesBlock extends Block {
 		}
 		
 		int count=0;
-		//LocalStore storage = LocalStore.instance();
-		Cache cache = Cache.instance();
+		LocalStoreManager storage = LocalStoreManager.instance();
+		//Cache cache = Cache.instance();
 		int rangeStart = Constants.inodeBlocksRangeStart;
 		int rangeEnd = rangeStart + Constants.inodeBlocksPerMachine;
 		for(int i=rangeStart; i<rangeEnd; i++){
 			InodesBlockID id = new InodesBlockID(i);
 			File file = new File(id.localPath());
 			if (!file.exists()) {
-				try {
+				storage.createBlock(id);
+				Block block = id.newBlock();
+				block.storeToFile();
+				count++;
+				
+				/*try {
 					Block block = cache.acquireBlock(id, true); // Create a new block in the local store
 					block.markLocalDirty(); // Mark the new block as dirty to write the initialized inodes
 					count++;
 				} finally {
 					cache.releaseBlock(id);
-				}
+				}*/
 			}
 		}
 		

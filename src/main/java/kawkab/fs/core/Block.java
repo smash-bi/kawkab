@@ -7,13 +7,11 @@ import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.google.protobuf.ByteString;
 
-import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.services.PrimaryNodeServiceClient;
@@ -43,8 +41,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	
 	private final Lock lock; // Block level lock
 	
-	private final Lock localStoreSyncLock; // Lock to prevent cache eviction before syncing to the local store
-	private final Condition localSyncWait; // To wait until the block is synced to the local store and canbe evicted from the cache.
+	private final Object localStoreSyncLock; // Lock to prevent cache eviction before syncing to the local store
 	
 	//private long lastGlobalFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
 	//private long lastPrimaryFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
@@ -77,9 +74,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 		this.id = id;
 		lock = new ReentrantLock();
 		
-		localStoreSyncLock = new ReentrantLock();
-		localSyncWait = localStoreSyncLock.newCondition();
-		
+		localStoreSyncLock = new Object();
 		//lastGlobalFetchTimeMs = 0; //This must be initialized to zero so that the block can be loaded on a non-primary node
 		//lastPrimaryFetchTimeMs = 0;
 		dataLoadLock = new ReentrantLock();
@@ -229,11 +224,8 @@ public abstract class Block /*implements AutoCloseable*/ {
 		assert cnt >= 0;
 		
 		if (cnt == 0) {
-			try {
-				localStoreSyncLock.lock(); 
-				localSyncWait.signalAll(); // Wake up the threads if they are waiting to evict this block from the cache
-			} finally {
-				localStoreSyncLock.unlock();
+			synchronized (localStoreSyncLock) {
+				localStoreSyncLock.notifyAll(); // Wake up the threads if they are waiting to evict this block from the cache
 			}
 			
 			// There can be only one thread waiting because the cache blocks other threads before calling the 
@@ -325,16 +317,13 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 */
 	public void waitUntilSynced() throws InterruptedException {
 		if (localDirtyCnt.get() > 0) {
-			try {
-				localStoreSyncLock.lock();
-				
+			synchronized(localStoreSyncLock) {
 				while (localDirtyCnt.get() > 0 || inLocalQueue.get()) { // Wait until the block is in local queue or the block is dirty
-					System.out.println("[B] Waiting to evict until this block is synced to the local store: " + id + ", cnt: " + localDirtyCnt.get() + ", inLocalQueue="+inLocalQueue.get());
-					localSyncWait.await();
+					System.out.println("[B] Waiting until this block is synced to the local store and then evicted from the cache: " + id + ", cnt: " + 
+								localDirtyCnt.get() + ", inLocalQueue="+inLocalQueue.get());
+					localStoreSyncLock.wait();
 				}
 				System.out.println("[B] Block synced, now evicting: " + id);
-			} finally {
-				localStoreSyncLock.unlock();
 			}
 		}
 	}

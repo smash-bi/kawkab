@@ -25,6 +25,7 @@ public final class Inode {
 	private int recordSize = Constants.recordSize; //Temporarily set to 1 until we implement reading/writing records
 	private boolean dirty; //not saved persistently
 	private static Cache cache;
+	private static LocalStoreManager localStore;
 	
 	public static final long MAXFILESIZE;
 	static {
@@ -32,6 +33,7 @@ public final class Inode {
 		
 		try {
 			cache = Cache.instance();
+			localStore = LocalStoreManager.instance();
 		} catch (IOException e) {
 			e.printStackTrace(); //FIXME: Handle exception properly
 		}
@@ -100,7 +102,7 @@ public final class Inode {
 			
 			DataSegment curSegment = null;
 			try {
-				curSegment = (DataSegment)cache.acquireBlock(curSegId, false);
+				curSegment = (DataSegment)cache.acquireBlock(curSegId);
 				bytes = curSegment.read(buffer, bufferOffset, toRead, curOffsetInFile);
 			} catch (InvalidFileOffsetException e) {
 				e.printStackTrace();
@@ -140,7 +142,7 @@ public final class Inode {
 		int appended = 0;
 		long fileSize = this.fileSize.get();
 		
-		BlockID lastSegID = null;
+		BlockID segId = null;
 		int curOffset = offset;
 		
 		//FIXME: What happens if an exception occurs? What append size is returned? We need to do some cleanup work
@@ -154,15 +156,15 @@ public final class Inode {
 			//if (fileSize % Constants.dataBlockSizeBytes == 0) {
 			if ((int)(fileSize % Constants.dataBlockSizeBytes) == 0) { // if the last block is full
 				try {
-					lastSegID = createNewBlock(fileSize);
+					segId = createNewBlock(fileSize);
 					lastSegCapacity = Constants.segmentSizeBytes;
 				} catch (IndexBlockFullException e) {
 					e.printStackTrace();
 					return appended;
 				}
+			} else {
+				segId = getByFileOffset(fileSize);
 			}
-			
-			lastSegID = getByFileOffset(fileSize);
 			
 			int bytes;
 			int toAppend = remaining <= lastSegCapacity ? remaining : lastSegCapacity;
@@ -171,7 +173,7 @@ public final class Inode {
 			// to throw an exception if the file already exists.
 			DataSegment seg = null;
 			try {
-				seg = (DataSegment)cache.acquireBlock(lastSegID, false);
+				seg = (DataSegment)cache.acquireBlock(segId);
 				bytes = seg.append(data, curOffset, toAppend, fileSize);
 			} finally {
 				if (seg != null) {
@@ -230,10 +232,8 @@ public final class Inode {
 		assert segmentInBlock == 0;
 		
 		DataSegmentID dsid = new DataSegmentID(inumber, blockInFile, segmentInBlock);
-		//DataSegment block = new DataSegment(dataSegmentID);
-		//cache.createBlock(block);
-		//System.out.println("\t\t\t\tCreating block: " + dsid + ", inumber: " + inumber);
-		try {
+		localStore.createBlock(dsid);
+		/*try {
 			//System.out.printf("fs=%d, block=%s\n", fileSize, dsid);
 			
 			Block seg = cache.acquireBlock(dsid, true);
@@ -241,7 +241,7 @@ public final class Inode {
 			                    // in the local store and there are no dirty bytes yet.
 		} finally {
 			cache.releaseBlock(dsid);
-		}
+		}*/
 		
 		//System.out.println(String.format("Created blk: %d, fileSize=%d", blockNumber, fileSize));
 		

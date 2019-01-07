@@ -9,7 +9,8 @@ import kawkab.fs.core.exceptions.KawkabException;
 
 public class GlobalStoreManager {
 	private static final Object initLock = new Object();
-	private GlobalBackend[] backends; // To interact with the global store
+	private GlobalBackend[] backends; // To store blocks to the global store
+	private GlobalBackend loadWorker; // To load a block from the global store
 	private LinkedBlockingQueue<Task> storeQs[]; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks globally
 	private final int numWorkers;               // Number of worker threads and number of reqsQs
@@ -30,6 +31,7 @@ public class GlobalStoreManager {
 	
 	private GlobalStoreManager() {
 		numWorkers = Constants.numWorkersStoreToGlobal;
+		loadWorker = new S3Backend();
 		backends = new GlobalBackend[numWorkers];
 		for(int i=0; i<numWorkers; i++) {
 			backends[i] = new S3Backend();
@@ -74,7 +76,9 @@ public class GlobalStoreManager {
 		//TODO: Limit the number of load requests, probably using semaphore
 		//TODO: Make it a blocking function and use a threadpool for the load requests
 		
-		backends[0].loadFromGlobal(block);
+		synchronized(loadWorker) {
+			loadWorker.loadFromGlobal(block);
+		}
 	}
 	
 	public void store(Block block, SyncCompleteListener listener) throws KawkabException {

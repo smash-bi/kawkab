@@ -44,24 +44,6 @@ public final class IbmapBlockID extends BlockID {
 	}
 	
 	@Override
-	public boolean areEqual(BlockID blockID){
-		if (blockID == null)
-			return false;
-		
-		if (!(blockID instanceof IbmapBlockID))
-			return false;
-		
-		IbmapBlockID id;
-		try {
-			id = (IbmapBlockID) blockID;
-		}catch(Exception e){
-			return false;
-		}
-		
-		return mapNum == id.mapNum;
-	}
-	
-	@Override
 	public String toString() {
 		return name(mapNum);
 	}
@@ -69,4 +51,34 @@ public final class IbmapBlockID extends BlockID {
 	public int blockIndex() {
 		return mapNum;
 	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#hashCode()
+	 */
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = super.hashCode();
+		result = prime * result + mapNum;
+		return result;
+	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#equals(java.lang.Object)
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (!super.equals(obj))
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		IbmapBlockID other = (IbmapBlockID) obj;
+		if (mapNum != other.mapNum)
+			return false;
+		return true;
+	}
+	
+	
 }

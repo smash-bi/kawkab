@@ -2,8 +2,6 @@ package kawkab.fs.core;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.channels.SeekableByteChannel;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -126,6 +124,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				e.printStackTrace();
 			}
 		}
+		
+		
+		System.out.println("Closing thread: " + Thread.currentThread().getName());
 	}
 	
 	/**
@@ -187,8 +188,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
 		
+		block.clearInLocalQueue();
 		if (dirtyCount == 0) {
-			block.clearInLocalQueue();
 			block.decAndGetLocalDirty(0); // To release any thread waiting for this block to be synced
 			return;
 		}
@@ -197,9 +198,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			fileLocks.lockFile(block.id());
 		} catch (InterruptedException e1) {
 			e1.printStackTrace();
-			fileLocks.unlockFile(block.id());
-			//FIXME: What should we do here? Should we return?
 			return;
+		} finally {
+			fileLocks.unlockFile(block.id());
+			
 		}
 		
 		try {
@@ -236,7 +238,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		// the local file while concurrently uploading to the global store. If this happens, S3 API throws an exception
 		// that the MD5 hash of the file has changed. Now we update this flag in notifyStoreComplete() function.
 		
-		block.clearInLocalQueue();
+		//block.clearInLocalQueue();
 		if (block.decAndGetLocalDirty(0) > 0) {
 			store(block);
 		}
@@ -325,11 +327,11 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * Multiple writers can call this function concurrently. However, only one writer per block should be allowed to call this function.
 	 * The function assumes that the caller prevents multiple writers from creating the same new block.
 	 */
-	public void createBlock(Block block) throws IOException, InterruptedException {
+	public void createBlock(BlockID block) throws IOException, InterruptedException {
 		
 		storePermits.acquire(); // This provides an upper limit on the number of blocks that can be created locally.
 		
-		File file = new File(block.id().localPath());
+		File file = new File(block.localPath());
 		File parent = file.getParentFile();
 		if (!parent.exists()){
 			parent.mkdirs();
@@ -337,10 +339,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		//syncLocally(block);
 		file.createNewFile();
-		storedFilesMap.put(block.id()); // storedFilesMap.put() and block.setInLocal() are not required to be atomic. This is because a  
+		storedFilesMap.put(block); // storedFilesMap.put() and block.setInLocal() are not required to be atomic. This is because a  
 										// file's size is only updated when the block has been created. Therefore, a reader cannot read 
 										// a non-existing block.
-		block.setInLocalStore(); //Mark the block as locally saved
+		//block.setInLocalStore(); //Mark the block as locally saved
 	}
 	
 	/*private void syncLocally(Block block) throws IOException {
@@ -432,9 +434,16 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		for (int i=0; i<storeQs.length; i++) {
 			assert storeQs[i].size() == 0;
 		}
+		
+		globalProc.shutdown();
+		
+		storedFilesMap.shutdown();
 	}
 
 	public boolean exists(BlockID id) { // FIXME: This function needs to be synchronized with the createNewBlock and evict functions
+		if (!working)
+			return false;
+		
 		return storedFilesMap.exists(id);
 	}
 }

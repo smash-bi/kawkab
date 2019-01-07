@@ -37,26 +37,6 @@ public final class DataSegmentID extends BlockID {
 		return new DataSegment(this);
 	}
 	
-	@Override
-	public boolean areEqual(BlockID blockID){
-		if (blockID == null)
-			return false;
-		
-		if (!(blockID instanceof DataSegmentID))
-			return false;
-		
-		DataSegmentID id;
-		try {
-			id = (DataSegmentID) blockID;
-		}catch(Exception e){
-			return false;
-		}
-		
-		return inumber == id.inumber &&
-				blockInFile == id.blockInFile &&
-				segmentInBlock == id.segmentInBlock;
-	}
-	
 	public static String name(long inumber, long blockInFile, int segmentInBlock) {
 		return String.format("DS%d-%d-%d", inumber, blockInFile, segmentInBlock);
 	}
@@ -115,5 +95,39 @@ public final class DataSegmentID extends BlockID {
 	@Override
 	public String toString() {
 		return name();
+	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#hashCode()
+	 */
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = super.hashCode();
+		result = prime * result + (int) (blockInFile ^ (blockInFile >>> 32));
+		result = prime * result + (int) (inumber ^ (inumber >>> 32));
+		result = prime * result + segmentInBlock;
+		return result;
+	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#equals(java.lang.Object)
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (!super.equals(obj))
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		DataSegmentID other = (DataSegmentID) obj;
+		if (blockInFile != other.blockInFile)
+			return false;
+		if (inumber != other.inumber)
+			return false;
+		if (segmentInBlock != other.segmentInBlock)
+			return false;
+		return true;
 	}
 }

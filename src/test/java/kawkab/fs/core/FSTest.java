@@ -33,7 +33,7 @@ public final class FSTest {
 		//tester.testBlocksCreation();
 		//tester.testSmallReadWrite();
 		//tester.testSmallRead();
-		tester.testLargeReadWrite();
+		//tester.testLargeReadWrite();
 		//tester.testMultipleReaders();
 		//tester.testMultipleFiles();
 		//tester.testWritePerformance();
@@ -42,6 +42,7 @@ public final class FSTest {
 		//tester.testReadPerfMultiReadersSameFile();
 		
 		//tester.testConcurrentReadWrite();
+		//tester.testConcurrentReadWriteLastBlock();
 		
 		//tester.testVeryLargeReadWrite();
 		//tester.testFileSeek();
@@ -288,7 +289,7 @@ public final class FSTest {
 						FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 						long initialSize = file.size();
 						
-						System.out.println("Opening file: " + filename + ", current size="+initialSize);
+						//System.out.println("Opening file: " + filename + ", current size="+initialSize);
 						
 						Random rand = new Random(0);
 						int bufSize = Constants.segmentSizeBytes;//8*1024*1024;
@@ -390,16 +391,16 @@ public final class FSTest {
 		int numWriters = 1;
 		Thread[] workers = new Thread[numWriters];
 		final int bufSize = 1*1024; //Constants.segmentSizeBytes;//8*1024*1024;
-		final long dataSize = 10L*1024*1024*1024;
-		Stats writeStats = new Stats();
+		final long dataSize = 3L*1024*1024*1024;
 		
+		Stats writeStats = new Stats();
 		long startTime = System.currentTimeMillis();
 		for (int i=0; i<numWriters; i++) {
 			final int id = i;
 			workers[i] = new Thread(){
 				public void run(){
 					try {
-						String filename = new String("/home/smash/testMultipleFiles-"+id);
+						String filename = new String("/home/smash/twpcf-"+id);
 						FileOptions opts = new FileOptions();
 						FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 						
@@ -461,7 +462,7 @@ public final class FSTest {
 		System.out.println("            Read Performance Test");
 		System.out.println("--------------------------------------------");
 		Filesystem fs = Filesystem.instance().bootstrap();
-		String filename = new String("/home/smash/readPerformanceTest");
+		String filename = new String("/home/smash/rp");
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
@@ -503,7 +504,7 @@ public final class FSTest {
 		System.out.println("-----------------------------------------------------------------");
 		
 		Filesystem fs = Filesystem.instance().bootstrap();
-		String filename = new String("/home/smash/multipleReaders");
+		String filename = new String("/home/smash/rpmsf");
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
@@ -525,7 +526,7 @@ public final class FSTest {
 		
 		long startTime = System.currentTimeMillis();
 		final Stats readStats = new Stats();
-		int numReaders = 8;
+		int numReaders = 10;
 		Thread[] readers = new Thread[numReaders];
 		for (int i=0; i<readers.length; i++){
 			readers[i] = new Thread() {
@@ -581,11 +582,11 @@ public final class FSTest {
 		System.out.println("       Concurrent Read Write Test");
 		System.out.println("-----------------------------------------------------------------");
 		
-		final int numWorkers = 10;
+		final int numWorkers = 2;
 		final int numFiles = 100;
-		final int numTasks = 100;
-		final int appendSize = 2*Constants.segmentSizeBytes/3;
-		final int bufferSize = Constants.dataBlockSizeBytes/2;
+		final int numTasks = 1000;
+		final int appendSize = 1000;
+		final int bufferSize = 1*1024;
 		Thread[] workers = new Thread[numWorkers];
 		final Random rand = new Random(Constants.thisNodeID);
 		final String prefix = "CRWTestL-";
@@ -666,11 +667,11 @@ public final class FSTest {
 		System.out.println("       Concurrent Read Write Test");
 		System.out.println("-----------------------------------------------------------------");
 		
-		final int numWorkers = 10;
+		final int numWorkers = 100;
 		final int numFiles = 1;
 		final int numTasks = 1000;
 		final int appendSize = Constants.segmentSizeBytes/3; // An odd append size to test reading existing block as well as newly created block
-		final int bufferSize = Constants.dataBlockSizeBytes/2;
+		final int bufferSize = 1024;
 		Thread[] workers = new Thread[numWorkers];
 		final Random rand = new Random(Constants.thisNodeID);
 		
@@ -685,20 +686,23 @@ public final class FSTest {
 						Filesystem fs = Filesystem.instance();
 						byte[] buffer = new byte[bufferSize];
 						
+						String fname = "CRWLBTest-"+rand.nextInt(numFiles);
+						FileHandle file = null;
+						FileMode mode = workerID == 0 ? FileMode.APPEND : FileMode.READ;
+						
+						try {
+							file = fs.open(fname, mode, new FileOptions());
+						} catch (InvalidFileModeException | FileNotExistException e) {
+							e.printStackTrace();
+							return;
+						}
+						
+						if (workerID != 0) {
+							Thread.sleep(1000);
+						}
+						
+						
 						for (int nTask=0; nTask<numTasks; nTask++) {
-							String fname = "CRWLBTest-"+rand.nextInt(numFiles);
-							FileHandle file = null;
-							
-							FileMode mode = workerID == 0 ? FileMode.APPEND : FileMode.READ;
-							
-							try {
-								file = fs.open(fname, mode, new FileOptions());
-							} catch (InvalidFileModeException | FileNotExistException e) {
-								//System.out.println("\t<"+workerID+"> Skipping file: " + fname);
-								nTask--;
-								continue;
-							}
-							
 							if (mode == FileMode.APPEND) {
 								long sizeMB = (file.size() + appendSize)/1024/1024;
 								
@@ -711,11 +715,13 @@ public final class FSTest {
 									//rand.nextBytes(writeBuf);
 								}
 							} else {
-								file.seekBytes(file.size()-1);
-								long dataSize = 1;
+								long dataSize = 100;
+								file.seekBytes(file.size()-dataSize);
+								long sizeMB = (file.size()-dataSize)/1024/1024;
 								long read = 0;
 								
-								System.out.println("\t<"+workerID+"> Task: \" + nTask + \", Reading file: " + fname + " up to " + (dataSize/1024/1024) + " MB");
+								
+								System.out.println("\t<"+ workerID+ "> Task: " + nTask + ", Reading file: " + fname + " up to " + sizeMB + " MB");
 								
 								while(read < dataSize) {
 									int toRead = (int)(read+bufferSize < dataSize ? bufferSize : dataSize - read);

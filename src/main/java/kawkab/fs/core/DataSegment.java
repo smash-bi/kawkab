@@ -106,7 +106,7 @@ public final class DataSegment extends Block {
 	 * @throws IOException 
 	 * @throws IncorrectOffsetException 
 	 */
-	synchronized int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile) 
+	int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile) 
 			throws InvalidFileOffsetException, IOException{
 		int blockSize = Constants.segmentSizeBytes;
 		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
@@ -120,9 +120,11 @@ public final class DataSegment extends Block {
 		int readSize = offsetInBlock+length <= blockSize ? length : blockSize-offsetInBlock;
 		//System.arraycopy(bytes, offsetInBlock, dstBuffer, dstBufferOffset, readSize);
 		
-		dataBuf.rewind();
-		dataBuf.position(offsetInBlock);
-		dataBuf.get(dstBuffer, dstBufferOffset, readSize);
+		ByteBuffer buf = dataBuf.asReadOnlyBuffer();
+		
+		buf.rewind();
+		buf.position(offsetInBlock);
+		buf.get(dstBuffer, dstBufferOffset, readSize);
 		
 		return readSize;
 	}

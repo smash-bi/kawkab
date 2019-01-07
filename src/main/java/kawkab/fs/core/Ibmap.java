@@ -1,6 +1,5 @@
 package kawkab.fs.core;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -47,7 +46,7 @@ public final class Ibmap extends Block{
 	 * This function consumes the next unused inumber from the current Ibmap block.
 	 * @return Returns next unused inumber, or -1 if the block is full.
 	 */
-	long nextInode(){
+	synchronized long nextInode(){
 		int bitIdx = -1;
 		
 		lock();
@@ -81,7 +80,7 @@ public final class Ibmap extends Block{
 	 * @param inumber Inode number associated with the file
 	 * @throws InodeNumberOutOfRangeException if the inumber is out of range of this ibmap block.
 	 */
-	void unlinkInode(long inumber) throws InodeNumberOutOfRangeException{
+	synchronized void unlinkInode(long inumber) throws InodeNumberOutOfRangeException{
 		//The inumber associated with the last bit of this ibmap block.
 		long maxInumber = bitIdxToInumber(blockIndex, Constants.ibmapBlockSizeBytes*8 - 1);
 		if (inumber < 0 || inumber > maxInumber)
@@ -111,7 +110,7 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	public void loadFrom(ByteBuffer buffer) throws IOException {
+	synchronized public void loadFrom(ByteBuffer buffer) throws IOException {
 		if (buffer.remaining() < Constants.ibmapBlockSizeBytes) {
 			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
 					+ "Have %d, needed %d.",buffer.remaining(), Constants.ibmapBlockSizeBytes));
@@ -124,13 +123,13 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	public void loadFromFile() throws IOException {
+	synchronized public void loadFromFile() throws IOException {
 		byte[] bytes = Files.toByteArray(new File(id.localPath()));
 		bitset = BitSet.valueOf(bytes);
 	}
 	
 	@Override
-	public void loadFrom(ReadableByteChannel channel) throws IOException {
+	synchronized public void loadFrom(ReadableByteChannel channel) throws IOException {
 		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		int bytesRead = Commons.readFrom(channel, buffer);
@@ -143,7 +142,7 @@ public final class Ibmap extends Block{
 	
 	@Override
 	protected void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
-		assert false;
+		assert false; //Loading ibmaps on a non-primary node is not allowed as each node has the ownership of a set of ibmaps
 	}
 	
 	/*@Override
@@ -167,7 +166,7 @@ public final class Ibmap extends Block{
 	}*/
 	
 	@Override
-	public int storeToFile() throws IOException {
+	public synchronized int storeToFile() throws IOException {
 		byte[] bytes = bitset.toByteArray();
 		File file = new File(id.localPath());
 		Files.write(bytes, file);
@@ -175,7 +174,7 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	public int storeTo(WritableByteChannel channel) throws IOException {
+	public synchronized int storeTo(WritableByteChannel channel) throws IOException {
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.ibmapBlockSizeBytes);
 		buffer.put(bitset.toByteArray());
 		buffer.rewind();
@@ -192,7 +191,7 @@ public final class Ibmap extends Block{
 	}
 
 	@Override
-	public ByteString byteString() {
+	public synchronized ByteString byteString() {
 		return ByteString.copyFrom(bitset.toByteArray());
 	}
 	
@@ -237,20 +236,23 @@ public final class Ibmap extends Block{
 			folder.mkdirs();
 		}
 		
-		//LocalStore storage = LocalStore.instance();
-		Cache cache = Cache.instance();
+		LocalStoreManager storage = LocalStoreManager.instance();
+		//Cache cache = Cache.instance();
 		int rangeStart = Constants.ibmapBlocksRangeStart;
 		int rangeEnd = rangeStart + Constants.ibmapsPerMachine;
 		for(int i=rangeStart; i<rangeEnd; i++){
 			IbmapBlockID id = new IbmapBlockID(i);
 			File file = new File(id.localPath());
 			if (!file.exists()) {
-				try {
+				storage.createBlock(id);
+				Block block = id.newBlock();
+				block.storeToFile();
+				/*try {
 					Block block = cache.acquireBlock(id, true); // This will create a new block in the local store.
 					block.markLocalDirty();
 				} finally {
 					cache.releaseBlock(id);
-				}
+				}*/
 			}
 			
 			/*Ibmap ibmap = new Ibmap(i);

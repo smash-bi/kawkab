@@ -1,56 +1,17 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
-import kawkab.fs.commons.Constants;
-import kawkab.fs.commons.Stats;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.utils.GCMonitor;
 
 /**
  * An LRU cache for Block objects. The objects are acquired and released using BlockIDs. This class is singleton and
  * thread safe.
  */
-public class Cache implements BlockEvictionListener{
-	private static final Object initLock = new Object(); 
-	
-	private static Cache instance;
-	private LRUCache cache; // An extended LinkedHashMap that implements removeEldestEntry()
-	private Lock cacheLock; // Cache level locking
-	private LocalStoreManager localStore;
-	
-	// For debugging purposes
-	private Stats acquireStats = new Stats();
-	private Stats releaseStats = new Stats();
-	private Stats loadStats = new Stats();
-	
-	private Cache() throws IOException{
-		System.out.println("Initializing cache..." );
-		
-		cacheLock = new ReentrantLock();
-		localStore = LocalStoreManager.instance();
-		cache = new LRUCache(this);
-	}
-	
+public abstract class Cache {
 	public static Cache instance() throws IOException {
-		if (instance == null) {
-			synchronized(initLock) {
-				if (instance == null) {
-					instance = new Cache();
-				}
-			}
-		}
-		
-		return instance;
+		return GCache.instance();
 	}
-	
-	/*public void createBlock(Block block) throws IOException, InterruptedException {
-		localStoreManager.createBlock(block);
-	}*/
 	
 	/**
 	 * Acquires a reference of the block from the LRU cache. BlockID is an immutable ID of the block, which also creates
@@ -99,69 +60,7 @@ public class Cache implements BlockEvictionListener{
 	 * @throws KawkabException 
 	 * @throws InterruptedException 
 	 */
-	public Block acquireBlock(BlockID blockID, boolean createNewBlock) throws IOException, KawkabException, InterruptedException {
-		//System.out.println("[C] acquire: " + blockID);
-		
-		CachedItem cachedItem = null;
-		
-		
-		
-		cacheLock.lock(); // Lock the whole cache. This is necessary to prevent from creating multiple references to the
-		                  // same block.
-		try { // To unlock the cache
-			cachedItem = cache.get(blockID.uniqueKey()); // Try acquiring the block from the memory
-			
-			if (createNewBlock && cachedItem != null) {
-				cachedItem.incrementRefCnt(); // FIXME: This will be removed from here when we properly handle the exception, 
-				                              // such that the caller don't have to release the block in the case of an exception.
-				System.out.println("Block already exists: " + blockID);
-				throw new KawkabException("Block already exists: " + blockID);
-			}
-			
-			if (cachedItem == null){ // If the block is not cached
-				long t = System.nanoTime();
-				Block block = blockID.newBlock();   // Creates a new block object to save in the cache
-				t = (System.nanoTime() - t)/1000;
-				acquireStats.putValue(t);
-
-				cachedItem = new CachedItem(block); // Wrap the object in a cached item
-				cache.put(blockID.uniqueKey(), cachedItem);
-			}
-			
-			cachedItem.incrementRefCnt();
-		} finally {                 // FIXME: Catch any exceptions and decrement the reference count before throwing  
-			cacheLock.unlock();     //        the exception. Change the caller functions to not release the block in 
-		                            //        the case of an exception.
-		}
-		
-		assert cache.size() <= Constants.maxBlocksInCache;
-		
-		// FIXME: Barging cannot happen between the writer that creates a new block and the readers that read the newly created
-		// block. This is because the file size is updated only after appending some data and the data can only be
-		// appended after creating the new block, which includes creating a new file in the local store.
-		
-		long t = System.nanoTime();
-		Block block = cachedItem.block();
-		if (createNewBlock) { //Not mutually exclusive because only one of the threads can create a new block as we have only one writer.
-			              // Otherwise, we should acquire a lock.
-			//System.out.println("\t Creating new block: " + blockID);
-			
-			// The writer creates a block and later loads the block from the local store to write data. This incurs an
-			// extra access to the local store. We can prevent this by updating the lastLocalFetchTime in the Block
-			// immediately after creating the block. However, it should not be done in the constructor. Instead, it
-			// should be done here, just before or after calling localStore.createBlock(block) function.
-			// This is a good location because all the new blocks has pass through this line. This is a bad location
-			// because this is not cache specific task.
-			
-			localStore.createBlock(block);
-		} else {
-			block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock function
-			                   // deals with concurrency. Therefore, we don't need to provide mutual exclusion here.
-		}
-		loadStats.putValue((System.nanoTime()-t)/1000);
-		
-		return block;
-	}
+	public abstract Block acquireBlock(BlockID blockID) throws IOException, KawkabException, InterruptedException;
 	
 	/**
 	 * Releases the block and decrements its reference count. Blocks with reference count 0 are eligible for eviction.
@@ -171,111 +70,14 @@ public class Cache implements BlockEvictionListener{
 	 * @param blockID
 	 * @throws KawkabException 
 	 */
-	public void releaseBlock(BlockID blockID) throws KawkabException {
-		//System.out.println("[C] Release block: " + blockID);
-		
-		//try {
-		
-		long t = System.nanoTime();
-		
-		CachedItem cachedItem = null;
-		cacheLock.lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
-		
-		try { //For cacheLock.lock()
-			cachedItem = cache.get(blockID.uniqueKey());
-			
-			if (cachedItem == null) {
-				System.out.println(" Releasing non-existing block: " + blockID.uniqueKey());
-				
-				assert cachedItem != null; //To exit the system during testing
-				return;
-			}
-			
-			if (blockID.onPrimaryNode() && cachedItem.block().isLocalDirty()) { // Persist blocks only through the primary node
-				// If the dirty bit for the local store is set
-				localStore.store(cachedItem.block()); // The call is non-blocking. Multiple threads are allowed 
-														  // to add the same block in the queue.
-				// FIXME: What to do with the exception?
-				
-			}
-			
-			cachedItem.decrementRefCnt(); // No need to acquire any lock for the cachedItem because the incrementRefCnt() and
-			                              // decrementRefCnt() functions are only called while holding the cacheLock.
-		} finally {
-			cacheLock.unlock();
-			
-			releaseStats.putValue((System.nanoTime()-t)/1000);
-		}
-			
-		/*} finally {
-			
-		}*/
-	}
-	
-	/**
-	 * This function is called when the cache is full and this block is the LRU block that is being evicted from the cache.
-	 * This function blocks until the local dirty count of the block becomes zero. If the local dirty count is already
-	 * zero, this function returns without any wait or sleep.
-	 * 
-	 * The caller already has the cacheLock acquired when this function is called.
-	 * 
-	 * The reference count for the cachedItem is zero. Otherwise, this function cannot be called.
-	 * @throws KawkabException 
-	 */
-	@Override
-	public void beforeEviction(CachedItem cachedItem) {
-		System.out.println("Evicting from cache: "+cachedItem.block().id());
-		Block block = cachedItem.block();
-		try {
-			block.waitUntilSynced();  // FIXME: This is a blocking call and the cacheLock is locked. This may
-	                                  // lead to performance problems because the thread sleeps while holding
-	                                  // the cacheLock. The lock cannot be released because otherwise another
-	                                  // thread can come and may acquire the block.
-			localStore.notifyEvictedFromCache(cachedItem.block());
-		} catch (InterruptedException | KawkabException e) {
-			e.printStackTrace();
-		}
-	}
+	public abstract void releaseBlock(BlockID blockID) throws KawkabException;
 	
 	/**
 	 * Flushes the block in the persistent store. This should be used only for system shutdown.
 	 * 
 	 * @throws KawkabException
 	 */
-	public void flush() throws KawkabException {
-		cacheLock.lock();
-		try {
-			Iterator<Map.Entry<String, CachedItem>> itr = cache.entrySet().iterator();
-			while (itr.hasNext()) {
-				//We need to close all the readers and writers before we can empty the cache.
-				//TODO: Wait until the reference count for the cached object becomes zero.
-				CachedItem cachedItem = itr.next().getValue();
-				//beforeEviction(cachedItem);
-				Block block = cachedItem.block();
-				if (block.id().onPrimaryNode() && block.isLocalDirty()) {
-					localStore.store(block);
-					try {
-						block.waitUntilSynced();
-						localStore.notifyEvictedFromCache(block);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-				}
-				itr.remove();
-			}
-			assert cache.size() == 0;
-		} finally {
-			cacheLock.unlock();
-		}
-	}
+	public abstract void flush() throws KawkabException;
 	
-	public void shutdown() throws KawkabException {
-		System.out.println("Closing cache. Current size = "+cache.size());
-		System.out.printf("AcquireStats (us): %s\n", acquireStats);
-		System.out.printf("ReleaseStats (us): %s\n", releaseStats);
-		System.out.printf("LoadStats (us): %s\n", loadStats);
-		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
-		flush();
-		localStore.stop();
-	}
+	public abstract void shutdown() throws KawkabException;
 }

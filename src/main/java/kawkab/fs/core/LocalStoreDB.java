@@ -29,8 +29,8 @@ public final class LocalStoreDB {
 		map = ChronicleMap
 				.of(String.class, String.class)
 			    .name(mapName)
-			    .averageKeySize(72)
-			    .averageValueSize(32)
+			    .averageKeySize(32)
+			    .averageValueSize(2)
 			    .entries(maxSize+100)
 			    .createPersistedTo(new File(mapFilePath));
 	}
@@ -43,7 +43,7 @@ public final class LocalStoreDB {
 		
 		assert map.size()+1 <= maxSize;
 		
-		String prev = map.put(id.localPath(), id.name());
+		String prev = map.put(id.localPath(), "");
 		
 		if (prev != null) {
 			System.out.println("\t Block already exists in the localstore: " + id + ", "+id.localPath());
@@ -82,5 +82,9 @@ public final class LocalStoreDB {
 	
 	public synchronized int size() {
 		return map.size();
+	}
+	
+	public synchronized void shutdown() {
+		map.close();
 	}
 }

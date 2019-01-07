@@ -48,25 +48,35 @@ public final class InodesBlockID extends BlockID{
 	}
 	
 	@Override
-	public boolean areEqual(BlockID blockID){
-		if (blockID == null)
-			return false;
-		
-		if (!(blockID instanceof InodesBlockID))
-			return false;
-		
-		InodesBlockID id;
-		try {
-			id = (InodesBlockID) blockID;
-		}catch(Exception e){
-			return false;
-		}
-		
-		return blockIndex == id.blockIndex;
-	}
-	
-	@Override
 	public String toString() {
 		return name(blockIndex);
+	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#hashCode()
+	 */
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = super.hashCode();
+		result = prime * result + blockIndex;
+		return result;
+	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#equals(java.lang.Object)
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (!super.equals(obj))
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		InodesBlockID other = (InodesBlockID) obj;
+		if (blockIndex != other.blockIndex)
+			return false;
+		return true;
 	}
 }
