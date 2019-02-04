@@ -11,6 +11,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 public abstract class Cache {
 	public static Cache instance() throws IOException {
 		return GCache.instance();
+		//return CustomCache.instance();
 	}
 	
 	/**

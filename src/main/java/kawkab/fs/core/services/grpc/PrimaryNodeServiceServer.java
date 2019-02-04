@@ -1,4 +1,4 @@
-package kawkab.fs.core.services;
+package kawkab.fs.core.services.grpc;
 
 import java.io.IOException;
 

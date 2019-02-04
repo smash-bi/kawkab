@@ -165,7 +165,7 @@ public final class InodesBlock extends Block {
 			
 			if (lastFetchTimeMs < now - Constants.inodesBlockFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
 				try {
-					System.out.println("[B] Load from the global: " + id());
+					// System.out.println("[IB] Load from the global: " + id());
 					
 					loadFromGlobal(); // First try loading data from the global store
 					return;

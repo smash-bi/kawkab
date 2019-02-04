@@ -18,6 +18,7 @@ import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
@@ -39,10 +40,6 @@ public final class CLI {
 		c.initFS();
 		c.cmd();
 		c.shutdown();
-	}
-
-	private void shutdown() throws KawkabException, InterruptedException, IOException {
-		fs.shutdown();
 	}
 
 	private void initFS() throws IOException, KawkabException, InterruptedException {
@@ -160,17 +157,11 @@ public final class CLI {
 
 	private void appendFile(String fn, String srcFile) throws IOException, OutOfMemoryException,
 			MaxFileSizeExceededException, InvalidFileOffsetException, KawkabException, InterruptedException {
-		DataInputStream di = null;
-		try {
-			di = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(srcFile))));
+		try (DataInputStream di = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(srcFile))))) {
 			byte[] buf = new byte[Constants.dataBlockSizeBytes];
 			int n = 0;
 			while ((n = di.read(buf)) != -1) {
 				appendFile(fn, buf, 0, n);
-			}
-		} finally {
-			if (di != null) {
-				di.close();
 			}
 		}
 	}
@@ -262,11 +253,10 @@ public final class CLI {
 				length = readLen;
 			}
 
-			file.seekBytes(byteStart);
 			System.out.println("[CLI] read len bytes: " + length);
 			while (read < length) {
 				int toRead = (int) (length - read >= buf.length ? buf.length : length - read);
-				int len = file.read(buf, toRead);
+				int len = file.read(buf, byteStart+read, toRead);
 				System.out.println("Read length = " + len);
 				if (out != null) {
 					out.write(new String(buf, 0, len));
@@ -284,7 +274,7 @@ public final class CLI {
 		System.out.println("");
 	}
 
-	private void parseOpen(String[] args) throws IOException, IbmapsFullException, KawkabException, InterruptedException {
+	private void parseOpen(String[] args) throws IOException, IbmapsFullException, KawkabException, InterruptedException, FileAlreadyOpenedException {
 		if (args.length < 3) {
 			System.out.println("Usage: open <filename> <r|a>");
 			return;
@@ -293,7 +283,7 @@ public final class CLI {
 		openFile(args[1], args[2]);
 	}
 
-	private FileHandle openFile(String fn, String fm) throws IOException, IbmapsFullException, KawkabException, InterruptedException {
+	private FileHandle openFile(String fn, String fm) throws IOException, IbmapsFullException, KawkabException, InterruptedException, FileAlreadyOpenedException {
 		FileMode mode;
 		if (fm.equals("r"))
 			mode = FileMode.READ;
@@ -306,5 +296,20 @@ public final class CLI {
 		openedFiles.put(fn, fh);
 
 		return fh;
+	}
+	
+	private void shutdown() throws KawkabException, InterruptedException, IOException {
+		fs.shutdown();
+		System.out.println("Closed CLI");
+		
+		/*Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
+		for (Thread thr : threadSet) {
+			System.out.println(thr.getName());
+			StackTraceElement[] stes = thr.getStackTrace();
+			for (StackTraceElement ste : stes) {
+				System.out.println("\t"+ste);
+			}
+		}
+		System.out.println("\n");*/
 	}
 }

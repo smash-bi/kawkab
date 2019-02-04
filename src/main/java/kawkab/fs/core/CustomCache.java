@@ -24,9 +24,9 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	private LocalStoreManager localStore;
 	
 	// For debugging purposes
-	private Stats acquireStats = new Stats();
-	private Stats releaseStats = new Stats();
-	private Stats loadStats = new Stats();
+	//private Stats acquireStats = new Stats();
+	//private Stats releaseStats = new Stats();
+	//private Stats loadStats = new Stats();
 	
 	private CustomCache() throws IOException {
 		System.out.println("Initializing cache..." );
@@ -118,10 +118,10 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 			}*/
 			
 			if (cachedItem == null){ // If the block is not cached
-				long t = System.nanoTime();
+				//long t = System.nanoTime();
 				Block block = blockID.newBlock();   // Creates a new block object to save in the cache
-				t = (System.nanoTime() - t)/1000;
-				acquireStats.putValue(t);
+				//t = (System.nanoTime() - t)/1000;
+				//acquireStats.putValue(t);
 
 				cachedItem = new CachedItem(block); // Wrap the object in a cached item
 				cache.put(blockID.uniqueKey(), cachedItem);
@@ -139,7 +139,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		// block. This is because the file size is updated only after appending some data and the data can only be
 		// appended after creating the new block, which includes creating a new file in the local store.
 		
-		long t = System.nanoTime();
+		//long t = System.nanoTime();
 		Block block = cachedItem.block();
 		/*if (createNewBlock) { //Not mutually exclusive because only one of the threads can create a new block as we have only one writer.
 			              // Otherwise, we should acquire a lock. Moreover, a reader cannot read a new block concurrently because 
@@ -160,7 +160,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 			block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock function
 			                   // deals with concurrency. Therefore, we don't need to provide mutual exclusion here.
 		//}
-		loadStats.putValue((System.nanoTime()-t)/1000);
+		//loadStats.putValue((System.nanoTime()-t)/1000);
 		
 		return block;
 	}
@@ -179,7 +179,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		
 		//try {
 		
-		long t = System.nanoTime();
+		//long t = System.nanoTime();
 		
 		CachedItem cachedItem = null;
 		cacheLock.lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
@@ -207,7 +207,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		} finally {
 			cacheLock.unlock();
 			
-			releaseStats.putValue((System.nanoTime()-t)/1000);
+			//releaseStats.putValue((System.nanoTime()-t)/1000);
 		}
 			
 		/*} finally {
@@ -276,9 +276,9 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	@Override
 	public void shutdown() throws KawkabException {
 		System.out.println("Closing cache. Current size = "+cache.size());
-		System.out.printf("AcquireStats (us): %s\n", acquireStats);
-		System.out.printf("ReleaseStats (us): %s\n", releaseStats);
-		System.out.printf("LoadStats (us): %s\n", loadStats);
+		//System.out.printf("AcquireStats (us): %s\n", acquireStats);
+		//System.out.printf("ReleaseStats (us): %s\n", releaseStats);
+		//System.out.printf("LoadStats (us): %s\n", loadStats);
 		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
 		flush();
 		localStore.stop();

@@ -236,7 +236,7 @@ public final class DataSegment extends Block {
 		 */
 		
 		if (dataBuf != null && dataBuf.limit() == Constants.segmentSizeBytes) { // Never load an already loaded block if the segment is full.
-			System.out.println("[DS] Segment is full. Not loading the segment again.");
+			//System.out.println("[DS] Segment is full. Not loading the segment again.");
 			return;
 		}
 		
@@ -248,7 +248,7 @@ public final class DataSegment extends Block {
 			
 			if (lastFetchTimeMs < now - Constants.dataSegmentFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
 				try {
-					System.out.println("[B] Load from the global: " + id());
+					//System.out.println("[DS] Load from the global: " + id());
 					
 					loadFromGlobal(); // First try loading data from the global store
 					lastFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store.

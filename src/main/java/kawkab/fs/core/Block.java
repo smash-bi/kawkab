@@ -14,7 +14,7 @@ import com.google.protobuf.ByteString;
 
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.services.PrimaryNodeServiceClient;
+import kawkab.fs.core.services.grpc.PrimaryNodeServiceClient;
 
 /**
  * This is a parent class for Ibmap, InodeBlock, and DataSegment classes. It provides a common interface for the subclasses

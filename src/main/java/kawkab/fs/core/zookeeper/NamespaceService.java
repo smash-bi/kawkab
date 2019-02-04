@@ -104,4 +104,8 @@ public final class NamespaceService {
 				throw new KawkabException(e.getMessage());
 		}
 	}
+	
+	public void shutdown() {
+		zkclient.shutdown();
+	}
 }

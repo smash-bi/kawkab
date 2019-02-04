@@ -18,7 +18,6 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 public final class FileHandle {
 	private long inumber;
 	private FileMode fileMode;
-	private long readOffsetInFile;
 	private static Cache cache;
 	
 	static { //Using static block to catch the exception during initialization
@@ -43,7 +42,7 @@ public final class FileHandle {
 	 * @throws KawkabException 
 	 * @throws InterruptedException 
 	 */
-	public synchronized int read(byte[] buffer, int length) throws IOException, IllegalArgumentException, KawkabException, InterruptedException {
+	public synchronized int read(byte[] buffer, long readOffsetInFile, int length) throws IOException, IllegalArgumentException, KawkabException, InterruptedException {
 		/*1. Borrow InodesBlock from cache
 		    2. Acquire InodesBlock lock
 		      3. Get the pointer to the dataBlock or the indirectBlock
@@ -99,14 +98,6 @@ public final class FileHandle {
 		readOffsetInFile += bytesRead;
 		
 		return bytesRead;
-	}
-	
-	/**
-	 * Seek the read pointer to the byteOffset bytes in the file
-	 * @param byteOffset
-	 */
-	public synchronized void seekBytes(long byteOffset){
-		readOffsetInFile = byteOffset;
 	}
 	
 	/**
@@ -181,19 +172,11 @@ public final class FileHandle {
 	}*/
 	
 	/**
-	 * Move the read pointer to numBytes relative to its current position
-	 * @param bytes number of bytes to move the read pointer
-	 */
-	public synchronized void relativeSeek(long numBytes){
-		readOffsetInFile = readOffsetInFile + numBytes;
-	}
-	
-	/**
 	 * Append data at the end of the file
 	 * @param data Data to append
 	 * @param offset Offset in the data array from where to start copying data
 	 * @param length Number of bytes to write from the data array
-	 * @return Index of the data appended to the file. The caller can use 
+	 * @return Number of bytes appended 
 	 * dataIndex.timestamp() to refer to the data just written. 
 	 * @throws OutOfMemoryException 
 	 * @throws InvalidFileOffsetException 
@@ -226,13 +209,6 @@ public final class FileHandle {
 			throw new InvalidFileModeException();
 		}
 		
-		/*int len = 0;
-		int inodesBlockNum = (int)(inumber / Constants.inodesPerBlock);
-		try (InodesBlock block = cache.getInodesBlock(inodesBlockNum)) {
-			len = block.append(inumber, data, offset, length);
-		}
-		return len;*/
-		
 		int appendedBytes = 0;
 		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
 		BlockID id = new InodesBlockID(inodesBlockIdx);
@@ -240,13 +216,6 @@ public final class FileHandle {
 		InodesBlock inodesBlock = null;
 		try {
 			inodesBlock = (InodesBlock)cache.acquireBlock(id);
-			//block.lock();
-			//try {
-				//TODO: 3. If file is currently being updated, wait on an updateCondition
-			    //TODO: 4. Otherwise, mark the file as being updated
-			//} finally {
-			//	block.unlock();
-			//}
 			
 			Inode inode = inodesBlock.getInode(inumber);
 			appendedBytes = inode.append(data, offset, length);
@@ -292,14 +261,6 @@ public final class FileHandle {
 		}
 		
 		return size;
-	}
-	
-	/**
-	 * @return Returns the current value of the read pointer; the file offset in bytes from where 
-	 * the read function starts reading. 
-	 */
-	public synchronized long readOffset(){
-		return readOffsetInFile;
 	}
 	
 	public long inumber() { // For debugging only

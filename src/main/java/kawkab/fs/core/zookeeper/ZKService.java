@@ -92,4 +92,12 @@ public final class ZKService {
 		
 		return res;
 	}
+	
+	public void shutdown() {
+		for (CuratorFramework client : clients.values()) {
+			client.close();
+		}
+		
+		System.out.println("Closed ZooKeeper clients");
+	}
 }

@@ -438,6 +438,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		globalProc.shutdown();
 		
 		storedFilesMap.shutdown();
+		
+		System.out.println("Closed LocalStoreManager");
 	}
 
 	public boolean exists(BlockID id) { // FIXME: This function needs to be synchronized with the createNewBlock and evict functions

@@ -4,14 +4,14 @@ import java.io.IOException;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
+import kawkab.fs.client.services.finagle.FFilesystemServiceServer;
+import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.services.PrimaryNodeServiceServer;
+import kawkab.fs.core.services.grpc.PrimaryNodeServiceServer;
 
 public final class Filesystem {
-	private static final Object initLock = new Object();
-	
 	private static volatile boolean initialized;
 	private static volatile boolean closed;
 	
@@ -20,20 +20,21 @@ public final class Filesystem {
 	private static Filesystem instance;
 	private Namespace namespace;
 	private PrimaryNodeServiceServer ns;
+	private FFilesystemServiceServer fs;
 	
 	private Filesystem() throws KawkabException, IOException {
 		namespace = Namespace.instance();
 		ns = new PrimaryNodeServiceServer();
+		fs = new FFilesystemServiceServer(this);
 		ns.startServer();
+		fs.startServer();
 	}
 	
-	public static Filesystem instance() throws KawkabException, IOException {
+	public static synchronized Filesystem instance() throws KawkabException, IOException {
 		if (instance == null) {
-			synchronized(initLock) {
-				if (instance == null)
-					instance = new Filesystem();
-			}
+			instance = new Filesystem();
 		}
+		
 		return instance;
 	}
 	
@@ -49,10 +50,12 @@ public final class Filesystem {
 	 * @throws IbmapsFullException if the system is full and no new file can be created unless an existing file is deleted
 	 * @throws IOException
 	 * @throws FileNotExistException If the file is opened in the read mode and the file does not exist in the system
+	 * @throws FileAlreadyOpenedException If the file is opened in the append mode more than once
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	public FileHandle open(String filename, FileMode mode, FileOptions opts) throws IbmapsFullException, IOException, FileNotExistException, KawkabException, InterruptedException{
+	public FileHandle open(String filename, FileMode mode, FileOptions opts) 
+			throws IbmapsFullException, IOException, FileAlreadyOpenedException, FileNotExistException, KawkabException, InterruptedException {
 		//TODO: Validate input
 		long inumber = namespace.openFile(filename, mode == FileMode.APPEND);
 		//System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber);
@@ -89,11 +92,28 @@ public final class Filesystem {
 			return;
 		
 		closed = true;
+		fs.stopServer();
 		ns.stopServer();
 		namespace.shutdown();
 		Ibmap.shutdown();
 		InodesBlock.shutdown();
 		Cache.instance().shutdown();
+		
+		synchronized(instance) {
+			instance.notifyAll();
+		}
+		
+		System.out.println("Closed FileSystem");
 		// GlobalStoreManager.instance().shutdown(); //The LocalStore closes the GlobalStore
+	}
+	
+	public boolean initialized() {
+		return initialized;
+	}
+	
+	public void waitUntilShutdown() throws InterruptedException {
+		synchronized(instance) {
+			instance.wait();
+		}
 	}
 }

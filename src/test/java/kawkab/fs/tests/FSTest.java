@@ -1,14 +1,19 @@
-package kawkab.fs.core;
+package kawkab.fs.tests;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Random;
+
+import org.junit.Test;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.commons.Stats;
+import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.InvalidFileModeException;
@@ -18,43 +23,41 @@ import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 public final class FSTest {
-	public void testMain() throws OutOfMemoryException, MaxFileSizeExceededException, 
-				InterruptedException, IbmapsFullException, InvalidFileOffsetException, 
-				InvalidFileModeException, IOException, IllegalArgumentException, KawkabException {
-		FSTest.main(null);
-	}
-	
-	public static void main(String args[]) throws OutOfMemoryException, 
-				MaxFileSizeExceededException, InterruptedException, IbmapsFullException, 
-				InvalidFileOffsetException, InvalidFileModeException, IOException, IllegalArgumentException, KawkabException {
+	public static void main(String args[]) throws OutOfMemoryException, MaxFileSizeExceededException,
+			InterruptedException, IbmapsFullException, InvalidFileOffsetException, InvalidFileModeException,
+			IOException, IllegalArgumentException, KawkabException {
 		FSTest tester = new FSTest();
-		//Constants.printConfig();
+		// Constants.printConfig();
 		tester.testBootstrap();
-		//tester.testBlocksCreation();
-		//tester.testSmallReadWrite();
-		//tester.testSmallRead();
-		//tester.testLargeReadWrite();
-		//tester.testMultipleReaders();
-		//tester.testMultipleFiles();
-		//tester.testWritePerformance();
+		// tester.testBlocksCreation();
+		// tester.testSmallReadWrite();
+		// tester.testSmallRead();
+		// tester.testLargeReadWrite();
+		// tester.testMultipleReaders();
+		// tester.testMultipleFiles();
+		// tester.testWritePerformance();
 		tester.testWritePerformanceConcurrentFiles();
-		//tester.testReadPerformance();
-		//tester.testReadPerfMultiReadersSameFile();
-		
-		//tester.testConcurrentReadWrite();
-		//tester.testConcurrentReadWriteLastBlock();
-		
-		//tester.testVeryLargeReadWrite();
-		//tester.testFileSeek();
-		
-		Thread.sleep(5000);
-		tester.testShutdown();
+		// tester.testReadPerformance();
+		// tester.testReadPerfMultiReadersSameFile();
+
+		// tester.testConcurrentReadWrite();
+		// tester.testConcurrentReadWriteLastBlock();
+
+		// tester.testRawWrites();
+
+		// tester.testVeryLargeReadWrite();
+		// tester.testFileSeek();
+
+		// Thread.sleep(5000);
+		tester.shutdownTest();
 	}
-	
 	/*public void testConfiguration(){
 		Constants.printConfig();
 	}*/
 	
+	/**
+	 * This must be called first to bootstrap the system.
+	 */
 	private void testBootstrap() throws IOException, KawkabException, InterruptedException{
 		System.out.println("---------------------------------------------");
 		System.out.println("            Bootstrap test");
@@ -64,7 +67,10 @@ public final class FSTest {
 		fs.bootstrap();
 	}
 	
-	private void testBlocksCreation() throws IbmapsFullException, OutOfMemoryException, 
+	/**
+	 * Tests the creation of blocks for a new file.
+	 */
+	private void testBlocksCreation() throws IbmapsFullException, OutOfMemoryException, FileAlreadyOpenedException, 
 				MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException{
 		System.out.println("-------------------------------------------------");
 		System.out.println("            Blocks creation test");
@@ -78,7 +84,10 @@ public final class FSTest {
 		file.append(data, 0, data.length);
 	}
 	
-	private void testSmallReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
+	/**
+	 * Test reading and writing a small file
+	 */
+	private void testSmallReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, FileAlreadyOpenedException,
 				InvalidFileOffsetException, InvalidFileModeException, IOException, IllegalArgumentException, KawkabException, InterruptedException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Small file test read and write");
@@ -97,13 +106,13 @@ public final class FSTest {
 		
 		System.out.println("Initial file size: " + file.size());
 		
-		file.seekBytes(file.size());
+		long readOffset = file.size();
 		int appended = file.append(dataBuffer, 0, dataBuffer.length);
 		
-		System.out.println(String.format("readOffset %d, file size %d, appended now %d", file.readOffset(), file.size(), appended));
+		System.out.println(String.format("readOffset %d, file size %d, appended now %d", readOffset, file.size(), appended));
 		
 		byte[] readBuf = new byte[dataBuffer.length];
-		int read = file.read(readBuf, readBuf.length);
+		int read = file.read(readBuf, readOffset, readBuf.length);
 		
 		
 		//System.out.println(Arrays.toString(readBuf));
@@ -113,8 +122,11 @@ public final class FSTest {
 		assert Arrays.equals(dataBuffer, readBuf);
 	}
 	
+	/**
+	 * Tests reading an existing file.
+	 */
 	private void testSmallRead()
-			throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, InvalidFileOffsetException,
+			throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, InvalidFileOffsetException,FileAlreadyOpenedException,
 			InvalidFileModeException, IOException, IllegalArgumentException, KawkabException, InterruptedException {
 		System.out.println("--------------------------------------------");
 		System.out.println("            Small file test read");
@@ -131,23 +143,24 @@ public final class FSTest {
 
 		System.out.println("Initial file size: " + file.size());
 
-		file.seekBytes(0);
-
 		byte[] readBuf = new byte[bufSize];
 		
 		long fileSize = file.size();
 		long read = 0;
 		while(read != fileSize) {
-			read += file.read(readBuf, readBuf.length);
+			read += file.read(readBuf, 0, readBuf.length);
 		}
 
 		// System.out.println(Arrays.toString(readBuf));
 		// System.out.println(Arrays.toString(dataBuffer));
 
-		System.out.println(String.format("Current readOffset %d, file size %d, read bytes %d", file.readOffset(), file.size(), read));
+		System.out.println(String.format("file size %d, read bytes %d", file.size(), read));
 	}
 	
-	private void testLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, 
+	/**
+	 * Tests writing a large file.
+	 */
+	private void testLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, IbmapsFullException, FileAlreadyOpenedException,
 				InvalidFileOffsetException, InvalidFileModeException, IOException, IllegalArgumentException, KawkabException, InterruptedException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Large files test");
@@ -165,13 +178,13 @@ public final class FSTest {
 		byte[] dataBuffer = new byte[dataSize];
 		new Random().nextBytes(dataBuffer);
 		
-		file.seekBytes(file.size());
+		long readOffset = file.size();
 		int appended = file.append(dataBuffer, 0, dataBuffer.length);
 		
-		System.out.println(String.format("readOffset %d, file size %d, appended now %d", file.readOffset(), file.size(), appended));
+		System.out.println(String.format("readOffset %d, file size %d, appended now %d", readOffset, file.size(), appended));
 		
 		byte[] readBuf = new byte[dataBuffer.length];
-		int read = file.read(readBuf, readBuf.length);
+		int read = file.read(readBuf, readOffset, readBuf.length);
 		
 		System.out.println("File " + filename + " size " + file.size());
 		
@@ -179,7 +192,10 @@ public final class FSTest {
 		assert Arrays.equals(dataBuffer, readBuf);
 	}
 	
-	private void testMultipleReaders() throws IbmapsFullException, OutOfMemoryException, 
+	/**
+	 * Tests multiple readers concurrently reading the same file
+	 */
+	private void testMultipleReaders() throws IbmapsFullException, OutOfMemoryException, FileAlreadyOpenedException,
 	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
 		System.out.println("--------------------------------------------");
 		System.out.println("            Multiple Readers Test");
@@ -222,18 +238,19 @@ public final class FSTest {
 					FileHandle file = null;
 					try {
 						file = fs.open(filename, FileMode.READ, opts);
-					} catch (IbmapsFullException | IOException | KawkabException | InterruptedException e) {
+					} catch (IbmapsFullException | FileAlreadyOpenedException | IOException | KawkabException | InterruptedException e) {
 						e.printStackTrace();
 						return;
 					}
-					file.seekBytes(offset);
+					long nextOffset = offset;
 					
 					long read = 0;
 					while(read < dataSize) {
 						int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
 						int bytes = 0;
 						try {
-							bytes = file.read(readBuf, toRead);
+							bytes = file.read(readBuf, nextOffset, toRead);
+							nextOffset += bytes;
 						} catch (IOException | IllegalArgumentException | KawkabException | InterruptedException e) {
 							e.printStackTrace();
 							break;
@@ -268,6 +285,9 @@ public final class FSTest {
 		}
 	}
 	
+	/**
+	 * Tests concurrently reading and writing different files
+	 */
 	private void testMultipleFiles() throws IbmapsFullException, OutOfMemoryException, 
 	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
 		System.out.println("--------------------------------------------");
@@ -287,7 +307,7 @@ public final class FSTest {
 						String filename = new String("/home/smash/testMultipleFiles-"+id);
 						FileOptions opts = new FileOptions();
 						FileHandle file = fs.open(filename, FileMode.APPEND, opts);
-						long initialSize = file.size();
+						long readOffset = file.size();
 						
 						//System.out.println("Opening file: " + filename + ", current size="+initialSize);
 						
@@ -309,12 +329,12 @@ public final class FSTest {
 						byte[] readBuf = new byte[bufSize];
 						rand = new Random(0);
 						
-						file.seekBytes(initialSize);
 						long read = 0;
 						while(read < dataSize) {
 							int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
-							int bytes = file.read(readBuf, toRead);
+							int bytes = file.read(readBuf, readOffset, toRead);
 							read += bytes;
+							readOffset += bytes;
 							
 							rand.nextBytes(writeBuf);
 							if (bytes < bufSize){
@@ -347,7 +367,10 @@ public final class FSTest {
 		
 	}
 	
-	private void testWritePerformance() throws IOException, IbmapsFullException, OutOfMemoryException, 
+	/**
+	 * Tests the performance of writing a single file
+	 */
+	private void testWritePerformance() throws IOException, IbmapsFullException, OutOfMemoryException, FileAlreadyOpenedException,
 			MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, KawkabException, InterruptedException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Write Performance Test");
@@ -358,8 +381,8 @@ public final class FSTest {
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
 		Random rand = new Random(0);
-		int bufSize = 10000*1024; //Constants.segmentSizeBytes;
-		long dataSize = 1L*1024*1024*1024;//1000*1000L*64L*bufSize + 3;
+		int bufSize = 1*1024; //Constants.segmentSizeBytes;
+		long dataSize = 100L*1024*1024;
 		long appended = 0;
 		
 		byte[] writeBuf = new byte[bufSize];
@@ -380,8 +403,11 @@ public final class FSTest {
 		System.out.println(String.format("Req buffer size=%d, Data size=%.0fMB, Write speed=%.0fMB/s, File size=%dMB, initFileSize=%d, fileID=%d", bufSize, sizeMB, speed, file.size()/1024/1024, initSize, file.inumber()));
 	}
 	
+	/**
+	 * Tests the performance of append operations using multiple concurrent writers
+	 */
 	private void testWritePerformanceConcurrentFiles() throws IbmapsFullException, OutOfMemoryException, 
-	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
+				MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
 		System.out.println("----------------------------------------------------------------");
 		System.out.println("            Write Perofrmance Test - Concurrent Files");
 		System.out.println("----------------------------------------------------------------");
@@ -394,7 +420,6 @@ public final class FSTest {
 		final long dataSize = 3L*1024*1024*1024;
 		
 		Stats writeStats = new Stats();
-		long startTime = System.currentTimeMillis();
 		for (int i=0; i<numWriters; i++) {
 			final int id = i;
 			workers[i] = new Thread(){
@@ -409,19 +434,14 @@ public final class FSTest {
 						Random rand = new Random(0);
 						long appended = 0;
 						
-						byte[] writeBuf = new byte[bufSize];
+						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
 						
 						long startTime = System.currentTimeMillis();
 						
-						Stats stats = new Stats();
-						
 						while(appended < dataSize) {
 							int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
-							long s = System.currentTimeMillis();
 							appended += file.append(writeBuf, 0, toWrite);
-							stats.putValue((System.currentTimeMillis()-s));
-							//rand.nextBytes(writeBuf);
 						}
 						
 						double durSec = (System.currentTimeMillis() - startTime)/1000.0;
@@ -429,7 +449,7 @@ public final class FSTest {
 						double thr = sizeMB/durSec;
 						writeStats.putValue(thr);
 						
-						System.out.println(String.format("File %d: Data size = %.0fMB, Write thr = %.0fMB/s, stats (ms): %s", id, sizeMB, thr, stats));
+						System.out.println(String.format("File %d: Data size = %.0fMB, Write thr = %.0fMB/s", id, sizeMB, thr));
 					} catch (Exception e){
 						e.printStackTrace();
 						return;
@@ -448,16 +468,15 @@ public final class FSTest {
 			}
 		}
 		
-		long elapsed = System.currentTimeMillis() - startTime;
-		
-		int thr = (int)((dataSize/(1024.0*1024)*numWriters)/(elapsed/1000.0));
-		
-		System.out.println("Aggregate write thr (MB/s) = " + thr);
 		System.out.printf("WriteStats: sum=%.0f, %s, bufSize=%d\n",writeStats.sum(), writeStats, bufSize);
 	}
 	
-	private void testReadPerformance() throws IOException, IbmapsFullException, OutOfMemoryException, 
-		MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IllegalArgumentException, KawkabException, InterruptedException{
+	
+	/**
+	 * Tests the performance of reads on the primary node
+	 */
+	private void testReadPerformance() throws IOException, IbmapsFullException, OutOfMemoryException, FileAlreadyOpenedException,
+					MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IllegalArgumentException, KawkabException, InterruptedException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Read Performance Test");
 		System.out.println("--------------------------------------------");
@@ -479,14 +498,12 @@ public final class FSTest {
 			//rand.nextBytes(writeBuf);
 		}
 		
-		file.seekBytes(0);
-		
 		long startTime = System.currentTimeMillis();
 		
 		long read = 0;
 		while(read < dataSize) {
 			int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
-			int bytes = file.read(buffer, toRead);
+			int bytes = file.read(buffer, read, toRead);
 			read += bytes;
 		}
 		
@@ -497,8 +514,12 @@ public final class FSTest {
 		System.out.println(String.format("Data size = %.2fMB, Read speed = %.0fMB/s", dataMB, speed));
 	}
 	
-	private void testReadPerfMultiReadersSameFile() throws IbmapsFullException, OutOfMemoryException, 
-	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
+	
+	/**
+	 * Read performance of the same file concurrently read by multiple readers
+	 */
+	private void testReadPerfMultiReadersSameFile() throws IbmapsFullException, OutOfMemoryException, FileAlreadyOpenedException,
+				MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
 		System.out.println("-----------------------------------------------------------------");
 		System.out.println("       Read Performance Multiple Readers Same File Test");
 		System.out.println("-----------------------------------------------------------------");
@@ -536,11 +557,10 @@ public final class FSTest {
 					FileHandle file = null;
 					try {
 						file = fs.open(filename, FileMode.READ, opts);
-					} catch (IbmapsFullException | IOException | KawkabException | InterruptedException e) {
+					} catch (IbmapsFullException | FileAlreadyOpenedException | IOException | KawkabException | InterruptedException e) {
 						e.printStackTrace();
 						return;
 					}
-					file.seekBytes(0);
 					
 					long startTime = System.currentTimeMillis();
 					
@@ -549,7 +569,7 @@ public final class FSTest {
 						int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
 						int bytes = 0;
 						try {
-							bytes = file.read(readBuf, toRead);
+							bytes = file.read(readBuf, read, toRead);
 						} catch (IOException | IllegalArgumentException | KawkabException | InterruptedException e) {
 							e.printStackTrace();
 							break;
@@ -576,8 +596,11 @@ public final class FSTest {
 		System.out.printf("Read stats (MB/s): sum=%.0f %s\n", readStats.sum(), readStats);
 	}
 	
+	/**
+	 * Tests the performance of concurrent read and append operations
+	 */
 	private void testConcurrentReadWrite() throws IbmapsFullException, OutOfMemoryException, 
-	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
+				MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
 		System.out.println("-----------------------------------------------------------------");
 		System.out.println("       Concurrent Read Write Test");
 		System.out.println("-----------------------------------------------------------------");
@@ -609,7 +632,7 @@ public final class FSTest {
 							
 							try {
 								file = fs.open(fname, mode, new FileOptions());
-							} catch (InvalidFileModeException | FileNotExistException e) {
+							} catch (InvalidFileModeException | FileAlreadyOpenedException | FileNotExistException e) {
 								//System.out.println("\t<"+workerID+"> Skipping file: " + fname);
 								nTask--;
 								continue;
@@ -627,7 +650,6 @@ public final class FSTest {
 									//rand.nextBytes(writeBuf);
 								}
 							} else {
-								file.seekBytes(0);
 								long dataSize = file.size();
 								long read = 0;
 								
@@ -637,7 +659,7 @@ public final class FSTest {
 									int toRead = (int)(read+bufferSize < dataSize ? bufferSize : dataSize - read);
 									int bytes = 0;
 									try {
-										bytes = file.read(buffer, toRead);
+										bytes = file.read(buffer, read, toRead);
 									} catch (IOException | IllegalArgumentException | KawkabException | InterruptedException e) {
 										e.printStackTrace();
 										break;
@@ -661,10 +683,11 @@ public final class FSTest {
 		}
 	}
 	
+	
 	private void testConcurrentReadWriteLastBlock() throws IbmapsFullException, OutOfMemoryException, 
-	MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
+			MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException {
 		System.out.println("-----------------------------------------------------------------");
-		System.out.println("       Concurrent Read Write Test");
+		System.out.println("       Concurrent Read Write of Last Block Test");
 		System.out.println("-----------------------------------------------------------------");
 		
 		final int numWorkers = 100;
@@ -692,7 +715,7 @@ public final class FSTest {
 						
 						try {
 							file = fs.open(fname, mode, new FileOptions());
-						} catch (InvalidFileModeException | FileNotExistException e) {
+						} catch (InvalidFileModeException | FileAlreadyOpenedException | FileNotExistException e) {
 							e.printStackTrace();
 							return;
 						}
@@ -716,23 +739,22 @@ public final class FSTest {
 								}
 							} else {
 								long dataSize = 100;
-								file.seekBytes(file.size()-dataSize);
 								long sizeMB = (file.size()-dataSize)/1024/1024;
 								long read = 0;
-								
-								
+								long readOffset = file.size()-dataSize;
 								System.out.println("\t<"+ workerID+ "> Task: " + nTask + ", Reading file: " + fname + " up to " + sizeMB + " MB");
 								
 								while(read < dataSize) {
 									int toRead = (int)(read+bufferSize < dataSize ? bufferSize : dataSize - read);
 									int bytes = 0;
 									try {
-										bytes = file.read(buffer, toRead);
+										bytes = file.read(buffer, readOffset, toRead);
 									} catch (IOException | IllegalArgumentException | KawkabException | InterruptedException e) {
 										e.printStackTrace();
 										break;
 									}
 									read += bytes;
+									readOffset += bytes;
 								}
 							}
 						}
@@ -755,127 +777,82 @@ public final class FSTest {
 		}
 	}
 	
-	/*private void testVeryLargeReadWrite() throws OutOfMemoryException, MaxFileSizeExceededException, 
-			IbmapsFullException, InvalidFileOffsetException, InvalidFileModeException, IOException{
-		Filesystem fs = Filesystem.instance().bootstrap();
-		String filename = new String("/home/smash/testVeryLarge");
-		FileOptions opts = new FileOptions();
-		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
+	private void testRawWrites() throws IOException, InterruptedException {
+		System.out.println("----------------------------------------------------------------");
+		System.out.println("            Raw writes Test using ByteBuffer");
+		System.out.println("----------------------------------------------------------------");
 		
-		Random rand = new Random(0);
-		int bufSize = 8*1024*1024;
-		long dataSize = (long)20*128L*bufSize + 3;
-		long appended = 0;
+		int numWriters = 1;
+		Thread[] workers = new Thread[numWriters];
+		final int bufSize = 1*1024; //Constants.segmentSizeBytes;//8*1024*1024;
+		final long dataSize = 3L*1024*1024*1024;
 		
-		byte[] writeBuf = new byte[bufSize];
-		rand.nextBytes(writeBuf);
-		
-		while(appended < dataSize) {
-			int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
-			appended += file.append(writeBuf, 0, toWrite);
-			rand.nextBytes(writeBuf);
+		Stats writeStats = new Stats();
+		for (int i=0; i<numWriters; i++) {
+			final int id = i;
+			workers[i] = new Thread(){
+				public void run(){
+					try {
+						ByteBuffer dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
+						byte[] writeBuf = new byte[bufSize];
+						new Random().nextBytes(writeBuf);
+						
+						long appended = 0;
+						long startTime = System.currentTimeMillis();
+						
+						while(appended < dataSize) {
+							int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
+							dataBuf.position(0);
+							dataBuf.put(writeBuf, 0, toWrite);
+							appended += toWrite;
+						}
+						
+						double durSec = (System.currentTimeMillis() - startTime)/1000.0;
+						double sizeMB = appended/(1024.0*1024);
+						double thr = sizeMB/durSec;
+						writeStats.putValue(thr);
+						
+						System.out.println(String.format("File %d: Data size = %.0fMB, Write thr = %.0fMB/s", id, sizeMB, thr));
+					} catch (Exception e){
+						e.printStackTrace();
+						return;
+					}
+				}
+			};
+			
+			workers[i].start();
 		}
 		
-		byte[] readBuf = new byte[bufSize];
-		rand = new Random(0);
-
-		long read = 0;
-		while(read < dataSize) {
-			int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
-			int bytes = file.read(readBuf, toRead);
-			read += bytes;
-			
-			rand.nextBytes(writeBuf);
-			if (bytes< writeBuf.length){
-				for(int i=0; i<bytes; i++){
-					assert readBuf[i] == writeBuf[i];
-				}
-			} else {
-				assert Arrays.equals(readBuf, writeBuf);
+		for (int i=0; i<workers.length; i++) {
+			try {
+				workers[i].join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
 			}
 		}
 		
-		assert appended == read;
-	}*/
+		System.out.printf("WriteStats: sum=%.0f, %s, bufSize=%d\n",writeStats.sum(), writeStats, bufSize);
+	}
 	
-	/*public void testFileSeek() throws OutOfMemoryException, MaxFileSizeExceededException, InterruptedException{
-		Filesystem fs = Filesystem.instance();
-		String filename = new String("/home/smash/testFileSeek");
-		FileOptions opts = new FileOptions();
-		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
-		
-		//When no block is available
-		assert file.seekAfterTime(0) == null;
-		
-		Random rand = new Random(0);
-		byte[] block1 = new byte[Filesystem.BlockSize()];
-		byte[] block2 = new byte[Filesystem.BlockSize()];
-		byte[] block3 = new byte[Filesystem.BlockSize()];
-		byte[] block4 = new byte[Filesystem.BlockSize()];
-		
-		long t1 = System.currentTimeMillis();
-		rand.nextBytes(block1);
-		file.append(block1, 0, block1.length);
-		
-		Thread.sleep(100);
-		long t2 = System.currentTimeMillis();
-		rand.nextBytes(block2);
-		file.append(block2, 0, block2.length);
-		
-		Thread.sleep(100);
-		long t3 = System.currentTimeMillis();
-		rand.nextBytes(block3);
-		file.append(block3, 0, block3.length);
-		
-		Thread.sleep(100);
-		long t4 = System.currentTimeMillis();
-		rand.nextBytes(block4);
-		file.append(block4, 0, block4.length);
-		
-		byte[] data = new byte[Filesystem.BlockSize()];
-		
-		//First block, regardless of the time.
-		file.seekAfterTime(0);
-		file.read(data, data.length);
-		assert Arrays.equals(data, block1);
-		
-		//Invalid block
-		assert file.seekBeforeTime(0) == null;
-		
-		//Invalid block
-		assert file.seekAfterTime(t4+10000) == null;
-		
-		//Last block regardless of the time.
-		file.seekBeforeTime(t4+10000);
-		file.read(data, data.length);
-		assert Arrays.equals(data, block4);
-		
-		//Block before time when no block contains the given time
-		file.seekBeforeTime(t2 - 10);
-		file.read(data, data.length);
-		assert Arrays.equals(data, block1);
-		
-		//Block after time when no block contains the given time
-		file.seekAfterTime(t2 - 10);
-		file.read(data, data.length);
-		assert Arrays.equals(data, block2);
-		
-		//Left block containing time
-		file.seekAfterTime(t2);
-		file.read(data, data.length);
-		assert Arrays.equals(data, block2);
-		
-		//Right block containing time
-		file.seekAfterTime(t3);
-		file.read(data, data.length);
-		assert Arrays.equals(data, block3);
-	}*/
-	
-	private void testShutdown() throws KawkabException, InterruptedException, IOException{
+	/**
+	 * This must be called at the end to flush any data left in the cache and to finish sending data to the global store.
+	 * 
+	 * @throws KawkabException
+	 * @throws InterruptedException
+	 * @throws IOException
+	 */
+	private void shutdownTest() throws KawkabException, InterruptedException, IOException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Filesystem shutdown Test");
 		System.out.println("--------------------------------------------");
 		
 		Filesystem.instance().shutdown();
+	}
+	
+	@Test
+	public void mainTest() throws OutOfMemoryException, MaxFileSizeExceededException, InterruptedException,
+			IbmapsFullException, InvalidFileOffsetException, InvalidFileModeException, IOException,
+			IllegalArgumentException, KawkabException {
+		FSTest.main(null);
 	}
 }

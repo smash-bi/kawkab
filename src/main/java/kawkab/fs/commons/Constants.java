@@ -41,7 +41,7 @@ public final class Constants {
 																					 //Blocks start with ID 0.
 	
 	public static final int maxBlocksPerLocalDevice = 20510 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
-	public static final int maxBlocksInCache        = 100000; //Size of the cache in number of blocks. The blocks are ibmaps, inodeBlocks, and data segments (not data blocks)
+	public static final int maxBlocksInCache        = 1000000; //Size of the cache in number of blocks. The blocks are ibmaps, inodeBlocks, and data segments (not data blocks)
 	
 	public static final int dataSegmentFetchExpiryTimeoutMs  = 10000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	public static final int inodesBlockFetchExpiryTimeoutMs  = 2000; //Expire data fetched from the global store after dataExpiryTimeoutMs
@@ -65,7 +65,7 @@ public final class Constants {
 	
 	//ZooKeeper cluster settings
 	public static final int zkMainClusterID = 1;
-	public static final String zkMainServers = "10.30.0.6:2181,10.30.0.6:2182,10.30.0.6:2183";
+	public static final String zkMainServers = "10.10.0.6:2181,10.10.0.6:2182,10.10.0.6:2183";
 	public static final int connectRetrySleepMs = 1000;
 	public static final int connectMaxRetries = 5;
 	public static final ZKClusterConfig zkMainCluster = 
@@ -75,12 +75,16 @@ public final class Constants {
 	
 	
 	//minio settings
-	public static final String[] minioServers = {"http://10.30.0.6:9000"};
+	public static final String[] minioServers = {"http://10.10.0.6:9000"};
 	public static final String minioAccessKey = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public static final String minioSecretKey = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
 	//gRPC service
 	public static final int primaryNodeServicePort = 22332;
+
+	// Filesystem RPC service for the filesystem clients
+	public static final int FS_SERVER_LISTEN_PORT = 33433;
+	public static final int MAX_BUFFER_LEN = 16*1024; //in bytes
 	
 	public static Map<Integer, NodeInfo> nodesMap;
 	
@@ -122,10 +126,10 @@ public final class Constants {
 		
 		thisNodeID = Integer.parseInt(nodeID);
 		nodesMap = new HashMap<Integer, NodeInfo>();  //Map of <NodeID, NodeInfo(NodeID, IP)> 
-		nodesMap.put(0, new NodeInfo(0, "10.30.0.7"));
-		nodesMap.put(1, new NodeInfo(1, "10.30.0.8"));
-		nodesMap.put(2, new NodeInfo(1, "10.30.0.9"));
-		nodesMap.put(3, new NodeInfo(1, "10.30.0.10"));
+		nodesMap.put(0, new NodeInfo(0, "10.10.0.7"));
+		nodesMap.put(1, new NodeInfo(1, "10.10.0.8"));
+		nodesMap.put(2, new NodeInfo(1, "10.10.0.9"));
+		//nodesMap.put(3, new NodeInfo(1, "10.10.0.10"));
 		
 		//GCMonitor.initialize();
 	}

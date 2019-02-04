@@ -1,4 +1,4 @@
-package kawkab.fs.core.services;
+package kawkab.fs.core.services.grpc;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -15,13 +15,12 @@ import kawkab.fs.core.InodesBlockID;
 import kawkab.fs.core.NodesRegister;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.services.proto.KawkabPrimaryNode.KInodesBlockID;
-import kawkab.fs.core.services.proto.KawkabPrimaryNode.KInodesBlockResponse;
-import kawkab.fs.core.services.proto.KawkabPrimaryNode.KSegmentID;
-import kawkab.fs.core.services.proto.KawkabPrimaryNode.KSegmentResponse;
+import kawkab.fs.core.services.grpc.PrimaryNodeGrpc.PrimaryNodeBlockingStub;
+import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KInodesBlockID;
+import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KInodesBlockResponse;
+import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KSegmentID;
+import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KSegmentResponse;
 import kawkab.fs.core.services.proto.KawkabPrimaryNodeServiceEnums.KErrorCode;
-import kawkab.fs.core.services.proto.PrimaryNodeGrpc;
-import kawkab.fs.core.services.proto.PrimaryNodeGrpc.PrimaryNodeBlockingStub;
 
 public final class PrimaryNodeServiceClient {
 	private static final Object initLock = new Object();

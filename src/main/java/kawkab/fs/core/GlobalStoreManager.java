@@ -218,6 +218,8 @@ public class GlobalStoreManager {
 		for (int i=0; i<storeQs.length; i++) {
 			assert storeQs[i].size() == 0;
 		}
+		
+		System.out.println("Closed GlobalStoreManager");
 	}
 	
 	private class Task {

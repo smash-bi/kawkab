@@ -23,6 +23,30 @@
 		  </extensions>
 	
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<version>3.2.1</version>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+						<configuration>
+							<shadedArtifactAttached>true</shadedArtifactAttached>
+							<minimizeJar>false</minimizeJar>
+							<transformers>
+								<transformer
+									implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+									<mainClass>kawkab.fs.Main</mainClass>
+								</transformer>
+							</transformers>
+							<shadeTestJar>true</shadeTestJar>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 		
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
@@ -30,12 +54,13 @@
 				<version>1.6.0</version>
 				<configuration>
 					<mainClass>kawkab.fs.cli.CLI</mainClass>
+					<!--  mainClass>kawkab.fs.Main</mainClass -->
 				</configuration>
 			</plugin>
 		
 			<plugin>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.7.0</version>
+				<version>3.8.0</version>
 				<configuration>
 					<source>1.8</source>
 					<target>1.8</target>
@@ -47,7 +72,9 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>2.19.1</version>
 				<configuration>
+					<enableAssertions>true</enableAssertions>
 					<argLine>-Xmx50g</argLine>
+					<!-- argLine>-Xcomp</argLine -->
 				</configuration>
 			</plugin>
 			
@@ -57,9 +84,9 @@
 		      <artifactId>protobuf-maven-plugin</artifactId>
 		      <version>0.5.1</version>
 		      <configuration>
-		        <protocArtifact>com.google.protobuf:protoc:3.5.0:exe:${os.detected.classifier}</protocArtifact>
+		        <protocArtifact>com.google.protobuf:protoc:3.5.1-1:exe:${os.detected.classifier}</protocArtifact>
 		        <pluginId>grpc-java</pluginId>
-		        <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.8.0:exe:${os.detected.classifier}</pluginArtifact>
+		        <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.18.0:exe:${os.detected.classifier}</pluginArtifact>
 		      </configuration>
 		      <executions>
 		        <execution>
@@ -70,6 +97,72 @@
 		        </execution>
 		      </executions>
 		    </plugin>
+		    
+		    <!-- For Scrooge -->
+		    <plugin>
+		        <groupId>net.alchim31.maven</groupId>
+		        <artifactId>scala-maven-plugin</artifactId>
+		        <version>3.4.4</version>
+		        <executions>
+		          <execution>
+		            <goals>
+		              <goal>compile</goal>
+		              <goal>testCompile</goal>
+		            </goals>
+		            <configuration>
+		              <args>
+		                <param>-unchecked</param>
+		                <param>-deprecation</param>
+		                <param>-encoding</param>
+		                <param>utf8</param>
+		              </args>
+		              <!-- Scrooge generates more files (one file per struct), so
+		                   you might need to increase running memory for maven
+		               -->
+		              <jvmArgs>
+		                <jvmArg>-Xmx2G</jvmArg>
+		              </jvmArgs>
+		            </configuration>
+		          </execution>
+		        </executions>
+			</plugin>
+		    
+		    <plugin>
+		        <groupId>com.twitter</groupId>
+		        <artifactId>scrooge-maven-plugin</artifactId>
+		        <version>19.1.0</version>
+		        <configuration>
+		          <!-- thriftNamespaceMappings>
+		            <thriftNamespaceMapping>
+		              <from>com.twitter.demo.thriftscala</from>
+		              <to>com.twitter.mydemo.renamed</to>
+		            </thriftNamespaceMapping>
+		          </thriftNamespaceMappings -->
+		          <language>java</language>
+		          <!-- add other Scrooge command line options using thriftOpts -->
+		          <thriftOpts>
+		            <thriftOpt>--finagle</thriftOpt>
+		          </thriftOpts>
+		        </configuration>
+		        <executions>
+		          <execution>
+		            <id>thrift-sources</id>
+		            <phase>generate-sources</phase>
+		            <goals>
+		              <goal>compile</goal>
+		            </goals>
+		          </execution>
+		          <execution>
+		            <id>thrift-test-sources</id>
+		            <phase>generate-test-sources</phase>
+		            <goals>
+		              <goal>testCompile</goal>
+		            </goals>
+		          </execution>
+		        </executions>
+			</plugin>
+			<!-- ================================================================== -->
+			
 		</plugins>
 	</build>
 	
@@ -79,7 +172,7 @@
 			<dependency>
 				<groupId>com.amazonaws</groupId>
 				<artifactId>aws-java-sdk-bom</artifactId>
-				<version>1.11.207</version>
+				<version>1.11.488</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -87,22 +180,67 @@
 	</dependencyManagement>
 
 	<dependencies>
+		<!-- Scrooge dependencies -->
+		<dependency>
+			<groupId>com.twitter</groupId>
+			<artifactId>util-core_2.12</artifactId>
+			<version>19.1.0</version>
+		</dependency>
+		<dependency>
+			<groupId>com.twitter</groupId>
+			<artifactId>util-codec_2.12</artifactId>
+			<version>19.1.0</version>
+		</dependency>
+		<dependency>
+			<groupId>com.twitter</groupId>
+			<artifactId>finagle-core_2.12</artifactId>
+			<version>19.1.0</version>
+		</dependency>
+		<dependency>
+			<groupId>com.twitter</groupId>
+			<artifactId>finagle-thrift_2.12</artifactId>
+			<version>19.1.0</version>
+		</dependency>
+		<dependency>
+			<groupId>com.twitter</groupId>
+			<artifactId>scrooge-core_2.12</artifactId>
+			<version>19.1.0</version>
+		</dependency>
+		<dependency>
+		      <groupId>org.apache.thrift</groupId>
+		      <artifactId>libthrift</artifactId>
+		      <version>0.12.0</version>
+		</dependency>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.12</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.jmock</groupId>
+			<artifactId>jmock</artifactId>
+			<version>2.10.0-RC3</version>
+			<scope>test</scope>
+		</dependency>
+		<!-- ========================================================================= -->
+	
 		<dependency>
 			<groupId>net.openhft</groupId>
 			<artifactId>chronicle-map</artifactId>
-			<version>3.13.0</version>
+			<version>3.17.0</version>
 		</dependency>
 
 		<dependency>
 			<groupId>org.agrona</groupId>
 			<artifactId>agrona</artifactId>
-			<version>0.9.5</version>
+			<version>0.9.30</version>
 		</dependency>
 		
 		<dependency>
 			<groupId>org.apache.curator</groupId>
 			<artifactId>curator-framework</artifactId>
-			<version>4.0.0</version>
+			<version>4.1.0</version>
 		</dependency>
 
 		<dependency>
@@ -113,17 +251,17 @@
 		<dependency>
 		  <groupId>io.grpc</groupId>
 			<artifactId>grpc-netty-shaded</artifactId>
-			<version>1.16.1</version>
+			<version>1.18.0</version>
 		</dependency>
 		<dependency>
 		  <groupId>io.grpc</groupId>
 		  <artifactId>grpc-protobuf</artifactId>
-		  <version>1.16.1</version>
+		  <version>1.18.0</version>
 		</dependency>
 		<dependency>
 		  <groupId>io.grpc</groupId>
 		  <artifactId>grpc-stub</artifactId>
-		  <version>1.16.1</version>
+		  <version>1.18.0</version>
 		</dependency>
 		
 		<dependency>
@@ -131,35 +269,6 @@
 			<artifactId>protobuf-java</artifactId>
 			<version>3.6.1</version>
 		</dependency>
-		
-		<!--dependency>
-			<groupId>com.google.guava</groupId>
-			<artifactId>guava</artifactId>
-			<version>26.0-jre</version>
-		</dependency-->
-
-		<!--dependency>
-			<groupId>org.apache.zookeeper</groupId>
-			<artifactId>zookeeper</artifactId>
-			<version>3.4.10</version>
-		</dependency-->
-
-		<!--dependency> 
-			<groupId>org.tinylog</groupId>
-			<artifactId>tinylog</artifactId> 
-			<version>1.2</version>
-		</dependency -->
-		<!--dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId> 
-			<version>4.12</version>
-			<scope>test</scope> 
-		</dependency --> 
-		<!-- dependency>
-			<groupId>org.lmdbjava</groupId> 
-			<artifactId>lmdbjava</artifactId>
-			<version>0.0.5</version> 
-		</dependency -->
 	</dependencies>
 
 </project>

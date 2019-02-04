@@ -1,4 +1,4 @@
-package kawkab.fs.core.services;
+package kawkab.fs.core.services.grpc;
 
 import java.io.IOException;
 
@@ -13,13 +13,13 @@ import kawkab.fs.core.InodesBlockID;
 import kawkab.fs.core.LocalStoreManager;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.services.proto.KawkabPrimaryNode.KExistsResponse;
-import kawkab.fs.core.services.proto.KawkabPrimaryNode.KInodesBlockID;
-import kawkab.fs.core.services.proto.KawkabPrimaryNode.KInodesBlockResponse;
-import kawkab.fs.core.services.proto.KawkabPrimaryNode.KSegmentID;
-import kawkab.fs.core.services.proto.KawkabPrimaryNode.KSegmentResponse;
+import kawkab.fs.core.services.grpc.PrimaryNodeGrpc.PrimaryNodeImplBase;
+import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KExistsResponse;
+import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KInodesBlockID;
+import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KInodesBlockResponse;
+import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KSegmentID;
+import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KSegmentResponse;
 import kawkab.fs.core.services.proto.KawkabPrimaryNodeServiceEnums.KErrorCode;
-import kawkab.fs.core.services.proto.PrimaryNodeGrpc.PrimaryNodeImplBase;
 
 public final class PrimaryNodeService extends PrimaryNodeImplBase {
 	private LocalStoreManager localStoreManager; //To check if a given block exists in the local storage

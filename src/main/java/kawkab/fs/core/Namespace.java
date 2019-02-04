@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 import kawkab.fs.core.exceptions.FileAlreadyExistsException;
+import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.InvalidFileModeException;
@@ -56,7 +57,7 @@ public class Namespace {
 	 * @throws InterruptedException
 	 */
 	public long openFile(String filename, boolean appendMode) throws IbmapsFullException, IOException,
-			InvalidFileModeException, FileNotExistException, KawkabException, InterruptedException {
+			InvalidFileModeException, FileAlreadyOpenedException, FileNotExistException, KawkabException, InterruptedException {
 		long inumber = -1L;
 
 		// Lock namespace for the given filename
@@ -115,13 +116,13 @@ public class Namespace {
 	 * proper openFilesTable.
 	 * 
 	 * @param inumber
-	 * @throws InvalidFileModeException
+	 * @throws FileAlreadyOpenedException
 	 */
-	private void openAppendFile(long inumber, String filename) throws InvalidFileModeException {
+	private void openAppendFile(long inumber, String filename) throws FileAlreadyOpenedException {
 		Boolean alreadyOpened = openedFiles.put(inumber, true);
 
 		if (alreadyOpened != null && alreadyOpened == true) {
-			throw new InvalidFileModeException("File is already opened in the append mode; inumber=" + inumber+", File: "+filename);
+			throw new FileAlreadyOpenedException("File is already opened in the append mode; inumber=" + inumber+", File: "+filename);
 		}
 	}
 
@@ -212,5 +213,6 @@ public class Namespace {
 
 	void shutdown() {
 		// TODO: Stop new requests
+		ns.shutdown();
 	}
 }

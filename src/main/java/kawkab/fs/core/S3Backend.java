@@ -88,8 +88,8 @@ public final class S3Backend implements GlobalBackend{
 				
 				try {
 					long sleepMs = (100+(Math.abs(rand.nextLong())%400));
-					System.out.println(String.format("[S3] Load from the global store failed for %s, retyring in %d ms...",
-							dstBlock.id().toString(),sleepMs));
+					// System.out.println(String.format("[S3] Load from the global store failed for %s, retyring in %d ms...",
+					//		dstBlock.id().toString(),sleepMs));
 					Thread.sleep(sleepMs);
 				} catch (InterruptedException e) {
 					throw new KawkabException(e);
@@ -203,6 +203,6 @@ public final class S3Backend implements GlobalBackend{
 	@Override
 	public void shutdown() {
 		System.out.println("Closing S3 backend ...");
-		//client.shutdown();
+		client.shutdown();
 	}
 }
