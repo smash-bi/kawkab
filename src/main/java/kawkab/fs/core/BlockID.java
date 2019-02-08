@@ -16,17 +16,23 @@ public abstract class BlockID {
 		public static final BlockType values[] = values();
 	}
 	
+	//protected final long k1, k2, k3; //To create a unique key across Ibmps, InodeBlocks, and DataSegments
+	//private final String key; // A globally unique key based on the unique name of the block
+	protected final BlockType type;
 	
-	private final String key; // A globally unique key based on the unique name of the block
-	private final BlockType type;
-	
-	public BlockID(String key, BlockType type){
-		this.key = key;
+	public BlockID(BlockType type){
+		//this.key = key;
+//		this.k1 = k1;
+//		this.k2 = k2;
+//		this.k3 = k3;
 		this.type = type;
 	}
 	
 	public BlockID(BlockID id) {
-		this.key = id.key;
+		//this.key = id.key;
+//		this.k1 = id.k1;
+//		this.k2 = id.k2;
+//		this.k3 = id.k3;
 		this.type = id.type;
 	}
 	
@@ -34,7 +40,7 @@ public abstract class BlockID {
 	
 	abstract public int primaryNodeID();
 	
-	abstract public String name();
+	//abstract public String name();
 	
 	abstract public String localPath();
 	
@@ -57,9 +63,9 @@ public abstract class BlockID {
 	/**
 	 * @return Globally unique string for this ID that can be used in maps
 	 */
-	public String uniqueKey() {
+	/*public String uniqueKey() {
 		return key;
-	}
+	}*/
 
 	/**
 	 * @return Type of the block that is represented by this ID
@@ -72,35 +78,13 @@ public abstract class BlockID {
 	 * @see java.lang.Object#hashCode()
 	 */
 	@Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = 1;
-		result = prime * result + ((key == null) ? 0 : key.hashCode());
-		result = prime * result + ((type == null) ? 0 : type.hashCode());
-		return result;
-	}
+	public abstract int hashCode();
 
 	/* (non-Javadoc)
 	 * @see java.lang.Object#equals(java.lang.Object)
 	 */
 	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		BlockID other = (BlockID) obj;
-		if (key == null) {
-			if (other.key != null)
-				return false;
-		} else if (!key.equals(other.key))
-			return false;
-		if (type != other.type)
-			return false;
-		return true;
-	}
+	public abstract boolean equals(Object obj);
 	
 	
 }

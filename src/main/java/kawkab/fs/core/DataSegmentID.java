@@ -13,6 +13,8 @@ public final class DataSegmentID extends BlockID {
 	private final long inumber;
 	private final long blockInFile;
 	private final int segmentInBlock; //Zero based segment index
+	private String localPath;
+	private int hash;
 	
 	/**
 	 * @param inumber inode number of the file
@@ -21,7 +23,7 @@ public final class DataSegmentID extends BlockID {
 	 * @param loadFromPrimary Loading from the primary node is enabled or not
 	 */
 	public DataSegmentID(long inumber, long blockInFile, int segmentInBlock) {
-		super(name(inumber, blockInFile, segmentInBlock), BlockType.DATA_SEGMENT);
+		super(BlockType.DATA_SEGMENT);
 		this.inumber = inumber;
 		this.blockInFile = blockInFile;
 		this.segmentInBlock = segmentInBlock;
@@ -37,14 +39,15 @@ public final class DataSegmentID extends BlockID {
 		return new DataSegment(this);
 	}
 	
-	public static String name(long inumber, long blockInFile, int segmentInBlock) {
-		return String.format("DS%d-%d-%d", inumber, blockInFile, segmentInBlock);
-	}
+	/*public static String name(long inumber, long blockInFile, int segmentInBlock) {
+		return "D"+inumber+"-"+blockInFile+"-"+segmentInBlock;
+		//return String.format("DS%d-%d-%d", inumber, blockInFile, segmentInBlock);
+	}*/
 
-	@Override
+	/*@Override
 	public String name() {
-		return name(inumber, blockInFile, segmentInBlock);
-	}
+		return this.uniqueKey();
+	}*/
 
 	@Override
 	public String localPath() {
@@ -52,6 +55,9 @@ public final class DataSegmentID extends BlockID {
 		//for the block number! Currently it is implemented as the encoding of both values.
 		
 		//String uuid = String.format("%016x%016x", id.highBits, id.lowBits);
+		
+		if (localPath != null)
+			return localPath;
 		
 		String uuid = Commons.uuidToString(inumber, blockInFile); //highBits=inumber, lowBits=BlockNumber
 		int uuidLen = uuid.length();
@@ -72,7 +78,9 @@ public final class DataSegmentID extends BlockID {
 		}
 		//path.append(File.separator).append(uuid.substring(levels*wordSize));
 		
-		return path.toString();
+		localPath = path.toString();
+		
+		return localPath;
 	}
 	
 	@Override
@@ -94,7 +102,7 @@ public final class DataSegmentID extends BlockID {
 	
 	@Override
 	public String toString() {
-		return name();
+		return "D-"+inumber+"-"+blockInFile+"-"+segmentInBlock;
 	}
 
 	/* (non-Javadoc)
@@ -102,11 +110,17 @@ public final class DataSegmentID extends BlockID {
 	 */
 	@Override
 	public int hashCode() {
-		final int prime = 31;
-		int result = super.hashCode();
+		if (hash != 0)
+			return hash;
+		
+		final int prime = 13; // [SR] random prime
+		int result = 17; // [SR] random
 		result = prime * result + (int) (blockInFile ^ (blockInFile >>> 32));
 		result = prime * result + (int) (inumber ^ (inumber >>> 32));
 		result = prime * result + segmentInBlock;
+		result = prime * result + ((type == null) ? 0 : (type.ordinal()*7)); // [SR] 7 is a random prime
+		
+		hash = result;
 		return result;
 	}
 
@@ -117,7 +131,7 @@ public final class DataSegmentID extends BlockID {
 	public boolean equals(Object obj) {
 		if (this == obj)
 			return true;
-		if (!super.equals(obj))
+		if (obj == null)
 			return false;
 		if (getClass() != obj.getClass())
 			return false;
@@ -128,6 +142,10 @@ public final class DataSegmentID extends BlockID {
 			return false;
 		if (segmentInBlock != other.segmentInBlock)
 			return false;
+		if (type != other.type)
+			return false;
 		return true;
 	}
+
+	
 }

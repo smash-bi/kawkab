@@ -32,6 +32,7 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 				.initialCapacity(Constants.maxBlocksInCache)
 				//.expireAfterAccess(120, TimeUnit.SECONDS)
 				.removalListener(this)
+				.concurrencyLevel(8)
 				.build(new CacheLoader<BlockID, Block>() {
 			@Override
 			public Block load(BlockID key) throws Exception {

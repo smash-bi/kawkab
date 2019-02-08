@@ -36,14 +36,14 @@ public final class FSTest {
 		// tester.testMultipleReaders();
 		// tester.testMultipleFiles();
 		// tester.testWritePerformance();
-		tester.testWritePerformanceConcurrentFiles();
+		// tester.testWritePerformanceConcurrentFiles();
 		// tester.testReadPerformance();
 		// tester.testReadPerfMultiReadersSameFile();
 
 		// tester.testConcurrentReadWrite();
 		// tester.testConcurrentReadWriteLastBlock();
 
-		// tester.testRawWrites();
+		tester.testRawWrites();
 
 		// tester.testVeryLargeReadWrite();
 		// tester.testFileSeek();
@@ -416,8 +416,8 @@ public final class FSTest {
 		
 		int numWriters = 1;
 		Thread[] workers = new Thread[numWriters];
-		final int bufSize = 1*1024; //Constants.segmentSizeBytes;//8*1024*1024;
-		final long dataSize = 3L*1024*1024*1024;
+		final int bufSize = 1*100; //Constants.segmentSizeBytes;//8*1024*1024;
+		final long dataSize = 25L*1024*1024*1024;
 		
 		Stats writeStats = new Stats();
 		for (int i=0; i<numWriters; i++) {
@@ -438,7 +438,6 @@ public final class FSTest {
 						rand.nextBytes(writeBuf);
 						
 						long startTime = System.currentTimeMillis();
-						
 						while(appended < dataSize) {
 							int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
 							appended += file.append(writeBuf, 0, toWrite);
@@ -784,8 +783,8 @@ public final class FSTest {
 		
 		int numWriters = 1;
 		Thread[] workers = new Thread[numWriters];
-		final int bufSize = 1*1024; //Constants.segmentSizeBytes;//8*1024*1024;
-		final long dataSize = 3L*1024*1024*1024;
+		final int bufSize = 1*100; //Constants.segmentSizeBytes;//8*1024*1024;
+		final long dataSize = 1L*1024*1024*1024;
 		
 		Stats writeStats = new Stats();
 		for (int i=0; i<numWriters; i++) {
@@ -793,15 +792,21 @@ public final class FSTest {
 			workers[i] = new Thread(){
 				public void run(){
 					try {
-						ByteBuffer dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
 						byte[] writeBuf = new byte[bufSize];
 						new Random().nextBytes(writeBuf);
 						
 						long appended = 0;
 						long startTime = System.currentTimeMillis();
 						
+						ByteBuffer dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
 						while(appended < dataSize) {
 							int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
+							
+							if (toWrite > dataBuf.remaining()) {
+								dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
+								assert toWrite <= dataBuf.remaining();
+							}
+							
 							dataBuf.position(0);
 							dataBuf.put(writeBuf, 0, toWrite);
 							appended += toWrite;

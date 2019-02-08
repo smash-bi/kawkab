@@ -94,9 +94,9 @@ public class GlobalStoreManager {
 		//System.out.println("\t\t\t[GSM] Enque: " + block.id());
 		
 		//Load balance between workers, but assign same worker to the same block.
-		int queueNum = Math.abs(block.id().uniqueKey().hashCode()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
+		int queueNum = Math.abs(block.id().hashCode()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
 		
-		storeQs[queueNum].add(new Task(block, listener));
+		// storeQs[queueNum].add(new Task(block, listener)); // <<=============================================================
 	}
 	
 	/**

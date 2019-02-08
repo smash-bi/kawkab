@@ -46,7 +46,7 @@ public final class NamespaceService {
 	 * @throws FileAlreadyExistsException if the file already exists in the namespace
 	 * @throws KawkabException Any other exception
 	 */
-	public void addFile(String filename, long inumber) throws FileAlreadyExistsException, KawkabException {
+	public synchronized void addFile(String filename, long inumber) throws FileAlreadyExistsException, KawkabException {
 		//System.out.println("[NSS] Adding file in the namespace: " + filename);
 		String path = fixPath(filename);
 		
@@ -67,7 +67,7 @@ public final class NamespaceService {
 	 * @throws FileNotExistException If the file does not exist in the namespace
 	 * @throws KawkabException Any other exception
 	 */
-	public long getInumber(String filename) throws FileNotExistException, KawkabException {
+	public synchronized long getInumber(String filename) throws FileNotExistException, KawkabException {
 		String path = fixPath(filename);
 		
 		long inumber = -1;

@@ -1,7 +1,7 @@
 package kawkab.fs.core;
 
 public class CachedItem {
-	private int refCount;
+	private int refCount; // It is not atomic variable because this variable is only accessed from a critical region in the CustomCache.acquireBlock() and releaseBlock() functions.
 	//private Lock lock; // Block level lock
 	private Block block;
 	

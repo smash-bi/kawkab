@@ -27,10 +27,10 @@ public class FileLocks {
 	 * @throws InterruptedException 
 	 */
 	public void lockFile(BlockID blockID) throws InterruptedException {
-		locks.get(blockID.uniqueKey()).acquire();
+		locks.get(blockID).acquire();
 	}
 	
 	public void unlockFile(BlockID blockID) {
-		locks.get(blockID.uniqueKey()).release();
+		locks.get(blockID).release();
 	}
 }

@@ -375,31 +375,18 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		//System.out.println("[LSM] Load block: " + id.name());
 		
 		if (!storedFilesMap.exists(id)) {
-			System.out.println("[LSM] Block is not available locally: " + id.name());
+			System.out.println("[LSM] Block is not available locally: " + id);
 			return false;
 		}
 		
 		try {
-			loadBlock(block);
-			block.setInLocalStore();
+			block.loadFromFile();
+			block.setInLocalStore(); // This happens when we load the block from the local store after a reboot, or after eviction from the cache
 		} catch (IOException e) {
 			throw new KawkabException(e);
 		}
 		
 		return true;
-	}
-	
-	private void loadBlock(Block block) throws IOException {
-		/*try(
-				RandomAccessFile file = new RandomAccessFile(block.id().localPath(), "r");
-				SeekableByteChannel channel = file.getChannel()
-            ) {
-			channel.position(block.offsetInBlock()); 
-			//System.out.println("Load: "+block.localPath() + ": " + channel.position());
-			block.loadFrom(channel);
-		}*/
-		
-		block.loadFromFile();
 	}
 	
 	public void stop() {

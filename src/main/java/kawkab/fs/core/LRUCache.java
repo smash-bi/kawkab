@@ -6,7 +6,7 @@ import java.util.Map.Entry;
 import kawkab.fs.commons.Constants;
 
 @SuppressWarnings("serial")
-public final class LRUCache extends LinkedHashMap<String, CachedItem> {
+public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 	private BlockEvictionListener evictListener;
 	
 	public LRUCache(BlockEvictionListener evictListener){
@@ -15,7 +15,7 @@ public final class LRUCache extends LinkedHashMap<String, CachedItem> {
 	}
 	
 	@Override
-	protected boolean removeEldestEntry(Entry<String, CachedItem> eldest) {
+	protected boolean removeEldestEntry(Entry<BlockID, CachedItem> eldest) {
 		if (super.size() < Constants.maxBlocksInCache)
 			return false;
 		
@@ -28,7 +28,7 @@ public final class LRUCache extends LinkedHashMap<String, CachedItem> {
 			
 			int count = 0;
 			int size = super.size();
-			for (Entry<String, CachedItem> entry : super.entrySet()) {
+			for (Entry<BlockID, CachedItem> entry : super.entrySet()) {
 				count++;
 				CachedItem altToEvict = entry.getValue();
 				if (altToEvict.refCount() == 0) {

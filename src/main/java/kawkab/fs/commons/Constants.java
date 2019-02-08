@@ -5,7 +5,6 @@ import java.util.Map;
 
 import kawkab.fs.core.NodeInfo;
 import kawkab.fs.core.zookeeper.ZKClusterConfig;
-import kawkab.fs.utils.GCMonitor;
 
 public final class Constants {
 	//TODO: Read constants and properties from a given configuration file.
@@ -17,7 +16,7 @@ public final class Constants {
 	public static int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
 	
 	//Default data block size in bytes
-	public static final int dataBlockSizeBytes = 16*1024*1024;
+	public static final int dataBlockSizeBytes = 64*1024*1024;
 	public static final int segmentSizeBytes = 1*1024*1024;
 	public static final int segmentsPerBlock = dataBlockSizeBytes/segmentSizeBytes;
 	public static final int directBlocksPerInode = 0;
@@ -41,7 +40,7 @@ public final class Constants {
 																					 //Blocks start with ID 0.
 	
 	public static final int maxBlocksPerLocalDevice = 20510 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
-	public static final int maxBlocksInCache        = 1000000; //Size of the cache in number of blocks. The blocks are ibmaps, inodeBlocks, and data segments (not data blocks)
+	public static final int maxBlocksInCache        = 20000; //Size of the cache in number of blocks. The blocks are ibmaps, inodeBlocks, and data segments (not data blocks)
 	
 	public static final int dataSegmentFetchExpiryTimeoutMs  = 10000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	public static final int inodesBlockFetchExpiryTimeoutMs  = 2000; //Expire data fetched from the global store after dataExpiryTimeoutMs

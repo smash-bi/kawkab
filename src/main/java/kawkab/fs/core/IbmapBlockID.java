@@ -6,11 +6,11 @@ import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Constants;
 
 public final class IbmapBlockID extends BlockID {
-	private final static String namePrefix = "M";
 	private final int mapNum;
+	private String localPath;
 	
 	public IbmapBlockID(int mapNum) {
-		super(name(mapNum) ,BlockType.IBMAP_BLOCK);
+		super(BlockType.IBMAP_BLOCK);
 		this.mapNum = mapNum;
 	}
 	
@@ -24,18 +24,21 @@ public final class IbmapBlockID extends BlockID {
 		return new Ibmap(this);
 	}
 
-	public static String name(int blockIndex) {
+	/*public static String name(int blockIndex) {
 		return namePrefix+blockIndex;
-	}
+	}*/
 	
-	@Override
+	/*@Override
 	public String name() {
 		return name(mapNum);
-	}
+	}*/
 
 	@Override
 	public String localPath() {
-		return Constants.ibmapsPath +File.separator+ name(mapNum);
+		if (localPath == null)
+			localPath = Constants.ibmapsPath +File.separator+mapNum;
+		
+		return localPath;
 	}
 	
 	@Override
@@ -45,7 +48,7 @@ public final class IbmapBlockID extends BlockID {
 	
 	@Override
 	public String toString() {
-		return name(mapNum);
+		return "B"+mapNum;
 	}
 
 	public int blockIndex() {
@@ -58,8 +61,9 @@ public final class IbmapBlockID extends BlockID {
 	@Override
 	public int hashCode() {
 		final int prime = 31;
-		int result = super.hashCode();
+		int result = 1;
 		result = prime * result + mapNum;
+		result = prime * result + ((type == null) ? 0 : (type.ordinal()*37)); //37 is just a random prime number
 		return result;
 	}
 
@@ -70,15 +74,18 @@ public final class IbmapBlockID extends BlockID {
 	public boolean equals(Object obj) {
 		if (this == obj)
 			return true;
-		if (!super.equals(obj))
+		if (obj == null)
 			return false;
 		if (getClass() != obj.getClass())
 			return false;
 		IbmapBlockID other = (IbmapBlockID) obj;
 		if (mapNum != other.mapNum)
 			return false;
+		if (type != other.type)
+			return false;
 		return true;
 	}
+
 	
 	
 }

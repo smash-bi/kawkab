@@ -115,7 +115,7 @@ public final class CLI {
 
 	private void parseAppend(String[] args) throws IOException, OutOfMemoryException, MaxFileSizeExceededException,
 			InvalidFileOffsetException, KawkabException, InterruptedException {
-		String usage = "Usage: apnd <filename> <str <string>> | file <filepath> | bytes <numBytes>";
+		String usage = "Usage: apnd <filename> <str <string>> | file <filepath> | bytes <numBytes> <reqSize>";
 		if (args.length < 4) {
 			System.out.println(usage);
 			return;
@@ -131,22 +131,30 @@ public final class CLI {
 			byte[] data = sb.toString().getBytes();
 			appendFile(fname, data, 0, data.length);
 		} else if (cmd.equals("bytes")) {
-			int len = -1;
+			if (args.length < 5) {
+				System.out.println(usage);
+				return;
+			}
+			int dataSize = -1;
+			int bufLen = 0;
 			try {
-				len = Integer.parseInt(args[3]);
+				dataSize = Integer.parseInt(args[3]);
+				bufLen = Integer.parseInt(args[4]);
 			} catch (NumberFormatException e) {
-				System.out.println("Given invalid bytes numBytes. " + usage);
+				System.out.println("Given invalid bytes numBytes or reqSize. " + usage);
 				return;
 			}
 			
 			String chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 			int charLen = chars.length();
 			Random rand = new Random();
-			byte[] data = new byte[len];
+			byte[] data = new byte[bufLen];
+			
 			for (int i=0; i<data.length; i++) {
 				data[i] = (byte)chars.charAt(rand.nextInt(charLen));
 			}
-			appendFile(fname, data, 0, len);
+			
+			appendFile(fname, data, dataSize, bufLen);
 		} else if (cmd.equals("file")) {
 			appendFile(fname, args[3]);
 		} else {
@@ -157,24 +165,28 @@ public final class CLI {
 
 	private void appendFile(String fn, String srcFile) throws IOException, OutOfMemoryException,
 			MaxFileSizeExceededException, InvalidFileOffsetException, KawkabException, InterruptedException {
-		try (DataInputStream di = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(srcFile))))) {
+		try (DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(srcFile))))) {
 			byte[] buf = new byte[Constants.dataBlockSizeBytes];
-			int n = 0;
-			while ((n = di.read(buf)) != -1) {
-				appendFile(fn, buf, 0, n);
+			int dataSize = 0;
+			while ((dataSize = dis.read(buf)) != -1) {
+				appendFile(fn, buf, dataSize, buf.length);
 			}
 		}
 	}
 
-	private void appendFile(String fn, byte[] data, int offset, int len) throws IOException, OutOfMemoryException,
+	private void appendFile(String fn, byte[] data, int dataSize, int bufLen) throws IOException, OutOfMemoryException,
 			MaxFileSizeExceededException, InvalidFileOffsetException, KawkabException, InterruptedException {
 		FileHandle file = null;
 		file = openedFiles.get(fn);
 		if (file == null) {
 			throw new IOException("File not opened: " + fn);
 		}
-
-		file.append(data, offset, len);
+		
+		int sent = 0;
+		while(sent < dataSize) {
+			int toSend = dataSize-sent > bufLen ? bufLen : dataSize - sent;
+			sent += file.append(data, 0, toSend);
+		}
 	}
 
 	private void parseRead(String[] args)

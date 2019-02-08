@@ -56,14 +56,6 @@ public final class LocalStoreDB {
 	
 	/**
 	 * @param blockName
-	 * @return Location of the blockName, or null if the blockName does not exist in the DB.
-	 *//*
-	public synchronized String get(String blockName) {
-		return map.get(blockName);
-	}*/
-	
-	/**
-	 * @param blockName
 	 * @return Whether the blockName entry exists in the DB or not
 	 */
 	public synchronized boolean exists(BlockID id) {

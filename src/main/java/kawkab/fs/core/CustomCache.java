@@ -7,7 +7,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import kawkab.fs.commons.Constants;
-import kawkab.fs.commons.Stats;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.utils.GCMonitor;
 
@@ -22,11 +21,6 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	private LRUCache cache; // An extended LinkedHashMap that implements removeEldestEntry()
 	private Lock cacheLock; // Cache level locking
 	private LocalStoreManager localStore;
-	
-	// For debugging purposes
-	//private Stats acquireStats = new Stats();
-	//private Stats releaseStats = new Stats();
-	//private Stats loadStats = new Stats();
 	
 	private CustomCache() throws IOException {
 		System.out.println("Initializing cache..." );
@@ -108,7 +102,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		cacheLock.lock(); // Lock the whole cache. This is necessary to prevent from creating multiple references to the
 		                  // same block.
 		try { // To unlock the cache
-			cachedItem = cache.get(blockID.uniqueKey()); // Try acquiring the block from the memory
+			cachedItem = cache.get(blockID); // Try acquiring the block from the memory
 			
 			/*if (createNewBlock && cachedItem != null) {
 				cachedItem.incrementRefCnt(); // FIXME: This will be removed from here when we properly handle the exception, 
@@ -124,7 +118,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 				//acquireStats.putValue(t);
 
 				cachedItem = new CachedItem(block); // Wrap the object in a cached item
-				cache.put(blockID.uniqueKey(), cachedItem);
+				cache.put(blockID, cachedItem);
 			}
 			
 			cachedItem.incrementRefCnt();
@@ -185,10 +179,10 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		cacheLock.lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
 		
 		try { //For cacheLock.lock()
-			cachedItem = cache.get(blockID.uniqueKey());
+			cachedItem = cache.get(blockID);
 			
 			if (cachedItem == null) {
-				System.out.println(" Releasing non-existing block: " + blockID.uniqueKey());
+				System.out.println(" Releasing non-existing block: " + blockID);
 				
 				assert cachedItem != null; //To exit the system during testing
 				return;
@@ -196,7 +190,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 			
 			if (blockID.onPrimaryNode() && cachedItem.block().isLocalDirty()) { // Persist blocks only through the primary node
 				// If the dirty bit for the local store is set
-				localStore.store(cachedItem.block()); // The call is non-blocking. Multiple threads are allowed 
+				localStore.store(cachedItem.block()); // The call is non-blocking. Multiple threads are allowed
 														  // to add the same block in the queue.
 				// FIXME: What to do with the exception?
 				
@@ -249,7 +243,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	public void flush() throws KawkabException {
 		cacheLock.lock();
 		try {
-			Iterator<Map.Entry<String, CachedItem>> itr = cache.entrySet().iterator();
+			Iterator<Map.Entry<BlockID, CachedItem>> itr = cache.entrySet().iterator();
 			while (itr.hasNext()) {
 				//We need to close all the readers and writers before we can empty the cache.
 				//TODO: Wait until the reference count for the cached object becomes zero.

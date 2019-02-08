@@ -5,11 +5,11 @@ import java.io.File;
 import kawkab.fs.commons.Constants;
 
 public final class InodesBlockID extends BlockID{
-	private final static String namePrefix = "I";
 	private final int blockIndex;
+	private String localPath;
 	
 	public InodesBlockID(int blockIndex) {
-		super(name(blockIndex) ,BlockType.INODES_BLOCK);
+		super(BlockType.INODES_BLOCK);
 		this.blockIndex = blockIndex;
 	}
 	
@@ -27,19 +27,21 @@ public final class InodesBlockID extends BlockID{
 		return new InodesBlock(this);
 	}
 	
-	public static String name(int blockIndex) {
+	/*public static String name(int blockIndex) {
 		return namePrefix+blockIndex;
-	}
+	}*/
 
-	@Override
+	/*@Override
 	public String name() {
-		return name(blockIndex);
-	}
+		return this.uniqueKey();
+	}*/
 
 	@Override
 	public String localPath() {
-		return Constants.inodeBlocksPath + File.separator + 
-				(blockIndex/Constants.inodeBlocksPerDirectory) + File.separator + name(blockIndex);
+		if (localPath == null)
+			localPath = Constants.inodeBlocksPath + File.separator + (blockIndex/Constants.inodeBlocksPerDirectory) + File.separator + blockIndex;
+		
+		return localPath;
 	}
 	
 	@Override
@@ -49,7 +51,7 @@ public final class InodesBlockID extends BlockID{
 	
 	@Override
 	public String toString() {
-		return name(blockIndex);
+		return "I"+blockIndex;
 	}
 
 	/* (non-Javadoc)
@@ -57,9 +59,10 @@ public final class InodesBlockID extends BlockID{
 	 */
 	@Override
 	public int hashCode() {
-		final int prime = 31;
-		int result = super.hashCode();
+		final int prime = 11; //randomly selected
+		int result = 19; //randomly selected
 		result = prime * result + blockIndex;
+		result = prime * result + ((type == null) ? 0 : (type.ordinal()*17)); //17 is just a random prime
 		return result;
 	}
 
@@ -70,12 +73,14 @@ public final class InodesBlockID extends BlockID{
 	public boolean equals(Object obj) {
 		if (this == obj)
 			return true;
-		if (!super.equals(obj))
+		if (obj == null)
 			return false;
 		if (getClass() != obj.getClass())
 			return false;
 		InodesBlockID other = (InodesBlockID) obj;
 		if (blockIndex != other.blockIndex)
+			return false;
+		if (type != other.type)
 			return false;
 		return true;
 	}

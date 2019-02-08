@@ -3,6 +3,7 @@ package kawkab.fs.api;
 import java.io.IOException;
 
 import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Stats;
 import kawkab.fs.core.BlockID;
 import kawkab.fs.core.Cache;
 import kawkab.fs.core.Filesystem.FileMode;
@@ -205,6 +206,7 @@ public final class FileHandle {
 		    16. Mark inodesBlock as dirty
 		    15. Release InodesBlock lock
 		  17. Return inodesBlock to the cache*/
+		
 		if (fileMode != FileMode.APPEND) {
 			throw new InvalidFileModeException();
 		}
@@ -214,9 +216,9 @@ public final class FileHandle {
 		BlockID id = new InodesBlockID(inodesBlockIdx);
 		
 		InodesBlock inodesBlock = null;
+		
 		try {
 			inodesBlock = (InodesBlock)cache.acquireBlock(id);
-			
 			Inode inode = inodesBlock.getInode(inumber);
 			appendedBytes = inode.append(data, offset, length);
 			

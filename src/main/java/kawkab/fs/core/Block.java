@@ -181,7 +181,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	
 	@Override
 	public String toString(){
-		return id.name();
+		return id.toString();
 	}
 	
 	/**
