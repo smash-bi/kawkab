@@ -49,6 +49,8 @@ To run the append test:
   mvn -Dtest=AppendTest -DnodeID=0 test
 ```
 
+Please use different nodeIDs for different Kawkab nodes.
+
 ## Run CLI
 ```
   mvn exec:java -D"exec.mainClass"="kawkab.fs.cli.CLI"
