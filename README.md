@@ -33,7 +33,7 @@ You can use [run-server.sh](minio/run-server.sh) in the minio folder to start th
 **Note:** You can optionally use [minio/reset.sh](minio/reset.sh) to start both the ZooKeeper and minio nodes from the same script. Please customize the script to configure the path of ZooKeeper folder before use.
 
 ## Customize the Fileysystem Configuration
-Please customize the [config.properties](src/main/resources/conf.properties) file to customize the filesystem. Specifically, please customize the following variables:
+Please customize the [config.properties](src/main/resources/config.properties) file to customize the filesystem. Specifically, please customize the following variables:
 * basePath
 * zkMainServers
 * minioServers
