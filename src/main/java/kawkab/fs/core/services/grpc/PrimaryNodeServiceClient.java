@@ -8,7 +8,7 @@ import java.util.Random;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Block;
 import kawkab.fs.core.DataSegmentID;
 import kawkab.fs.core.InodesBlockID;
@@ -140,8 +140,8 @@ public final class PrimaryNodeServiceClient {
 		}
 		
 		ManagedChannel channel = ManagedChannelBuilder
-									.forAddress(ip, Constants.primaryNodeServicePort)
-									.maxInboundMessageSize(Constants.grpcClientFrameSize)
+									.forAddress(ip, Configuration.instance().primaryNodeServicePort)
+									.maxInboundMessageSize(Configuration.instance().grpcClientFrameSize)
 									.usePlaintext(true).build();
 		client = PrimaryNodeGrpc.newBlockingStub(channel);
 		clients.put(nodeID, client);

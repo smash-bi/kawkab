@@ -8,7 +8,16 @@ import java.nio.channels.WritableByteChannel;
 import java.util.Base64;
 
 public final class Commons {
-	public static String uuidToString(long uuidHigh, long uuidLow){
+	private static final int ibmapBlockSizeBytes;
+	private static final int ibmapsPerMachine;
+	
+	static {
+		Configuration conf = Configuration.instance();
+		ibmapBlockSizeBytes = conf.ibmapBlockSizeBytes;
+		ibmapsPerMachine = conf.ibmapsPerMachine;
+	}
+	
+	public static String uuidToBase64String(long uuidHigh, long uuidLow){
 		byte[] id = new byte[16];
 		ByteBuffer buffer = ByteBuffer.wrap(id);
 		buffer.putLong(uuidHigh);
@@ -95,19 +104,15 @@ public final class Commons {
         return result;
     }
     
-    public int myid() {
-    	return Constants.thisNodeID; //FIXME: Get the id of the current node in a proper way. 
-    }
-    
     public static int primaryWriterID(long inumber) {
-		long inodeBlocksPerIbmap = Constants.ibmapBlockSizeBytes * Byte.SIZE;
+		long inodeBlocksPerIbmap = ibmapBlockSizeBytes * Byte.SIZE;
 		long ibmapNum = inumber / inodeBlocksPerIbmap;
 		
 		return ibmapOwner(ibmapNum);
 	}
     
     public static int ibmapOwner(long ibmapNum) {
-    	return (int)(ibmapNum / Constants.ibmapsPerMachine); //TODO: Get this number from ZooKeeper
+    	return (int)(ibmapNum / ibmapsPerMachine); //TODO: Get this number from ZooKeeper
     }
 }
 

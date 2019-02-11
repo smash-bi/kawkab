@@ -7,7 +7,7 @@ import com.twitter.util.Await;
 import com.twitter.util.TimeoutException;
 
 import kawkab.fs.client.services.FilesystemService;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Filesystem;
 
 
@@ -17,8 +17,8 @@ public class FFilesystemServiceServer {
 	private FilesystemService.Service service;
 	
 	public FFilesystemServiceServer(Filesystem fs) {
-		int maxConcurrentRequests = 1000; //Maximum number of concurrent requests the server can handle
-		int maxWaiters = 0; //Number of connections in the wait queue
+		// int maxConcurrentRequests = 1000; //Maximum number of concurrent requests the server can handle
+		// int maxWaiters = 0; //Number of connections in the wait queue
 		
 		service = new FilesystemService.Service(new FFilesystemServiceImpl(fs));
 		
@@ -28,7 +28,7 @@ public class FFilesystemServiceServer {
 	}
 	
 	public void startServer() {
-		server = tserver.serve(":"+Constants.FS_SERVER_LISTEN_PORT, service);
+		server = tserver.serve(":"+Configuration.instance().fsServerListenPort, service);
 	}
 	
 	public void stopServer() {

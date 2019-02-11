@@ -3,7 +3,7 @@ package kawkab.fs.core.index;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.DataSegment;
 import kawkab.fs.core.DataIndex;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
@@ -16,7 +16,7 @@ public class MappedIndex {
 	public MappedIndex(){
 		timeToByteOffset = new ConcurrentHashMap<Long, Long>();
 		byteToDataBlock = new ConcurrentHashMap<Long, DataSegment>();
-		dataBlockSize = Constants.segmentSizeBytes;
+		dataBlockSize = Configuration.instance().segmentSizeBytes;
 	}
 	
 	public DataSegment getByByte(long byteOffset) throws InvalidFileOffsetException{

@@ -11,14 +11,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.google.protobuf.ByteString;
 
 import kawkab.fs.commons.Commons;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 
 public final class DataSegment extends Block {
-	private final static int recordSize = Constants.recordSize; //Temporarily set to 1 until we implement reading/writing records
+	private final static Configuration conf = Configuration.instance();
+	private final static int recordSize = conf.recordSize; //Temporarily set to 1 until we implement reading/writing records
 	
 	private ByteBuffer dataBuf;
 	private DataSegmentID segmentID;
@@ -58,7 +59,7 @@ public final class DataSegment extends Block {
 		
 		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
 		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
-		int capacity = Constants.segmentSizeBytes - offsetInSegment;
+		int capacity = conf.segmentSizeBytes - offsetInSegment;
 		int toAppend = length <= capacity ? length : capacity;
 		
 		//System.arraycopy(data, offset, bytes, offsetInSegment, toAppend);
@@ -76,7 +77,7 @@ public final class DataSegment extends Block {
 		markLocalDirty();
 		
 		//Mark block as full
-		if (offsetInSegment+toAppend == Constants.segmentSizeBytes) {
+		if (offsetInSegment+toAppend == conf.segmentSizeBytes) {
 			segmentIsFull = true;
 		}
 		
@@ -96,7 +97,7 @@ public final class DataSegment extends Block {
 	 */
 	int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile) 
 			throws InvalidFileOffsetException, IOException{
-		int blockSize = Constants.segmentSizeBytes;
+		int blockSize = conf.segmentSizeBytes;
 		//int offsetInBlock = (int)(offsetInFile % Constants.segmentSizeBytes);
 		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
 		if (offsetInBlock >= blockSize || offsetInBlock < 0) {
@@ -123,7 +124,7 @@ public final class DataSegment extends Block {
 	@Override
 	public synchronized boolean shouldStoreGlobally() {
 		// Store in the global store only if this is the last segment of the block and this segment is full
-		if (segmentID.segmentInBlock()+1 == Constants.segmentsPerBlock // If it is the last segment in the block 
+		if (segmentID.segmentInBlock()+1 == conf.segmentsPerBlock // If it is the last segment in the block 
 				&& segmentIsFull) { // and the segment is full
 			return true;
 		}
@@ -143,7 +144,7 @@ public final class DataSegment extends Block {
 				SeekableByteChannel channel = file.getChannel()
 			) {
 			
-			channel.position(segmentID.segmentInBlock() * Constants.segmentSizeBytes);
+			channel.position(segmentID.segmentInBlock() * conf.segmentSizeBytes);
 			// System.out.println("Load: "+block.localPath() + ": " + channel.position());
 			loadFrom(channel);
 		}
@@ -155,7 +156,7 @@ public final class DataSegment extends Block {
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		Commons.readFrom(channel, buffer);*/ 
 		
-		dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
+		dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
 		int loaded = Commons.readFrom(channel, dataBuf);
 		
 		assert loaded >= 0;
@@ -192,7 +193,7 @@ public final class DataSegment extends Block {
 		
 		int length = srcBuffer.remaining();
 		
-		dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
+		dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
 		dataBuf.limit(length);
 		dataBuf.put(srcBuffer);
 		dataBuf.rewind();
@@ -224,18 +225,18 @@ public final class DataSegment extends Block {
 		 * data segment may get loaded from the remote node unnecessarily. 
 		 */
 		
-		if (dataBuf != null && dataBuf.limit() == Constants.segmentSizeBytes) { // Never load an already loaded block if the segment is full.
+		if (dataBuf != null && dataBuf.limit() == conf.segmentSizeBytes) { // Never load an already loaded block if the segment is full.
 			//System.out.println("[DS] Segment is full. Not loading the segment again.");
 			return;
 		}
 		
 		long now = System.currentTimeMillis();
 		
-		if (lastFetchTimeMs < now - Constants.dataSegmentFetchExpiryTimeoutMs) { // If the last data-fetch-time exceeds the time limit
+		if (lastFetchTimeMs < now - conf.dataSegmentFetchExpiryTimeoutMs) { // If the last data-fetch-time exceeds the time limit
 				
 			now = System.currentTimeMillis();
 			
-			if (lastFetchTimeMs < now - Constants.dataSegmentFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
+			if (lastFetchTimeMs < now - conf.dataSegmentFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
 				try {
 					//System.out.println("[DS] Load from the global: " + id());
 					
@@ -380,21 +381,21 @@ public final class DataSegment extends Block {
 		//dirtyBytesLock.unlock();
 		
 		//Offset in block is equal to the start offset of the current segment + the start of the dirty bytes
-		int offset = segmentID.segmentInBlock() * Constants.segmentSizeBytes + dirtyOffset.get();
+		int offset = segmentID.segmentInBlock() * conf.segmentSizeBytes + dirtyOffset.get();
 		
-		assert offset <= Constants.dataBlockSizeBytes;
+		assert offset <= conf.dataBlockSizeBytes;
 		
 		return offset;
 	}
 	
 	@Override
 	public int memorySizeBytes() {
-		return Constants.segmentSizeBytes + 8; //FIXME: Get the exact number
+		return conf.segmentSizeBytes + 8; //FIXME: Get the exact number
 	}
 	
 	@Override
 	public int sizeWhenSerialized() {
-		return Constants.segmentSizeBytes;
+		return conf.segmentSizeBytes;
 	}
 	
 	
@@ -449,7 +450,7 @@ public final class DataSegment extends Block {
 	 * @return
 	 */
 	public static int recordsPerSegment(int recordSize) {
-		return Constants.segmentSizeBytes / recordSize;
+		return conf.segmentSizeBytes / recordSize;
 	}
 	
 	/**
@@ -472,7 +473,7 @@ public final class DataSegment extends Block {
 	 */
 	public static long blockInFile(long segmentInFile) {
 		// blockInFile := segmentInFile x segmentSize / blockSize
-		return segmentInFile * Constants.segmentSizeBytes / Constants.dataBlockSizeBytes;
+		return segmentInFile * conf.segmentSizeBytes / conf.dataBlockSizeBytes;
 	}
 	
 	/**
@@ -480,7 +481,7 @@ public final class DataSegment extends Block {
 	 */
 	public static int segmentInBlock(long segmentInFile) {
 		// segmentInBlock := segmentInFile % segmentsPerBlock
-		return (int)(segmentInFile % Constants.segmentsPerBlock);
+		return (int)(segmentInFile % conf.segmentsPerBlock);
 	}
 	
 	/**

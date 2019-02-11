@@ -4,7 +4,7 @@ import java.io.IOException;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 
 public final class PrimaryNodeServiceServer {
 	private final Server server;
@@ -12,7 +12,7 @@ public final class PrimaryNodeServiceServer {
 	
 	public PrimaryNodeServiceServer() throws IOException {
 		server = ServerBuilder
-				.forPort(Constants.primaryNodeServicePort)
+				.forPort(Configuration.instance().primaryNodeServicePort)
 				.addService(new PrimaryNodeService())
 				.build();
 		

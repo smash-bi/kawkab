@@ -8,7 +8,7 @@ import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.KeeperException;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 
 public final class ZKService {
@@ -33,12 +33,14 @@ public final class ZKService {
 	}
 	
 	public synchronized void initService(ZKClusterConfig cluster) {
+		System.out.println("Initializing ZooKeeper client: " + cluster.id());
+		
 		if (clients.containsKey(cluster.id()))
 			return;
 		
 		CuratorFramework client = null;
 		
-		ExponentialBackoffRetry retryPolicy = new ExponentialBackoffRetry(Constants.connectRetrySleepMs, Constants.connectMaxRetries);
+		ExponentialBackoffRetry retryPolicy = new ExponentialBackoffRetry(cluster.connectRetryIntervalMs(), cluster.connectMaxRetries());
 		
 		try {
 			client = CuratorFrameworkFactory.builder()  //There should be only one instance of the framework for each cluster
@@ -52,7 +54,6 @@ public final class ZKService {
 			e.printStackTrace();
 			if (client != null)
 				client.close();
-			return;
 		}
 	}
 	
@@ -69,7 +70,7 @@ public final class ZKService {
 			if (e instanceof KeeperException)
 				throw (KeeperException)e;
 			
-			throw new KawkabException(e.getMessage()); //TODO: Check for the type of exception and then handle it appropriately
+			throw new KawkabException(e); //TODO: Check for the type of exception and then handle it appropriately
 		}
 	}
 	
@@ -87,13 +88,14 @@ public final class ZKService {
 			if (e instanceof KeeperException)
 				throw (KeeperException)e;
 			
-			throw new KawkabException(e.getMessage()); //TODO: Check for the type of exception and then handle it appropriately
+			throw new KawkabException(e); //TODO: Check for the type of exception and then handle it appropriately
 		}
 		
 		return res;
 	}
 	
 	public void shutdown() {
+		System.out.println("Closed ZooKeeper clients");
 		for (CuratorFramework client : clients.values()) {
 			client.close();
 		}

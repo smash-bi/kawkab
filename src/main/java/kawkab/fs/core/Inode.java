@@ -7,7 +7,7 @@ import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.atomic.AtomicLong;
 
 import kawkab.fs.commons.Commons;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
@@ -19,17 +19,20 @@ public final class Inode {
 	// The FileHandle first calls append and then calls updateSize to update the fileSize. Ideally, 
 	// We should update the fileSize immediately after adding a new block. The fileSize is not being
 	// updated immediately to allow concurrent reading and writing to the same dataBlock.
+
+	private static final Configuration conf = Configuration.instance();
 	
 	private long inumber;
 	private AtomicLong fileSize = new AtomicLong(0);
-	private int recordSize = Constants.recordSize; //Temporarily set to 1 until we implement reading/writing records
+	private int recordSize = conf.recordSize; //Temporarily set to 1 until we implement reading/writing records
 	private boolean dirty; //not saved persistently
+	
 	private static Cache cache;
 	private static LocalStoreManager localStore;
 	
 	public static final long MAXFILESIZE;
 	static {
-		MAXFILESIZE = Constants.maxFileSizeBytes;//blocks * Constants.blockSegmentSizeBytes;
+		MAXFILESIZE = conf.maxFileSizeBytes;//blocks * Constants.blockSegmentSizeBytes;
 		
 		try {
 			cache = Cache.instance();
@@ -88,7 +91,7 @@ public final class Inode {
 			//System.out.println("Reading block at offset " + offsetInFile + ": " + curBlkUuid.key);
 			
 			long segNumber = DataSegment.segmentInFile(curOffsetInFile, recordSize);
-			long nextSegStart = (segNumber + 1) * Constants.segmentSizeBytes;
+			long nextSegStart = (segNumber + 1) * conf.segmentSizeBytes;
 			int toRead = (int)(curOffsetInFile+remaining <= nextSegStart ? remaining : nextSegStart - curOffsetInFile);
 			//int offsetInSeg = DataSegment.offsetInSegment(curOffsetInFile, recordSize);
 			//int canReadFromSeg = Constants.segmentSizeBytes - offsetInSeg;
@@ -151,13 +154,13 @@ public final class Inode {
 		//long t = System.nanoTime();
 		
 		while(remaining > 0) {
-			int lastSegCapacity = Constants.segmentSizeBytes - (int)(fileSize % Constants.segmentSizeBytes);
+			int lastSegCapacity = conf.segmentSizeBytes - (int)(fileSize % conf.segmentSizeBytes);
 			
 			//if (fileSize % Constants.dataBlockSizeBytes == 0) {
-			if ((int)(fileSize % Constants.dataBlockSizeBytes) == 0) { // if the last block is full
+			if ((int)(fileSize % conf.dataBlockSizeBytes) == 0) { // if the last block is full
 				try {
 					segId = createNewBlock(fileSize);
-					lastSegCapacity = Constants.segmentSizeBytes;
+					lastSegCapacity = conf.segmentSizeBytes;
 				} catch (IndexBlockFullException e) {
 					e.printStackTrace();
 					return appended;
@@ -219,7 +222,7 @@ public final class Inode {
 	 */
 	BlockID createNewBlock(final long fileSize) throws MaxFileSizeExceededException, IndexBlockFullException, InvalidFileOffsetException, IOException, InterruptedException, KawkabException{
 		//long blocksCount = (long)Math.ceil(1.0*fileSize / Constants.dataBlockSizeBytes);
-		if (fileSize + Constants.segmentSizeBytes > MAXFILESIZE){
+		if (fileSize + conf.segmentSizeBytes > MAXFILESIZE){
 			throw new MaxFileSizeExceededException();
 		}
 		
@@ -253,9 +256,9 @@ public final class Inode {
 	}
 	
 	void loadFrom(final ByteBuffer buffer) throws IOException {
-		if (buffer.remaining() < Constants.inodeSizeBytes) {
+		if (buffer.remaining() < conf.inodeSizeBytes) {
 			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
-					+ "Have %d, needed %d.",buffer.remaining(), Constants.inodeSizeBytes));
+					+ "Have %d, needed %d.",buffer.remaining(), conf.inodeSizeBytes));
 		}
 		
 		inumber = buffer.getLong();
@@ -264,7 +267,7 @@ public final class Inode {
 	}
 	
 	void loadFrom(final ReadableByteChannel channel) throws IOException {
-		int inodeSizeBytes = Constants.inodeSizeBytes;
+		int inodeSizeBytes = conf.inodeSizeBytes;
 		ByteBuffer buffer = ByteBuffer.allocate(inodeSizeBytes);
 		
 		int bytesRead = Commons.readFrom(channel, buffer);
@@ -287,16 +290,16 @@ public final class Inode {
 	 * @return Number of bytes written in the channel
 	 */
 	int storeTo(final WritableByteChannel channel) throws IOException {
-		ByteBuffer buffer = ByteBuffer.allocate(Constants.inodeSizeBytes);
+		ByteBuffer buffer = ByteBuffer.allocate(conf.inodeSizeBytes);
 		storeTo(buffer);
 		buffer.rewind();
 		//buffer.limit(buffer.capacity());
 		
 		int bytesWritten = Commons.writeTo(channel, buffer);
 		
-		if (bytesWritten < Constants.inodeSizeBytes) {
+		if (bytesWritten < conf.inodeSizeBytes) {
 			throw new InsufficientResourcesException(String.format("Full block is not strored. Stored "
-					+ "%d bytes out of %d.",bytesWritten, Constants.inodeSizeBytes));
+					+ "%d bytes out of %d.",bytesWritten, conf.inodeSizeBytes));
 		}
 		
 		//System.out.printf("Stored inode: %d -> %d\n", inumber, fileSize.get());
@@ -320,7 +323,7 @@ public final class Inode {
 		//This can be achieved if size is rounded to 32, 64, 128, ...
 		
 		//Direct and indirect pointers + filesize + inumber + reserved.
-		int size = (Constants.directBlocksPerInode + 3)*16 + 8 + 0;
+		int size = (conf.directBlocksPerInode + 3)*16 + 8 + 0;
 		size = size + (64 % size);
 		
 		return size; 

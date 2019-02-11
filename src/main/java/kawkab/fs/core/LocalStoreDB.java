@@ -3,12 +3,12 @@ package kawkab.fs.core;
 import java.io.File;
 import java.io.IOException;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import net.openhft.chronicle.map.ChronicleMap;
 
 public final class LocalStoreDB {
 	private final int maxSize;
-	private static final String mapFilePath = Constants.basePath + "/localStoreDB/chroniclemap-"+Constants.thisNodeID;
+	private static final String mapFilePath = Configuration.instance().basePath + "/localStoreDB/chroniclemap-"+Configuration.instance().thisNodeID;
 	private static final String mapName = "localStoreDB";
 	private ChronicleMap<String, String> map; // Path to ID map. A key is a block's path because the data segments belonging
 	                                          // to the same block have the same path. In this way, we save the number of

@@ -3,7 +3,7 @@ package kawkab.fs.core;
 import java.util.HashMap;
 import java.util.Map;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 
 public class NodesRegister {
@@ -47,6 +47,6 @@ public class NodesRegister {
 	//Populates the map with the given 
 	private void load() {
 		//FIXME: Load from a configuration file.
-		nodesMap.putAll(Constants.nodesMap);
+		nodesMap.putAll(Configuration.instance().nodesMap);
 	}
 }

@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.DataSegment;
 import kawkab.fs.core.DataIndex;
 
@@ -20,7 +20,7 @@ public class FlatIndex {
 	public FlatIndex(){
 		timeToByteOffset = new ConcurrentHashMap<Long, Long>();
 		byteToDataBlock = new ConcurrentHashMap<Long, DataSegment>();
-		dataBlockSize = Constants.segmentSizeBytes;
+		dataBlockSize = Configuration.instance().segmentSizeBytes;
 		dataIndex = new ArrayList<DataIndex>();
 		dataSegments = new ArrayList<DataSegment>();
 	}

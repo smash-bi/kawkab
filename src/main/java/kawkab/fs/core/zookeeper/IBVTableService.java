@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.Code;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 
 public class IBVTableService {
@@ -21,7 +21,7 @@ public class IBVTableService {
 	private IBVTableService() throws KawkabException {
 		versions = new ConcurrentHashMap<Long, Long>();
 		zkclient = ZKService.instance();
-		zkcluster = Constants.zkMainCluster;
+		zkcluster = Configuration.instance().zkMainCluster;
 		zkclient.initService(zkcluster);
 		createRootNode();
 	}
@@ -70,7 +70,7 @@ public class IBVTableService {
 			zkclient.addNode(zkcluster.id(), path, new byte[]{0});
 		} catch (KeeperException e) {
 			if (e.code() != Code.NODEEXISTS)
-				throw new KawkabException(e.getMessage());
+				throw new KawkabException(e);
 		}
 	}
 }

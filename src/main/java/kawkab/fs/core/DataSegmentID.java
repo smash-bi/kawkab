@@ -3,7 +3,7 @@ package kawkab.fs.core;
 import java.io.File;
 
 import kawkab.fs.commons.Commons;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 
 /**
  * This class is supposed to be an immutable class.
@@ -15,6 +15,8 @@ public final class DataSegmentID extends BlockID {
 	private final int segmentInBlock; //Zero based segment index
 	private String localPath;
 	private int hash;
+	
+	private static final String blocksPath = Configuration.instance().blocksPath;
 	
 	/**
 	 * @param inumber inode number of the file
@@ -59,7 +61,7 @@ public final class DataSegmentID extends BlockID {
 		if (localPath != null)
 			return localPath;
 		
-		String uuid = Commons.uuidToString(inumber, blockInFile); //highBits=inumber, lowBits=BlockNumber
+		String uuid = Commons.uuidToBase64String(inumber, blockInFile); //highBits=inumber, lowBits=BlockNumber
 		int uuidLen = uuid.length();
 		
 		int wordSize = 3; //Number of characters of the Base64 encoding that make a directory
@@ -68,15 +70,15 @@ public final class DataSegmentID extends BlockID {
 		
 		assert wordSize * levels < uuidLen-1;
 		
-		StringBuilder path = new StringBuilder(Constants.blocksPath.length()+uuidLen+levels);
-		path.append(Constants.blocksPath + File.separator);
+		StringBuilder path = new StringBuilder(blocksPath.length()+uuidLen+levels);
+		path.append(blocksPath + File.separator);
+		
 		int rootLen = uuidLen - levels*wordSize;
 		path.append(uuid.substring(0, rootLen));
 		
 		for (int i=0; i<levels; i++){
 			path.append(File.separator).append(uuid.substring(rootLen+i*wordSize, rootLen+i*wordSize+wordSize));
 		}
-		//path.append(File.separator).append(uuid.substring(levels*wordSize));
 		
 		localPath = path.toString();
 		

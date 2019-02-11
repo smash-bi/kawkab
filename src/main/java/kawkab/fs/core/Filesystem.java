@@ -1,10 +1,13 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
+import java.util.Properties;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.client.services.finagle.FFilesystemServiceServer;
+import kawkab.fs.commons.Configuration;
+import kawkab.fs.core.exceptions.AlreadyConfiguredException;
 import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
@@ -18,9 +21,9 @@ public final class Filesystem {
 	public enum FileMode { READ, APPEND }
 	
 	private static Filesystem instance;
-	private Namespace namespace;
-	private PrimaryNodeServiceServer ns;
-	private FFilesystemServiceServer fs;
+	private static Namespace namespace;
+	private static PrimaryNodeServiceServer ns;
+	private static FFilesystemServiceServer fs;
 	
 	private Filesystem() throws KawkabException, IOException {
 		namespace = Namespace.instance();
@@ -32,7 +35,7 @@ public final class Filesystem {
 	
 	public static synchronized Filesystem instance() throws KawkabException, IOException {
 		if (instance == null) {
-			instance = new Filesystem();
+			throw new KawkabException("Filesystem is not bootstrapped. First call Fileysystem.bootstrap(nodeID, config)");
 		}
 		
 		return instance;
@@ -71,20 +74,27 @@ public final class Filesystem {
 	 * @throws IOException
 	 * @throws InterruptedException
 	 * @throws KawkabException
+	 * @throws AlreadyConfiguredException 
 	 */
-	public Filesystem bootstrap() throws IOException, InterruptedException, KawkabException {
+	public static synchronized Filesystem bootstrap(int nodeID, Properties confProps) throws IOException, InterruptedException, KawkabException, AlreadyConfiguredException {
 		if (initialized) {
 			System.out.println("\tFilesystem is already bootstraped, not doing it again...");
-			return this;
+			return instance;
 		}
 		
-		initialized = true;
+		Configuration.configure(nodeID, confProps);
+		
+		instance = new Filesystem();
 		
 		InodesBlock.bootstrap();
 		Ibmap.bootstrap();
 		namespace.bootstrap();
 		
-		return this;
+		
+		
+		initialized = true;
+		
+		return instance;
 	}
 	
 	public synchronized void shutdown() throws KawkabException, InterruptedException, IOException{
@@ -115,5 +125,9 @@ public final class Filesystem {
 		synchronized(instance) {
 			instance.wait();
 		}
+	}
+	
+	public Configuration getConf() {
+		return Configuration.instance();
 	}
 }

@@ -15,7 +15,7 @@ import kawkab.fs.client.services.FilesystemService;
 import kawkab.fs.client.services.InvalidArgumentException;
 import kawkab.fs.client.services.InvalidSessionException;
 import kawkab.fs.client.services.RequestFailedException;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
 
@@ -23,6 +23,7 @@ public class TFilesystemServiceImpl implements FilesystemService.Iface {
 	private Filesystem fs;
 	private Map<Long, FileHandle> sessions;			// Opened files from the clients
 	private AtomicLong counter = new AtomicLong();	//To assigns unique sessionsIDs for each file open request from the clients
+	private static int maxBufferLen = Configuration.instance().maxBufferLen;
 	
 	public TFilesystemServiceImpl (Filesystem fs) {
 		this.fs = fs;
@@ -57,8 +58,8 @@ public class TFilesystemServiceImpl implements FilesystemService.Iface {
 	      throw new InvalidSessionException("Session ID is invalid or the session does not exist.");
 	    }
 	    
-	    if (length > Constants.MAX_BUFFER_LEN) {
-	    	throw new InvalidArgumentException("Maximum allowed length in bytes is "+Constants.MAX_BUFFER_LEN);
+	    if (length > maxBufferLen) {
+	    	throw new InvalidArgumentException("Maximum allowed length in bytes is "+maxBufferLen);
 	    }
 	    
 	    long size;

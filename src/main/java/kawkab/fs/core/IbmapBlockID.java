@@ -3,11 +3,12 @@ package kawkab.fs.core;
 import java.io.File;
 
 import kawkab.fs.commons.Commons;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 
 public final class IbmapBlockID extends BlockID {
 	private final int mapNum;
 	private String localPath;
+	private static final String ibmapsPath = Configuration.instance().ibmapsPath+File.separator;
 	
 	public IbmapBlockID(int mapNum) {
 		super(BlockType.IBMAP_BLOCK);
@@ -36,7 +37,7 @@ public final class IbmapBlockID extends BlockID {
 	@Override
 	public String localPath() {
 		if (localPath == null)
-			localPath = Constants.ibmapsPath +File.separator+mapNum;
+			localPath = ibmapsPath+mapNum;
 		
 		return localPath;
 	}

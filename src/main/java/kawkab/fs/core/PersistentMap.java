@@ -3,7 +3,7 @@ package kawkab.fs.core;
 import java.io.File;
 import java.io.IOException;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import net.openhft.chronicle.map.ChronicleMap;
 
 public class PersistentMap {
@@ -13,8 +13,9 @@ public class PersistentMap {
 	private ChronicleMap<String, Long> map;
 	
 	private PersistentMap() throws IOException{
-		String path = Constants.namespacePath + "/" + "kawkab-kv";
-		File file = new File(Constants.namespacePath);
+		Configuration conf = Configuration.instance();
+		String path = conf.namespacePath + "/" + "kawkab-kv";
+		File file = new File(conf.namespacePath);
 		if (!file.exists()){
 			file.mkdirs();
 		}

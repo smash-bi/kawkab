@@ -75,6 +75,11 @@
 					<enableAssertions>true</enableAssertions>
 					<argLine>-Xmx50g</argLine>
 					<!-- argLine>-Xcomp</argLine -->
+					<systemPropertyVariables>
+						<propertyName>nodeID</propertyName>
+						<buildDirectory>${0}</buildDirectory>
+						[...]
+					</systemPropertyVariables>
 				</configuration>
 			</plugin>
 			

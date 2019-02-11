@@ -10,7 +10,7 @@ import java.nio.channels.WritableByteChannel;
 
 import com.google.protobuf.ByteString;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 
@@ -20,6 +20,8 @@ public final class InodesBlock extends Block {
 	private long lastFetchTimeMs; 	// Clock time in ms when the block was last loaded. This must be initialized 
 									// to zero when the block is first created in memory.
 	//private int version; //Inodes-block's current version number.
+	
+	private static Configuration conf = Configuration.instance();
 	
 	/*
 	 * The access modifier of the constructor is "default" so that it can be packaged as a library. Clients
@@ -35,10 +37,10 @@ public final class InodesBlock extends Block {
 	InodesBlock(InodesBlockID id){
 		super(id);
 		
-		inodes = new Inode[Constants.inodesPerBlock];
+		inodes = new Inode[conf.inodesPerBlock];
 		int blockIndex = id.blockIndex();
-		for (int j=0; j<Constants.inodesPerBlock; j++) {
-			long inumber = blockIndex*Constants.inodesPerBlock + j;
+		for (int j=0; j<conf.inodesPerBlock; j++) {
+			long inumber = blockIndex*conf.inodesPerBlock + j;
 			initInode(inumber);
 		}
 	}
@@ -82,7 +84,7 @@ public final class InodesBlock extends Block {
 	@Override
 	public void loadFrom(ByteBuffer buffer) throws IOException {
 		//inodes = new Inode[Constants.inodesPerBlock];
-		for(int i=0; i<Constants.inodesPerBlock; i++){
+		for(int i=0; i<conf.inodesPerBlock; i++){
 			//inodes[i] = new Inode(0);
 			inodes[i].loadFrom(buffer);
 		}
@@ -101,7 +103,7 @@ public final class InodesBlock extends Block {
 	@Override
 	public void loadFrom(ReadableByteChannel channel) throws IOException {
 		//inodes = new Inode[Constants.inodesPerBlock];
-		for(int i=0; i<Constants.inodesPerBlock; i++){
+		for(int i=0; i<conf.inodesPerBlock; i++){
 			//inodes[i] = new Inode(0);
 			inodes[i].loadFrom(channel);
 		}
@@ -137,7 +139,7 @@ public final class InodesBlock extends Block {
 	public ByteString byteString() {
 		//TODO: This function takes extra memory to serialize inodes in an input stream. We need an alternate
 		//method for this purpose.
-		ByteBuffer buffer = ByteBuffer.allocate(inodes.length * Constants.inodeSizeBytes);
+		ByteBuffer buffer = ByteBuffer.allocate(inodes.length * conf.inodeSizeBytes);
 		for(Inode inode : inodes) {
 			inode.storeTo(buffer);
 		}
@@ -159,11 +161,11 @@ public final class InodesBlock extends Block {
 		
 		long now = System.currentTimeMillis();
 		
-		if (lastFetchTimeMs < now - Constants.inodesBlockFetchExpiryTimeoutMs) { // If the last data-fetch-time exceeds the time limit
+		if (lastFetchTimeMs < now - conf.inodesBlockFetchExpiryTimeoutMs) { // If the last data-fetch-time exceeds the time limit
 				
 			now = System.currentTimeMillis();
 			
-			if (lastFetchTimeMs < now - Constants.inodesBlockFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
+			if (lastFetchTimeMs < now - conf.inodesBlockFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
 				try {
 					// System.out.println("[IB] Load from the global: " + id());
 					
@@ -206,12 +208,12 @@ public final class InodesBlock extends Block {
 	
 	@Override
 	public int memorySizeBytes() {
-		return Constants.inodesBlockSizeBytes + 8; //FIXME: Get the exact number
+		return conf.inodesBlockSizeBytes + 8; //FIXME: Get the exact number
 	}
 	
 	@Override
 	public int sizeWhenSerialized() {
-		return Constants.inodesBlockSizeBytes;
+		return conf.inodesBlockSizeBytes;
 	}
 	
 	
@@ -266,7 +268,7 @@ public final class InodesBlock extends Block {
 		
 		System.out.println("Bootstrap InodesBlocks");
 		
-		File folder = new File(Constants.inodeBlocksPath);
+		File folder = new File(conf.inodeBlocksPath);
 		if (!folder.exists()){
 			System.out.println("  Creating folder: " + folder.getAbsolutePath());
 			folder.mkdirs();
@@ -275,8 +277,8 @@ public final class InodesBlock extends Block {
 		int count=0;
 		LocalStoreManager storage = LocalStoreManager.instance();
 		//Cache cache = Cache.instance();
-		int rangeStart = Constants.inodeBlocksRangeStart;
-		int rangeEnd = rangeStart + Constants.inodeBlocksPerMachine;
+		int rangeStart = conf.inodeBlocksRangeStart;
+		int rangeEnd = rangeStart + conf.inodeBlocksPerMachine;
 		for(int i=rangeStart; i<rangeEnd; i++){
 			InodesBlockID id = new InodesBlockID(i);
 			File file = new File(id.localPath());
@@ -305,10 +307,10 @@ public final class InodesBlock extends Block {
 	}
 	
 	static int blockIndexFromInumber(long inumber) {
-		return (int)(inumber / Constants.inodesPerBlock);
+		return (int)(inumber / conf.inodesPerBlock);
 	}
 	
 	private int inodeIdxFromInumber(long inumber){
-		return (int)(inumber % Constants.inodesPerBlock);
+		return (int)(inumber % conf.inodesPerBlock);
 	}
 }

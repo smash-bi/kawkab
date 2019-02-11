@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.utils.GCMonitor;
 
@@ -15,7 +15,8 @@ import kawkab.fs.utils.GCMonitor;
  * thread safe.
  */
 public class CustomCache extends Cache implements BlockEvictionListener{
-	private static final Object initLock = new Object(); 
+	private static final Object initLock = new Object();
+	private static Configuration conf;
 	
 	private static CustomCache instance;
 	private LRUCache cache; // An extended LinkedHashMap that implements removeEldestEntry()
@@ -24,6 +25,8 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	
 	private CustomCache() throws IOException {
 		System.out.println("Initializing cache..." );
+		
+		conf = Configuration.instance();
 		
 		cacheLock = new ReentrantLock();
 		localStore = LocalStoreManager.instance();
@@ -127,7 +130,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		                            //        the case of an exception.
 		}
 		
-		assert cache.size() <= Constants.maxBlocksInCache;
+		assert cache.size() <= conf.maxBlocksInCache;
 		
 		// FIXME: Barging cannot happen between the writer that creates a new block and the readers that read the newly created
 		// block. This is because the file size is updated only after appending some data and the data can only be

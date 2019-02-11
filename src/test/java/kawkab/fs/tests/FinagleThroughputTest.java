@@ -1,7 +1,9 @@
 package kawkab.fs.tests;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -13,23 +15,27 @@ import java.util.concurrent.locks.LockSupport;
 import org.junit.Test;
 
 import kawkab.fs.client.services.finagle.FFilesystemServiceClient;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
 import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.exceptions.AlreadyConfiguredException;
 import kawkab.fs.core.exceptions.KawkabException;
 
 /**
  * Tests the throughput of the filesystem
  */
 public class FinagleThroughputTest {
-	public static void main(String[] args) throws KawkabException, IOException, InterruptedException {
+	public static void main(String[] args) throws KawkabException, IOException, InterruptedException, AlreadyConfiguredException {
 		FinagleThroughputTest ft = new FinagleThroughputTest();
 		ft.throughputTest();
 	}
 	
 	
 	@Test
-	public void throughputTest() throws KawkabException {
+	public void throughputTest() throws KawkabException, IOException, AlreadyConfiguredException {
+		Properties props = getProperties();
+		Configuration conf = Configuration.configure(0, props);
+		
 		final int numClients = 30;
 		final int numNodes = 3; // Number of servers to connect in a round-robin fashion
 		final int appendSize = 100 * 1024 * 1024; 
@@ -44,7 +50,7 @@ public class FinagleThroughputTest {
 		ExecutorService executor = Executors.newFixedThreadPool(numClients);
 		Random rand = ThreadLocalRandom.current();
 		
-		assert numNodes > 0 && numNodes <= Constants.nodesMap.size();
+		assert numNodes > 0 && numNodes <= conf.nodesMap.size();
 		
 		for (int i=0; i<numClients; i++) {
 			final int clid = i;
@@ -55,8 +61,8 @@ public class FinagleThroughputTest {
 				public void run() {
 					ThreadLocalRandom rand = ThreadLocalRandom.current();
 					int svrIdx = id % numNodes; ;
-					String svrIP = Constants.nodesMap.get(svrIdx).ip;
-					String svrAddr = String.format("%s:%d",svrIP,Constants.FS_SERVER_LISTEN_PORT);
+					String svrIP = conf.nodesMap.get(svrIdx).ip;
+					String svrAddr = String.format("%s:%d",svrIP,conf.fsServerListenPort);
 					String fname = String.format("ft-%d-%d", id, rand.nextInt(1000000));
 					System.out.printf("[%d] Writing to file: %s on %s\n",id,fname,svrIP);
 					FFilesystemServiceClient client = new FFilesystemServiceClient(svrAddr);
@@ -127,5 +133,15 @@ public class FinagleThroughputTest {
 		System.out.printf("Ops per second: %s\n", opsThrStats);
 		System.out.printf("Clinets = %d, thr = %.2f MB/s, ops/sec = %.2f\n", numClients, tThr.doubleValue(), tOpsThr.doubleValue());
 		System.out.printf("%d\t%.0f\t%.0f\t%.0f\n", numClients,tThr.doubleValue(), latStats.mean(), tOpsThr.doubleValue());
+	}
+	
+	private Properties getProperties() throws IOException {
+		String propsFile = "/config.properties";
+		
+		try (InputStream in = Thread.class.getResourceAsStream(propsFile)) {
+			Properties props = new Properties();
+			props.load(in);
+			return props;
+		}
 	}
 }

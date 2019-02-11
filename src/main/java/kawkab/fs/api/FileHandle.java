@@ -2,8 +2,7 @@ package kawkab.fs.api;
 
 import java.io.IOException;
 
-import kawkab.fs.commons.Constants;
-import kawkab.fs.commons.Stats;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.BlockID;
 import kawkab.fs.core.Cache;
 import kawkab.fs.core.Filesystem.FileMode;
@@ -19,19 +18,19 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 public final class FileHandle {
 	private long inumber;
 	private FileMode fileMode;
-	private static Cache cache;
+	private Cache cache;
+	private final static int inodesPerBlock;
 	
-	static { //Using static block to catch the exception during initialization
-		try {
-			cache = Cache.instance();
-		} catch (IOException e) { //FIXME: Handle the exception properly
-			e.printStackTrace();
-		}
+	static {
+		Configuration conf = Configuration.instance();
+		inodesPerBlock = conf.inodesPerBlock;
 	}
 	
-	public FileHandle(long inumber, FileMode mode){
+	public FileHandle(long inumber, FileMode mode) throws IOException, KawkabException{
 		this.inumber = inumber;
 		this.fileMode = mode;
+		
+		cache = Cache.instance();
 	}
 	
 	/**
@@ -61,7 +60,7 @@ public final class FileHandle {
 		if (length > buffer.length)
 			throw new IllegalArgumentException("Read data size is greater than the given buffer size.");
 		
-		int blockIndex = (int)(inumber / Constants.inodesPerBlock);
+		int blockIndex = (int)(inumber / inodesPerBlock);
 		//System.out.println("[FH] inodeBlock: " + blockIndex);
 		BlockID id = new InodesBlockID(blockIndex);
 		
@@ -212,7 +211,7 @@ public final class FileHandle {
 		}
 		
 		int appendedBytes = 0;
-		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
+		int inodesBlockIdx = (int)(inumber / inodesPerBlock);
 		BlockID id = new InodesBlockID(inodesBlockIdx);
 		
 		InodesBlock inodesBlock = null;
@@ -246,7 +245,7 @@ public final class FileHandle {
 	 * @throws InterruptedException 
 	 */
 	public synchronized long size() throws KawkabException, InterruptedException{
-		int inodesBlockIdx = (int)(inumber / Constants.inodesPerBlock);
+		int inodesBlockIdx = (int)(inumber / inodesPerBlock);
 		long size = 0;
 		BlockID id = new InodesBlockID(inodesBlockIdx);
 		

@@ -13,7 +13,7 @@ import com.google.common.io.Files;
 import com.google.protobuf.ByteString;
 
 import kawkab.fs.commons.Commons;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.InodeNumberOutOfRangeException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
@@ -21,7 +21,8 @@ import kawkab.fs.core.exceptions.KawkabException;
 
 public final class Ibmap extends Block{
 	private static final int bitsPerByte = Byte.SIZE;
-	
+	private static final int ibmapBlockSizeBytes = Configuration.instance().ibmapBlockSizeBytes;
+			
 	private final int blockIndex; //Not saved persistently
 	
 	/**
@@ -38,7 +39,7 @@ public final class Ibmap extends Block{
 	Ibmap(IbmapBlockID id) {
 		super(id);
 		this.blockIndex = id.blockIndex();
-		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
+		byte[] bytes = new byte[ibmapBlockSizeBytes];
 		bitset = BitSet.valueOf(bytes);
 	}
 	
@@ -66,13 +67,13 @@ public final class Ibmap extends Block{
 	}
 	
 	private long bitIdxToInumber(int ibmapIdx, int bitIndex){
-		long inumber = (8L*ibmapIdx*Constants.ibmapBlockSizeBytes) + bitIndex;
+		long inumber = (8L*ibmapIdx*ibmapBlockSizeBytes) + bitIndex;
 		//System.out.println("[Ibmap] blockIdx: " + ibmapIdx + ", bitIdx: " + bitIndex + ", inumber: " + inumber);
 		return inumber;
 	}
 	
 	private int inumberToBitIndex(long inumber){
-		return (int)(inumber % (Constants.ibmapBlockSizeBytes * bitsPerByte));
+		return (int)(inumber % (ibmapBlockSizeBytes * bitsPerByte));
 	}
 	
 	/**
@@ -82,7 +83,7 @@ public final class Ibmap extends Block{
 	 */
 	synchronized void unlinkInode(long inumber) throws InodeNumberOutOfRangeException{
 		//The inumber associated with the last bit of this ibmap block.
-		long maxInumber = bitIdxToInumber(blockIndex, Constants.ibmapBlockSizeBytes*8 - 1);
+		long maxInumber = bitIdxToInumber(blockIndex, ibmapBlockSizeBytes*8 - 1);
 		if (inumber < 0 || inumber > maxInumber)
 			throw new InodeNumberOutOfRangeException();
 		
@@ -111,12 +112,12 @@ public final class Ibmap extends Block{
 	
 	@Override
 	synchronized public void loadFrom(ByteBuffer buffer) throws IOException {
-		if (buffer.remaining() < Constants.ibmapBlockSizeBytes) {
+		if (buffer.remaining() < ibmapBlockSizeBytes) {
 			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
-					+ "Have %d, needed %d.",buffer.remaining(), Constants.ibmapBlockSizeBytes));
+					+ "Have %d, needed %d.",buffer.remaining(), ibmapBlockSizeBytes));
 		}
 		
-		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
+		byte[] bytes = new byte[ibmapBlockSizeBytes];
 		buffer.get(bytes);
 		
 		bitset = BitSet.valueOf(bytes);
@@ -130,7 +131,7 @@ public final class Ibmap extends Block{
 	
 	@Override
 	synchronized public void loadFrom(ReadableByteChannel channel) throws IOException {
-		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
+		byte[] bytes = new byte[ibmapBlockSizeBytes];
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		int bytesRead = Commons.readFrom(channel, buffer);
 		/*if (bytesRead < bytes.length)
@@ -175,7 +176,7 @@ public final class Ibmap extends Block{
 	
 	@Override
 	public synchronized int storeTo(WritableByteChannel channel) throws IOException {
-		ByteBuffer buffer = ByteBuffer.allocate(Constants.ibmapBlockSizeBytes);
+		ByteBuffer buffer = ByteBuffer.allocate(ibmapBlockSizeBytes);
 		buffer.put(bitset.toByteArray());
 		buffer.rewind();
 		
@@ -207,7 +208,7 @@ public final class Ibmap extends Block{
 	
 	@Override
 	public int memorySizeBytes() {
-		return Constants.ibmapBlockSizeBytes + 16; //FIXME: Get the exact number
+		return ibmapBlockSizeBytes + 16; //FIXME: Get the exact number
 	}
 	
 	@Override
@@ -230,7 +231,9 @@ public final class Ibmap extends Block{
 		if (bootstraped)
 			return;
 		
-		File folder = new File(Constants.ibmapsPath);
+		Configuration conf = Configuration.instance();
+		
+		File folder = new File(conf.ibmapsPath);
 		if (!folder.exists()) {
 			System.out.println("  Creating folder: " + folder.getAbsolutePath());
 			folder.mkdirs();
@@ -238,8 +241,8 @@ public final class Ibmap extends Block{
 		
 		LocalStoreManager storage = LocalStoreManager.instance();
 		//Cache cache = Cache.instance();
-		int rangeStart = Constants.ibmapBlocksRangeStart;
-		int rangeEnd = rangeStart + Constants.ibmapsPerMachine;
+		int rangeStart = conf.ibmapBlocksRangeStart;
+		int rangeEnd = rangeStart + conf.ibmapsPerMachine;
 		for(int i=rangeStart; i<rangeEnd; i++){
 			IbmapBlockID id = new IbmapBlockID(i);
 			File file = new File(id.localPath());

@@ -26,7 +26,7 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.BlockID.BlockType;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
@@ -43,7 +43,9 @@ public final class S3Backend implements GlobalBackend{
 		createRootBucket();
 		listExistingBuckets();
 		fileLocks = FileLocks.instance();
-		buffer = new byte[(Math.max(Constants.dataBlockSizeBytes, Constants.inodesBlockSizeBytes))];
+		
+		Configuration conf = Configuration.instance();
+		buffer = new byte[(Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes))];
 	}
 	
 	@Override
@@ -143,8 +145,9 @@ public final class S3Backend implements GlobalBackend{
 	}
 	
 	private AmazonS3 newS3Client() {
-		AWSCredentials credentials = new BasicAWSCredentials(Constants.minioAccessKey,
-				Constants.minioSecretKey);
+		Configuration conf = Configuration.instance();
+		
+		AWSCredentials credentials = new BasicAWSCredentials(conf.minioAccessKey, conf.minioSecretKey);
 		ClientConfiguration clientConfiguration = new ClientConfiguration();
 	    clientConfiguration.setSignerOverride("AWSS3V4SignerType"); //API signature S3v4. Depends on the minio API signature
 	    
@@ -153,7 +156,7 @@ public final class S3Backend implements GlobalBackend{
 							.withClientConfiguration(clientConfiguration)
 							.withPathStyleAccessEnabled(true)
 							.withForceGlobalBucketAccessEnabled(true)
-							.withEndpointConfiguration(new EndpointConfiguration(Constants.minioServers[0], "ca-central-1"))
+							.withEndpointConfiguration(new EndpointConfiguration(conf.minioServers[0], "ca-central-1"))
 							.build();
 		return client;
 	}

@@ -8,16 +8,18 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
-import kawkab.fs.commons.Constants;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.exceptions.AlreadyConfiguredException;
 import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
@@ -27,14 +29,13 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 public final class CLI {
 	private Filesystem fs;
-	private static final int BUFLEN = Constants.dataBlockSizeBytes;
 	private Map<String, FileHandle> openedFiles;
-
+	
 	public CLI() {
 		openedFiles = new HashMap<String, FileHandle>();
 	}
 	
-	public static void main(String[] args) throws IOException, KawkabException, InterruptedException {
+	public static void main(String[] args) throws IOException, KawkabException, InterruptedException, AlreadyConfiguredException {
 		CLI c = new CLI();
 
 		c.initFS();
@@ -42,10 +43,12 @@ public final class CLI {
 		c.shutdown();
 	}
 
-	private void initFS() throws IOException, KawkabException, InterruptedException {
+	private void initFS() throws IOException, KawkabException, InterruptedException, AlreadyConfiguredException {
 		//Constants.printConfig();
-		fs = Filesystem.instance();
-		fs.bootstrap();
+		int nodeID = getNodeID();
+		Properties props = getProperties();
+		
+		fs = Filesystem.bootstrap(nodeID, props);
 	}
 
 	private void cmd() throws IOException {
@@ -166,7 +169,8 @@ public final class CLI {
 	private void appendFile(String fn, String srcFile) throws IOException, OutOfMemoryException,
 			MaxFileSizeExceededException, InvalidFileOffsetException, KawkabException, InterruptedException {
 		try (DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(srcFile))))) {
-			byte[] buf = new byte[Constants.dataBlockSizeBytes];
+			int bufLen = 4*1024;
+			byte[] buf = new byte[bufLen];
 			int dataSize = 0;
 			while ((dataSize = dis.read(buf)) != -1) {
 				appendFile(fn, buf, dataSize, buf.length);
@@ -251,8 +255,10 @@ public final class CLI {
 		if (file == null) {
 			throw new IOException("File not opened: " + fn);
 		}
+		
+		int bufLen = 16*1024*1024;
 
-		byte[] buf = new byte[BUFLEN];
+		byte[] buf = new byte[bufLen];
 		long read = 0;
 		BufferedWriter out = null;
 		try {
@@ -323,5 +329,25 @@ public final class CLI {
 			}
 		}
 		System.out.println("\n");*/
+	}
+	
+	private static Properties getProperties() throws IOException {
+		String propsFile = "/config.properties";
+		
+		try (InputStream in = Thread.class.getResourceAsStream(propsFile)) {
+			Properties props = new Properties();
+			props.load(in);
+			return props;
+		}
+	}
+	
+	private static int getNodeID() throws KawkabException {
+		String nodeIDProp = "nodeID";
+		
+		if (System.getProperty(nodeIDProp) == null) {
+			throw new KawkabException("System property nodeID is not defined.");
+		}
+		
+		return Integer.parseInt(System.getProperty(nodeIDProp));
 	}
 }

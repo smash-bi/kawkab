@@ -10,7 +10,7 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.cache.RemovalListener;
 import com.google.common.cache.RemovalNotification;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 
 public class GCache extends Cache implements RemovalListener<BlockID, Block>{
@@ -18,18 +18,22 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 	
 	private LoadingCache<BlockID, Block> cache;
 	private LocalStoreManager localStore;
+	private static Configuration conf;
 	
 	private static GCache instance;
 	
-	private GCache() throws IOException{
+	
+	private GCache() throws IOException {
 		System.out.println("Initializing cache..." );
+		
+		conf = Configuration.instance();
 		
 		localStore = LocalStoreManager.instance();
 		//cache = new GCache(this);
 		
 		cache = CacheBuilder.newBuilder()
-				.maximumSize(Constants.maxBlocksInCache)
-				.initialCapacity(Constants.maxBlocksInCache)
+				.maximumSize(conf.maxBlocksInCache)
+				.initialCapacity(conf.maxBlocksInCache)
 				//.expireAfterAccess(120, TimeUnit.SECONDS)
 				.removalListener(this)
 				.concurrencyLevel(8)

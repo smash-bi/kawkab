@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import kawkab.fs.commons.Commons;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileAlreadyExistsException;
 import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -26,11 +26,13 @@ public class Namespace {
 	private Map<Long, Boolean> openedFiles; // Map<inumber, appendMode>
 
 	private static Namespace instance;
+	private static final int ibmapsPerMachine = Configuration.instance().ibmapsPerMachine;
+	private static final int thisNodeID = Configuration.instance().thisNodeID;
 
 	private Namespace() throws KawkabException, IOException {
 		cache = Cache.instance();
 		locks = new KeyedLock();
-		lastIbmapUsed = Constants.ibmapBlocksRangeStart;
+		lastIbmapUsed = Configuration.instance().ibmapBlocksRangeStart;
 		openedFiles = new ConcurrentHashMap<Long, Boolean>();
 		ns = NamespaceService.instance();
 	}
@@ -94,10 +96,10 @@ public class Namespace {
 
 			// if the file is opened in append mode and this node is not the primary file
 			// writer
-			if (appendMode && Commons.primaryWriterID(inumber) != Constants.thisNodeID) {
+			if (appendMode && Commons.primaryWriterID(inumber) != thisNodeID) {
 				throw new InvalidFileModeException(
 						String.format("Cannot open file in the append mode. Inumber of the file is out of range of this node's range. NodeID=%d, PrimaryWriter=%d",
-								Constants.thisNodeID, 
+								thisNodeID, 
 								Commons.primaryWriterID(inumber)));
 			}
 
@@ -156,7 +158,7 @@ public class Namespace {
 				if (inumber >= 0)
 					break;
 
-				mapNum = (mapNum + 1) % Constants.ibmapsPerMachine;
+				mapNum = (mapNum + 1) % ibmapsPerMachine;
 				if (mapNum == lastIbmapUsed) {
 					throw new IbmapsFullException();
 				}

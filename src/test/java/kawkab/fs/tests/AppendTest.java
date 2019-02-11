@@ -1,6 +1,8 @@
 package kawkab.fs.tests;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
 import java.util.Random;
 
 import org.junit.After;
@@ -12,6 +14,7 @@ import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Stats;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.exceptions.AlreadyConfiguredException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.InvalidFileModeException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
@@ -22,8 +25,11 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 public class AppendTest {
 
 	@Before
-	public void initialize() throws IOException, InterruptedException, KawkabException {
-		Filesystem.instance().bootstrap();
+	public void initialize() throws IOException, InterruptedException, KawkabException, AlreadyConfiguredException {
+		int nodeID = getNodeID();
+		Properties props = getProperties();
+		
+		Filesystem.bootstrap(nodeID, props);
 	}
 	
 	@After
@@ -96,5 +102,25 @@ public class AppendTest {
 		}
 
 		System.out.printf("WriteStats: sum=%.0f, %s, bufSize=%d\n", writeStats.sum(), writeStats, bufSize);
+	}
+	
+	private Properties getProperties() throws IOException {
+		String propsFile = "/config.properties";
+		
+		try (InputStream in = Thread.class.getResourceAsStream(propsFile)) {
+			Properties props = new Properties();
+			props.load(in);
+			return props;
+		}
+	}
+	
+	private int getNodeID() throws KawkabException {
+		String nodeIDProp = "nodeID";
+		
+		if (System.getProperty(nodeIDProp) == null) {
+			throw new KawkabException("System property nodeID is not defined.");
+		}
+		
+		return Integer.parseInt(System.getProperty(nodeIDProp));
 	}
 }

@@ -3,20 +3,21 @@ package kawkab.fs.core;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 
 @SuppressWarnings("serial")
 public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 	private BlockEvictionListener evictListener;
+	private static final int maxBlocksInCache = Configuration.instance().maxBlocksInCache;
 	
 	public LRUCache(BlockEvictionListener evictListener){
-		super(Constants.maxBlocksInCache+1, 1.1f, true);
+		super(maxBlocksInCache+1, 1.1f, true);
 		this.evictListener = evictListener;
 	}
 	
 	@Override
 	protected boolean removeEldestEntry(Entry<BlockID, CachedItem> eldest) {
-		if (super.size() < Constants.maxBlocksInCache)
+		if (super.size() < maxBlocksInCache)
 			return false;
 		
 		CachedItem toEvict = eldest.getValue();

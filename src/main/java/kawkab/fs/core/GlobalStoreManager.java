@@ -3,7 +3,7 @@ package kawkab.fs.core;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 
@@ -13,7 +13,7 @@ public class GlobalStoreManager {
 	private GlobalBackend loadWorker; // To load a block from the global store
 	private LinkedBlockingQueue<Task> storeQs[]; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks globally
-	private final int numWorkers;               // Number of worker threads and number of reqsQs
+	private final int numWorkers = Configuration.instance().numWorkersStoreToGlobal; // Number of worker threads and number of reqsQs
 	private volatile boolean working = true;    // To stop accepting new requests after working is false
 	
 	private static GlobalStoreManager instance;
@@ -30,7 +30,6 @@ public class GlobalStoreManager {
 	}
 	
 	private GlobalStoreManager() {
-		numWorkers = Constants.numWorkersStoreToGlobal;
 		loadWorker = new S3Backend();
 		backends = new GlobalBackend[numWorkers];
 		for(int i=0; i<numWorkers; i++) {

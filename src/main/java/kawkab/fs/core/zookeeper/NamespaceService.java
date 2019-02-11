@@ -7,7 +7,7 @@ import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.Code;
 
 import kawkab.fs.commons.Commons;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileAlreadyExistsException;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
@@ -23,7 +23,7 @@ public final class NamespaceService {
 	
 	private NamespaceService() throws KawkabException {
 		zkclient = ZKService.instance();
-		zkcluster = Constants.zkMainCluster;
+		zkcluster = Configuration.instance().zkMainCluster;
 		zkclient.initService(zkcluster);
 		encoder = Base64.getUrlEncoder();
 		//createRootNode();
@@ -101,7 +101,7 @@ public final class NamespaceService {
 			zkclient.addNode(zkcluster.id(), path, new byte[]{0});
 		} catch (KeeperException e) {
 			if (e.code() != Code.NODEEXISTS)
-				throw new KawkabException(e.getMessage());
+				throw new KawkabException(e);
 		}
 	}
 	

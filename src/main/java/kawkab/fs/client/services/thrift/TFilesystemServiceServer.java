@@ -12,7 +12,7 @@ import org.apache.thrift.transport.TServerTransport;
 import org.apache.thrift.transport.TTransportFactory;
 
 import kawkab.fs.client.services.FilesystemService;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Filesystem;
 
 public class TFilesystemServiceServer {
@@ -23,7 +23,7 @@ public class TFilesystemServiceServer {
 		
 		
 		try {
-			TServerTransport transport = new TServerSocket(Constants.FS_SERVER_LISTEN_PORT);
+			TServerTransport transport = new TServerSocket(Configuration.instance().fsServerListenPort);
 
 			TThreadPoolServer.Args args = new TThreadPoolServer.Args(transport);
 			args.transportFactory(new TTransportFactory());

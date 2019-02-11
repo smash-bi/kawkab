@@ -6,7 +6,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 
@@ -16,8 +16,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	//private ExecutorService workers;
 	private GlobalStoreManager globalProc;
 	
-	private final int maxBlocks = Constants.maxBlocksPerLocalDevice; // Number of blocks that can be created locally
-	private final int numWorkers;               // Number of worker threads and number of reqsQs
+	private static final int maxBlocks = Configuration.instance().maxBlocksPerLocalDevice; // Number of blocks that can be created locally
+	private static final int numWorkers = Configuration.instance().syncThreadsPerDevice; // Number of worker threads and number of reqsQs
+	
 	private LinkedBlockingQueue<Block> storeQs[]; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks locally
 	private LocalStoreDB storedFilesMap;        // Contains the paths and IDs of the blocks that are currently stored locally
@@ -41,7 +42,6 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private LocalStoreManager() throws IOException {
 		//workers = Executors.newFixedThreadPool(numWorkers);
 		globalProc = GlobalStoreManager.instance();
-		numWorkers = Constants.syncThreadsPerDevice;
 		
 		storedFilesMap = new LocalStoreDB(maxBlocks);
 		storePermits = new Semaphore(maxBlocks);

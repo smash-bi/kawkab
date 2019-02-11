@@ -1,18 +1,21 @@
 package kawkab.fs.tests;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Properties;
 import java.util.Random;
 
 import org.junit.Test;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.exceptions.AlreadyConfiguredException;
 import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
@@ -23,18 +26,21 @@ import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 public final class FSTest {
+	private Configuration conf;
+	private Filesystem fs;
+	
 	public static void main(String args[]) throws OutOfMemoryException, MaxFileSizeExceededException,
 			InterruptedException, IbmapsFullException, InvalidFileOffsetException, InvalidFileModeException,
-			IOException, IllegalArgumentException, KawkabException {
+			IOException, IllegalArgumentException, KawkabException, AlreadyConfiguredException, FileAlreadyOpenedException {
 		FSTest tester = new FSTest();
 		// Constants.printConfig();
 		tester.testBootstrap();
-		// tester.testBlocksCreation();
-		// tester.testSmallReadWrite();
+		tester.testBlocksCreation();
+		tester.testSmallReadWrite();
 		// tester.testSmallRead();
-		// tester.testLargeReadWrite();
-		// tester.testMultipleReaders();
-		// tester.testMultipleFiles();
+		tester.testLargeReadWrite();
+		tester.testMultipleReaders();
+		tester.testMultipleFiles();
 		// tester.testWritePerformance();
 		// tester.testWritePerformanceConcurrentFiles();
 		// tester.testReadPerformance();
@@ -43,7 +49,7 @@ public final class FSTest {
 		// tester.testConcurrentReadWrite();
 		// tester.testConcurrentReadWriteLastBlock();
 
-		tester.testRawWrites();
+		//tester.testRawWrites();
 
 		// tester.testVeryLargeReadWrite();
 		// tester.testFileSeek();
@@ -57,26 +63,51 @@ public final class FSTest {
 	
 	/**
 	 * This must be called first to bootstrap the system.
+	 * @throws AlreadyConfiguredException 
 	 */
-	private void testBootstrap() throws IOException, KawkabException, InterruptedException{
+	private void testBootstrap() throws IOException, KawkabException, InterruptedException, AlreadyConfiguredException{
 		System.out.println("---------------------------------------------");
 		System.out.println("            Bootstrap test");
 		System.out.println("---------------------------------------------");
 		
-		Filesystem fs = Filesystem.instance();
-		fs.bootstrap();
+		int nodeID = getNodeID();
+		Properties props = getProperties();
+		
+		fs = Filesystem.bootstrap(nodeID, props);
+		conf = fs.getConf();
+	}
+	
+	private Properties getProperties() throws IOException {
+		String propsFile = "/config.properties";
+		
+		try (InputStream in = Thread.class.getResourceAsStream(propsFile)) {
+			Properties props = new Properties();
+			props.load(in);
+			return props;
+		}
+	}
+	
+	private int getNodeID() throws KawkabException {
+		String nodeIDProp = "nodeID";
+		
+		if (System.getProperty(nodeIDProp) == null) {
+			throw new KawkabException("System property nodeID is not defined.");
+		}
+		
+		return Integer.parseInt(System.getProperty(nodeIDProp));
 	}
 	
 	/**
 	 * Tests the creation of blocks for a new file.
+	 * @throws AlreadyConfiguredException 
 	 */
 	private void testBlocksCreation() throws IbmapsFullException, OutOfMemoryException, FileAlreadyOpenedException, 
-				MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException{
+				MaxFileSizeExceededException, InvalidFileOffsetException, InvalidFileModeException, IOException, KawkabException, InterruptedException, AlreadyConfiguredException{
 		System.out.println("-------------------------------------------------");
 		System.out.println("            Blocks creation test");
 		System.out.println("-------------------------------------------------");
 		
-		Filesystem fs = Filesystem.instance().bootstrap();
+		Filesystem fs = Filesystem.instance();
 		String filename = "testFile";
 		FileHandle file = fs.open(filename, FileMode.APPEND, new FileOptions());
 		
@@ -93,14 +124,14 @@ public final class FSTest {
 		System.out.println("            Small file test read and write");
 		System.out.println("--------------------------------------------");
 		
-		Filesystem fs = Filesystem.instance().bootstrap();
+		Filesystem fs = Filesystem.instance();
 		
 		String filename = new String("/home/smash/testSmall");
 		FileOptions opts = new FileOptions();
 		
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
-		int dataSize = (int)(1.7*Constants.segmentSizeBytes);
+		int dataSize = (int)(1.7*conf.segmentSizeBytes);
 		byte[] dataBuffer = new byte[dataSize];
 		new Random().nextBytes(dataBuffer);
 		
@@ -132,14 +163,14 @@ public final class FSTest {
 		System.out.println("            Small file test read");
 		System.out.println("--------------------------------------------");
 
-		Filesystem fs = Filesystem.instance().bootstrap();
+		Filesystem fs = Filesystem.instance();
 
 		String filename = new String("/home/smash/testSmall");
 		FileOptions opts = new FileOptions();
 
 		FileHandle file = fs.open(filename, FileMode.READ, opts);
 
-		int bufSize = Constants.dataBlockSizeBytes;
+		int bufSize = conf.dataBlockSizeBytes;
 
 		System.out.println("Initial file size: " + file.size());
 
@@ -166,7 +197,7 @@ public final class FSTest {
 		System.out.println("            Large files test");
 		System.out.println("--------------------------------------------");
 		
-		Filesystem fs = Filesystem.instance().bootstrap();
+		Filesystem fs = Filesystem.instance();
 		
 		String filename = new String("/home/smash/testLarge");
 		FileOptions opts = new FileOptions();
@@ -174,7 +205,7 @@ public final class FSTest {
 		
 		System.out.println("Initial file size: " + file.size());
 		
-		int dataSize = 2*Constants.dataBlockSizeBytes + 1; //1*1024*1024*1024;
+		int dataSize = 2*conf.dataBlockSizeBytes + 1; //1*1024*1024*1024;
 		byte[] dataBuffer = new byte[dataSize];
 		new Random().nextBytes(dataBuffer);
 		
@@ -201,15 +232,15 @@ public final class FSTest {
 		System.out.println("            Multiple Readers Test");
 		System.out.println("--------------------------------------------");
 		
-		Filesystem fs = Filesystem.instance().bootstrap();
+		Filesystem fs = Filesystem.instance();
 		String filename = new String("/home/smash/multipleReaders");
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		final long offset = file.size();
 		
 		Random rand = new Random(0);
-		int bufSize = Constants.segmentSizeBytes;//8*1024*1024;
-		long dataSize = 1L*20*Constants.dataBlockSizeBytes + 1;
+		int bufSize = conf.segmentSizeBytes;//8*1024*1024;
+		long dataSize = 1L*20*conf.dataBlockSizeBytes + 1;
 		long appended = 0;
 		
 		byte[] writeBuf = new byte[bufSize];
@@ -294,7 +325,7 @@ public final class FSTest {
 		System.out.println("            Multiple Files Test");
 		System.out.println("--------------------------------------------");
 		
-		Filesystem fs = Filesystem.instance().bootstrap();
+		Filesystem fs = Filesystem.instance();
 		
 		int numFiles = 100;
 		Thread[] workers = new Thread[numFiles];
@@ -312,8 +343,8 @@ public final class FSTest {
 						//System.out.println("Opening file: " + filename + ", current size="+initialSize);
 						
 						Random rand = new Random(0);
-						int bufSize = Constants.segmentSizeBytes;//8*1024*1024;
-						long dataSize = 4L*Constants.dataBlockSizeBytes + 17;
+						int bufSize = conf.segmentSizeBytes;//8*1024*1024;
+						long dataSize = 4L*conf.dataBlockSizeBytes + 17;
 						long appended = 0;
 						
 						byte[] writeBuf = new byte[bufSize];
@@ -375,7 +406,7 @@ public final class FSTest {
 		System.out.println("--------------------------------------------");
 		System.out.println("            Write Performance Test");
 		System.out.println("--------------------------------------------");
-		Filesystem fs = Filesystem.instance().bootstrap();
+		Filesystem fs = Filesystem.instance();
 		String filename = new String("/home/smash/writePerformanceTest");
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
@@ -412,7 +443,7 @@ public final class FSTest {
 		System.out.println("            Write Perofrmance Test - Concurrent Files");
 		System.out.println("----------------------------------------------------------------");
 		
-		Filesystem fs = Filesystem.instance().bootstrap();
+		Filesystem fs = Filesystem.instance();
 		
 		int numWriters = 1;
 		Thread[] workers = new Thread[numWriters];
@@ -479,13 +510,13 @@ public final class FSTest {
 		System.out.println("--------------------------------------------");
 		System.out.println("            Read Performance Test");
 		System.out.println("--------------------------------------------");
-		Filesystem fs = Filesystem.instance().bootstrap();
+		Filesystem fs = Filesystem.instance();
 		String filename = new String("/home/smash/rp");
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
 		Random rand = new Random(0);
-		int bufSize = Constants.segmentSizeBytes;
+		int bufSize = conf.segmentSizeBytes;
 		long dataSize = 2L*1024*1024*1024;//1000*1000L*64L*bufSize + 3;
 		byte[] buffer = new byte[bufSize];
 		long appended = file.size();
@@ -523,7 +554,7 @@ public final class FSTest {
 		System.out.println("       Read Performance Multiple Readers Same File Test");
 		System.out.println("-----------------------------------------------------------------");
 		
-		Filesystem fs = Filesystem.instance().bootstrap();
+		Filesystem fs = Filesystem.instance();
 		String filename = new String("/home/smash/rpmsf");
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
@@ -610,10 +641,10 @@ public final class FSTest {
 		final int appendSize = 1000;
 		final int bufferSize = 1*1024;
 		Thread[] workers = new Thread[numWorkers];
-		final Random rand = new Random(Constants.thisNodeID);
+		final Random rand = new Random(conf.thisNodeID);
 		final String prefix = "CRWTestL-";
 		
-		Filesystem.instance().bootstrap();
+		Filesystem.instance();
 		
 		for(int i=0; i<numWorkers; i++) {
 			final int id = i;
@@ -692,12 +723,10 @@ public final class FSTest {
 		final int numWorkers = 100;
 		final int numFiles = 1;
 		final int numTasks = 1000;
-		final int appendSize = Constants.segmentSizeBytes/3; // An odd append size to test reading existing block as well as newly created block
+		final int appendSize = conf.segmentSizeBytes/3; // An odd append size to test reading existing block as well as newly created block
 		final int bufferSize = 1024;
 		Thread[] workers = new Thread[numWorkers];
-		final Random rand = new Random(Constants.thisNodeID);
-		
-		Filesystem.instance().bootstrap();
+		final Random rand = new Random(conf.thisNodeID);
 		
 		for(int i=0; i<numWorkers; i++) {
 			final int id = i;
@@ -798,12 +827,12 @@ public final class FSTest {
 						long appended = 0;
 						long startTime = System.currentTimeMillis();
 						
-						ByteBuffer dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
+						ByteBuffer dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
 						while(appended < dataSize) {
 							int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
 							
 							if (toWrite > dataBuf.remaining()) {
-								dataBuf = ByteBuffer.allocateDirect(Constants.segmentSizeBytes);
+								dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
 								assert toWrite <= dataBuf.remaining();
 							}
 							
@@ -857,7 +886,8 @@ public final class FSTest {
 	@Test
 	public void mainTest() throws OutOfMemoryException, MaxFileSizeExceededException, InterruptedException,
 			IbmapsFullException, InvalidFileOffsetException, InvalidFileModeException, IOException,
-			IllegalArgumentException, KawkabException {
+			IllegalArgumentException, KawkabException, AlreadyConfiguredException, FileAlreadyOpenedException {
+		
 		FSTest.main(null);
 	}
 }

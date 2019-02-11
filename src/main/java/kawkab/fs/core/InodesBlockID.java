@@ -2,11 +2,15 @@ package kawkab.fs.core;
 
 import java.io.File;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 
 public final class InodesBlockID extends BlockID{
 	private final int blockIndex;
 	private String localPath;
+	
+	private static final int inodeBlocksPerMachine = Configuration.instance().inodeBlocksPerMachine;
+	private static final int inodeBlocksPerDirectory = Configuration.instance().inodeBlocksPerDirectory;
+	private static final String inodeBlocksPath = Configuration.instance().inodeBlocksPath + File.separator;
 	
 	public InodesBlockID(int blockIndex) {
 		super(BlockType.INODES_BLOCK);
@@ -19,7 +23,7 @@ public final class InodesBlockID extends BlockID{
 	
 	@Override
 	public int primaryNodeID() {
-		return (int) (blockIndex / Constants.inodeBlocksPerMachine); //First block has ID 0
+		return (int) (blockIndex / inodeBlocksPerMachine); //First block has ID 0
 	}
 
 	@Override
@@ -39,7 +43,7 @@ public final class InodesBlockID extends BlockID{
 	@Override
 	public String localPath() {
 		if (localPath == null)
-			localPath = Constants.inodeBlocksPath + File.separator + (blockIndex/Constants.inodeBlocksPerDirectory) + File.separator + blockIndex;
+			localPath = inodeBlocksPath + (blockIndex/inodeBlocksPerDirectory) + File.separator + blockIndex;
 		
 		return localPath;
 	}
