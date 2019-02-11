@@ -8,8 +8,8 @@ then
   exit 1
 fi
 
-#BIN=zookeeper-3.4.10/bin
-BIN=zookeeper-3.5.3-beta/bin
+zkDir=zookeeper-3.5.4-beta
+BIN=${zkDir}/bin
 conf="./conf/zoo$1.cfg"
 
 #export ZOO_LOG4J_PROP="DEBUG,CONSOLE";
