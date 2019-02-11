@@ -37,6 +37,8 @@ Please customize the [config.properties](src/main/resources/config.properties) f
 * basePath
 * zkMainServers
 * minioServers
+* minioAccessKey
+* minioSecretKey
 * The Kawkab nodes count and list
 
 ## Run AppendTest
