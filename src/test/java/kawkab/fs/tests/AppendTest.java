@@ -47,10 +47,10 @@ public class AppendTest {
 
 		Filesystem fs = Filesystem.instance();
 
-		int numWriters = 1;
+		int numWriters = Integer.parseInt(System.getProperty("numWriters", "1"));
 		Thread[] workers = new Thread[numWriters];
-		final int bufSize = 1 * 100; // Constants.segmentSizeBytes;//8*1024*1024;
-		final long dataSize = 15L * 1024 * 1024 * 1024;
+		final int bufSize = Integer.parseInt(System.getProperty("bufferSize", "100"));
+		final long dataSize = 5L * 1024 * 1024 * 1024;
 
 		Stats writeStats = new Stats();
 		for (int i = 0; i < numWriters; i++) {
@@ -82,7 +82,7 @@ public class AppendTest {
 						writeStats.putValue(thr);
 
 						System.out.println(
-								String.format("File %d: Data size = %.0fMB, Write thr = %.0fMB/s", id, sizeMB, thr));
+								String.format("Writer %d: Data size = %.0fMB, Write tput = %.0fMB/s", id, sizeMB, thr));
 					} catch (Exception e) {
 						e.printStackTrace();
 						return;
@@ -101,7 +101,7 @@ public class AppendTest {
 			}
 		}
 
-		System.out.printf("WriteStats: sum=%.0f, %s, bufSize=%d\n", writeStats.sum(), writeStats, bufSize);
+		System.out.printf("\n\nWriters stats (sum, avg, stddev, min, max, count): sum=%.0f, %s, buffer size=%d, numWriters=%d\n\n", writeStats.sum(), writeStats, bufSize, numWriters);
 	}
 	
 	private Properties getProperties() throws IOException {
