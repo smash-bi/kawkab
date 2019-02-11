@@ -48,10 +48,13 @@ First make directory "fs" in the root folder. The filesystem files will be creat
 To run the append test:
 ```
   mvn compile
-  mvn -Dtest=AppendTest -DnodeID=0 test
+  mvn -Dtest=AppendTest -DnodeID=0 [-DbufferSize=100] [-DnumWriters=1] test
 ```
 
-Please use different nodeIDs for different Kawkab nodes.
+* Please use different nodeIDs for different Kawkab nodes
+* *bufSize* is the request size; the size of the buffer that is used to call the fs.append() calls
+* *numWriters* is the number of concurrent writers
+* Each writer appends 5GB data
 
 ## Run CLI
 ```
