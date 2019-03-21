@@ -113,7 +113,7 @@ public final class PrimaryNodeService extends PrimaryNodeImplBase {
 		try {
 			block = cache.acquireBlock(bid);
 			blockBytes = block.byteString();
-		} catch(FileNotExistException | InterruptedException e) {
+		} catch(FileNotExistException e) {
 			blockBytes = null;
 		} finally {
 			if (block != null) {

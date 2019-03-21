@@ -7,6 +7,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import kawkab.fs.commons.Configuration;
+import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.utils.GCMonitor;
 
@@ -92,12 +93,11 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	 * @param blockID
 	 * @param type
 	 * @return
-	 * @throws IOException 
-	 * @throws KawkabException 
-	 * @throws InterruptedException 
+	 * @throws IOException The block is not cached if the exception is thrown 
+	 * @throws KawkabException The block is not cached if the exception is thrown
 	 */
 	@Override
-	public Block acquireBlock(BlockID blockID) throws IOException, KawkabException, InterruptedException {
+	public Block acquireBlock(BlockID blockID) throws IOException, KawkabException {
 		//System.out.println("[C] acquire: " + blockID);
 		
 		CachedItem cachedItem = null;
@@ -132,12 +132,20 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		
 		assert cache.size() <= conf.maxBlocksInCache;
 		
+		Block block = cachedItem.block();
+		try {
+			block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock function
+		} catch (KawkabException | IOException e) {
+			releaseBlock(block.id());
+		}
+        // deals with concurrency. Therefore, we don't need to provide mutual exclusion here.
+		
 		// FIXME: Barging cannot happen between the writer that creates a new block and the readers that read the newly created
 		// block. This is because the file size is updated only after appending some data and the data can only be
 		// appended after creating the new block, which includes creating a new file in the local store.
 		
 		//long t = System.nanoTime();
-		Block block = cachedItem.block();
+		//Block block = cachedItem.block();
 		/*if (createNewBlock) { //Not mutually exclusive because only one of the threads can create a new block as we have only one writer.
 			              // Otherwise, we should acquire a lock. Moreover, a reader cannot read a new block concurrently because 
 						  // the file size doesn't reflect the existence of the new block until the append function that
@@ -206,10 +214,6 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 			
 			//releaseStats.putValue((System.nanoTime()-t)/1000);
 		}
-			
-		/*} finally {
-			
-		}*/
 	}
 	
 	/**

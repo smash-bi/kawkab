@@ -23,7 +23,7 @@ public final class DataSegment extends Block {
 	
 	private ByteBuffer dataBuf;
 	private DataSegmentID segmentID;
-	private boolean segmentIsFull;  // Sets to true only when the block becomes full in an append operation.
+	private volatile boolean segmentIsFull;  // Sets to true only when the block becomes full in an append operation.
 	private long lastFetchTimeMs; // Clock time in ms when the block was last loaded. This must be initialized 
 										// to zero when the block is first created in memory.
 	private AtomicInteger dirtyOffset;
@@ -42,7 +42,22 @@ public final class DataSegment extends Block {
 		lastFetchTimeMs = 0;
 		dirtyOffset = new AtomicInteger(0);
 		
+		dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
+		
 		//System.out.println(" Opened block: " + name());
+	}
+	
+	void reInit(DataSegmentID segmentID) {
+		reset(segmentID);
+		this.segmentID = segmentID;
+		lastFetchTimeMs = 0;
+		dataBuf.clear();
+		dataBuf.limit(0);
+		dirtyOffset.set(0);
+	}
+	
+	boolean isFull() {
+		return segmentIsFull;
 	}
 	
 	/**
@@ -53,7 +68,7 @@ public final class DataSegment extends Block {
 	 * @return number of bytes appended starting from the offset
 	 * @throws IOException 
 	 */
-	synchronized int append(byte[] data, int offset, int length, long offsetInFile) throws IOException {
+	int append(byte[] data, int offset, int length, long offsetInFile) throws IOException {
 		assert offset >= 0;
 		assert offset < data.length;
 		
@@ -62,9 +77,14 @@ public final class DataSegment extends Block {
 		int capacity = conf.segmentSizeBytes - offsetInSegment;
 		int toAppend = length <= capacity ? length : capacity;
 		
+		/*int toAppend = length;
+		if (length > capacity)
+			toAppend = capacity;*/
+		
 		//System.arraycopy(data, offset, bytes, offsetInSegment, toAppend);
 		if (offsetInSegment != dataBuf.limit())
 			System.out.println(id + " - " + offsetInSegment+" != "+dataBuf.limit());
+		
 		assert offsetInSegment == dataBuf.limit();
 
 		dataBuf.position(offsetInSegment);
@@ -122,7 +142,7 @@ public final class DataSegment extends Block {
 	}
 	
 	@Override
-	public synchronized boolean shouldStoreGlobally() {
+	public boolean shouldStoreGlobally() {
 		// Store in the global store only if this is the last segment of the block and this segment is full
 		if (segmentID.segmentInBlock()+1 == conf.segmentsPerBlock // If it is the last segment in the block 
 				&& segmentIsFull) { // and the segment is full
@@ -156,7 +176,6 @@ public final class DataSegment extends Block {
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		Commons.readFrom(channel, buffer);*/ 
 		
-		dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
 		int loaded = Commons.readFrom(channel, dataBuf);
 		
 		assert loaded >= 0;
@@ -193,7 +212,6 @@ public final class DataSegment extends Block {
 		
 		int length = srcBuffer.remaining();
 		
-		dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
 		dataBuf.limit(length);
 		dataBuf.put(srcBuffer);
 		dataBuf.rewind();
@@ -339,26 +357,6 @@ public final class DataSegment extends Block {
 		return bytesWritten;
 	}
 
-	/*@Override
-	public synchronized int storeFullTo(WritableByteChannel channel) throws IOException {
-		int bytesWritten = 0;
-		//int size = bytes.length;
-		//ByteBuffer buffer = ByteBuffer.wrap(bytes);
-		//bytesWritten = Commons.writeTo(channel, buffer);
-		
-		dataBuf.rewind();
-		int size = dataBuf.remaining();
-		bytesWritten = Commons.writeTo(channel, dataBuf);
-		
-		if (bytesWritten < size) {
-			throw new InsufficientResourcesException(String.format("Full block is not stored. Stored "
-					+ "%d bytes out of %d.",bytesWritten, size));
-		}
-		
-		System.out.println("[DS] Bytes written in channel: " + bytesWritten);
-		
-		return bytesWritten;
-	}*/
 	
 	@Override
 	public ByteString byteString() {
@@ -397,41 +395,6 @@ public final class DataSegment extends Block {
 	public int sizeWhenSerialized() {
 		return conf.segmentSizeBytes;
 	}
-	
-	
-	/*@Override
-	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
-		//We don't have to anything here because the loadFromDisk function implemented in this class does not call fromBuffer method. 
-	}
-
-	@Override
-	void toBuffer(ByteBuffer buffer) throws InsufficientResourcesException {
-		//We don't have to anything here because the storeToDisk function implemented in this class does not call toBuffer method.
-	}
-	
-	@Override
-	public void load() throws IOException {
-		//System.out.println("Opening block: " + id);
-		Path path = new File(localPath()).toPath();
-		//buffer = IoUtil.mapExistingFile(location, id.key, 0, Constants.dataBlockSizeBytes);
-		Set<OpenOption> options = new HashSet<OpenOption>();
-	    options.add(StandardOpenOption.WRITE);
-	    options.add(StandardOpenOption.READ);
-		channel = Files.newByteChannel(path, options);
-	}*/
-	
-	
-	/**
-	 * This is the last function called before releasing memory from cache. Therefore, we should also perform
-	 * cleanup operations here.
-	 */
-	/*@Override
-	public void store() throws IOException{
-		//System.out.println("Closing block: " + id);
-		//IoUtil.unmap(buffer);
-		//System.out.println("\tClosed block: " + name());
-		cleanup();
-	}*/
 	
 	@Override
 	public synchronized void cleanup() throws IOException {
@@ -497,13 +460,5 @@ public final class DataSegment extends Block {
 	public static int offsetInSegment(long offsetInFile, int recordSize) {
 		// offsetInSegment = recordInSegment + offsetInRecord
 		return (int)(recordInSegment(offsetInFile, recordSize) + (offsetInFile % recordSize));
-	}
-	
-	/**
-	 * Converts the offset in the file to the offset in the block
-	 */
-	private static int offsetInBlock(long offsetInFile, int recordSize) {
-		// offsetInBlock = segmentInBlock + recordInSegment + offsetInRecord
-		return (int)((segmentInBlock(segmentInFile(offsetInFile, recordSize)) + recordInSegment(offsetInFile, recordSize) + (offsetInFile % recordSize)));
 	}
 }

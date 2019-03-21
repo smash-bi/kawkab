@@ -12,6 +12,7 @@ import org.junit.Test;
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Stats;
+import kawkab.fs.core.DataSegment;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.AlreadyConfiguredException;
@@ -47,12 +48,13 @@ public class AppendTest {
 
 		Filesystem fs = Filesystem.instance();
 
-		int numWriters = Integer.parseInt(System.getProperty("numWriters", "1"));
+		final int numWriters = Integer.parseInt(System.getProperty("numWriters", "1"));
 		Thread[] workers = new Thread[numWriters];
 		final int bufSize = Integer.parseInt(System.getProperty("bufferSize", "100"));
-		final long dataSize = 5L * 1024 * 1024 * 1024;
+		final long dataSize = Long.parseLong(System.getProperty("dataSize", "5368709120"));
 
 		Stats writeStats = new Stats();
+		Stats opStats = new Stats();
 		for (int i = 0; i < numWriters; i++) {
 			final int id = i;
 			workers[i] = new Thread() {
@@ -60,9 +62,10 @@ public class AppendTest {
 					try {
 						String filename = new String("/home/smash/twpcf-" + id);
 						FileOptions opts = new FileOptions();
+						
+						System.out.println("Opening file: " + filename);
+						
 						FileHandle file = fs.open(filename, FileMode.APPEND, opts);
-
-						System.out.println("Opening file: " + filename + ", current size=" + file.size());
 
 						Random rand = new Random(0);
 						long appended = 0;
@@ -71,18 +74,26 @@ public class AppendTest {
 						rand.nextBytes(writeBuf);
 
 						long startTime = System.currentTimeMillis();
+						int toWrite = bufSize;
+						long ops = 0;
 						while (appended < dataSize) {
-							int toWrite = (int) (appended + bufSize <= dataSize ? bufSize : dataSize - appended);
+							if (dataSize-appended < bufSize)
+								toWrite = (int)(dataSize - appended);
+							
 							appended += file.append(writeBuf, 0, toWrite);
+							ops++;
 						}
-
+						
 						double durSec = (System.currentTimeMillis() - startTime) / 1000.0;
-						double sizeMB = appended / (1024.0 * 1024);
+						double sizeMB = appended / (1024.0 * 1024.0);
 						double thr = sizeMB / durSec;
+						double opThr = ops / durSec;
 						writeStats.putValue(thr);
+						opStats.putValue(opThr);
+						
+						file.close();
 
-						System.out.println(
-								String.format("Writer %d: Data size = %.0fMB, Write tput = %.0fMB/s", id, sizeMB, thr));
+						System.out.printf("Writer %d: Data size = %.0fMB, Write tput = %,.0f MB/s, Ops tput = %,.0f OPS\n", id, sizeMB, thr, opThr);
 					} catch (Exception e) {
 						e.printStackTrace();
 						return;
@@ -90,6 +101,7 @@ public class AppendTest {
 				}
 			};
 
+			workers[i].setName("Writer-"+id);
 			workers[i].start();
 		}
 
@@ -101,7 +113,7 @@ public class AppendTest {
 			}
 		}
 
-		System.out.printf("\n\nWriters stats (sum, avg, stddev, min, max, count): sum=%.0f, %s, buffer size=%d, numWriters=%d\n\n", writeStats.sum(), writeStats, bufSize, numWriters);
+		System.out.printf("\n\nWriters stats: sum=%.0f, %s, buffer size=%d, numWriters=%d\nOps stats: %s\n\n", writeStats.sum(), writeStats, bufSize, numWriters, opStats);
 	}
 	
 	private Properties getProperties() throws IOException {

@@ -44,6 +44,7 @@ public final class Configuration {
 	public final int inodesBlockFetchExpiryTimeoutMs; //  = 2000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	//public final int primaryFetchExpiryTimeoutMs = 5000; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
+	public final int segSyncThreadsPerDevice = 1;
 	public final int syncThreadsPerDevice; // = 1;
 	public final int numWorkersStoreToGlobal; // = 8;
 	//public final int numWorkersLoadFromGlobal = 5;

@@ -16,10 +16,12 @@ import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 public final class FileHandle {
-	private long inumber;
-	private FileMode fileMode;
-	private Cache cache;
+	private final long inumber;
+	private final FileMode fileMode;
+	private static Cache cache;
 	private final static int inodesPerBlock;
+	private Inode inode;
+	private InodesBlock inodesBlock;
 	
 	static {
 		Configuration conf = Configuration.instance();
@@ -31,6 +33,21 @@ public final class FileHandle {
 		this.fileMode = mode;
 		
 		cache = Cache.instance();
+		
+		int inodesBlockIdx = (int)(inumber / inodesPerBlock);
+		BlockID id = new InodesBlockID(inodesBlockIdx);
+		
+		InodesBlock inb = null;
+		try {
+			inb = (InodesBlock)cache.acquireBlock(id);
+		} catch (IOException | KawkabException e) {
+			inode = null;
+			inodesBlock = null;
+			throw e;
+		}
+		
+		inodesBlock = inb;
+		inode = inodesBlock.getInode(inumber);
 	}
 	
 	/**
@@ -60,24 +77,26 @@ public final class FileHandle {
 		if (length > buffer.length)
 			throw new IllegalArgumentException("Read data size is greater than the given buffer size.");
 		
-		int blockIndex = (int)(inumber / inodesPerBlock);
+		//int blockIndex = (int)(inumber / inodesPerBlock);
 		//System.out.println("[FH] inodeBlock: " + blockIndex);
-		BlockID id = new InodesBlockID(blockIndex);
+		//BlockID id = new InodesBlockID(blockIndex);
 		
-		Inode inode = null;
-		long fileSize = 0;
-		InodesBlock block = null;
-		try {
-			block = (InodesBlock)cache.acquireBlock(id);
-			block.lock(); // To read the current file size, which can be updated by a concurrent writer
-			inode = block.getInode(inumber);
-			fileSize = inode.fileSize();
-		} finally {
-			if (block != null) {
-				block.unlock();
-				cache.releaseBlock(block.id());
-			}
-		}
+		//Inode inode = null;
+		//long fileSize = 0;
+		//InodesBlock block = null;
+		//try {
+			//block = (InodesBlock)cache.acquireBlock(id);
+			//block.lock(); // To read the current file size, which can be updated by a concurrent writer
+			//inode = block.getInode(inumber);
+			//fileSize = inode.fileSize();
+		//} finally {
+			//if (block != null) {
+			//	block.unlock();
+			//	cache.releaseBlock(block.id());
+			//}
+		//}
+		
+		long fileSize = inode.fileSize();
 		
 		if (readOffsetInFile + length > fileSize)
 			throw new IllegalArgumentException(String.format(
@@ -210,31 +229,12 @@ public final class FileHandle {
 			throw new InvalidFileModeException();
 		}
 		
-		int appendedBytes = 0;
-		int inodesBlockIdx = (int)(inumber / inodesPerBlock);
-		BlockID id = new InodesBlockID(inodesBlockIdx);
-		
-		InodesBlock inodesBlock = null;
-		
-		try {
-			inodesBlock = (InodesBlock)cache.acquireBlock(id);
-			Inode inode = inodesBlock.getInode(inumber);
-			appendedBytes = inode.append(data, offset, length);
-			
-			if (appendedBytes > 0) {
-				try {
-					inodesBlock.lock();
-					inode.updateSize(appendedBytes);
-					inodesBlock.markLocalDirty();
-				} finally {
-					inodesBlock.unlock();
-				}
-			}
-		} finally {
-			if (inodesBlock != null) {
-				cache.releaseBlock(inodesBlock.id());
-			}
+		if (inodesBlock == null) {
+			throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
 		}
+		
+		int appendedBytes = inode.appendBuffered(data, offset, length);
+		inodesBlock.markLocalDirty();
 		
 		return appendedBytes;
 	}
@@ -270,5 +270,17 @@ public final class FileHandle {
 	
 	public FileMode mode() {
 		return fileMode;
+	}
+	
+	public synchronized void close() throws KawkabException {
+		
+		if (inodesBlock != null) {
+			cache.releaseBlock(inodesBlock.id());
+		}
+		
+		inode = null;
+		inodesBlock = null;
+		
+		//TODO: Update openFiles table.
 	}
 }

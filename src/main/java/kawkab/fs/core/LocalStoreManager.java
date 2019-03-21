@@ -18,13 +18,18 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	
 	private static final int maxBlocks = Configuration.instance().maxBlocksPerLocalDevice; // Number of blocks that can be created locally
 	private static final int numWorkers = Configuration.instance().syncThreadsPerDevice; // Number of worker threads and number of reqsQs
+	private static final int numSegWorkers = Configuration.instance().segSyncThreadsPerDevice;
 	
 	private LinkedBlockingQueue<Block> storeQs[]; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks locally
-	private LocalStoreDB storedFilesMap;        // Contains the paths and IDs of the blocks that are currently stored locally
-	private Semaphore storePermits;
+	private final LocalStoreDB storedFilesMap;        // Contains the paths and IDs of the blocks that are currently stored locally
+	private final Semaphore storePermits;
 	private volatile boolean working = true;
-	private FileLocks fileLocks;
+	private final FileLocks fileLocks;
+	
+	
+	private LinkedBlockingQueue<StoreItem>[] segQs;
+	private Thread[] segWorkers;
 	
 	private static LocalStoreManager instance;
 	
@@ -59,6 +64,89 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		System.out.println("Initializing local store manager");
 		
 		startWorkers();
+		startSegWorkers();
+	}
+	
+	private void startSegWorkers() {
+		segQs = new LinkedBlockingQueue[numSegWorkers];
+		for (int i=0; i<segQs.length; i++) {
+			segQs[i] = new LinkedBlockingQueue<StoreItem>();
+		}
+		
+		segWorkers = new Thread[numSegWorkers];
+		for (int i=0; i<segWorkers.length; i++) {
+			final int wid = i;
+			segWorkers[i] = new Thread("SegWorker-"+wid) {
+				public void run() {
+					runSegWorker(segQs[wid]);
+				}
+			};
+			
+			segWorkers[i].start();
+		}
+	}
+	
+	private void runSegWorker(LinkedBlockingQueue<StoreItem> reqs) {
+		while(true) {
+			StoreItem si = null;
+			try {
+				si = reqs.poll(2, TimeUnit.SECONDS);
+			} catch (InterruptedException e1) {
+				if (!working) {
+					break;
+				}
+			}
+		
+			if (si == null) {
+				if (!working)
+					break;
+				continue;
+			}
+			
+			try {
+				processDSStoreRequest(si);
+			} catch (KawkabException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		
+		
+		// Perform the remaining tasks in the queue
+		StoreItem si = null;
+		while( (si = reqs.poll()) != null) {
+			try {
+				processDSStoreRequest(si);
+			} catch (KawkabException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		
+		System.out.println("Closing thread: " + Thread.currentThread().getName());
+	}
+	
+	void storeDS(Inode inode, DataSegment ds) {
+		if (ds.markInLocalQueue()) { //The block is already in the queue, the block should not be added again.
+			// System.out.println("[LSM] Skipping: " + ds.id());
+			return;
+		}
+		
+		StoreItem item = new StoreItem(inode, ds);
+		
+		// System.out.println("\t[LSM] Enque: " + ds.id());
+		
+		//Load balance between workers, but assign same worker to the same block.
+		int queueNum = (int)(Math.abs(inode.inumber()) % numSegWorkers); //TODO: convert hashcode to a fixed computed integer or int based key
+		
+		segQs[queueNum].add(item);
+	}
+	
+	private void processDSStoreRequest(StoreItem item) throws KawkabException {
+		//System.out.println("Processing: " + item.ds.id());
+		
+		int synced = processStoreRequest(item.ds);
+		item.inode.notifyLocallySynced(item.ds, synced);
 	}
 	
 	/**
@@ -180,38 +268,36 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * @param block
 	 * @throws KawkabException
 	 */
-	private void processStoreRequest(Block block) throws KawkabException {
+	private int processStoreRequest(Block block) throws KawkabException {
+		int syncedCnt = 0;
 		long dirtyCount = block.localDirtyCount();
 		
 		// WARNING! This functions works correctly in combination with the store(block) function only if the same block 
-		// is assigned always to the same worker thread.
+		// is always assigned to the same worker thread.
 		
 		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
 		
 		block.clearInLocalQueue();
 		if (dirtyCount == 0) {
 			block.decAndGetLocalDirty(0); // To release any thread waiting for this block to be synced
-			return;
+			return 0;
 		}
 		
 		try {
-			fileLocks.lockFile(block.id());
+			fileLocks.lockFile(block.id()); // To prevent concurrent read from the GlobalStoreManager
 		} catch (InterruptedException e1) {
 			e1.printStackTrace();
-			return;
+			return 0;
 		} finally {
 			fileLocks.unlockFile(block.id());
 			
 		}
 		
 		try {
-			boolean globalDirty = false;
 			while (dirtyCount > 0) {
 				try {
 					//syncLocally(block);
-					block.storeToFile();
-					block.markGlobalDirty();
-					globalDirty = true;
+					syncedCnt += block.storeToFile();
 				} catch (IOException e) {
 					e.printStackTrace();
 					//FIXME: What should we do here? Should we return?
@@ -223,9 +309,11 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				                                                  // only a short duration.
 			}
 			
-			if (globalDirty && block.shouldStoreGlobally()) { // If it the block is the last data segment or an ibmap or an inodesBlock
+			block.markGlobalDirty();
+			
+			if (block.shouldStoreGlobally()) { // If it the block is the last data segment or an ibmap or an inodesBlock
 				globalProc.store(block, this); // Add the block in the queue to be transferred to the globalStore
-			} 
+			}
 		} finally {
 			fileLocks.unlockFile(block.id());
 		}
@@ -242,6 +330,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		if (block.decAndGetLocalDirty(0) > 0) {
 			store(block);
 		}
+		
+		return syncedCnt;
 	}
 	
 	/*private long updateLocalDirty(Block block, long dirtyCount) {
@@ -434,5 +524,15 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			return false;
 		
 		return storedFilesMap.exists(id);
+	}
+	
+	private class StoreItem {
+		Inode inode;
+		DataSegment ds;
+		
+		StoreItem(Inode inode, DataSegment ds) {
+			this.inode = inode;
+			this.ds = ds;
+		}
 	}
 }

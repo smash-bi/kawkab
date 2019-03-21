@@ -32,7 +32,7 @@ import kawkab.fs.core.services.grpc.PrimaryNodeServiceClient;
  */
 
 public abstract class Block /*implements AutoCloseable*/ {
-	protected final BlockID id;
+	protected BlockID id;
 	
 	private static GlobalStoreManager globalStoreManager; // Backend store such as S3
 	private static LocalStoreManager localStoreManager;  // Local store such as local SSD
@@ -75,8 +75,6 @@ public abstract class Block /*implements AutoCloseable*/ {
 		lock = new ReentrantLock();
 		
 		localStoreSyncLock = new Object();
-		//lastGlobalFetchTimeMs = 0; //This must be initialized to zero so that the block can be loaded on a non-primary node
-		//lastPrimaryFetchTimeMs = 0;
 		dataLoadLock = new ReentrantLock();
 		
 		localDirtyCnt  = new AtomicLong(0);
@@ -88,6 +86,15 @@ public abstract class Block /*implements AutoCloseable*/ {
 		                                          // the newly created blocks are always cached.
 	}
 	
+	protected void reset(BlockID id) {
+		this.id = id;
+		localDirtyCnt.set(0);
+		globalDirtyCnt.set(0);
+		inLocalQueue.set(false);
+		inGlobalQueue.set(false);
+		inLocalStore.set(false);
+		inCache.set(false);
+	}
 	
 	/**
 	 * Indicates if the block is allowed be stored in the global store. Dirty bits are tested separately.

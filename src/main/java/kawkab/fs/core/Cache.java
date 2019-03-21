@@ -61,7 +61,7 @@ public abstract class Cache {
 	 * @throws KawkabException 
 	 * @throws InterruptedException 
 	 */
-	public abstract Block acquireBlock(BlockID blockID) throws IOException, KawkabException, InterruptedException;
+	public abstract Block acquireBlock(BlockID blockID) throws IOException, KawkabException;
 	
 	/**
 	 * Releases the block and decrements its reference count. Blocks with reference count 0 are eligible for eviction.

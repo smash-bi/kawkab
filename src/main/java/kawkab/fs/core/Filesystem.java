@@ -5,7 +5,6 @@ import java.util.Properties;
 
 import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
-import kawkab.fs.client.services.finagle.FFilesystemServiceServer;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.AlreadyConfiguredException;
 import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
@@ -23,14 +22,14 @@ public final class Filesystem {
 	private static Filesystem instance;
 	private static Namespace namespace;
 	private static PrimaryNodeServiceServer ns;
-	private static FFilesystemServiceServer fs;
+	//private static FFilesystemServiceServer fs;
 	
 	private Filesystem() throws KawkabException, IOException {
 		namespace = Namespace.instance();
 		ns = new PrimaryNodeServiceServer();
-		fs = new FFilesystemServiceServer(this);
+		//fs = new FFilesystemServiceServer(this);
 		ns.startServer();
-		fs.startServer();
+		//fs.startServer();
 	}
 	
 	public static synchronized Filesystem instance() throws KawkabException, IOException {
@@ -102,7 +101,7 @@ public final class Filesystem {
 			return;
 		
 		closed = true;
-		fs.stopServer();
+		//fs.stopServer();
 		ns.stopServer();
 		namespace.shutdown();
 		Ibmap.shutdown();

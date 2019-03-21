@@ -46,6 +46,9 @@ public final class CLI {
 	private void initFS() throws IOException, KawkabException, InterruptedException, AlreadyConfiguredException {
 		//Constants.printConfig();
 		int nodeID = getNodeID();
+		
+		System.out.println("Node ID = " + nodeID);
+		
 		Properties props = getProperties();
 		
 		fs = Filesystem.bootstrap(nodeID, props);
@@ -138,10 +141,10 @@ public final class CLI {
 				System.out.println(usage);
 				return;
 			}
-			int dataSize = -1;
+			long dataSize = -1;
 			int bufLen = 0;
 			try {
-				dataSize = Integer.parseInt(args[3]);
+				dataSize = Long.parseLong(args[3]);
 				bufLen = Integer.parseInt(args[4]);
 			} catch (NumberFormatException e) {
 				System.out.println("Given invalid bytes numBytes or reqSize. " + usage);
@@ -178,7 +181,7 @@ public final class CLI {
 		}
 	}
 
-	private void appendFile(String fn, byte[] data, int dataSize, int bufLen) throws IOException, OutOfMemoryException,
+	private void appendFile(String fn, byte[] data, long dataSize, int bufLen) throws IOException, OutOfMemoryException,
 			MaxFileSizeExceededException, InvalidFileOffsetException, KawkabException, InterruptedException {
 		FileHandle file = null;
 		file = openedFiles.get(fn);
@@ -188,7 +191,7 @@ public final class CLI {
 		
 		int sent = 0;
 		while(sent < dataSize) {
-			int toSend = dataSize-sent > bufLen ? bufLen : dataSize - sent;
+			int toSend = (int)(dataSize-sent > bufLen ? bufLen : dataSize - sent);
 			sent += file.append(data, 0, toSend);
 		}
 	}
@@ -266,14 +269,13 @@ public final class CLI {
 				out = new BufferedWriter(new FileWriter(new File(dst)));
 			}
 
-			long length = file.size();
-			if (readLen > 0) {
-				length = readLen;
+			if (readLen <= 0) {
+				readLen = file.size();
 			}
 
-			System.out.println("[CLI] read len bytes: " + length);
-			while (read < length) {
-				int toRead = (int) (length - read >= buf.length ? buf.length : length - read);
+			System.out.println("[CLI] read len bytes: " + readLen);
+			while (read < readLen) {
+				int toRead = (int) (readLen - read >= buf.length ? buf.length : readLen - read);
 				int len = file.read(buf, byteStart+read, toRead);
 				System.out.println("Read length = " + len);
 				if (out != null) {
@@ -331,17 +333,23 @@ public final class CLI {
 		System.out.println("\n");*/
 	}
 	
-	private static Properties getProperties() throws IOException {
+	private Properties getProperties() throws IOException {
 		String propsFile = "/config.properties";
 		
 		try (InputStream in = Thread.class.getResourceAsStream(propsFile)) {
+			assert in != null;
+			
+			if (in == null) {
+				System.out.println("in is null");
+			}
+			
 			Properties props = new Properties();
 			props.load(in);
 			return props;
 		}
 	}
 	
-	private static int getNodeID() throws KawkabException {
+	private int getNodeID() throws KawkabException {
 		String nodeIDProp = "nodeID";
 		
 		if (System.getProperty(nodeIDProp) == null) {

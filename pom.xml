@@ -10,6 +10,7 @@
 	
 	  <properties>
 	    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+	    <nodeID>0</nodeID>
 	  </properties>
 
 	<build>
@@ -52,9 +53,25 @@
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>exec-maven-plugin</artifactId>
 				<version>1.6.0</version>
+				<executions>
+		          <execution>
+		            <goals>
+		              <goal>exec</goal>
+		            </goals>
+		          </execution>
+		        </executions>
 				<configuration>
-					<mainClass>kawkab.fs.cli.CLI</mainClass>
-					<!--  mainClass>kawkab.fs.Main</mainClass -->
+					<executable>java</executable>
+					<arguments>
+						<argument>-ea</argument>
+						<argument>-Xmn40g</argument>
+						<argument>-Xmx40g</argument>
+						<argument>-DnodeID=${nodeID}</argument>
+						<argument>-classpath</argument>
+						<classpath/>
+						<argument>kawkab.fs.cli.CLI</argument>
+					</arguments>
+					<addResourcesToClasspath>true</addResourcesToClasspath>
 				</configuration>
 			</plugin>
 		
@@ -64,6 +81,9 @@
 				<configuration>
 					<source>1.8</source>
 					<target>1.8</target>
+					<excludes>
+				      <exclude>**/thrift/*.java</exclude>
+				    </excludes>
 				</configuration>
 			</plugin>
 
@@ -101,72 +121,6 @@
 		        </execution>
 		      </executions>
 		    </plugin>
-		    
-		    <!-- For Scrooge -->
-		    <plugin>
-		        <groupId>net.alchim31.maven</groupId>
-		        <artifactId>scala-maven-plugin</artifactId>
-		        <version>3.4.4</version>
-		        <executions>
-		          <execution>
-		            <goals>
-		              <goal>compile</goal>
-		              <goal>testCompile</goal>
-		            </goals>
-		            <configuration>
-		              <args>
-		                <param>-unchecked</param>
-		                <param>-deprecation</param>
-		                <param>-encoding</param>
-		                <param>utf8</param>
-		              </args>
-		              <!-- Scrooge generates more files (one file per struct), so
-		                   you might need to increase running memory for maven
-		               -->
-		              <jvmArgs>
-		                <jvmArg>-Xmx2G</jvmArg>
-		              </jvmArgs>
-		            </configuration>
-		          </execution>
-		        </executions>
-			</plugin>
-		    
-		    <plugin>
-		        <groupId>com.twitter</groupId>
-		        <artifactId>scrooge-maven-plugin</artifactId>
-		        <version>19.1.0</version>
-		        <configuration>
-		          <!-- thriftNamespaceMappings>
-		            <thriftNamespaceMapping>
-		              <from>com.twitter.demo.thriftscala</from>
-		              <to>com.twitter.mydemo.renamed</to>
-		            </thriftNamespaceMapping>
-		          </thriftNamespaceMappings -->
-		          <language>java</language>
-		          <!-- add other Scrooge command line options using thriftOpts -->
-		          <thriftOpts>
-		            <thriftOpt>--finagle</thriftOpt>
-		          </thriftOpts>
-		        </configuration>
-		        <executions>
-		          <execution>
-		            <id>thrift-sources</id>
-		            <phase>generate-sources</phase>
-		            <goals>
-		              <goal>compile</goal>
-		            </goals>
-		          </execution>
-		          <execution>
-		            <id>thrift-test-sources</id>
-		            <phase>generate-test-sources</phase>
-		            <goals>
-		              <goal>testCompile</goal>
-		            </goals>
-		          </execution>
-		        </executions>
-			</plugin>
-			<!-- ================================================================== -->
-			
 		</plugins>
 	</build>
 	
@@ -184,51 +138,19 @@
 	</dependencyManagement>
 
 	<dependencies>
-		<!-- Scrooge dependencies -->
 		<dependency>
-			<groupId>com.twitter</groupId>
-			<artifactId>util-core_2.12</artifactId>
-			<version>19.1.0</version>
+		  <!-- Chronicle Queue for batching -->
+		  <groupId>net.openhft</groupId>
+		  <artifactId>chronicle-queue</artifactId>
+		  <version>5.17.9</version>
 		</dependency>
-		<dependency>
-			<groupId>com.twitter</groupId>
-			<artifactId>util-codec_2.12</artifactId>
-			<version>19.1.0</version>
-		</dependency>
-		<dependency>
-			<groupId>com.twitter</groupId>
-			<artifactId>finagle-core_2.12</artifactId>
-			<version>19.1.0</version>
-		</dependency>
-		<dependency>
-			<groupId>com.twitter</groupId>
-			<artifactId>finagle-thrift_2.12</artifactId>
-			<version>19.1.0</version>
-		</dependency>
-		<dependency>
-			<groupId>com.twitter</groupId>
-			<artifactId>scrooge-core_2.12</artifactId>
-			<version>19.1.0</version>
-		</dependency>
-		<dependency>
-		      <groupId>org.apache.thrift</groupId>
-		      <artifactId>libthrift</artifactId>
-		      <version>0.12.0</version>
-		</dependency>
+		
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
 			<version>4.12</version>
 			<scope>test</scope>
 		</dependency>
-		<dependency>
-			<groupId>org.jmock</groupId>
-			<artifactId>jmock</artifactId>
-			<version>2.10.0-RC3</version>
-			<scope>test</scope>
-		</dependency>
-		<!-- ========================================================================= -->
-	
 		<dependency>
 			<groupId>net.openhft</groupId>
 			<artifactId>chronicle-map</artifactId>

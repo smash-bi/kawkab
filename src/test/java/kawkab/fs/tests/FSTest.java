@@ -47,7 +47,7 @@ public final class FSTest {
 		// tester.testReadPerfMultiReadersSameFile();
 
 		// tester.testConcurrentReadWrite();
-		// tester.testConcurrentReadWriteLastBlock();
+		tester.testConcurrentReadWriteLastBlock();
 
 		//tester.testRawWrites();
 
@@ -113,6 +113,8 @@ public final class FSTest {
 		
 		byte[] data = new byte[10];
 		file.append(data, 0, data.length);
+		
+		file.close();
 	}
 	
 	/**
@@ -145,6 +147,7 @@ public final class FSTest {
 		byte[] readBuf = new byte[dataBuffer.length];
 		int read = file.read(readBuf, readOffset, readBuf.length);
 		
+		file.close();
 		
 		//System.out.println(Arrays.toString(readBuf));
 		//System.out.println(Arrays.toString(dataBuffer));
@@ -182,6 +185,8 @@ public final class FSTest {
 			read += file.read(readBuf, 0, readBuf.length);
 		}
 
+		file.close();
+		
 		// System.out.println(Arrays.toString(readBuf));
 		// System.out.println(Arrays.toString(dataBuffer));
 
@@ -218,6 +223,8 @@ public final class FSTest {
 		int read = file.read(readBuf, readOffset, readBuf.length);
 		
 		System.out.println("File " + filename + " size " + file.size());
+		
+		file.close();
 		
 		assert appended == read;
 		assert Arrays.equals(dataBuffer, readBuf);
@@ -300,6 +307,12 @@ public final class FSTest {
 						//LockSupport.parkNanos(waitRand.nextInt(90000));
 					}
 					
+					try {
+						file.close();
+					} catch (KawkabException e) {
+						e.printStackTrace();
+					}
+					
 					assert dataAppended == read;
 				}
 			};
@@ -377,6 +390,8 @@ public final class FSTest {
 							}
 						}
 						
+						file.close();
+						
 						assert appended == read;
 					} catch (Exception e){
 						e.printStackTrace();
@@ -431,6 +446,8 @@ public final class FSTest {
 		double sizeMB = appended/1024.0/1024.0;
 		double speed = sizeMB/durSec;
 		
+		file.close();
+		
 		System.out.println(String.format("Req buffer size=%d, Data size=%.0fMB, Write speed=%.0fMB/s, File size=%dMB, initFileSize=%d, fileID=%d", bufSize, sizeMB, speed, file.size()/1024/1024, initSize, file.inumber()));
 	}
 	
@@ -478,6 +495,8 @@ public final class FSTest {
 						double sizeMB = appended/(1024.0*1024);
 						double thr = sizeMB/durSec;
 						writeStats.putValue(thr);
+						
+						file.close();
 						
 						System.out.println(String.format("File %d: Data size = %.0fMB, Write thr = %.0fMB/s", id, sizeMB, thr));
 					} catch (Exception e){
@@ -540,6 +559,8 @@ public final class FSTest {
 		double durSec = (System.currentTimeMillis() - startTime)/1000.0;
 		double dataMB = read*1.0/1024/1024;
 		double speed = dataMB/durSec;
+		
+		file.close();
 		
 		System.out.println(String.format("Data size = %.2fMB, Read speed = %.0fMB/s", dataMB, speed));
 	}
@@ -610,6 +631,13 @@ public final class FSTest {
 					double durSec = (System.currentTimeMillis() - startTime)/1000.0;
 					double dataMB = (1.0*read)/(1024*1024);
 					readStats.putValue(dataMB/durSec);
+					
+					try {
+						file.close();
+					} catch (KawkabException e) {
+						e.printStackTrace();
+					}
+					
 					System.out.println(String.format("Data size: %.2f, Read Speed: %.2fMB/s", dataMB, dataMB/durSec));
 				}
 			};
@@ -697,6 +725,8 @@ public final class FSTest {
 									read += bytes;
 								}
 							}
+							
+							file.close();
 						}
 					} catch (KawkabException | IOException | IbmapsFullException | InterruptedException | 
 							OutOfMemoryException | MaxFileSizeExceededException | InvalidFileOffsetException e) {
@@ -786,6 +816,9 @@ public final class FSTest {
 								}
 							}
 						}
+						
+						file.close();
+						
 					} catch (KawkabException | IOException | IbmapsFullException | InterruptedException | 
 							OutOfMemoryException | MaxFileSizeExceededException | InvalidFileOffsetException e) {
 						e.printStackTrace();
