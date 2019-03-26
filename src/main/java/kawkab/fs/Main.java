@@ -20,7 +20,7 @@ public class Main {
 			public void run() {
 				try {
 					fs.shutdown();
-				} catch (KawkabException | InterruptedException | IOException e) {
+				} catch (KawkabException | InterruptedException e) {
 					e.printStackTrace();
 				}
 			}

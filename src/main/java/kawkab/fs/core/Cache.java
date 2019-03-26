@@ -9,7 +9,7 @@ import kawkab.fs.core.exceptions.KawkabException;
  * thread safe.
  */
 public abstract class Cache {
-	public static Cache instance() throws IOException {
+	public static Cache instance() {
 		//return GCache.instance();
 		return CustomCache.instance();
 	}

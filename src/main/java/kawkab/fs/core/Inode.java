@@ -23,32 +23,27 @@ public final class Inode {
 	
 	private long inumber;
 	private AtomicLong fileSize = new AtomicLong(0);
-	private AtomicLong fileSizeBuffered = new AtomicLong(0);
 	private int recordSize = conf.recordSize; //Temporarily set to 1 until we implement reading/writing records
 	
 	private static Cache cache;
 	private static LocalStoreManager localStore;
 	
+	private DataSegmentID segId;
 	private DataSegment curSeg;
-	private static DSPool dsPool;
-	private static LocalStoreManager lsm;
+	private SegmentTimer timer;
+	private SegmentTimerQueue timerQ;
 	
 	public static final long MAXFILESIZE;
 	static {
 		MAXFILESIZE = conf.maxFileSizeBytes;//blocks * Constants.blockSegmentSizeBytes;
 		
-		try {
-			cache = Cache.instance();
-			localStore = LocalStoreManager.instance();
-			dsPool = DSPool.instance();
-			lsm = LocalStoreManager.instance();
-		} catch (IOException e) {
-			e.printStackTrace(); //FIXME: Handle exception properly
-		}
+		cache = Cache.instance();
+		localStore = LocalStoreManager.instance();
 	}
 	
 	protected Inode(long inumber/*, int recordSize*/){
 		this.inumber = inumber;
+		timerQ = SegmentTimerQueue.instance();
 	}
 	
 	/**
@@ -110,6 +105,7 @@ public final class Inode {
 			DataSegment curSegment = null;
 			try {
 				curSegment = (DataSegment)cache.acquireBlock(curSegId);
+				curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
 				bytes = curSegment.read(buffer, bufferOffset, toRead, curOffsetInFile);
 			} catch (InvalidFileOffsetException e) {
 				e.printStackTrace();
@@ -131,24 +127,25 @@ public final class Inode {
 	public int appendBuffered(final byte[] data, int offset, final int length) throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
 		int appended = 0;
 		int remaining = length;
-		long fileSizeBuffered = this.fileSizeBuffered.get();
+		long fileSizeBuffered = this.fileSize.get();
 		
 		if (fileSizeBuffered + length > MAXFILESIZE) {
 			throw new MaxFileSizeExceededException();
 		}
 		
 		while (remaining > 0) {
-			if ((int)(fileSizeBuffered % conf.dataBlockSizeBytes) == 0) { // if the last block is full
-				DataSegmentID segId = createNewBlock(fileSizeBuffered);
+			if (curSeg == null) {
+				if ((fileSizeBuffered % conf.dataBlockSizeBytes) == 0L) { // if the last block is full
+					segId = createNewBlock(fileSizeBuffered);
+				} else {
+					segId = getSegmentID(fileSizeBuffered);
+				}
 				
-				assert curSeg == null;
-				
-				curSeg = dsPool.acquire();
-				curSeg.reInit(segId);
-				//TODO: Add the current segment in the queue of not-locally-synced-DSes for the readers
-			} else if (curSeg == null) { //This is OK because only one thread can be the writer
-				curSeg = dsPool.acquire();
-				curSeg.reInit(getSegmentID(fileSizeBuffered));
+				timer = new SegmentTimer(segId);
+				curSeg = (DataSegment) cache.acquireBlock(segId);
+				curSeg.markLoaded();
+			} else {
+				timer.disable();
 			}
 			
 			try {
@@ -163,26 +160,24 @@ public final class Inode {
 			}
 			
 			//TODO: Add the segment in the localQueue for persistence
-			lsm.storeDS(this, curSeg);
+			localStore.store(curSeg);
 			
-			if (curSeg.isFull()) {
-				curSeg = null; //This is OK because only one thread can be the writer
+			if (!timer.update()) {
+				timer = new SegmentTimer(segId);
+				timer.update();
+			}
+			
+			timerQ.submit(timer);
+			
+			if (fileSizeBuffered % conf.segmentSizeBytes == 0) {
+				curSeg = null;
+				segId = null;
 			}
 		}
 		
-		this.fileSizeBuffered.set(fileSizeBuffered);
+		this.fileSize.set(fileSizeBuffered);
 		
 		return appended;
-	}
-	
-	void notifyLocallySynced(DataSegment ds, int numBytes) {
-		long newFS = fileSize.addAndGet(numBytes);
-		
-		if (newFS % conf.segmentSizeBytes == 0) { //The segment is full and should be returned to the DSPool
-			dsPool.release(ds);
-		}
-		
-		System.out.println("FS = " + newFS);
 	}
 	
 	private DataSegmentID getSegmentID(long offsetInFile) {
@@ -293,8 +288,6 @@ public final class Inode {
 		inumber = buffer.getLong();
 		fileSize.set(buffer.getLong());
 		recordSize = buffer.getInt();
-		
-		fileSizeBuffered.set(fileSize.get());
 	}
 	
 	void loadFrom(final ReadableByteChannel channel) throws IOException {
@@ -313,8 +306,6 @@ public final class Inode {
 		fileSize.set(buffer.getLong());
 		recordSize = buffer.getInt();
 		
-		fileSizeBuffered.set(fileSize.get());
-		
 		//System.out.printf("\tLoaded inode: %d -> %d\n", inumber, fileSize.get());
 	}
 	
@@ -323,8 +314,6 @@ public final class Inode {
 	 * @return Number of bytes written in the channel
 	 */
 	int storeTo(final WritableByteChannel channel) throws IOException {
-		assert fileSize.get() == fileSizeBuffered.get();
-		
 		ByteBuffer buffer = ByteBuffer.allocate(conf.inodeSizeBytes);
 		storeTo(buffer);
 		buffer.rewind();
@@ -368,9 +357,5 @@ public final class Inode {
 	
 	long inumber() {
 		return inumber;
-	}
-	
-	void close() {
-		
 	}
 }

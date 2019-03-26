@@ -1,25 +1,16 @@
 package kawkab.fs.core;
 
 public class CachedItem {
-	private int refCount; // It is not atomic variable because this variable is only accessed from a critical region in the CustomCache.acquireBlock() and releaseBlock() functions.
-	//private Lock lock; // Block level lock
-	private Block block;
+	private int refCount; 	// It is not an atomic or volatile variable because this variable is only accessed from the 
+							// critical section in the CustomCache.acquireBlock() and releaseBlock() functions.
+	private final Block block;
 	
 	public CachedItem(Block block){
 		refCount = 0;
 		this.block = block;
-		//lock = new ReentrantLock();
 	}
 	
-	/*public void lock(){
-		lock.lock();
-	}
-	
-	public void unlock(){
-		lock.unlock();
-	}*/
-	
-	public void incrementRefCnt(){
+	public void incrementRefCnt() {
 		refCount++;
 	}
 	

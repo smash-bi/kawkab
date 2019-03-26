@@ -23,7 +23,7 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 	private static GCache instance;
 	
 	
-	private GCache() throws IOException {
+	private GCache() {
 		System.out.println("Initializing cache..." );
 		
 		conf = Configuration.instance();
@@ -45,7 +45,7 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 		});
 	}
 	
-	public static GCache instance() throws IOException {
+	public static GCache instance() {
 		if (instance == null) {
 			synchronized(initLock) {
 				if (instance == null) {
@@ -116,7 +116,7 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 	public void shutdown() throws KawkabException {
 		System.out.println("Closing cache. Current size = "+cache.size());
 		flush();
-		localStore.stop();
+		localStore.shutdown();
 	}
 
 	@Override

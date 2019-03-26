@@ -7,7 +7,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import kawkab.fs.commons.Configuration;
-import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.utils.GCMonitor;
 
@@ -24,7 +23,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	private Lock cacheLock; // Cache level locking
 	private LocalStoreManager localStore;
 	
-	private CustomCache() throws IOException {
+	private CustomCache() {
 		System.out.println("Initializing cache..." );
 		
 		conf = Configuration.instance();
@@ -34,7 +33,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		cache = new LRUCache(this);
 	}
 	
-	public static CustomCache instance() throws IOException {
+	public static CustomCache instance() {
 		if (instance == null) {
 			synchronized(initLock) {
 				if (instance == null) {
@@ -45,10 +44,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		
 		return instance;
 	}
-	
-	/*public void createBlock(Block block) throws IOException, InterruptedException {
-		localStoreManager.createBlock(block);
-	}*/
+
 	
 	/**
 	 * Acquires a reference of the block from the LRU cache. BlockID is an immutable ID of the block, which also creates
@@ -103,16 +99,9 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		CachedItem cachedItem = null;
 		
 		cacheLock.lock(); // Lock the whole cache. This is necessary to prevent from creating multiple references to the
-		                  // same block.
+		                  // same block when the block is not already cached.
 		try { // To unlock the cache
 			cachedItem = cache.get(blockID); // Try acquiring the block from the memory
-			
-			/*if (createNewBlock && cachedItem != null) {
-				cachedItem.incrementRefCnt(); // FIXME: This will be removed from here when we properly handle the exception, 
-				                              // such that the caller don't have to release the block in the case of an exception.
-				System.out.println("Block already exists: " + blockID);
-				throw new KawkabException("Block already exists: " + blockID);
-			}*/
 			
 			if (cachedItem == null){ // If the block is not cached
 				//long t = System.nanoTime();
@@ -125,49 +114,13 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 			}
 			
 			cachedItem.incrementRefCnt();
+			assert cache.size() <= conf.maxBlocksInCache;
 		} finally {                 // FIXME: Catch any exceptions and decrement the reference count before throwing  
 			cacheLock.unlock();     //        the exception. Change the caller functions to not release the block in 
 		                            //        the case of an exception.
 		}
 		
-		assert cache.size() <= conf.maxBlocksInCache;
-		
-		Block block = cachedItem.block();
-		try {
-			block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock function
-		} catch (KawkabException | IOException e) {
-			releaseBlock(block.id());
-		}
-        // deals with concurrency. Therefore, we don't need to provide mutual exclusion here.
-		
-		// FIXME: Barging cannot happen between the writer that creates a new block and the readers that read the newly created
-		// block. This is because the file size is updated only after appending some data and the data can only be
-		// appended after creating the new block, which includes creating a new file in the local store.
-		
-		//long t = System.nanoTime();
-		//Block block = cachedItem.block();
-		/*if (createNewBlock) { //Not mutually exclusive because only one of the threads can create a new block as we have only one writer.
-			              // Otherwise, we should acquire a lock. Moreover, a reader cannot read a new block concurrently because 
-						  // the file size doesn't reflect the existence of the new block until the append function that
-						  // is creating the new block has completed.
-			
-			//System.out.println("\t Creating new block: " + blockID);
-			
-			// The writer creates a block and later loads the block from the local store to write data. This incurs an
-			// extra access to the local store. We can prevent this by updating the lastLocalFetchTime in the Block
-			// immediately after creating the block. However, it should not be done in the constructor. Instead, it
-			// should be done here, just before or after calling localStore.createBlock(block) function.
-			// This is a good location because all the new blocks has pass through this line. This is a bad location
-			// because this is not cache specific task.
-			
-			localStore.createBlock(block);
-		} else {*/
-			block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock function
-			                   // deals with concurrency. Therefore, we don't need to provide mutual exclusion here.
-		//}
-		//loadStats.putValue((System.nanoTime()-t)/1000);
-		
-		return block;
+		return cachedItem.block();
 	}
 	
 	/**
@@ -199,20 +152,19 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 				return;
 			}
 			
-			if (blockID.onPrimaryNode() && cachedItem.block().isLocalDirty()) { // Persist blocks only through the primary node
-				// If the dirty bit for the local store is set
-				localStore.store(cachedItem.block()); // The call is non-blocking. Multiple threads are allowed
-														  // to add the same block in the queue.
-				// FIXME: What to do with the exception?
-				
-			}
-			
 			cachedItem.decrementRefCnt(); // No need to acquire any lock for the cachedItem because the incrementRefCnt() and
 			                              // decrementRefCnt() functions are only called while holding the cacheLock.
 		} finally {
 			cacheLock.unlock();
 			
 			//releaseStats.putValue((System.nanoTime()-t)/1000);
+		}
+		
+		if (blockID.onPrimaryNode() && cachedItem.block().isLocalDirty()) { // Persist blocks only through the primary node
+			// If the dirty bit for the local store is set
+			localStore.store(cachedItem.block()); // The call is non-blocking. Multiple threads are allowed
+													  // to add the same block in the queue.
+			// FIXME: What to do with the exception?
 		}
 	}
 	
@@ -282,6 +234,6 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		//System.out.printf("LoadStats (us): %s\n", loadStats);
 		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
 		flush();
-		localStore.stop();
+		localStore.shutdown();
 	}
 }

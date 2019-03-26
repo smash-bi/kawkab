@@ -10,7 +10,7 @@ public final class PrimaryNodeServiceServer {
 	private final Server server;
 	private boolean started = false;
 	
-	public PrimaryNodeServiceServer() throws IOException {
+	public PrimaryNodeServiceServer() {
 		server = ServerBuilder
 				.forPort(Configuration.instance().primaryNodeServicePort)
 				.addService(new PrimaryNodeService())

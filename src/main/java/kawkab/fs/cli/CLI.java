@@ -15,8 +15,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 
-import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
+import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.AlreadyConfiguredException;

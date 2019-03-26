@@ -62,12 +62,8 @@ public abstract class Block /*implements AutoCloseable*/ {
 	private boolean isLoaded; //If the block bytes are already loaded; used only on the primary node
 	
 	static { // Because we need to catch the exception
-		try {
-			globalStoreManager = GlobalStoreManager.instance();
-			localStoreManager = LocalStoreManager.instance(); //FIXME: Handle exception properly
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		globalStoreManager = GlobalStoreManager.instance();
+		localStoreManager = LocalStoreManager.instance(); //FIXME: Handle exception properly
 	}
 	
 	public Block(BlockID id) {
@@ -353,7 +349,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * @throws KawkabException
 	 * @throws IOException
 	 */
-	protected void loadBlock() throws FileNotExistException, KawkabException, IOException {
+	public void loadBlock() throws FileNotExistException, KawkabException, IOException {
 		if (id.onPrimaryNode()) { // If this node is the primary writer of the file
 			loadBlockOnPrimary();
 			return;
@@ -438,4 +434,10 @@ public abstract class Block /*implements AutoCloseable*/ {
 		return inCache.get();
 	}
 	
+	public void markLoaded() {
+		isLoaded = true;	// We don't have to make it atomic or synchronize it because the writer calls this function
+							// before updating the file size, which prevents any concurrent readers of a new segment.
+							// Moreover, the readers use a lock if the isLoaded==false and then again read the variable,
+							// which ensures that the reader reads the most recent value.
+	}
 }

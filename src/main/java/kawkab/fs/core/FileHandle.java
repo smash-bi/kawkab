@@ -1,14 +1,9 @@
-package kawkab.fs.api;
+package kawkab.fs.core;
 
 import java.io.IOException;
 
 import kawkab.fs.commons.Configuration;
-import kawkab.fs.core.BlockID;
-import kawkab.fs.core.Cache;
 import kawkab.fs.core.Filesystem.FileMode;
-import kawkab.fs.core.Inode;
-import kawkab.fs.core.InodesBlock;
-import kawkab.fs.core.InodesBlockID;
 import kawkab.fs.core.exceptions.InvalidFileModeException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
@@ -40,6 +35,8 @@ public final class FileHandle {
 		InodesBlock inb = null;
 		try {
 			inb = (InodesBlock)cache.acquireBlock(id);
+			inb.loadBlock();
+			
 		} catch (IOException | KawkabException e) {
 			inode = null;
 			inodesBlock = null;
@@ -245,23 +242,7 @@ public final class FileHandle {
 	 * @throws InterruptedException 
 	 */
 	public synchronized long size() throws KawkabException, InterruptedException{
-		int inodesBlockIdx = (int)(inumber / inodesPerBlock);
-		long size = 0;
-		BlockID id = new InodesBlockID(inodesBlockIdx);
-		
-		InodesBlock block = null;
-		try {
-			block = (InodesBlock) cache.acquireBlock(id);
-			size = block.fileSize(inumber);
-		} catch (IOException e) {
-			e.printStackTrace();
-		} finally {
-			if (block != null) {
-				cache.releaseBlock(block.id());
-			}
-		}
-		
-		return size;
+		return inodesBlock.fileSize(inumber);
 	}
 	
 	public long inumber() { // For debugging only

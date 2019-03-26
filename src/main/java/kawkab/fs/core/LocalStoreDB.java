@@ -14,25 +14,29 @@ public final class LocalStoreDB {
 	                                          // to the same block have the same path. In this way, we save the number of
 	                                          // entries in the map.
 	
-	public LocalStoreDB(int maxSize) throws IOException {
+	public LocalStoreDB(int maxSize) {
 		this.maxSize = maxSize;
 		initMap();
 	}
 	
-	private void initMap() throws IOException {
+	private void initMap() {
 		System.out.println("Map file path: " + mapFilePath);
 		File file = new File(mapFilePath).getParentFile();
 		if (!file.exists()) {
 			file.mkdirs();
 		}
 		
-		map = ChronicleMap
-				.of(String.class, String.class)
-			    .name(mapName)
-			    .averageKeySize(32)
-			    .averageValueSize(2)
-			    .entries(maxSize+100)
-			    .createPersistedTo(new File(mapFilePath));
+		try {
+			map = ChronicleMap
+					.of(String.class, String.class)
+				    .name(mapName)
+				    .averageKeySize(32)
+				    .averageValueSize(2)
+				    .entries(maxSize+100)
+				    .createPersistedTo(new File(mapFilePath));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	/**

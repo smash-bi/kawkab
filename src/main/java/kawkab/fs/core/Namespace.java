@@ -29,7 +29,7 @@ public class Namespace {
 	private static final int ibmapsPerMachine = Configuration.instance().ibmapsPerMachine;
 	private static final int thisNodeID = Configuration.instance().thisNodeID;
 
-	private Namespace() throws KawkabException, IOException {
+	private Namespace() throws KawkabException {
 		cache = Cache.instance();
 		locks = new KeyedLock();
 		lastIbmapUsed = Configuration.instance().ibmapBlocksRangeStart;
@@ -37,7 +37,7 @@ public class Namespace {
 		ns = NamespaceService.instance();
 	}
 
-	public static Namespace instance() throws KawkabException, IOException {
+	public static Namespace instance() throws KawkabException {
 		if (instance == null) {
 			synchronized (initLock) {
 				if (instance == null)
@@ -196,6 +196,7 @@ public class Namespace {
 			// inumber + ", primary: " + Commons.primaryWriterID(inumber));
 
 			inodesBlock = (InodesBlock) cache.acquireBlock(id);
+			inodesBlock.loadBlock();
 			inodesBlock.initInode(inumber);
 		} finally {
 			if (inodesBlock != null) {

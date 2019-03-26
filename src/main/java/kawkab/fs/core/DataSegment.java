@@ -43,6 +43,7 @@ public final class DataSegment extends Block {
 		dirtyOffset = new AtomicInteger(0);
 		
 		dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
+		dataBuf.limit(0);
 		
 		//System.out.println(" Opened block: " + name());
 	}

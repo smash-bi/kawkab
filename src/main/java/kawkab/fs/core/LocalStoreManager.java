@@ -27,13 +27,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private volatile boolean working = true;
 	private final FileLocks fileLocks;
 	
-	
-	private LinkedBlockingQueue<StoreItem>[] segQs;
-	private Thread[] segWorkers;
-	
 	private static LocalStoreManager instance;
 	
-	public static LocalStoreManager instance() throws IOException { 
+	public static LocalStoreManager instance() { 
 		if (instance == null) {
 			synchronized(initLock) {
 				if (instance == null)
@@ -44,7 +40,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		return instance;
 	}
 	
-	private LocalStoreManager() throws IOException {
+	private LocalStoreManager() {
 		//workers = Executors.newFixedThreadPool(numWorkers);
 		globalProc = GlobalStoreManager.instance();
 		
@@ -64,89 +60,6 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		System.out.println("Initializing local store manager");
 		
 		startWorkers();
-		startSegWorkers();
-	}
-	
-	private void startSegWorkers() {
-		segQs = new LinkedBlockingQueue[numSegWorkers];
-		for (int i=0; i<segQs.length; i++) {
-			segQs[i] = new LinkedBlockingQueue<StoreItem>();
-		}
-		
-		segWorkers = new Thread[numSegWorkers];
-		for (int i=0; i<segWorkers.length; i++) {
-			final int wid = i;
-			segWorkers[i] = new Thread("SegWorker-"+wid) {
-				public void run() {
-					runSegWorker(segQs[wid]);
-				}
-			};
-			
-			segWorkers[i].start();
-		}
-	}
-	
-	private void runSegWorker(LinkedBlockingQueue<StoreItem> reqs) {
-		while(true) {
-			StoreItem si = null;
-			try {
-				si = reqs.poll(2, TimeUnit.SECONDS);
-			} catch (InterruptedException e1) {
-				if (!working) {
-					break;
-				}
-			}
-		
-			if (si == null) {
-				if (!working)
-					break;
-				continue;
-			}
-			
-			try {
-				processDSStoreRequest(si);
-			} catch (KawkabException e) {
-				e.printStackTrace();
-			}
-		}
-		
-		
-		
-		// Perform the remaining tasks in the queue
-		StoreItem si = null;
-		while( (si = reqs.poll()) != null) {
-			try {
-				processDSStoreRequest(si);
-			} catch (KawkabException e) {
-				e.printStackTrace();
-			}
-		}
-		
-		
-		System.out.println("Closing thread: " + Thread.currentThread().getName());
-	}
-	
-	void storeDS(Inode inode, DataSegment ds) {
-		if (ds.markInLocalQueue()) { //The block is already in the queue, the block should not be added again.
-			// System.out.println("[LSM] Skipping: " + ds.id());
-			return;
-		}
-		
-		StoreItem item = new StoreItem(inode, ds);
-		
-		// System.out.println("\t[LSM] Enque: " + ds.id());
-		
-		//Load balance between workers, but assign same worker to the same block.
-		int queueNum = (int)(Math.abs(inode.inumber()) % numSegWorkers); //TODO: convert hashcode to a fixed computed integer or int based key
-		
-		segQs[queueNum].add(item);
-	}
-	
-	private void processDSStoreRequest(StoreItem item) throws KawkabException {
-		//System.out.println("Processing: " + item.ds.id());
-		
-		int synced = processStoreRequest(item.ds);
-		item.inode.notifyLocallySynced(item.ds, synced);
 	}
 	
 	/**
@@ -479,7 +392,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		return true;
 	}
 	
-	public void stop() {
+	public void shutdown() {
 		System.out.println("Closing LocalStoreManager...");
 		
 		if (workers == null)
@@ -488,9 +401,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		working = false;
 		
 		for (int i=0; i<numWorkers; i++) {
-			//workers[i].interrupt();
 			try {
-				//workers[i].interrupt();
 				workers[i].join();
 			} catch (InterruptedException e) {
 				e.printStackTrace();

@@ -3,7 +3,6 @@ package kawkab.fs.core;
 import java.io.IOException;
 import java.util.Properties;
 
-import kawkab.fs.api.FileHandle;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.AlreadyConfiguredException;
@@ -96,7 +95,7 @@ public final class Filesystem {
 		return instance;
 	}
 	
-	public synchronized void shutdown() throws KawkabException, InterruptedException, IOException{
+	public synchronized void shutdown() throws KawkabException, InterruptedException{
 		if (closed)
 			return;
 		
@@ -106,6 +105,7 @@ public final class Filesystem {
 		namespace.shutdown();
 		Ibmap.shutdown();
 		InodesBlock.shutdown();
+		SegmentTimerQueue.instance().shutdown();
 		Cache.instance().shutdown();
 		
 		synchronized(instance) {

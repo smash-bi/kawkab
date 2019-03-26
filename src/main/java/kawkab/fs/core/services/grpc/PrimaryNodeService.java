@@ -26,14 +26,10 @@ public final class PrimaryNodeService extends PrimaryNodeImplBase {
 	private static Cache cache; //To acquire block and return to the client
 	
 	static {
-		try {
-			cache = Cache.instance();
-		} catch (IOException e) { //FIXME: Handle the exception properly
-			e.printStackTrace();
-		}
+		cache = Cache.instance();
 	}
 	
-	public PrimaryNodeService() throws IOException {
+	public PrimaryNodeService() {
 		localStoreManager = LocalStoreManager.instance();
 	}
 	
@@ -112,6 +108,7 @@ public final class PrimaryNodeService extends PrimaryNodeImplBase {
 		ByteString blockBytes = null;
 		try {
 			block = cache.acquireBlock(bid);
+			block.loadBlock();
 			blockBytes = block.byteString();
 		} catch(FileNotExistException e) {
 			blockBytes = null;
