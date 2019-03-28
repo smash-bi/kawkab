@@ -55,11 +55,12 @@ public class SegmentTimer {
 			return -1;
 		}
 		
-		System.out.println("Expired " + segId);
-		
 		return diff;
 	}
 	
+	/**
+	 * Atomically sets the new value and returns the previous value
+	 */
 	public boolean getAndSetInQueue(boolean inQueue) {
 		return this.inQueue.getAndSet(inQueue);
 	}

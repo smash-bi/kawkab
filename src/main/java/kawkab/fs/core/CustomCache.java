@@ -22,6 +22,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	private LRUCache cache; // An extended LinkedHashMap that implements removeEldestEntry()
 	private Lock cacheLock; // Cache level locking
 	private LocalStoreManager localStore;
+	//private DSPool dsp;
 	
 	private CustomCache() {
 		System.out.println("Initializing cache..." );
@@ -31,6 +32,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		cacheLock = new ReentrantLock();
 		localStore = LocalStoreManager.instance();
 		cache = new LRUCache(this);
+		//dsp = DSPool.instance();
 	}
 	
 	public static CustomCache instance() {
@@ -105,7 +107,17 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 			
 			if (cachedItem == null){ // If the block is not cached
 				//long t = System.nanoTime();
-				Block block = blockID.newBlock();   // Creates a new block object to save in the cache
+				/*Block block;
+				if (blockID.type() == BlockType.DATA_SEGMENT) {
+					DataSegment seg = dsp.acquire();
+					seg.reset(blockID);
+					block = seg;
+				} else {
+					block = blockID.newBlock();   // Creates a new block object to save in the cache
+				}*/
+				
+				Block block = blockID.newBlock();
+				
 				//t = (System.nanoTime() - t)/1000;
 				//acquireStats.putValue(t);
 
@@ -134,10 +146,6 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	@Override
 	public void releaseBlock(BlockID blockID) throws KawkabException {
 		//System.out.println("[C] Release block: " + blockID);
-		
-		//try {
-		
-		//long t = System.nanoTime();
 		
 		CachedItem cachedItem = null;
 		cacheLock.lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
@@ -235,5 +243,12 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
 		flush();
 		localStore.shutdown();
+	}
+	
+	private final class CacheContext {
+		private final CachedItem item;
+		private CacheContext (CachedItem ci, Block block) {
+			item = ci;
+		}
 	}
 }

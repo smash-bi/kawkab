@@ -1,7 +1,10 @@
 package kawkab.fs.core;
 
+import java.io.BufferedOutputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.atomic.AtomicLong;
@@ -32,6 +35,8 @@ public final class Inode {
 	private DataSegment curSeg;
 	private SegmentTimer timer;
 	private SegmentTimerQueue timerQ;
+	
+	private WritableByteChannel channel;
 	
 	public static final long MAXFILESIZE;
 	static {
@@ -124,6 +129,52 @@ public final class Inode {
 		return bufferOffset;
 	}
 	
+	public int appendDirect(final byte[] data, int offset, final int length) throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
+		int appended = 0;
+		int remaining = length;
+		long fileSizeBuffered = this.fileSize.get();
+		
+		if (fileSizeBuffered + length > MAXFILESIZE) {
+			throw new MaxFileSizeExceededException();
+		}
+		
+		while (remaining > 0) {
+			if (channel == null) {
+				DataSegmentID segId;
+				if ((fileSizeBuffered % conf.dataBlockSizeBytes) == 0L) { // if the last block is full
+					segId = createNewBlock(fileSizeBuffered);
+				} else {
+					segId = getSegmentID(fileSizeBuffered);
+				}
+				
+				channel = Channels.newChannel(new BufferedOutputStream(new FileOutputStream(segId.localPath())));
+			}
+			
+			try {
+				ByteBuffer buffer = ByteBuffer.wrap(data, offset, length);
+				int bytes = channel.write(buffer);
+				
+				remaining -= bytes;
+				appended += bytes;
+				fileSizeBuffered += bytes;
+			} catch (IOException e) {
+				e.printStackTrace();
+				channel.close();
+				channel = null;
+				throw new KawkabException(e);
+			}
+			
+			if ((fileSizeBuffered % conf.dataBlockSizeBytes) == 0L) {
+				channel.close();
+				channel = null;
+			}
+		}
+		
+		this.fileSize.set(fileSizeBuffered);
+		
+		return appended;
+	}
+	
 	public int appendBuffered(final byte[] data, int offset, final int length) throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
 		int appended = 0;
 		int remaining = length;
@@ -159,10 +210,10 @@ public final class Inode {
 				throw new KawkabException(e);
 			}
 			
-			//TODO: Add the segment in the localQueue for persistence
 			localStore.store(curSeg);
 			
 			if (!timer.update()) {
+				curSeg = (DataSegment) cache.acquireBlock(segId);
 				timer = new SegmentTimer(segId);
 				timer.update();
 			}
@@ -268,9 +319,10 @@ public final class Inode {
 	 */
 	DataSegmentID createNewBlock(final long fileSize) throws IOException, InterruptedException {
 		DataSegmentID dsid = getSegmentID(fileSize);
-		localStore.createBlock(dsid);
 		
-		//System.out.println(String.format("Created blk: %d, fileSize=%d", blockNumber, fileSize));
+		// System.out.println(String.format("Creating blk for: %s, fileSize=%d", dsid, fileSize));
+		
+		localStore.createBlock(dsid);
 		
 		return dsid;
 	}
@@ -326,8 +378,8 @@ public final class Inode {
 					+ "%d bytes out of %d.",bytesWritten, conf.inodeSizeBytes));
 		}
 		
-		if (fileSize.get() > 0)
-			System.out.printf("Stored inode: %d -> %d\n", inumber, fileSize.get());
+		//if (fileSize.get() > 0)
+		//	System.out.printf("Stored inode: %d -> %d\n", inumber, fileSize.get());
 		
 		return bytesWritten;
 	}

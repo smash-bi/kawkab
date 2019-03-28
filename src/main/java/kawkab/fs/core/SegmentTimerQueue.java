@@ -32,9 +32,7 @@ public class SegmentTimerQueue {
 	}
 	
 	public void submit(SegmentTimer timer) {
-		boolean inQueue = timer.getAndSetInQueue(true);
-		
-		if (inQueue)
+		if (timer.getAndSetInQueue(true))
 			return;
 		
 		queue.add(timer);

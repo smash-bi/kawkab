@@ -23,7 +23,7 @@ public class Namespace {
 	private int lastIbmapUsed;
 	private KeyedLock locks;
 
-	private Map<Long, Boolean> openedFiles; // Map<inumber, appendMode>
+	private Map<Long, Boolean> openedFiles; // Map<inumber, appendMode> //TODO: Use a bit-map instead of the hashmap
 
 	private static Namespace instance;
 	private static final int ibmapsPerMachine = Configuration.instance().ibmapsPerMachine;
@@ -71,14 +71,13 @@ public class Namespace {
 				inumber = ns.getInumber(filename);
 			} catch (FileNotExistException fnee) { // If the file does not exist
 				if (appendMode) { // Create file if the file is opened in the append mode.
-					// System.out.println("[NS] Creating new file: " + filename);
+					System.out.println("[NS] Creating new file: " + filename);
 					inumber = createNewFile();
 
 					try {
 						ns.addFile(filename, inumber);
 
-						// System.out.println("[N] Created a new file: " + filename + ", inumber: " +
-						// inumber);
+						 //System.out.println("[N] Created a new file: " + filename + ", inumber: " + inumber);
 					} catch (FileAlreadyExistsException faee) { // If the file already exists, e.g., because another
 																// node created the same file with different inumber
 						releaseInumber(inumber);

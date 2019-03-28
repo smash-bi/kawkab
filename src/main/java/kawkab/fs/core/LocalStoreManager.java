@@ -18,7 +18,6 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	
 	private static final int maxBlocks = Configuration.instance().maxBlocksPerLocalDevice; // Number of blocks that can be created locally
 	private static final int numWorkers = Configuration.instance().syncThreadsPerDevice; // Number of worker threads and number of reqsQs
-	private static final int numSegWorkers = Configuration.instance().segSyncThreadsPerDevice;
 	
 	private LinkedBlockingQueue<Block> storeQs[]; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks locally
@@ -163,7 +162,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			return;
 		}
 		
-		//System.out.println("\t[LSM] Enque: " + block.id());
+		// System.out.println("\t[LSM] Enque: " + block.id());
 		
 		//Load balance between workers, but assign same worker to the same block.
 		int queueNum = Math.abs(block.id().perBlockKey()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
@@ -207,11 +206,13 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 		
 		try {
-			while (dirtyCount > 0) {
+			//while (dirtyCount > 0) {
+			if (dirtyCount > 0) {
 				try {
 					//syncLocally(block);
 					syncedCnt += block.storeToFile();
 				} catch (IOException e) {
+					System.out.println("Unbale to store data for ID: " + block.id());
 					e.printStackTrace();
 					//FIXME: What should we do here? Should we return?
 				}
@@ -239,8 +240,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		// the local file while concurrently uploading to the global store. If this happens, S3 API throws an exception
 		// that the MD5 hash of the file has changed. Now we update this flag in notifyStoreComplete() function.
 		
-		//block.clearInLocalQueue();
-		if (block.decAndGetLocalDirty(0) > 0) {
+		//if (block.decAndGetLocalDirty(0) > 0) {
+		if (dirtyCount > 0) {
 			store(block);
 		}
 		
@@ -330,21 +331,28 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * Multiple writers can call this function concurrently. However, only one writer per block should be allowed to call this function.
 	 * The function assumes that the caller prevents multiple writers from creating the same new block.
 	 */
-	public void createBlock(BlockID block) throws IOException, InterruptedException {
+	public void createBlock(BlockID blockID) throws IOException, InterruptedException {
 		
 		storePermits.acquire(); // This provides an upper limit on the number of blocks that can be created locally.
 		
-		File file = new File(block.localPath());
+		File file = new File(blockID.localPath());
 		File parent = file.getParentFile();
 		if (!parent.exists()){
 			parent.mkdirs();
 		}
 		
 		//syncLocally(block);
-		file.createNewFile();
-		storedFilesMap.put(block); // storedFilesMap.put() and block.setInLocal() are not required to be atomic. This is because a  
+		if (!file.createNewFile()) {
+			storePermits.release();
+			throw new IOException("Unable to create the file: " + blockID.localPath());
+		}
+		
+		storedFilesMap.put(blockID); // storedFilesMap.put() and block.setInLocal() are not required to be atomic. This is because a  
 										// file's size is only updated when the block has been created. Therefore, a reader cannot read 
 										// a non-existing block.
+		
+		// System.out.println("Created file: " + blockID.localPath() + " for " + blockID);
+		
 		//block.setInLocalStore(); //Mark the block as locally saved
 	}
 	
@@ -435,15 +443,5 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			return false;
 		
 		return storedFilesMap.exists(id);
-	}
-	
-	private class StoreItem {
-		Inode inode;
-		DataSegment ds;
-		
-		StoreItem(Inode inode, DataSegment ds) {
-			this.inode = inode;
-			this.ds = ds;
-		}
 	}
 }

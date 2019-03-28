@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.protobuf.ByteString;
 
+import io.grpc.netty.shaded.io.netty.buffer.PooledByteBufAllocator;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -42,7 +43,8 @@ public final class DataSegment extends Block {
 		lastFetchTimeMs = 0;
 		dirtyOffset = new AtomicInteger(0);
 		
-		dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
+		//dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
+		dataBuf = PooledByteBufAllocator.DEFAULT.buffer(conf.segmentSizeBytes);
 		dataBuf.limit(0);
 		
 		//System.out.println(" Opened block: " + name());
@@ -291,29 +293,6 @@ public final class DataSegment extends Block {
 			}
 		}
 	}
-	
-	/*@Override
-	public int fromInputStream(InputStream in) throws IOException {
-		lock();
-		bytes = new byte[Constants.segmentSizeBytes];
-		int read = 0;
-		int remaining = bytes.length;
-		int ret = 0;
-		try {
-			while(remaining > 0 && ret >= 0) {
-				ret = in.read(bytes, read, remaining);
-				remaining -= ret;
-				read += ret;
-			}
-		} finally {
-			unlock();
-		}
-		
-		if (read != bytes.length)
-			throw new IOException("Unable to load Ibmap completely from the inputstream: " + name());
-		
-		return read;
-	}*/
 	
 	@Override
 	public int storeToFile() throws IOException {

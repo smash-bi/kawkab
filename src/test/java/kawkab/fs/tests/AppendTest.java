@@ -57,7 +57,7 @@ public class AppendTest {
 		Stats opStats = new Stats();
 		for (int i = 0; i < numWriters; i++) {
 			final int id = i;
-			workers[i] = new Thread() {
+			workers[i] = new Thread("Appender-"+id) {
 				public void run() {
 					try {
 						String filename = new String("/home/smash/twpcf-" + id);
@@ -101,7 +101,6 @@ public class AppendTest {
 				}
 			};
 
-			workers[i].setName("Writer-"+id);
 			workers[i].start();
 		}
 
