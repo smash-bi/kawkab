@@ -43,8 +43,8 @@ public final class DataSegment extends Block {
 		lastFetchTimeMs = 0;
 		dirtyOffset = new AtomicInteger(0);
 		
-		//dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
-		dataBuf = PooledByteBufAllocator.DEFAULT.buffer(conf.segmentSizeBytes);
+		dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
+		//dataBuf = PooledByteBufAllocator.DEFAULT.buffer(conf.segmentSizeBytes);
 		dataBuf.limit(0);
 		
 		//System.out.println(" Opened block: " + name());

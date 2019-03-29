@@ -7,6 +7,7 @@ import java.util.Properties;
 import kawkab.fs.core.NodeInfo;
 import kawkab.fs.core.exceptions.AlreadyConfiguredException;
 import kawkab.fs.core.zookeeper.ZKClusterConfig;
+import kawkab.fs.utils.GCMonitor;
 
 public final class Configuration {
 	private static Configuration instance;
@@ -164,7 +165,7 @@ public final class Configuration {
 		//ZooKeeper cluster settings
 		zkMainCluster =	new ZKClusterConfig(zkMainClusterID, zkMainServers, connectRetrySleepMs, connectMaxRetries);
 		
-		//GCMonitor.initialize();
+		GCMonitor.initialize();
 		
 		printConfig();
 		

@@ -158,7 +158,7 @@ public final class FileHandle {
 			throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
 		}
 		
-		int appendedBytes = inode.appendDirect(data, offset, length);
+		int appendedBytes = inode.appendBuffered(data, offset, length);
 		inodesBlock.markLocalDirty();
 		
 		return appendedBytes;

@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class SegmentTimer {
 	private static final int timeoutMs = 1000; //Randomly chosen, a small value should be sufficient as we want to batch back-to-back writes only
 	private final AtomicBoolean inQueue;
+
 	private long timestamp;
 	private final DataSegmentID segId;
 	
@@ -16,19 +17,22 @@ public class SegmentTimer {
 	/**
 	 * Sets the timer to be the current wall clock time.
 	 * 
-	 * @return true if the timer was expired based on the previous timer value, otherwise returns false
+	 * @return false if the timer has already expired based on the previous timer value, otherwise returns true
 	 */
 	public synchronized boolean update() {
-		if (timestamp < 0)
-			return false;
+		assert timestamp >= 0;
 		
 		timestamp = System.currentTimeMillis();
 		
 		return true;
 	}
 	
+	/**
+	 * 
+	 * @return false if the timer has already expired based on the previous timer value, otherwise returns true
+	 */
 	public synchronized boolean disable() {
-		if (timestamp < 0)
+		if (timestamp < 0) // if the timer has expired
 			return false;
 		
 		timestamp = 0;
@@ -42,20 +46,25 @@ public class SegmentTimer {
 	 * @return -1 if the timer has expired, otherwise returns the remaining the lower bound millis until the timer expires
 	 */
 	public synchronized long expired(long timeNow) {
-		if (timestamp < 0)
-			return -1;
+		assert timestamp >= 0;	// The timestamp should never be negative because it is only set to -1 in this function. 
+								// Morevoer, the worker should not add this timer back in the queue as it has expired. 
+								// The appender will not add an expired timer in the queue
 		
-		if (timestamp == 0)
+		if (timestamp == 0) // if the timer is disabled
 			return timeoutMs;
 		
 		long diff = timeNow - timestamp;
 		
-		if (diff >= timeoutMs) {
+		if (diff >= timeoutMs) { // if the timer has expired
 			timestamp = -1;
 			return -1;
 		}
 		
-		return diff;
+		if (diff <= 0) { // This happens if the writer and the worker contend for lock, and the worker calls this function after the writer calls the update function
+			return timeoutMs;
+		}
+		
+		return timeoutMs - diff;
 	}
 	
 	/**

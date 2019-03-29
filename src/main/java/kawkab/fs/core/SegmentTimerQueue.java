@@ -39,8 +39,11 @@ public class SegmentTimerQueue {
 	}
 	
 	private void processSegments() {
+		SegmentTimer next = null;
+		
 		while(working) {
-			SegmentTimer next = queue.poll();
+			next = queue.poll();
+			
 			if (next == null) {
 				try {
 					Thread.sleep(1);
@@ -55,7 +58,6 @@ public class SegmentTimerQueue {
 			}
 		}
 		
-		SegmentTimer next = null;
 		while((next = queue.poll()) != null) {
 			try {
 				process(next);
@@ -82,11 +84,12 @@ public class SegmentTimerQueue {
 		}
 		
 		if (ret <= 0) {
+			// System.out.println("[STQ] Releasing " + timer.segmentID());
 			cache.releaseBlock(timer.segmentID());
 			return;
 		}
 			
-		timer.getAndSetInQueue(true);
+		submit(timer);
 	}
 	
 	public void shutdown() {

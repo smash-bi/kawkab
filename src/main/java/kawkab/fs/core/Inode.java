@@ -195,8 +195,9 @@ public final class Inode {
 				timer = new SegmentTimer(segId);
 				curSeg = (DataSegment) cache.acquireBlock(segId);
 				curSeg.markLoaded();
-			} else {
-				timer.disable();
+			} else if (!timer.disable()) {
+				timer = new SegmentTimer(segId);
+				curSeg = (DataSegment) cache.acquireBlock(segId);
 			}
 			
 			try {
@@ -212,11 +213,7 @@ public final class Inode {
 			
 			localStore.store(curSeg);
 			
-			if (!timer.update()) {
-				curSeg = (DataSegment) cache.acquireBlock(segId);
-				timer = new SegmentTimer(segId);
-				timer.update();
-			}
+			timer.update();
 			
 			timerQ.submit(timer);
 			

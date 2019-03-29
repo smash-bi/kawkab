@@ -96,7 +96,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	 */
 	@Override
 	public Block acquireBlock(BlockID blockID) throws IOException, KawkabException {
-		//System.out.println("[C] acquire: " + blockID);
+		// System.out.println("[C] acquire: " + blockID);
 		
 		CachedItem cachedItem = null;
 		
@@ -145,7 +145,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	 */
 	@Override
 	public void releaseBlock(BlockID blockID) throws KawkabException {
-		//System.out.println("[C] Release block: " + blockID);
+		// System.out.println("[C] Release block: " + blockID);
 		
 		CachedItem cachedItem = null;
 		cacheLock.lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
@@ -226,6 +226,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 						e.printStackTrace();
 					}
 				}
+				assert cachedItem.refCount() == 0;
 				itr.remove();
 			}
 			assert cache.size() == 0;
