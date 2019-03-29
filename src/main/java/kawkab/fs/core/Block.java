@@ -440,4 +440,8 @@ public abstract class Block /*implements AutoCloseable*/ {
 							// Moreover, the readers use a lock if the isLoaded==false and then again read the variable,
 							// which ensures that the reader reads the most recent value.
 	}
+	
+	public boolean isLoaded() {
+		return isLoaded;
+	}
 }

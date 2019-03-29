@@ -226,7 +226,13 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 						e.printStackTrace();
 					}
 				}
+				
+				if (cachedItem.refCount() != 0) {
+					System.out.println("Ref count is not 0: id: " + block.id() + ", count: " + cachedItem.refCount());
+				}
+				
 				assert cachedItem.refCount() == 0;
+				
 				itr.remove();
 			}
 			assert cache.size() == 0;
@@ -244,12 +250,5 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
 		flush();
 		localStore.shutdown();
-	}
-	
-	private final class CacheContext {
-		private final CachedItem item;
-		private CacheContext (CachedItem ci, Block block) {
-			item = ci;
-		}
 	}
 }

@@ -2,19 +2,22 @@ package kawkab.fs.core;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import kawkab.fs.commons.Commons;
 import kawkab.fs.core.exceptions.KawkabException;
 
 public class SegmentTimerQueue {
-	private final ConcurrentLinkedQueue<SegmentTimer> queue;
+	private final ConcurrentLinkedQueue<SegmentTimer> buffer;
 	private final Cache cache;
 	private final Thread timerThread;
+	private final Time time;
 	private volatile boolean working = true;
 	
 	private static SegmentTimerQueue instance;
 	
-	public SegmentTimerQueue () {
-		queue = new ConcurrentLinkedQueue<SegmentTimer>();
+	private SegmentTimerQueue () {
+		buffer = new ConcurrentLinkedQueue<SegmentTimer>();
 		cache = Cache.instance();
+		time = Time.instance();
 		timerThread = new Thread("SegmentTimerQueueThread") {
 			public void run() {
 				processSegments();
@@ -31,22 +34,22 @@ public class SegmentTimerQueue {
 		return instance;
 	}
 	
-	public void submit(SegmentTimer timer) {
+	public void add(SegmentTimer timer) {
 		if (timer.getAndSetInQueue(true))
 			return;
 		
-		queue.add(timer);
+		buffer.add(timer);
 	}
 	
 	private void processSegments() {
 		SegmentTimer next = null;
 		
 		while(working) {
-			next = queue.poll();
+			next = buffer.poll();
 			
 			if (next == null) {
 				try {
-					Thread.sleep(1);
+					Thread.sleep(2); //2 is chosen randomly. It doesn't impact the performance, but a large value may result in slower expiry of the segments
 				} catch (InterruptedException e) {}
 				continue;
 			}
@@ -55,10 +58,11 @@ public class SegmentTimerQueue {
 				process(next);
 			} catch (KawkabException e) {
 				e.printStackTrace();
+				continue;
 			}
 		}
 		
-		while((next = queue.poll()) != null) {
+		while((next = buffer.poll()) != null) {
 			try {
 				process(next);
 			} catch (KawkabException e) {
@@ -70,26 +74,24 @@ public class SegmentTimerQueue {
 	private void process(SegmentTimer timer) throws KawkabException {
 		timer.getAndSetInQueue(false);
 		
-		long timeNow = System.currentTimeMillis();
+		long timeNow = time.currentTime();
+		long ret = timer.expireTime(timeNow);
 		
-		long ret = timer.expired(timeNow);
-		
-		if (ret > 0) {
+		while (ret > 0) { //While (!EXPIRED && !DISABLED)
 			try {
 				Thread.sleep(ret);
 			} catch (InterruptedException e) {}
 			
-			timeNow = System.currentTimeMillis();
-			ret = timer.expired(timeNow);
+			timeNow = time.currentTime();
+			ret = timer.expireTime(timeNow);
 		}
 		
-		if (ret <= 0) {
-			// System.out.println("[STQ] Releasing " + timer.segmentID());
-			cache.releaseBlock(timer.segmentID());
+		if (ret == SegmentTimer.DISABLED || ret == SegmentTimer.ALREADY_EXPIRED)
 			return;
-		}
-			
-		submit(timer);
+		
+		assert ret == SegmentTimer.EXPIRED;
+		
+		cache.releaseBlock(timer.segmentID());
 	}
 	
 	public void shutdown() {

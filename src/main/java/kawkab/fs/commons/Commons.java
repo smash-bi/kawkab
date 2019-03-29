@@ -54,9 +54,24 @@ public final class Commons {
      * @throws IOException
      */
     public static int readFrom(ReadableByteChannel channel, ByteBuffer toBuffer) throws IOException {
+    	return readFrom(channel, toBuffer, toBuffer.remaining());
+    }
+    
+    /**
+     * Reads toBuffer.remaining() bytes from the channel into the toBuffer.
+     * 
+     * @param channel Read from the channel
+     * @param toBuffer Read into the buffer
+     * @param size The number of bytes to read from the channel
+     * @return Total number of bytes read from the channel
+     * @throws IOException
+     */
+    public static int readFrom(ReadableByteChannel channel, ByteBuffer toBuffer, int size) throws IOException {
     	int readNow = 0;
     	int totalRead = 0;
-    	int size = toBuffer.remaining();
+    	int remaining = toBuffer.remaining();
+    	
+    	assert size <= remaining;
     	
     	while(readNow >= 0 && totalRead < size) {
     		readNow = channel.read(toBuffer);

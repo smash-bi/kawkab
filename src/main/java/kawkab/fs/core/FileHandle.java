@@ -10,6 +10,12 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 
+/**
+ * TODO: Store InodeBlocks in a separate table than the cache.
+ * TODO: Remove the InodeBlocks from the table when necessary
+ * TODO: Keep a reference count of InodeBlocks
+ */
+
 public final class FileHandle {
 	private final long inumber;
 	private final FileMode fileMode;
