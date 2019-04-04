@@ -194,7 +194,7 @@ public final class DataSegment extends Block {
 
 		loadedBytes = bytesRead;
 
-		System.out.printf("[DS] Loaded bytes from channel: %d, length=%d, bufPosition=%d\n", bytesRead, length, dataBuf.position());
+		//System.out.printf("[DS] Loaded bytes from channel: %d, length=%d, bufPosition=%d\n", bytesRead, length, dataBuf.position());
 
 		return bytesRead;
 	}
@@ -329,7 +329,7 @@ public final class DataSegment extends Block {
 
 		dirtyOffset += bytesWritten;
 
-		System.out.printf("[DS] Bytes written in channel = %d, dirtyOffset=%d, dirtyLength=%d\n", bytesWritten, dirtyOffset, size);
+		//System.out.printf("[DS] Bytes written in channel = %d, dirtyOffset=%d, dirtyLength=%d\n", bytesWritten, dirtyOffset, size);
 
 		return bytesWritten;
 	}
