@@ -45,56 +45,42 @@ public final class Commons {
         }
     }
     
+
     /**
-     * Reads toBuffer.remaining() bytes from the channel into the toBuffer.
+     * Reads dstBuffer.remaining() bytes from the channel into the toBuffer.
      * 
-     * @param channel Read from the channel
-     * @param toBuffer Read into the buffer
-     * @return Total number of bytes read from the channel.
-     * @throws IOException
-     */
-    public static int readFrom(ReadableByteChannel channel, ByteBuffer toBuffer) throws IOException {
-    	return readFrom(channel, toBuffer, toBuffer.remaining());
-    }
-    
-    /**
-     * Reads toBuffer.remaining() bytes from the channel into the toBuffer.
-     * 
-     * @param channel Read from the channel
-     * @param toBuffer Read into the buffer
-     * @param size The number of bytes to read from the channel
+     * @param channel Source channel
+     * @param dstBuffer Destination buffer
      * @return Total number of bytes read from the channel
      * @throws IOException
      */
-    public static int readFrom(ReadableByteChannel channel, ByteBuffer toBuffer, int size) throws IOException {
+    public static int readFrom(ReadableByteChannel channel, ByteBuffer dstBuffer) throws IOException {
     	int readNow = 0;
     	int totalRead = 0;
-    	int remaining = toBuffer.remaining();
-    	
-    	assert size <= remaining;
-    	
-    	while(readNow >= 0 && totalRead < size) {
-    		readNow = channel.read(toBuffer);
-    		if (readNow >= 0)
-    			totalRead += readNow;
+
+    	while(dstBuffer.remaining() > 0) {
+    		readNow = channel.read(dstBuffer);
+    		if (readNow == -1)
+    			break;
+
+    		totalRead += readNow;
     	}
     	
     	return totalRead;
     }
     
     /**
-     * Writes fromBuffer.remaining() bytes from fromBuffer into toChannel.
-     * @param toChannel
-     * @param fromBuffer
-     * @param size
+     * Writes srcBuffer.remaining() bytes from srcBuffer into dstChannel.
+     * @param dstChannel
+     * @param srcBuffer
      * @return The number of bytes written into the channel.
      * @throws IOException
      */
-    public static int writeTo(WritableByteChannel toChannel, ByteBuffer fromBuffer) throws IOException {
+    public static int writeTo(WritableByteChannel dstChannel, ByteBuffer srcBuffer) throws IOException {
     	int bytesWritten = 0;
-    	int size = fromBuffer.remaining();
+    	int size = srcBuffer.remaining();
     	while(bytesWritten < size) {
-    		bytesWritten += toChannel.write(fromBuffer);
+    		bytesWritten += dstChannel.write(srcBuffer);
     	}
     	
     	return bytesWritten;

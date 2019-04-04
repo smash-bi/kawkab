@@ -100,27 +100,31 @@ public abstract class Block /*implements AutoCloseable*/ {
 
 	/**
 	 * Load the content of the block from the local file
-	 * 
-	 * @param buffer
+	 *
+	 * @return Number of bytes loaded from the file
 	 * @throws IOException
 	 */
-	public abstract void loadFromFile() throws IOException;
+	public abstract int loadFromFile() throws IOException;
 	
 	/**
 	 * Load the content of the block from the given ByteBuffer
 	 * 
 	 * @param buffer
+	 *
+	 * @return Number of bytes read from the buffer
 	 * @throws IOException
 	 */
-	public abstract void loadFrom(ByteBuffer buffer) throws IOException;
+	public abstract int loadFrom(ByteBuffer buffer) throws IOException;
 	
 	/**
 	 * Load the contents of the block from channel.
 	 * 
 	 * @param channel
+	 *
+	 * @return Number of bytes read from the channel
 	 * @throws IOException
 	 */
-	public abstract void loadFrom(ReadableByteChannel channel)  throws IOException;
+	public abstract int loadFrom(ReadableByteChannel channel)  throws IOException;
 	
 	/**
 	 * Store contents of the block to channel. This function stores only the
@@ -130,13 +134,13 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * @return Number of bytes written to the channel.
 	 * @throws IOException
 	 */
-	public abstract int storeTo(WritableByteChannel channel)  throws IOException;
+	abstract int storeTo(WritableByteChannel channel)  throws IOException;
 	
 	/**
 	 * Stores the block in a file.
 	 * @return Number of bytes written in the file.
 	 */
-	public abstract int storeToFile() throws IOException;
+	abstract int storeToFile() throws IOException;
 	
 	/**
 	 * Stores the complete block in the channel.
@@ -399,6 +403,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 					isLoaded = true; //Once data is loaded on the primary, it should not expired because 
 				                     // the concurrent readers/writer read/modify the same block in the cache.
 				}
+				isLoaded = true;
 			} finally {
 				dataLoadLock.unlock();
 			}
@@ -432,16 +437,5 @@ public abstract class Block /*implements AutoCloseable*/ {
 	
 	public boolean isInCache() {
 		return inCache.get();
-	}
-	
-	public void markLoaded() {
-		isLoaded = true;	// We don't have to make it atomic or synchronize it because the writer calls this function
-							// before updating the file size, which prevents any concurrent readers of a new segment.
-							// Moreover, the readers use a lock if the isLoaded==false and then again read the variable,
-							// which ensures that the reader reads the most recent value.
-	}
-	
-	public boolean isLoaded() {
-		return isLoaded;
 	}
 }

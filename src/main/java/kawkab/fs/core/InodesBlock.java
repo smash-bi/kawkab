@@ -27,13 +27,6 @@ public final class InodesBlock extends Block {
 	 * The access modifier of the constructor is "default" so that it can be packaged as a library. Clients
 	 * are not supposed to extend or instantiate this class.
 	 */
-	/**
-	 * @param blockIndex The block number, starting from zero, of this inodesBlock. Although the
-	 *         inodesBlocks are sharded across machines, the blockIndex is relative to the whole
-	 *         system, not relative to this machine.
-	 * @param version This the version number of this inodesBlock. The current version number should be retrieved
-	 *        from the inodesBlock version table (IBV table).
-	 */
 	InodesBlock(InodesBlockID id){
 		super(id);
 		
@@ -82,31 +75,36 @@ public final class InodesBlock extends Block {
 	}
 	
 	@Override
-	public void loadFrom(ByteBuffer buffer) throws IOException {
-		//inodes = new Inode[Constants.inodesPerBlock];
+	public int loadFrom(ByteBuffer buffer) throws IOException {
+		int bytesRead = 0;
+
 		for(int i=0; i<conf.inodesPerBlock; i++){
-			//inodes[i] = new Inode(0);
-			inodes[i].loadFrom(buffer);
+			bytesRead += inodes[i].loadFrom(buffer);
 		}
+
+		return bytesRead;
 	}
 	
 	@Override
-	public void loadFromFile() throws IOException {
+	public int loadFromFile() throws IOException {
 		try (RandomAccessFile file = new RandomAccessFile(id.localPath(), "r");
 				SeekableByteChannel channel = file.getChannel()) {
 			channel.position(0);
 			// System.out.println("Load: "+block.localPath() + ": " + channel.position());
-			loadFrom(channel);
+			return loadFrom(channel);
 		}
 	}
 	
 	@Override
-	public void loadFrom(ReadableByteChannel channel) throws IOException {
+	public int loadFrom(ReadableByteChannel channel) throws IOException {
+		int bytesRead = 0;
 		//inodes = new Inode[Constants.inodesPerBlock];
 		for(int i=0; i<conf.inodesPerBlock; i++){
 			//inodes[i] = new Inode(0);
-			inodes[i].loadFrom(channel);
+			bytesRead += inodes[i].loadFrom(channel);
 		}
+
+		return bytesRead;
 	}
 	
 	@Override

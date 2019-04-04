@@ -188,7 +188,6 @@ public final class Inode {
 	/**
 	 * Append data at the end of the file
 	 * @param data Data to append
-	 * @param curOffset Offset in the data array
 	 * @param length Number of bytes to write from the data array
 	 * @return number of bytes appended
 	 * @throws InvalidFileOffsetException 
@@ -266,8 +265,14 @@ public final class Inode {
 	public long fileSize(){
 		return fileSize.get();
 	}
-	
-	void loadFrom(final ByteBuffer buffer) throws IOException {
+
+	/**
+	 * Loads data in the inode variables from the buffer
+	 * @param buffer
+	 * @return Number of bytes read from the buffer
+	 * @throws IOException
+	 */
+	int loadFrom(final ByteBuffer buffer) throws IOException {
 		if (buffer.remaining() < conf.inodeSizeBytes) {
 			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
 					+ "Have %d, needed %d.",buffer.remaining(), conf.inodeSizeBytes));
@@ -276,9 +281,17 @@ public final class Inode {
 		inumber = buffer.getLong();
 		fileSize.set(buffer.getLong());
 		recordSize = buffer.getInt();
+
+		return Long.BYTES*2 + Integer.BYTES;
 	}
-	
-	void loadFrom(final ReadableByteChannel channel) throws IOException {
+
+	/**
+	 * Loads inode variables from the channel
+	 * @param channel
+	 * @return Number of bytes read from the channel
+	 * @throws IOException
+	 */
+	int loadFrom(final ReadableByteChannel channel) throws IOException {
 		int inodeSizeBytes = conf.inodeSizeBytes;
 		ByteBuffer buffer = ByteBuffer.allocate(inodeSizeBytes);
 		
@@ -293,8 +306,10 @@ public final class Inode {
 		inumber = buffer.getLong();
 		fileSize.set(buffer.getLong());
 		recordSize = buffer.getInt();
-		
+
 		//System.out.printf("\tLoaded inode: %d -> %d\n", inumber, fileSize.get());
+
+		return bytesRead;
 	}
 	
 	/*
@@ -328,8 +343,23 @@ public final class Inode {
 		int written = buffer.position() - start;
 		return written;
 	}
-	
-	long inumber() {
-		return inumber;
+
+	/**
+	 * This function must not be concurrent to the append function. So this should be called from the same thread as
+	 * the append function. Otherwise, we should make the append and close synchronized.
+	 */
+	void releaseBuffer() throws KawkabException {
+		if (timer == null)
+			return;
+
+		if (timer.disableIfValid()) {
+			cache.releaseBlock(segId);
+
+			timer = null;
+			curSeg = null;
+			segId = null;
+
+			return;
+		}
 	}
 }

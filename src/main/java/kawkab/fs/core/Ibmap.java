@@ -33,9 +33,6 @@ public final class Ibmap extends Block{
 	
 	private static boolean bootstraped;
 	
-	/**
-	 * @param blockIndex Index of the Ibmap block for the current machine.
-	 */
 	Ibmap(IbmapBlockID id) {
 		super(id);
 		this.blockIndex = id.blockIndex();
@@ -111,7 +108,7 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	synchronized public void loadFrom(ByteBuffer buffer) throws IOException {
+	public synchronized int loadFrom(ByteBuffer buffer) throws IOException {
 		if (buffer.remaining() < ibmapBlockSizeBytes) {
 			throw new InsufficientResourcesException(String.format("Not enough bytes left in the buffer: "
 					+ "Have %d, needed %d.",buffer.remaining(), ibmapBlockSizeBytes));
@@ -121,16 +118,20 @@ public final class Ibmap extends Block{
 		buffer.get(bytes);
 		
 		bitset = BitSet.valueOf(bytes);
+
+		return bytes.length;
 	}
 	
 	@Override
-	synchronized public void loadFromFile() throws IOException {
+	public synchronized int loadFromFile() throws IOException {
 		byte[] bytes = Files.toByteArray(new File(id.localPath()));
 		bitset = BitSet.valueOf(bytes);
+
+		return bytes.length;
 	}
 	
 	@Override
-	synchronized public void loadFrom(ReadableByteChannel channel) throws IOException {
+	public synchronized int loadFrom(ReadableByteChannel channel) throws IOException {
 		byte[] bytes = new byte[ibmapBlockSizeBytes];
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		int bytesRead = Commons.readFrom(channel, buffer);
@@ -139,6 +140,8 @@ public final class Ibmap extends Block{
 					+ "%d/%d bytes for block I%d.",bytesRead,bytes.length, blockIndex));*/
 		
 		bitset = BitSet.valueOf(bytes);
+
+		return bytesRead;
 	}
 	
 	@Override

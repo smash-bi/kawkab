@@ -187,12 +187,12 @@ public final class FileHandle {
 		return fileMode;
 	}
 	
-	public synchronized void close() throws KawkabException {
-		
+	synchronized void close() throws KawkabException {
 		if (inodesBlock != null) {
+			inode.releaseBuffer();
 			cache.releaseBlock(inodesBlock.id());
 		}
-		
+
 		inode = null;
 		inodesBlock = null;
 		

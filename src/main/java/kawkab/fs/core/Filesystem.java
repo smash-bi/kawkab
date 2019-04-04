@@ -63,6 +63,12 @@ public final class Filesystem {
 		FileHandle file = new FileHandle(inumber, mode);
 		return file;
 	}
+
+	public void close(FileHandle fh) throws KawkabException {
+		fh.close();
+		if (fh.mode() == FileMode.APPEND)
+			namespace.closeAppendFile(fh.inumber());
+	}
 	
 	/**
 	 * This function bootstraps the filesystem on this node. It should be called once when the system is started. It

@@ -23,7 +23,7 @@ public class Namespace {
 	private int lastIbmapUsed;
 	private KeyedLock locks;
 
-	private Map<Long, Boolean> openedFiles; // Map<inumber, appendMode> //TODO: Use a bit-map instead of the hashmap
+	private Map<Long, Boolean> openedFiles; // Map<inumber, appendMode> //FIXME: Should we use a bit-map instead of a map?
 
 	private static Namespace instance;
 	private static final int ibmapsPerMachine = Configuration.instance().ibmapsPerMachine;
@@ -46,6 +46,12 @@ public class Namespace {
 		}
 
 		return instance;
+	}
+
+	public void closeAppendFile(long inumber) throws KawkabException{
+		if (openedFiles.remove(inumber) == null)
+			throw new KawkabException("File is not previously opened or not in the openedFilesTable, inumber = " + inumber);
+
 	}
 
 	/**

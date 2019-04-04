@@ -114,7 +114,7 @@ public final class FSTest {
 		byte[] data = new byte[10];
 		file.append(data, 0, data.length);
 		
-		file.close();
+		fs.close(file);
 	}
 	
 	/**
@@ -128,7 +128,7 @@ public final class FSTest {
 		
 		Filesystem fs = Filesystem.instance();
 		
-		String filename = new String("/home/smash/testSmall");
+		String filename = "/home/smash/testSmall";
 		FileOptions opts = new FileOptions();
 		
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
@@ -146,8 +146,8 @@ public final class FSTest {
 		
 		byte[] readBuf = new byte[dataBuffer.length];
 		int read = file.read(readBuf, readOffset, readBuf.length);
-		
-		file.close();
+
+		fs.close(file);
 		
 		//System.out.println(Arrays.toString(readBuf));
 		//System.out.println(Arrays.toString(dataBuffer));
@@ -168,7 +168,7 @@ public final class FSTest {
 
 		Filesystem fs = Filesystem.instance();
 
-		String filename = new String("/home/smash/testSmall");
+		String filename = "/home/smash/testSmall";
 		FileOptions opts = new FileOptions();
 
 		FileHandle file = fs.open(filename, FileMode.READ, opts);
@@ -185,7 +185,7 @@ public final class FSTest {
 			read += file.read(readBuf, 0, readBuf.length);
 		}
 
-		file.close();
+		fs.close(file);
 		
 		// System.out.println(Arrays.toString(readBuf));
 		// System.out.println(Arrays.toString(dataBuffer));
@@ -204,7 +204,7 @@ public final class FSTest {
 		
 		Filesystem fs = Filesystem.instance();
 		
-		String filename = new String("/home/smash/testLarge");
+		String filename = "/home/smash/testLarge";
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
@@ -223,8 +223,8 @@ public final class FSTest {
 		int read = file.read(readBuf, readOffset, readBuf.length);
 		
 		System.out.println("File " + filename + " size " + file.size());
-		
-		file.close();
+
+		fs.close(file);
 		
 		assert appended == read;
 		assert Arrays.equals(dataBuffer, readBuf);
@@ -240,7 +240,7 @@ public final class FSTest {
 		System.out.println("--------------------------------------------");
 		
 		Filesystem fs = Filesystem.instance();
-		String filename = new String("/home/smash/multipleReaders");
+		String filename = "/home/smash/multipleReaders";
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		final long offset = file.size();
@@ -308,7 +308,7 @@ public final class FSTest {
 					}
 					
 					try {
-						file.close();
+						fs.close(file);
 					} catch (KawkabException e) {
 						e.printStackTrace();
 					}
@@ -348,7 +348,7 @@ public final class FSTest {
 			workers[i] = new Thread(){
 				public void run(){
 					try {
-						String filename = new String("/home/smash/testMultipleFiles-"+id);
+						String filename = "/home/smash/testMultipleFiles-"+id;
 						FileOptions opts = new FileOptions();
 						FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 						long readOffset = file.size();
@@ -389,8 +389,8 @@ public final class FSTest {
 								assert Arrays.equals(readBuf, writeBuf);
 							}
 						}
-						
-						file.close();
+
+						fs.close(file);
 						
 						assert appended == read;
 					} catch (Exception e){
@@ -422,7 +422,7 @@ public final class FSTest {
 		System.out.println("            Write Performance Test");
 		System.out.println("--------------------------------------------");
 		Filesystem fs = Filesystem.instance();
-		String filename = new String("/home/smash/writePerformanceTest");
+		String filename = "/home/smash/writePerformanceTest";
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
@@ -445,8 +445,8 @@ public final class FSTest {
 		double durSec = (System.currentTimeMillis() - startTime)/1000.0;
 		double sizeMB = appended/1024.0/1024.0;
 		double speed = sizeMB/durSec;
-		
-		file.close();
+
+		fs.close(file);
 		
 		System.out.println(String.format("Req buffer size=%d, Data size=%.0fMB, Write speed=%.0fMB/s, File size=%dMB, initFileSize=%d, fileID=%d", bufSize, sizeMB, speed, file.size()/1024/1024, initSize, file.inumber()));
 	}
@@ -473,7 +473,7 @@ public final class FSTest {
 			workers[i] = new Thread(){
 				public void run(){
 					try {
-						String filename = new String("/home/smash/twpcf-"+id);
+						String filename = "/home/smash/twpcf-"+id;
 						FileOptions opts = new FileOptions();
 						FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 						
@@ -495,8 +495,8 @@ public final class FSTest {
 						double sizeMB = appended/(1024.0*1024);
 						double thr = sizeMB/durSec;
 						writeStats.putValue(thr);
-						
-						file.close();
+
+						fs.close(file);
 						
 						System.out.println(String.format("File %d: Data size = %.0fMB, Write thr = %.0fMB/s", id, sizeMB, thr));
 					} catch (Exception e){
@@ -530,7 +530,7 @@ public final class FSTest {
 		System.out.println("            Read Performance Test");
 		System.out.println("--------------------------------------------");
 		Filesystem fs = Filesystem.instance();
-		String filename = new String("/home/smash/rp");
+		String filename = "/home/smash/rp";
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
@@ -559,8 +559,8 @@ public final class FSTest {
 		double durSec = (System.currentTimeMillis() - startTime)/1000.0;
 		double dataMB = read*1.0/1024/1024;
 		double speed = dataMB/durSec;
-		
-		file.close();
+
+		fs.close(file);
 		
 		System.out.println(String.format("Data size = %.2fMB, Read speed = %.0fMB/s", dataMB, speed));
 	}
@@ -576,7 +576,7 @@ public final class FSTest {
 		System.out.println("-----------------------------------------------------------------");
 		
 		Filesystem fs = Filesystem.instance();
-		String filename = new String("/home/smash/rpmsf");
+		String filename = "/home/smash/rpmsf";
 		FileOptions opts = new FileOptions();
 		FileHandle file = fs.open(filename, FileMode.APPEND, opts);
 		
@@ -633,7 +633,7 @@ public final class FSTest {
 					readStats.putValue(dataMB/durSec);
 					
 					try {
-						file.close();
+						fs.close(file);
 					} catch (KawkabException e) {
 						e.printStackTrace();
 					}
@@ -725,8 +725,8 @@ public final class FSTest {
 									read += bytes;
 								}
 							}
-							
-							file.close();
+
+							fs.close(file);
 						}
 					} catch (KawkabException | IOException | IbmapsFullException | InterruptedException | 
 							OutOfMemoryException | MaxFileSizeExceededException | InvalidFileOffsetException e) {
@@ -816,8 +816,8 @@ public final class FSTest {
 								}
 							}
 						}
-						
-						file.close();
+
+						fs.close(file);
 						
 					} catch (KawkabException | IOException | IbmapsFullException | InterruptedException | 
 							OutOfMemoryException | MaxFileSizeExceededException | InvalidFileOffsetException e) {

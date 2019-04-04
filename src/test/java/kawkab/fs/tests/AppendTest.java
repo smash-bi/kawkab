@@ -1,26 +1,20 @@
 package kawkab.fs.tests;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Properties;
-import java.util.Random;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Stats;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.AlreadyConfiguredException;
-import kawkab.fs.core.exceptions.IbmapsFullException;
-import kawkab.fs.core.exceptions.InvalidFileModeException;
-import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
-import kawkab.fs.core.exceptions.OutOfMemoryException;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+import java.util.Random;
 
 public class AppendTest {
 
@@ -39,13 +33,12 @@ public class AppendTest {
 	
 	@Test
 	public void appendPerformanceConcurrentFilesTest()
-			throws IbmapsFullException, OutOfMemoryException, MaxFileSizeExceededException, InvalidFileOffsetException,
-			InvalidFileModeException, IOException, KawkabException, InterruptedException {
+			throws IOException, KawkabException {
 		System.out.println("----------------------------------------------------------------");
 		System.out.println("            Append Perofrmance Test - Concurrent Files");
 		System.out.println("----------------------------------------------------------------");
 
-		Filesystem fs = Filesystem.instance();
+		final Filesystem fs = Filesystem.instance();
 
 		final int numWriters = Integer.parseInt(System.getProperty("numWriters", "1"));
 		Thread[] workers = new Thread[numWriters];
@@ -59,7 +52,7 @@ public class AppendTest {
 			workers[i] = new Thread("Appender-"+id) {
 				public void run() {
 					try {
-						String filename = new String("/home/smash/twpcf-" + id);
+						String filename = "/home/smash/twpcf-" + id;
 						FileOptions opts = new FileOptions();
 						
 						System.out.println("Opening file: " + filename);
@@ -90,12 +83,11 @@ public class AppendTest {
 						writeStats.putValue(thr);
 						opStats.putValue(opThr);
 						
-						file.close();
+						fs.close(file);
 
 						System.out.printf("Writer %d: Data size = %.0fMB, Write tput = %,.0f MB/s, Ops tput = %,.0f OPS\n", id, sizeMB, thr, opThr);
 					} catch (Exception e) {
 						e.printStackTrace();
-						return;
 					}
 				}
 			};
@@ -103,9 +95,9 @@ public class AppendTest {
 			workers[i].start();
 		}
 
-		for (int i = 0; i < workers.length; i++) {
+		for (Thread worker : workers) {
 			try {
-				workers[i].join();
+				worker.join();
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}

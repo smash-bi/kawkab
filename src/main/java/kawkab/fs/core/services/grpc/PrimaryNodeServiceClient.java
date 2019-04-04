@@ -77,6 +77,7 @@ public final class PrimaryNodeServiceClient {
 		}
 		
 		ByteBuffer buf = resp.getSegmentBytes().asReadOnlyByteBuffer();
+		buf.rewind();
 		block.loadFrom(buf);
 	}
 	
@@ -118,6 +119,7 @@ public final class PrimaryNodeServiceClient {
 			}
 			
 			ByteBuffer buf = resp.getInodesBlockBytes().asReadOnlyByteBuffer();
+			buf.rewind();
 			block.loadFrom(buf);
 			return;
 		}

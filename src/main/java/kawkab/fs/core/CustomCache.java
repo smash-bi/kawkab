@@ -1,14 +1,16 @@
 package kawkab.fs.core;
 
-import java.io.IOException;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.utils.GCMonitor;
+
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * An LRU cache for Block objects. The objects are acquired and released using BlockIDs. This class is singleton and
@@ -97,7 +99,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	@Override
 	public Block acquireBlock(BlockID blockID) throws IOException, KawkabException {
 		// System.out.println("[C] acquire: " + blockID);
-		
+
 		CachedItem cachedItem = null;
 		
 		cacheLock.lock(); // Lock the whole cache. This is necessary to prevent from creating multiple references to the

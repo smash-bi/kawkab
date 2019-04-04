@@ -150,15 +150,8 @@ public final class CLI {
 				System.out.println("Given invalid bytes numBytes or reqSize. " + usage);
 				return;
 			}
-			
-			String chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-			int charLen = chars.length();
-			Random rand = new Random();
-			byte[] data = new byte[bufLen];
-			
-			for (int i=0; i<data.length; i++) {
-				data[i] = (byte)chars.charAt(rand.nextInt(charLen));
-			}
+
+			byte[] data = randomData(bufLen);
 			
 			appendFile(fname, data, dataSize, bufLen);
 		} else if (cmd.equals("file")) {
@@ -357,5 +350,18 @@ public final class CLI {
 		}
 		
 		return Integer.parseInt(System.getProperty(nodeIDProp));
+	}
+
+	private byte[] randomData(int length) {
+		String chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+		int charLen = chars.length();
+		Random rand = new Random();
+		byte[] data = new byte[length];
+
+		for (int i=0; i<data.length; i++) {
+			data[i] = (byte)chars.charAt(rand.nextInt(charLen));
+		}
+
+		return data;
 	}
 }
