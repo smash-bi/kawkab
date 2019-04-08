@@ -1,5 +1,7 @@
 package kawkab.fs.core;
 
+import kawkab.fs.core.exceptions.KawkabException;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -7,6 +9,7 @@ public class SegmentTimer {
 	public static final int TIMEOUT_MS = 5; //Randomly chosen, a small value should be sufficient as we want to batch back-to-back writes only
 
 	private final AtomicLong mState;
+	private final Inode inode;
 	private final DataSegmentID segId;
 	private final AtomicBoolean inQueue;
 	private final static Time time = Time.instance();
@@ -14,11 +17,12 @@ public class SegmentTimer {
 	public final static int DISABLED = 0; // Must be zero
 	public final static int EXPIRED  = -1; // Must be a negative value
 	public final static int ALREADY_EXPIRED = -2; //Must be a negative value. This is never set in mState variable.
-	
-	public SegmentTimer(DataSegmentID id) {
+
+	public SegmentTimer(DataSegmentID id, Inode inode) {
 		segId = id;
 		mState = new AtomicLong(DISABLED);
 		inQueue = new AtomicBoolean(false);
+		this.inode = inode;
 	}
 	
 	public void update() {
@@ -56,12 +60,12 @@ public class SegmentTimer {
 	 * Atomically expires the timer if the timer goes beyond the defined timeout
 	 * @param timeNow the current time in millis
 	 * 
-	 * @return EXPIRED_NOW (negative value) if the timer has expired in this function call,
+	 * @return EXPIRED_NOW (negative value) if the timer has expired in the current function call,
 	 *         ALREADY_EXPIRED (negative value) if the timer has already expired in some previous function call
 	 *         DISABLED (0 value) if the timer is disabled, 
 	 *         otherwise the remaining time of the timer in millis
 	 */
-	public long expireTime(long timeNow) {
+	public long tryExpire(long timeNow) throws KawkabException {
 		long state;
 		do {
 			state = mState.get();
@@ -83,7 +87,9 @@ public class SegmentTimer {
 				return diff;
 			
 		} while(!mState.compareAndSet(state, EXPIRED)); // We may be looping here multiple times, but that is fine because the thread is not on the critical path
-		
+
+		inode.onTimerExpiry(this, segId);
+
 		return EXPIRED;
 	}
 	

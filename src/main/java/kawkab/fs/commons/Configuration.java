@@ -87,7 +87,7 @@ public final class Configuration {
 	public final Map<Integer, NodeInfo> nodesMap;
 	
 	public static Configuration instance() {
-		//assert instance != null;
+		assert instance != null;
 		
 		return instance;
 	}

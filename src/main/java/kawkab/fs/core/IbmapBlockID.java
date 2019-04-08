@@ -86,7 +86,4 @@ public final class IbmapBlockID extends BlockID {
 			return false;
 		return true;
 	}
-
-	
-	
 }

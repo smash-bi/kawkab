@@ -44,18 +44,15 @@ public final class Ibmap extends Block{
 	 * This function consumes the next unused inumber from the current Ibmap block.
 	 * @return Returns next unused inumber, or -1 if the block is full.
 	 */
-	synchronized long nextInode(){
+	synchronized long useNextInumber(){
 		int bitIdx = -1;
 		
-		lock();
 		try {
 			bitIdx = bitset.nextClearBit(0);
 			bitset.set(bitIdx);
 			markLocalDirty();
 		} catch(IndexOutOfBoundsException e){
 			return -1;
-		} finally {
-			unlock();
 		}
 		
 		long inumber = bitIdxToInumber(blockIndex, bitIdx); //Convert the bit index to inumber

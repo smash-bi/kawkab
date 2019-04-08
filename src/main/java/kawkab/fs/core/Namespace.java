@@ -22,6 +22,7 @@ public class Namespace {
 	private Cache cache;
 	private int lastIbmapUsed;
 	private KeyedLock locks;
+	private static LocalStoreManager localStore;
 
 	private Map<Long, Boolean> openedFiles; // Map<inumber, appendMode> //FIXME: Should we use a bit-map instead of a map?
 
@@ -35,6 +36,7 @@ public class Namespace {
 		lastIbmapUsed = Configuration.instance().ibmapBlocksRangeStart;
 		openedFiles = new ConcurrentHashMap<Long, Boolean>();
 		ns = NamespaceService.instance();
+		localStore = LocalStoreManager.instance();
 	}
 
 	public static Namespace instance() throws KawkabException {
@@ -99,12 +101,11 @@ public class Namespace {
 
 			// TODO: update openFilesTable
 
-			// if the file is opened in append mode and this node is not the primary file
-			// writer
+			// if the file is opened in append mode and this node is not the primary file writer
 			if (appendMode && Commons.primaryWriterID(inumber) != thisNodeID) {
 				throw new InvalidFileModeException(
 						String.format("Cannot open file in the append mode. Inumber of the file is out of range of this node's range. NodeID=%d, PrimaryWriter=%d",
-								thisNodeID, 
+								thisNodeID,
 								Commons.primaryWriterID(inumber)));
 			}
 
@@ -159,7 +160,7 @@ public class Namespace {
 			try {
 				// System.out.println("[NS] Map number: " + mapNum);
 				ibmap = (Ibmap) (cache.acquireBlock(id));
-				inumber = ibmap.nextInode();
+				inumber = ibmap.useNextInumber();
 				if (inumber >= 0)
 					break;
 
@@ -169,6 +170,7 @@ public class Namespace {
 				}
 			} finally {
 				if (ibmap != null) {
+					localStore.store(ibmap);
 					cache.releaseBlock(ibmap.id());
 				}
 			}
@@ -205,6 +207,7 @@ public class Namespace {
 			inodesBlock.initInode(inumber);
 		} finally {
 			if (inodesBlock != null) {
+				localStore.store(inodesBlock);
 				cache.releaseBlock(inodesBlock.id());
 			}
 		}

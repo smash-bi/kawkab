@@ -48,7 +48,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	private final Lock dataLoadLock; //Lock for loading data in memory, disabling other threads from reading the block until data is loaded
 	
 	private AtomicInteger globalDirtyCnt;
-	private AtomicLong localDirtyCnt; // Keeps track of the number of times the block is udpated. It helps in keeping track of the 
+	private AtomicLong localDirtyCnt; // Keeps track of the number of times the block is udpated. It helps in keeping track of the
 	                        // updated bytes and flush only the updated bytes to the local/global store. 
 	                        // TODO: Change this to a dirty bit. This can be achieved by an AtomicBoolean instead of
 	                        // an AtomicInteger

@@ -97,6 +97,14 @@ public final class CLI {
 					e.printStackTrace();
 				}
 			}
+
+			for (FileHandle file: openedFiles.values()) {
+				try {
+					fs.close(file);
+				} catch (KawkabException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 	}
 	
@@ -135,7 +143,7 @@ public final class CLI {
 				sb.append(' ').append(args[i]);
 			}
 			byte[] data = sb.toString().getBytes();
-			appendFile(fname, data, 0, data.length);
+			appendFile(fname, data, data.length, data.length);
 		} else if (cmd.equals("bytes")) {
 			if (args.length < 5) {
 				System.out.println(usage);
@@ -253,7 +261,6 @@ public final class CLI {
 		}
 		
 		int bufLen = 16*1024*1024;
-
 		byte[] buf = new byte[bufLen];
 		long read = 0;
 		BufferedWriter out = null;
@@ -278,7 +285,7 @@ public final class CLI {
 				}
 				read += len;
 			}
-		} catch (IllegalArgumentException | InterruptedException e) {
+		} catch (IllegalArgumentException e) {
 			e.printStackTrace();
 		} finally {
 			if (out != null)

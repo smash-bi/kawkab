@@ -2,12 +2,10 @@ package kawkab.fs.core;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import kawkab.fs.commons.Commons;
 import kawkab.fs.core.exceptions.KawkabException;
 
 public class SegmentTimerQueue {
 	private final ConcurrentLinkedQueue<SegmentTimer> buffer;
-	private final Cache cache;
 	private final Thread timerThread;
 	private final Time time;
 	private volatile boolean working = true;
@@ -16,7 +14,6 @@ public class SegmentTimerQueue {
 	
 	private SegmentTimerQueue () {
 		buffer = new ConcurrentLinkedQueue<SegmentTimer>();
-		cache = Cache.instance();
 		time = Time.instance();
 		timerThread = new Thread("SegmentTimerQueueThread") {
 			public void run() {
@@ -75,7 +72,7 @@ public class SegmentTimerQueue {
 		timer.getAndSetInQueue(false);
 		
 		long timeNow = time.currentTime();
-		long ret = timer.expireTime(timeNow);
+		long ret = timer.tryExpire(timeNow);
 		
 		while (ret > 0) { //While (!EXPIRED && !DISABLED)
 			try {
@@ -83,15 +80,12 @@ public class SegmentTimerQueue {
 			} catch (InterruptedException e) {}
 			
 			timeNow = time.currentTime();
-			ret = timer.expireTime(timeNow);
+			ret = timer.tryExpire(timeNow);
 		}
 		
-		if (ret == SegmentTimer.DISABLED || ret == SegmentTimer.ALREADY_EXPIRED)
-			return;
-		
-		assert ret == SegmentTimer.EXPIRED;
-		
-		cache.releaseBlock(timer.segmentID());
+		// if (ret == SegmentTimer.DISABLED || ret == SegmentTimer.ALREADY_EXPIRED)
+		//	return;
+		//assert ret == SegmentTimer.EXPIRED;
 	}
 	
 	public void shutdown() {

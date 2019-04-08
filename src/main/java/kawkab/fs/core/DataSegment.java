@@ -4,7 +4,6 @@ import com.google.protobuf.ByteString;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
-import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 
@@ -36,7 +35,7 @@ public final class DataSegment extends Block {
 												// This variable is not atomic because only the writer modify the variable
 												// and the value is assigned atomically due to Java memory model.
 	private int initialAppendPos; // Index from which data will be appended the first time. This position is not modified with the appends
-	private int loadedBytes; // Number of bytes loaded in this block from the local or remote storage
+	private int bytesLoaded; // Number of bytes loaded in this block from the local or remote storage
 
 	/**
 	 * The constructor should not create a new file in the local storage. This constructor
@@ -192,7 +191,7 @@ public final class DataSegment extends Block {
 
 		buffer.clear();
 
-		loadedBytes = bytesRead;
+		bytesLoaded = bytesRead;
 
 		//System.out.printf("[DS] Loaded bytes from channel: %d, length=%d, bufPosition=%d\n", bytesRead, length, dataBuf.position());
 
@@ -228,7 +227,9 @@ public final class DataSegment extends Block {
 
 		int bytesRead = buffer.position();
 
-		loadedBytes = bytesRead;
+		bytesLoaded = bytesRead;
+
+		System.out.println("[DS] Bytes loaded: " + bytesLoaded);
 		
 		return bytesRead;
 	}
@@ -252,8 +253,8 @@ public final class DataSegment extends Block {
 		 * data segment may get loaded from the remote node unnecessarily. 
 		 */
 		
-		if (loadedBytes == conf.segmentSizeBytes) { // Never load an already loaded block if the segment is full.
-			//System.out.println("[DS] Segment is full. Not loading the segment again.");
+		if (bytesLoaded == conf.segmentSizeBytes) { // Never load an already loaded block if the segment is full.
+			System.out.println("[DS] Segment is full. Not loading the segment again.");
 			return;
 		}
 		
@@ -265,7 +266,7 @@ public final class DataSegment extends Block {
 			
 			if (lastFetchTimeMs < now - conf.dataSegmentFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
 				try {
-					//System.out.println("[DS] Load from the global: " + id());
+					System.out.println("[DS] Load from the global: " + id());
 					
 					loadFromGlobal(); // First try loading data from the global store
 					lastFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store.
