@@ -39,7 +39,8 @@ public final class Configuration {
 																					 //Blocks start with ID 0.
 	
 	public final int maxBlocksPerLocalDevice; // = 20510 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
-	public final int maxBlocksInCache; //        = 20000; //Size of the cache in number of blocks. The blocks are ibmaps, inodeBlocks, and data segments (not data blocks)
+	//public final int maxBlocksInCache; //        = 20000; //Size of the cache in number of blocks. The blocks are ibmaps, inodeBlocks, and data segments (not data blocks)
+	public final int cacheSizeMiB;	// Size of the cache in MB
 	
 	public final int dataSegmentFetchExpiryTimeoutMs; //  = 10000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	public final int inodesBlockFetchExpiryTimeoutMs; //  = 2000; //Expire data fetched from the global store after dataExpiryTimeoutMs
@@ -113,7 +114,8 @@ public final class Configuration {
 		inodeSizeBytes			= Integer.parseInt(props.getProperty("inodeSizeBytes", "50").trim());
 			
 		maxBlocksPerLocalDevice	= Integer.parseInt(props.getProperty("maxBlocksPerLocalDevice", "30000").trim());
-		maxBlocksInCache		= Integer.parseInt(props.getProperty("maxBlocksInCache", "20000").trim());
+		//maxBlocksInCache		= Integer.parseInt(props.getProperty("maxBlocksInCache", "20000").trim());
+		cacheSizeMiB				= Integer.parseInt(props.getProperty("cacheSizeMiB", "10000").trim());
 			
 		dataSegmentFetchExpiryTimeoutMs  = Integer.parseInt(props.getProperty("dataSegmentFetchExpiryTimeoutMs", "10000").trim());
 		inodesBlockFetchExpiryTimeoutMs  = Integer.parseInt(props.getProperty("inodesBlockFetchExpiryTimeoutMs", "2000").trim());
@@ -195,7 +197,7 @@ public final class Configuration {
 		System.out.println(String.format("Inode blocks range start . = %d", inodeBlocksRangeStart));
 		System.out.println(String.format("Max blocks per local device= %d", maxBlocksPerLocalDevice));
 		System.out.println();
-		System.out.println(String.format("Max blocks in cache ...... = %d", maxBlocksInCache));
+		System.out.println(String.format("Cache size (MiB) ......... = %d", cacheSizeMiB));
 	}
 	
 	private void verify() {
@@ -211,6 +213,7 @@ public final class Configuration {
 		assert minioSecretKey.length() >= 8; //From minio documentation
 		
 		assert maxBlocksPerLocalDevice > inodeBlocksPerMachine + ibmapsPerMachine;
-		//assert maxBlocksPerLocalDevice > maxBlocksInCache;
+		
+		assert cacheSizeMiB > (segmentSizeBytes/1048576.0);
 	}
 }

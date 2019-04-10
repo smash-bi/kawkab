@@ -8,10 +8,11 @@ import kawkab.fs.commons.Configuration;
 @SuppressWarnings("serial")
 public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 	private BlockEvictionListener evictListener;
-	private static final int maxBlocksInCache = Configuration.instance().maxBlocksInCache;
+	private final int maxBlocksInCache;
 	
-	public LRUCache(BlockEvictionListener evictListener){
-		super(maxBlocksInCache+1, 1.1f, true);
+	public LRUCache(int maxBlocksInCache, BlockEvictionListener evictListener) {
+		super(maxBlocksInCache + 1, 1.1f, true);
+		this.maxBlocksInCache = maxBlocksInCache;
 		this.evictListener = evictListener;
 	}
 	
@@ -53,12 +54,4 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 		
 		return true;
 	}
-	
-	/*public CachedItem get(String key) {
-		return super.get(key);
-	}
-	
-	public CachedItem put(String key, CachedItem item) {
-		return super.put(key, item);
-	}*/
 }

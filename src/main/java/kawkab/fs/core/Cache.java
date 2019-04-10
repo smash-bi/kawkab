@@ -12,6 +12,7 @@ public abstract class Cache {
 	public static Cache instance() {
 		//return GCache.instance();
 		return CustomCache.instance();
+		//return BufferedCache.instance();
 	}
 	
 	/**
@@ -55,7 +56,6 @@ public abstract class Cache {
 	 * If the function throws an exception, the caller must call the releaseBlock() function to release the block.
 	 * 
 	 * @param blockID
-	 * @param type
 	 * @return
 	 * @throws IOException 
 	 * @throws KawkabException 

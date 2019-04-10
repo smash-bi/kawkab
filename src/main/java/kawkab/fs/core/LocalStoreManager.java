@@ -157,7 +157,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			throw new KawkabException("LocalProcessor has already received stop signal.");
 		}*/
 		
-		if (block.markInLocalQueue()) { //The block is already in the queue, the block should not be added again.
+		if (block.markInLocalQueue()) { //If the block is already in the queue, the block should not be added again.
 			//System.out.println("[LSM] Skipping: " + block.id());
 			return;
 		}

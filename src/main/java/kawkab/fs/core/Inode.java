@@ -64,13 +64,13 @@ public final class Inode {
 	 * @param length
 	 * @param offsetInFile
 	 * @return
-	 * @throws InvalidFileOffsetException
 	 * @throws IllegalArgumentException
+	 * @throws InvalidFileOffsetException
 	 * @throws IOException
 	 * @throws KawkabException
-	 * @throws InterruptedException
 	 */
-	public int read(final byte[] buffer, final int length, final long offsetInFile) throws IllegalArgumentException, IOException, KawkabException {
+	public int read(final byte[] buffer, final int length, final long offsetInFile) throws
+			IllegalArgumentException, InvalidFileOffsetException, IOException, KawkabException {
 		if (length <= 0)
 			throw new IllegalArgumentException("Given length is 0.");
 		
@@ -91,10 +91,7 @@ public final class Inode {
 			long segNumber = DataSegment.segmentInFile(curOffsetInFile, recordSize);
 			long nextSegStart = (segNumber + 1) * conf.segmentSizeBytes;
 			int toRead = (int)(curOffsetInFile+remaining <= nextSegStart ? remaining : nextSegStart - curOffsetInFile);
-			//int offsetInSeg = DataSegment.offsetInSegment(curOffsetInFile, recordSize);
-			//int canReadFromSeg = Constants.segmentSizeBytes - offsetInSeg;
-			//int toRead = (int)(remaining >= canReadFromSeg ? canReadFromSeg : remaining);
-			int bytes = 0;
+			int bytesRead = 0;
 			
 			// System.out.println(String.format("Seg=%s, bufLen=%d, bufOffset=%d, toRead=%d, offInFile=%d, remInBuf=%d,dataRem=%d",
 			//     curSegId.toString(), buffer.length, bufferOffset, toRead, curOffsetInFile, buffer.length-bufferOffset,remaining));
@@ -105,19 +102,16 @@ public final class Inode {
 			try {
 				curSegment = (DataSegment)cache.acquireBlock(curSegId);
 				curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
-				bytes = curSegment.read(buffer, bufferOffset, toRead, curOffsetInFile);
-			} catch (InvalidFileOffsetException e) {
-				e.printStackTrace();
-				return bufferOffset;
+				bytesRead = curSegment.read(buffer, bufferOffset, toRead, curOffsetInFile);
 			} finally {
 				if (curSegment != null) {
 					cache.releaseBlock(curSegment.id());
 				}
 			}
 			
-			bufferOffset += bytes;
-			remaining -= bytes;
-			curOffsetInFile += bytes;
+			bufferOffset += bytesRead;
+			remaining -= bytesRead;
+			curOffsetInFile += bytesRead;
 		}
 		
 		return bufferOffset;

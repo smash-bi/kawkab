@@ -50,17 +50,18 @@ public final class DataSegment extends Block {
 		dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
 	}
 
-	/*void reInit(DataSegmentID segmentID) {
+	void reInit(DataSegmentID segmentID) {
 		reset(segmentID);
 		this.segmentID = segmentID;
 		lastFetchTimeMs = 0;
 		dataBuf.clear();
 		dirtyOffset = 0;
 		writePos.set(0);
-	}*/
+		initedForAppends = false;
+	}
 
 	synchronized void initForAppend(long offsetInFile) {
-		if (initedForAppends) //This means the segment is already initialized and contains the valid bytes
+		if (initedForAppends)
 			return;
 		
 		initialAppendPos = offsetInSegment(offsetInFile, recordSize);
@@ -125,7 +126,7 @@ public final class DataSegment extends Block {
 	 * @throws IOException 
 	 */
 	int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile) 
-			throws InvalidFileOffsetException, IOException{
+			throws InvalidFileOffsetException {
 		int blockSize = conf.segmentSizeBytes;
 		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
 		if (offsetInBlock >= blockSize || offsetInBlock < 0) {

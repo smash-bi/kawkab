@@ -20,12 +20,12 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 public final class FileHandle {
 	private final long inumber;
 	private final FileMode fileMode;
-	private static Cache cache;
-	private final static int inodesPerBlock;
-	private Inode inode;
-	private InodesBlock inodesBlock;
-	private final boolean onPrimaryNode;
-	private static LocalStoreManager localStore;
+	private final static Cache cache;
+	private final static int inodesPerBlock;	// Used in accessing the inode of this file when on the non-primary node
+	private Inode inode;	// Not final because we set it to null in the close() in order to free the memory
+	private InodesBlock inodesBlock;	// Not final because we set it to null in the close() in order to free the memory
+	private final boolean onPrimaryNode;	//Indicates whether this file is opened on its primary node or not
+	private final static LocalStoreManager localStore;	// FIXME: Isn't it a bad design to access localStore from a file handle?
 
 	static {
 		Configuration conf = Configuration.instance();
@@ -66,7 +66,8 @@ public final class FileHandle {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	public synchronized int read(byte[] buffer, long readOffsetInFile, int length) throws IOException, IllegalArgumentException, KawkabException {
+	public synchronized int read(byte[] buffer, long readOffsetInFile, int length) throws
+			IOException, IllegalArgumentException, KawkabException, InvalidFileOffsetException {
 		if (length > buffer.length || length < 0)
 			throw new IllegalArgumentException("Read length is negative or greater than the given buffer size.");
 

@@ -15,13 +15,12 @@ import kawkab.fs.core.exceptions.KawkabException;
 
 public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 	private static final Object initLock = new Object();
+	private static GCache instance;
 	
 	private LoadingCache<BlockID, Block> cache;
 	private LocalStoreManager localStore;
 	private static Configuration conf;
-	
-	private static GCache instance;
-	
+	private final int MAX_BLOCKS_IN_CACHE;
 	
 	private GCache() {
 		System.out.println("Initializing cache..." );
@@ -31,9 +30,12 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 		localStore = LocalStoreManager.instance();
 		//cache = new GCache(this);
 		
+		MAX_BLOCKS_IN_CACHE = (int)(conf.cacheSizeMiB / (conf.segmentSizeBytes/1048576.0) + conf.inodeBlocksPerMachine + conf.ibmapsPerMachine); //FIXME: Not calculated correctly
+		assert MAX_BLOCKS_IN_CACHE > 0;
+		
 		cache = CacheBuilder.newBuilder()
-				.maximumSize(conf.maxBlocksInCache)
-				.initialCapacity(conf.maxBlocksInCache)
+				.maximumSize(MAX_BLOCKS_IN_CACHE)
+				.initialCapacity(MAX_BLOCKS_IN_CACHE)
 				//.expireAfterAccess(120, TimeUnit.SECONDS)
 				.removalListener(this)
 				.concurrencyLevel(8)

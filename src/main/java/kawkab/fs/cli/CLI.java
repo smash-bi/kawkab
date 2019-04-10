@@ -198,7 +198,7 @@ public final class CLI {
 	}
 
 	private void parseRead(String[] args)
-			throws NumberFormatException, IbmapsFullException, IOException, KawkabException {
+			throws NumberFormatException, IbmapsFullException, IOException, KawkabException, InvalidFileOffsetException {
 		String usage = "Usage: read filename offset intLength <dstFile>";
 		
 		String fn = null;
@@ -253,7 +253,7 @@ public final class CLI {
 	}
 
 	private void readFile(String fn, long byteStart, long readLen, String dst)
-			throws IbmapsFullException, IOException, KawkabException {
+			throws IbmapsFullException, IOException, KawkabException, InvalidFileOffsetException {
 		FileHandle file = null;
 		file = openedFiles.get(fn);
 		if (file == null) {

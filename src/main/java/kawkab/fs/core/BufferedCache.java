@@ -10,21 +10,24 @@ import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static kawkab.fs.core.BlockID.BlockType;
+
 /**
  * An LRU cache for Block objects. The objects are acquired and released using BlockIDs. This class is singleton and
  * thread safe.
  */
-public class CustomCache extends Cache implements BlockEvictionListener{
+public class BufferedCache extends Cache implements BlockEvictionListener{
 	private static final Object initLock = new Object();
-	private static CustomCache instance;
+	private static BufferedCache instance;
 	
 	private Configuration conf;
 	private LRUCache cache; // An extended LinkedHashMap that implements removeEldestEntry()
-	private final int MAX_BLOCKS_IN_CACHE;
 	private Lock cacheLock; // Cache level locking
 	private LocalStoreManager localStore;
+	private final int MAX_BLOCKS_IN_CACHE;
+	private DSPool dsp;
 	
-	private CustomCache() {
+	private BufferedCache() {
 		System.out.println("Initializing cache..." );
 		
 		conf = Configuration.instance();
@@ -32,17 +35,24 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		cacheLock = new ReentrantLock();
 		localStore = LocalStoreManager.instance();
 		
-		MAX_BLOCKS_IN_CACHE = (int)(conf.cacheSizeMiB / (conf.segmentSizeBytes/1048576.0) + conf.inodeBlocksPerMachine + conf.ibmapsPerMachine); //FIXME: Not calculated correctly
-		assert MAX_BLOCKS_IN_CACHE > 0;
+		int numSegmentsInCache =
+				(int)((conf.cacheSizeMiB * 1048576L)/conf.segmentSizeBytes);
+		if (numSegmentsInCache <= 0) {
+			System.out.println("Cache size is not sufficient to cache the metadata and the data segments");
+		}
+		assert numSegmentsInCache > 0;
 		
-		cache = new LRUCache(MAX_BLOCKS_IN_CACHE, this);
+		dsp = new DSPool(numSegmentsInCache);
+		cache = new LRUCache(numSegmentsInCache, this);
+		
+		MAX_BLOCKS_IN_CACHE = numSegmentsInCache + conf.inodeBlocksPerMachine + conf.ibmapsPerMachine; //FIXME: The size of cache is not what is reflected from the configuration
 	}
 	
-	public static CustomCache instance() {
+	public static BufferedCache instance() {
 		if (instance == null) {
 			synchronized(initLock) {
 				if (instance == null) {
-					instance = new CustomCache();
+					instance = new BufferedCache();
 				}
 			}
 		}
@@ -108,8 +118,21 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 			cachedItem = cache.get(blockID); // Try acquiring the block from the memory
 			
 			if (cachedItem == null){ // If the block is not cached
-				Block block = blockID.newBlock();
+				//long t = System.nanoTime();
+				Block block;
+				if (blockID.type() == BlockType.DATA_SEGMENT) {
+					DataSegment seg = dsp.acquire((DataSegmentID)blockID);
+					seg.reset(blockID);
+					block = seg;
+				} else {
+					block = blockID.newBlock();   // Creates a new block object to save in the cache
+				}
 				
+				//Block block = blockID.newBlock();
+				
+				//t = (System.nanoTime() - t)/1000;
+				//acquireStats.putValue(t);
+
 				cachedItem = new CachedItem(block); // Wrap the object in a cached item
 				cache.put(blockID, cachedItem);
 			}
@@ -153,6 +176,8 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 			                              // decrementRefCnt() functions are only called while holding the cacheLock.
 		} finally {
 			cacheLock.unlock();
+			
+			//releaseStats.putValue((System.nanoTime()-t)/1000);
 		}
 		
 		if (blockID.onPrimaryNode() && cachedItem.block().isLocalDirty()) { // Persist blocks only through the primary node
@@ -175,10 +200,6 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	 */
 	@Override
 	public void beforeEviction(CachedItem cachedItem) {
-		// FIXME: Release the cacheLock before calling waitUntilEvicted. This entails ensuring that only one thread can
-		// be in the critical section. Therefore, we cannot simply release and acquire the lock around the waitUntilSynched
-		// function.
-		
 		System.out.println("Evicting from cache: "+cachedItem.block().id());
 		Block block = cachedItem.block();
 		try {
@@ -187,15 +208,16 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	                                  // the cacheLock. The lock cannot be released because otherwise another
 	                                  // thread can come and may acquire the block.
 			localStore.notifyEvictedFromCache(cachedItem.block());
+			
+			if (block.id().type() == BlockType.DATA_SEGMENT)
+				dsp.release((DataSegment) block);
 		} catch (InterruptedException | KawkabException e) {
 			e.printStackTrace();
 		}
 	}
 	
 	/**
-	 * Flushes the block in the persistent store. This should be used only for system shutdown. There must not be any
-	 * concurrent readers or writers accessing the cache. All the acquired blocks must be returned to the cache
-	 * before calling this function.
+	 * Flushes the block in the persistent store. This should be used only for system shutdown.
 	 * 
 	 * @throws KawkabException
 	 */
@@ -208,6 +230,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 				//We need to close all the readers and writers before we can empty the cache.
 				//TODO: Wait until the reference count for the cached object becomes zero.
 				CachedItem cachedItem = itr.next().getValue();
+				//beforeEviction(cachedItem);
 				Block block = cachedItem.block();
 				if (block.id().onPrimaryNode() && block.isLocalDirty()) {
 					localStore.store(block);
@@ -236,6 +259,9 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	@Override
 	public void shutdown() throws KawkabException {
 		System.out.println("Closing cache. Current size = "+cache.size());
+		//System.out.printf("AcquireStats (us): %s\n", acquireStats);
+		//System.out.printf("ReleaseStats (us): %s\n", releaseStats);
+		//System.out.printf("LoadStats (us): %s\n", loadStats);
 		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
 		flush();
 		localStore.shutdown();
