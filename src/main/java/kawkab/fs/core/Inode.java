@@ -160,7 +160,7 @@ public final class Inode {
 			
 			timer.update();
 			
-			timerQ.add(timer);
+			timerQ.add(timer, inumber);
 			
 			if (curSeg.isFull()) { // If the current segment is full
 				curSeg = null;

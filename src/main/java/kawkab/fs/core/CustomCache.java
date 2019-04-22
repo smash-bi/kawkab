@@ -7,6 +7,8 @@ import kawkab.fs.utils.GCMonitor;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -23,6 +25,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	private final int MAX_BLOCKS_IN_CACHE;
 	private Lock cacheLock; // Cache level locking
 	private LocalStoreManager localStore;
+	private ConcurrentMap<BlockID, Lock> locksMap;
 	
 	private CustomCache() {
 		System.out.println("Initializing cache..." );
@@ -36,6 +39,8 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		assert MAX_BLOCKS_IN_CACHE > 0;
 		
 		cache = new LRUCache(MAX_BLOCKS_IN_CACHE, this);
+		
+		locksMap = new ConcurrentHashMap<BlockID, Lock>();
 	}
 	
 	public static CustomCache instance() {
@@ -117,7 +122,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 			cachedItem.incrementRefCnt();
 			assert cache.size() <= MAX_BLOCKS_IN_CACHE;
 		} finally {                 // FIXME: Catch any exceptions and decrement the reference count before throwing  
-			cacheLock.unlock();     //        the exception. Change the caller functions to not release the block in 
+			cacheLock.unlock();     //        the exception. Change the caller functions to not release the block in
 		                            //        the case of an exception.
 		}
 		

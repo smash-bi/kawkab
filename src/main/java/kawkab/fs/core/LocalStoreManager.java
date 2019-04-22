@@ -189,9 +189,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
 		
-		block.clearInLocalQueue();
+		block.clearInLocalQueue(); //Mark the block as not in the queue
+		
 		if (dirtyCount == 0) {
-			block.decAndGetLocalDirty(0); // To release any thread waiting for this block to be synced
+			block.notifySyncComplete();
 			return 0;
 		}
 		
@@ -217,7 +218,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 					//FIXME: What should we do here? Should we return?
 				}
 				
-				dirtyCount = block.decAndGetLocalDirty(dirtyCount); // If the data segment is not the last segment in the data block, 
+				dirtyCount = block.subtractAndGetLocalDirty(dirtyCount); // If the data segment is not the last segment in the data block,
 				                                                  // and the segment is updated while we were syncing, resync the
 				                                                  // the segment to the localStorage. This may create head-of-line blocking for
 				                                                  // only a short duration.
@@ -234,15 +235,17 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		//System.out.println("dirtyCount=0, skipping submittingToGlobal: " + block.id());
 		//updateLocalDirty(block, dirtyCount);
-		//block.decAndGetLocalDirty(dirtyCount);
+		//block.subtractAndGetLocalDirty(dirtyCount);
 		
 		// We clear the inLocalQueue flag when the global store has finished uploading. This is to mutually exclude updating
 		// the local file while concurrently uploading to the global store. If this happens, S3 API throws an exception
 		// that the MD5 hash of the file has changed. Now we update this flag in notifyStoreComplete() function.
 		
-		//if (block.decAndGetLocalDirty(0) > 0) {
+		//if (block.subtractAndGetLocalDirty(0) > 0) {
 		if (dirtyCount > 0) {
 			store(block);
+		} else {
+			block.notifySyncComplete();
 		}
 		
 		return syncedCnt;
@@ -251,7 +254,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	/*private long updateLocalDirty(Block block, long dirtyCount) {
 		block.clearInLocalQueue();	// We have to do it so that either the current executing 
 									// thread or the appender can add the block in the local queue
-		return block.decAndGetLocalDirty(dirtyCount);
+		return block.subtractAndGetLocalDirty(dirtyCount);
 	}*/
 	
 	@Override
@@ -267,7 +270,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		 * 
 		*/
 		
-		long dirtyCount = block.decAndGetLocalDirty(0);
+		long dirtyCount = block.subtractAndGetLocalDirty(0);
 		if (dirtyCount > 0) {// We have to check the count again. We cannot simply call localDirtyCount() 
 							// because we need to notify any thread waiting for the block to be removed 
 							// from the local queue.
@@ -275,9 +278,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			//System.out.println("[LSM] Local dirty. Adding again: " + block.id() + ", cnt="+dirtyCount);
 			store(block);
 			return;
-		} /*else {
-			System.out.println("[LSM] Local NOT dirty. Skipping: " + block.id() + ", cnt="+dirtyCount);
-		}*/
+		} else {
+			// System.out.println("[LSM] Local NOT dirty. Skipping: " + block.id() + ", cnt="+dirtyCount);
+			block.notifySyncComplete();
+		}
 		
 		//System.out.println("[LSM] Finished storing to global: " + block.id());
 		
@@ -285,7 +289,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			// Block is not cached. Therefore, the cache will not delete the block.
 			// The block is in the local store and it can be deleted.
 			// Therefore, mark that the block can be evicted from the local store.
-			evict(block);
+			evictFromLocal(block);
 		}
 	}
 	
@@ -293,13 +297,13 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		block.unsetInCache();
 		
 		if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
-			evict(block);
+			evictFromLocal(block);
 		} else {
 			//TODO: Add in canBeEvicted list. Also, remove from the canBeEvicted list if the block becomes dirty again
 		}
 	}
 	
-	private void evict(Block block) throws KawkabException {
+	private void evictFromLocal(Block block) throws KawkabException {
 		if (block.id().onPrimaryNode() && !block.isInLocal())
 			return;
 		
@@ -307,7 +311,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		//System.out.println("[LSM] Evict locally: " + id);
 		
-		if (storedFilesMap.removeEntry(id) == null) { //The cache and the global store race to evict this block.
+		if (storedFilesMap.removeEntry(id) == null) { //The cache and the global store race to evictFromLocal this block.
 			return;
 		}
 		
@@ -438,7 +442,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		System.out.println("Closed LocalStoreManager");
 	}
 
-	public boolean exists(BlockID id) { // FIXME: This function needs to be synchronized with the createNewBlock and evict functions
+	public boolean exists(BlockID id) { // FIXME: This function needs to be synchronized with the createNewBlock and evictFromLocal functions
 		if (!working)
 			return false;
 		

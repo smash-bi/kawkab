@@ -23,7 +23,7 @@ public final class KeyedLock {
 		keyLock.lock.lock();
 	}
 	
-	public void unlock(String key) throws IOException{
+	public void unlock(String key) {
 		KeyLock keyLock = null;
 		synchronized (locks) {
 			keyLock = locks.get(key);

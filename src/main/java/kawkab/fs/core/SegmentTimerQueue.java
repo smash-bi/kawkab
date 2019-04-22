@@ -5,16 +5,16 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import kawkab.fs.core.exceptions.KawkabException;
 
 public class SegmentTimerQueue {
-	private final ConcurrentLinkedQueue<SegmentTimer> buffer;
+	private final TransferQueue<SegmentTimer> buffer;
 	private final Thread timerThread;
-	private final Time time;
+	private final Clock clock;
 	private volatile boolean working = true;
 	
 	private static SegmentTimerQueue instance;
 	
 	private SegmentTimerQueue () {
-		buffer = new ConcurrentLinkedQueue<SegmentTimer>();
-		time = Time.instance();
+		buffer = new TransferQueue<>();
+		clock = Clock.instance();
 		timerThread = new Thread("SegmentTimerQueueThread") {
 			public void run() {
 				processSegments();
@@ -31,23 +31,19 @@ public class SegmentTimerQueue {
 		return instance;
 	}
 	
-	public void add(SegmentTimer timer) {
-		if (timer.getAndSetInQueue(true))
-			return;
+	public void add(SegmentTimer timer, long inumber) {
+		assert working;
 		
-		buffer.add(timer);
+		buffer.add(timer, inumber);
 	}
 	
 	private void processSegments() {
 		SegmentTimer next = null;
 		
 		while(working) {
-			next = buffer.poll();
-			
-			if (next == null) {
-				try {
-					Thread.sleep(2); //2 is chosen randomly. It doesn't impact the performance, but a large value may result in slower expiry of the segments
-				} catch (InterruptedException e) {}
+			try {
+				next = buffer.take();
+			} catch (InterruptedException e) {
 				continue;
 			}
 			
@@ -59,6 +55,8 @@ public class SegmentTimerQueue {
 			}
 		}
 		
+		// Some items may have been left in the queue during closing. We have to retrieve those items and process
+		// them before exit.
 		while((next = buffer.poll()) != null) {
 			try {
 				process(next);
@@ -69,9 +67,7 @@ public class SegmentTimerQueue {
 	}
 	
 	private void process(SegmentTimer timer) throws KawkabException {
-		timer.getAndSetInQueue(false);
-		
-		long timeNow = time.currentTime();
+		long timeNow = clock.currentTime();
 		long ret = timer.tryExpire(timeNow);
 		
 		while (ret > 0) { //While (!EXPIRED && !DISABLED)
@@ -79,7 +75,7 @@ public class SegmentTimerQueue {
 				Thread.sleep(ret);
 			} catch (InterruptedException e) {}
 			
-			timeNow = time.currentTime();
+			timeNow = clock.currentTime();
 			ret = timer.tryExpire(timeNow);
 		}
 		
@@ -91,6 +87,8 @@ public class SegmentTimerQueue {
 	public void shutdown() {
 		System.out.println("Closing SegmentTimerQueue");
 		working = false;
+		
+		buffer.shutdown();
 		
 		timerThread.interrupt();
 		try {

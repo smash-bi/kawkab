@@ -2,17 +2,15 @@ package kawkab.fs.core;
 
 import kawkab.fs.core.exceptions.KawkabException;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class SegmentTimer {
+public class SegmentTimer extends AbstractTransferItem{
 	public static final int TIMEOUT_MS = 5; //Randomly chosen, a small value should be sufficient as we want to batch back-to-back writes only
 
 	private final AtomicLong mState;
 	private final Inode inode;
 	private final DataSegmentID segId;
-	private final AtomicBoolean inQueue;
-	private final static Time time = Time.instance();
+	private final static Clock clock = Clock.instance();
 	
 	public final static int DISABLED = 0; // Must be zero
 	public final static int EXPIRED  = -1; // Must be a negative value
@@ -21,7 +19,6 @@ public class SegmentTimer {
 	public SegmentTimer(DataSegmentID id, Inode inode) {
 		segId = id;
 		mState = new AtomicLong(DISABLED);
-		inQueue = new AtomicBoolean(false);
 		this.inode = inode;
 	}
 	
@@ -33,7 +30,7 @@ public class SegmentTimer {
 		
 		// We don't need to check the previous state because the append thread has previously set the state
 		// to disabled. Moreover, the worker thread will not concurrently update the state variable.
-		long prev = mState.getAndSet(time.currentTime());
+		long prev = mState.getAndSet(clock.currentTime());
 		
 		assert prev == DISABLED;
 	}
@@ -58,12 +55,12 @@ public class SegmentTimer {
 	
 	/**
 	 * Atomically expires the timer if the timer goes beyond the defined timeout
-	 * @param timeNow the current time in millis
+	 * @param timeNow the current clock in millis
 	 * 
 	 * @return EXPIRED_NOW (negative value) if the timer has expired in the current function call,
 	 *         ALREADY_EXPIRED (negative value) if the timer has already expired in some previous function call
 	 *         DISABLED (0 value) if the timer is disabled, 
-	 *         otherwise the remaining time of the timer in millis
+	 *         otherwise the remaining clock of the timer in millis
 	 */
 	public long tryExpire(long timeNow) throws KawkabException {
 		long state;
@@ -91,13 +88,5 @@ public class SegmentTimer {
 		inode.onTimerExpiry(this, segId);
 
 		return EXPIRED;
-	}
-	
-	public DataSegmentID segmentID() {
-		return segId;
-	}
-	
-	public boolean getAndSetInQueue(boolean newVal) {
-		return inQueue.getAndSet(newVal);
 	}
 }

@@ -133,7 +133,6 @@ public final class FileHandle {
 
 		int appendedBytes = inode.appendBuffered(data, offset, length);
 		inodesBlock.markLocalDirty();
-
 		localStore.store(inodesBlock);
 
 		return appendedBytes;

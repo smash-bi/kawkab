@@ -31,7 +31,7 @@ import kawkab.fs.core.services.grpc.PrimaryNodeServiceClient;
  * 
  */
 
-public abstract class Block /*implements AutoCloseable*/ {
+public abstract class Block extends AbstractTransferItem {
 	protected BlockID id;
 	
 	private static GlobalStoreManager globalStoreManager; // Backend store such as S3
@@ -53,7 +53,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 	                        // TODO: Change this to a dirty bit. This can be achieved by an AtomicBoolean instead of
 	                        // an AtomicInteger
 	
-	private AtomicBoolean inLocalQueue;  // The block is in a queue for local persistence
+	private volatile boolean inLocalQueue;  // The block is in a queue for local persistence
 	private AtomicBoolean inGlobalQueue; // The block is in a queue for global persistence
 	
 	private AtomicBoolean inLocalStore; // The blocks is currently in the local store (can be in more places as well)
@@ -75,7 +75,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 		
 		localDirtyCnt  = new AtomicLong(0);
 		globalDirtyCnt = new AtomicInteger(0);
-		inLocalQueue   = new AtomicBoolean(false);
+		inLocalQueue   = false;
 		inGlobalQueue  = new AtomicBoolean(false);
 		inLocalStore   = new AtomicBoolean(false);
 		inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and 
@@ -86,7 +86,7 @@ public abstract class Block /*implements AutoCloseable*/ {
 		this.id = id;
 		localDirtyCnt.set(0);
 		globalDirtyCnt.set(0);
-		inLocalQueue.set(false);
+		inLocalQueue = false;
 		inGlobalQueue.set(false);
 		inLocalStore.set(false);
 		inCache.set(false);
@@ -220,26 +220,26 @@ public abstract class Block /*implements AutoCloseable*/ {
 	}
 	
 	/**
-	 * Decrements the local dirty count by the given count value. If the count becomes zero, the function signals any
+	 * Subtracts the local dirty count by the given count value. If the count becomes zero, the function signals any
 	 * appender that is waiting for this block to be evicted from the cache.
-	 * 
+	 *
+	 * @param count is a positive number >= 0 that should be subtracted from the current value of dirty count of this block
 	 * @returns the updated value of the dirtyCounter for the local store
 	 */
-	public long decAndGetLocalDirty(long count) {
+	public long subtractAndGetLocalDirty(long count) {
+		count = Math.abs(count);
+		
 		long cnt = localDirtyCnt.addAndGet(-count);
 		
 		assert cnt >= 0;
 		
-		if (cnt == 0) {
-			synchronized (localStoreSyncLock) {
-				localStoreSyncLock.notifyAll(); // Wake up the threads if they are waiting to evict this block from the cache
-			}
-			
-			// There can be only one thread waiting because the cache blocks other threads before calling the 
-			// waitUntilSynced() function.
-		}
-		
 		return cnt;
+	}
+	
+	public void notifySyncComplete() {
+		synchronized (localStoreSyncLock) {
+			localStoreSyncLock.notifyAll(); // Wake up the threads if they are waiting to evict this block from the cache
+		}
 	}
 	
 	/**
@@ -250,10 +250,6 @@ public abstract class Block /*implements AutoCloseable*/ {
 		return globalDirtyCnt.get();
 	}
 	
-	/**
-	 * Clears the mark that the block is in a queue for persistence in the global store.
-	 * @return
-	 */
 	public int decAndGetGlobalDirty(int count) {
 		return globalDirtyCnt.addAndGet(-count);
 	}
@@ -265,10 +261,17 @@ public abstract class Block /*implements AutoCloseable*/ {
 	/**
 	 * Marks that the block is in a queue to be persisted in the local store.
 	 * 
-	 * @return Returns true if the block was already marked to be in a local store queue
+	 * @return Returns true if the block was already marked to be in the local queue
 	 */
 	public boolean markInLocalQueue() {
-		return inLocalQueue.getAndSet(true);
+		/*if (inLocalQueue.get())
+			return true;
+		return inLocalQueue.getAndSet(true);*/
+		
+		if (inLocalQueue)
+			return true;
+		inLocalQueue = true;
+		return false;
 	}
 	
 	/**
@@ -277,7 +280,15 @@ public abstract class Block /*implements AutoCloseable*/ {
 	 * @return Returns false if the marker was already clear
 	 */
 	public boolean clearInLocalQueue() {
-		return inLocalQueue.getAndSet(false);
+		if (!inLocalQueue)
+			return false;
+		
+		inLocalQueue = false;
+		return true;
+		
+		/*if (!inLocalQueue.get())
+			return false;
+		return inLocalQueue.getAndSet(false);*/
 	}
 	
 	/**
@@ -325,9 +336,9 @@ public abstract class Block /*implements AutoCloseable*/ {
 	public void waitUntilSynced() throws InterruptedException {
 		if (localDirtyCnt.get() > 0) {
 			synchronized(localStoreSyncLock) {
-				while (localDirtyCnt.get() > 0 || inLocalQueue.get()) { // Wait until the block is in local queue or the block is dirty
+				while (localDirtyCnt.get() > 0 || inLocalQueue) { // It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
 					System.out.println("[B] Waiting until this block is synced to the local store and then evicted from the cache: " + id + ", cnt: " + 
-								localDirtyCnt.get() + ", inLocalQueue="+inLocalQueue.get());
+								localDirtyCnt.get() + ", inLocalQueue="+inLocalQueue);
 					localStoreSyncLock.wait();
 				}
 				System.out.println("[B] Block synced, now evicting: " + id);
@@ -439,3 +450,17 @@ public abstract class Block /*implements AutoCloseable*/ {
 		return inCache.get();
 	}
 }
+
+/**
+ * (1)	It may happen that a block's dirty count is zero and the block is in the queue:
+ * 		- Appender writes the block B and increments dirty count d
+ * 		- Appender puts the block in queue after marking that the block is in the queue
+ * 		- LocalStore takes the block from the queue and marks the block as not in queue
+ * 		- LocalStore thread sleeps
+ * 		- Appender updates the block, increments dirty count d, and puts the block again in the queue after marking inQueue bit
+ * 		- LocalStore wakes and reads the dirty count to be two, writes data to disk, and decrements the dirty count by 2, making it zero
+ * 		- As the dirty count is zero, LocalStore wakes any thread wiating on localStoreSyncLock
+ * 		- A thread wakes and finds that the block is still in queue. Therefore, it cannot be garbage collected and so sleeps again
+ * 		- LocalStore takes the same block again from the queue, finds the dirty cont to zero, so wakes the threads on
+ * 		  localStoreSyncQueue and does not persist data on disk
+ */
