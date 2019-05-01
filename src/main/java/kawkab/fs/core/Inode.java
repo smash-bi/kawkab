@@ -12,6 +12,7 @@ import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
+import kawkab.fs.utils.TimeLog;
 
 public final class Inode {
 	//FIXME: fileSize can be internally staled. This is because append() is a two step process. 
@@ -117,7 +118,9 @@ public final class Inode {
 		return bufferOffset;
 	}
 	
-	public int appendBuffered(final byte[] data, int offset, final int length) throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
+	//private TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS);
+	public int appendBuffered(final byte[] data, int offset, final int length)
+			throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
 		int remaining = length; //Reaming size of data to append
 		long fileSizeBuffered = this.fileSize.get(); // Current file size
 		
@@ -152,15 +155,16 @@ public final class Inode {
 				offset += bytes;
 				fileSizeBuffered += bytes;
 			} catch (IOException e) {
-				e.printStackTrace();
 				throw new KawkabException(e);
 			}
 			
+			//tlog.start();
 			localStore.store(curSeg);
+			//tlog.end();
 			
 			timer.update();
-			
-			timerQ.add(timer, inumber);
+
+			timerQ.add(timer);
 			
 			if (curSeg.isFull()) { // If the current segment is full
 				curSeg = null;
@@ -380,6 +384,8 @@ public final class Inode {
 	 * the append function. Otherwise, we should make the append and close synchronized.
 	 */
 	void releaseBuffer() throws KawkabException {
+		//tlog.printStats("DS.append,ls.store");
+		
 		if (timer == null)
 			return;
 

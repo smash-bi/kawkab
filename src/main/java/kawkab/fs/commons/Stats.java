@@ -71,6 +71,6 @@ public class Stats {
     
     @Override
     public synchronized String toString(){
-        return String.format("a=%d s=%d n=%d x=%d, N=%d", (long)mean(), (long)stddev(), (long)min, (long)max, count);
+        return String.format("a=%,d s=%,d n=%,d x=%,d, N=%,d", (long)mean(), (long)stddev(), (long)min, (long)max, count);
     }
 }

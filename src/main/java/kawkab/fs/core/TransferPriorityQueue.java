@@ -1,6 +1,8 @@
 package kawkab.fs.core;
 
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
@@ -16,21 +18,60 @@ import java.util.concurrent.LinkedBlockingQueue;
  * updates the dirty count after each update while the consumer substracts the dirty count by the amount it has
  * processed.
  */
-public class TransferQueue <T extends AbstractTransferItem> {
+public class TransferPriorityQueue<T extends AbstractTransferItem> {
+	private ConcurrentHashMap<Long, ConcurrentLinkedQueue<T>> queuesMap;
 	private BlockingQueue<T> unifiedQueue;
+	private Thread conveyor;
+	private volatile boolean working = true;
 	
 	private long inQCountAgg = 0; //For debugging only
 	private long inTriesAgg = 0; //For debugging only
 	
-	public TransferQueue() {
+	public TransferPriorityQueue() {
+		queuesMap = new ConcurrentHashMap<>();
 		unifiedQueue = new LinkedBlockingQueue<>();
+		conveyor = new Thread("TransferQueueTransferrer"){
+			@Override
+			public void run() {
+				transferItems();
+			}
+		};
+		conveyor.start();
+	}
+	
+	private void transferItems() {
+		while(working) {
+			boolean empty = true;
+			for (ConcurrentLinkedQueue<T> queue : queuesMap.values()) { //Iterate over all of the queues
+				for (T item : queue) {
+					unifiedQueue.add(item); //Add items in a unified blocking queue
+					empty = false;
+				}
+			}
+			
+			if (empty) {
+				try {
+					Thread.sleep(1); //Sleep for 1 ms as there was no item
+				} catch (InterruptedException e) {
+					continue;
+				}
+			}
+		}
+		
+		// Transfer any remaining items that were missed before
+		for (ConcurrentLinkedQueue<T> queue : queuesMap.values()) {
+			for (T item : queue) {
+				unifiedQueue.add(item);
+			}
+		}
 	}
 	
 	/**
 	 * Add item at the tail of the queue
 	 * @param item
+	 * @param id
 	 */
-	public void add(T item) {
+	public void add(T item, long id) {
 		item.inTries++;
 		if (item.getAndSetInQueue(true)) { // The item is already in the queue
 			return;
@@ -38,7 +79,14 @@ public class TransferQueue <T extends AbstractTransferItem> {
 		
 		item.inQCount++;
 		
-		unifiedQueue.add(item);
+		ConcurrentLinkedQueue<T> q = queuesMap.get(id);
+		
+		if (q == null) {
+			q = new ConcurrentLinkedQueue<>();
+			queuesMap.putIfAbsent(id, q);
+		}
+		
+		q.add(item);
 	}
 	
 	/**
@@ -78,12 +126,17 @@ public class TransferQueue <T extends AbstractTransferItem> {
 		return item;
 	}
 	
-	public int size() {
-		return unifiedQueue.size();
-	}
-	
 	public void shutdown() {
-		System.out.printf("\t[TQ] Total tries = %d, Total added in Q = %d, ratio = %.2f%%\n", inTriesAgg, inQCountAgg, 100.0*inQCountAgg/inTriesAgg);
+		System.out.println("Closing TransferQueue");
+		working = false;
+		
+		conveyor.interrupt();
+		try {
+			conveyor.join();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		
+		System.out.printf("\t[TPQ] Total tries = %d, Total added in Q = %d, ratio = %.2f%%\n", inTriesAgg, inQCountAgg, 100.0*inQCountAgg/inTriesAgg);
 	}
 }
-

@@ -6,7 +6,6 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -24,7 +23,7 @@ import kawkab.fs.core.services.grpc.PrimaryNodeServiceClient;
  * deleted from the local store if the global dirty count is zero and the block is not in the cache. The global dirty
  * count prevents too many updates to the global store.
  * 
- * localDirtyCnt: It keeps the count of the updates applied to the block and the updates that are persisted in the local
+ * isLocalDirty: It keeps the count of the updates applied to the block and the updates that are persisted in the local
  * store.
  * 
  * The dirty counts are increment in the markDirty() function.
@@ -34,48 +33,39 @@ import kawkab.fs.core.services.grpc.PrimaryNodeServiceClient;
 public abstract class Block extends AbstractTransferItem {
 	protected BlockID id;
 	
-	private static GlobalStoreManager globalStoreManager; // Backend store such as S3
-	private static LocalStoreManager localStoreManager;  // Local store such as local SSD
-	
-	protected static PrimaryNodeServiceClient primaryNodeService = PrimaryNodeServiceClient.instance(); // To load the block from the primary node
-	
-	private final Lock lock; // Block level lock
+	private final static GlobalStoreManager globalStoreManager = GlobalStoreManager.instance(); // Backend store such as S3
+	private final static LocalStoreManager localStoreManager = LocalStoreManager.instance(); //FIXME: Handle exception properly;  // Local store such as local SSD
+	protected final static PrimaryNodeServiceClient primaryNodeService = PrimaryNodeServiceClient.instance(); // To load the block from the primary node
 	
 	private final Object localStoreSyncLock; // Lock to prevent cache eviction before syncing to the local store
 	
-	//private long lastGlobalFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
-	//private long lastPrimaryFetchTimeMs = 0; //Clock time in ms when the block was last loaded from the local or the global store
 	private final Lock dataLoadLock; //Lock for loading data in memory, disabling other threads from reading the block until data is loaded
 	
 	private AtomicInteger globalDirtyCnt;
-	private AtomicLong localDirtyCnt; // Keeps track of the number of times the block is udpated. It helps in keeping track of the
+	private volatile boolean isLocalDirty; // Keeps track of the number of times the block is udpated. It helps in keeping track of the
 	                        // updated bytes and flush only the updated bytes to the local/global store. 
 	                        // TODO: Change this to a dirty bit. This can be achieved by an AtomicBoolean instead of
 	                        // an AtomicInteger
 	
-	private volatile boolean inLocalQueue;  // The block is in a queue for local persistence
+	//private volatile boolean inLocalQueue;  // The block is in a queue for local persistence
 	private AtomicBoolean inGlobalQueue; // The block is in a queue for global persistence
-	
 	private AtomicBoolean inLocalStore; // The blocks is currently in the local store (can be in more places as well)
 	private AtomicBoolean inCache;      // The block is in cache 
 	
 	private boolean isLoaded; //If the block bytes are already loaded; used only on the primary node
 	
-	static { // Because we need to catch the exception
-		globalStoreManager = GlobalStoreManager.instance();
-		localStoreManager = LocalStoreManager.instance(); //FIXME: Handle exception properly
-	}
+	public long inQCount = 0; //For debug purposes
+	public long inTries = 0; //For debug purposes
 	
 	public Block(BlockID id) {
 		this.id = id;
-		lock = new ReentrantLock();
 		
 		localStoreSyncLock = new Object();
 		dataLoadLock = new ReentrantLock();
 		
-		localDirtyCnt  = new AtomicLong(0);
+		isLocalDirty = false;
 		globalDirtyCnt = new AtomicInteger(0);
-		inLocalQueue   = false;
+		//inLocalQueue   = false;
 		inGlobalQueue  = new AtomicBoolean(false);
 		inLocalStore   = new AtomicBoolean(false);
 		inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and 
@@ -84,9 +74,9 @@ public abstract class Block extends AbstractTransferItem {
 	
 	protected void reset(BlockID id) {
 		this.id = id;
-		localDirtyCnt.set(0);
+		isLocalDirty = false;
 		globalDirtyCnt.set(0);
-		inLocalQueue = false;
+		//inLocalQueue = false;
 		inGlobalQueue.set(false);
 		inLocalStore.set(false);
 		inCache.set(false);
@@ -195,7 +185,7 @@ public abstract class Block extends AbstractTransferItem {
 	 * Increment the local dirty counts.
 	 */
 	public void markLocalDirty() {
-		localDirtyCnt.incrementAndGet();
+		isLocalDirty = true;
 	}
 	
 	/**
@@ -209,31 +199,20 @@ public abstract class Block extends AbstractTransferItem {
 	 * @return Returns whether this block has been modified until now or not.
 	 */
 	public boolean isLocalDirty(){
-		return localDirtyCnt.get() > 0;
+		return isLocalDirty;
 	}
 	
 	/**
 	 * @return Returns the current value of the local dirty count
 	 */
-	public long localDirtyCount() {
-		return localDirtyCnt.get();
-	}
+	/*public long localDirtyCount() {
+		return isLocalDirty.get();
+	}*/
 	
-	/**
-	 * Subtracts the local dirty count by the given count value. If the count becomes zero, the function signals any
-	 * appender that is waiting for this block to be evicted from the cache.
-	 *
-	 * @param count is a positive number >= 0 that should be subtracted from the current value of dirty count of this block
-	 * @returns the updated value of the dirtyCounter for the local store
-	 */
-	public long subtractAndGetLocalDirty(long count) {
-		count = Math.abs(count);
-		
-		long cnt = localDirtyCnt.addAndGet(-count);
-		
-		assert cnt >= 0;
-		
-		return cnt;
+	public boolean getAndClearLocalDirty() {
+		boolean isDirty = isLocalDirty;
+		isLocalDirty = false;
+		return isDirty;
 	}
 	
 	public void notifySyncComplete() {
@@ -263,33 +242,32 @@ public abstract class Block extends AbstractTransferItem {
 	 * 
 	 * @return Returns true if the block was already marked to be in the local queue
 	 */
-	public boolean markInLocalQueue() {
-		/*if (inLocalQueue.get())
+	/*public boolean markInLocalQueue() {
+		*//*if (inLocalQueue.get())
 			return true;
-		return inLocalQueue.getAndSet(true);*/
+		return inLocalQueue.getAndSet(true);*//*
 		
 		if (inLocalQueue)
 			return true;
 		inLocalQueue = true;
 		return false;
-	}
+	}*/
 	
 	/**
 	 * Clears the mark that the block is in a queue for persistence in the local store.
 	 * 
 	 * @return Returns false if the marker was already clear
 	 */
-	public boolean clearInLocalQueue() {
+	/*public void clearInLocalQueue() {
 		if (!inLocalQueue)
-			return false;
+			return;
 		
 		inLocalQueue = false;
-		return true;
 		
-		/*if (!inLocalQueue.get())
+		*//*if (!inLocalQueue.get())
 			return false;
-		return inLocalQueue.getAndSet(false);*/
-	}
+		return inLocalQueue.getAndSet(false);*//*
+	}*/
 	
 	/**
 	 * Marks that the block is in a queue to be persisted in the local store.
@@ -311,22 +289,9 @@ public abstract class Block extends AbstractTransferItem {
 	
 	public abstract boolean evictLocallyOnMemoryEviction();
 	
-	public void lock(){
-		lock.lock();
-	}
-	
-	public void unlock(){
-		lock.unlock();
-	}
-	
 	public BlockID id(){
 		return id;
 	}
-	
-	/**
-	 * Releases any acquired resources such as file channels
-	 */
-	public void cleanup() throws IOException {  }
 	
 	/**
 	 * The caller thread blocks until this block is flushed in the local storage and the local dirty count becomes zero.
@@ -334,11 +299,11 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws InterruptedException 
 	 */
 	public void waitUntilSynced() throws InterruptedException {
-		if (localDirtyCnt.get() > 0) {
+		if (isLocalDirty || inTransferQueue()) {
 			synchronized(localStoreSyncLock) {
-				while (localDirtyCnt.get() > 0 || inLocalQueue) { // It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
-					System.out.println("[B] Waiting until this block is synced to the local store and then evicted from the cache: " + id + ", cnt: " + 
-								localDirtyCnt.get() + ", inLocalQueue="+inLocalQueue);
+				while (isLocalDirty || inTransferQueue()) { // It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
+					System.out.println("[B] Waiting until this block is synced to the local store and then evicted from the cache: " + id + ", isLocalDirty: " +
+								isLocalDirty + ", inLocalQueue="+inTransferQueue());
 					localStoreSyncLock.wait();
 				}
 				System.out.println("[B] Block synced, now evicting: " + id);
@@ -430,23 +395,23 @@ public abstract class Block extends AbstractTransferItem {
 	 */
 	protected abstract void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException;
 	
-	public void setInLocalStore() {
+	void setInLocalStore() {
 		inLocalStore.set(true);
 	}
 	
-	public void unsetInLocalStore() {
+	void unsetInLocalStore() {
 		inLocalStore.set(false);
 	}
 	
-	public boolean isInLocal() {
+	boolean isInLocal() {
 		return inLocalStore.get();
 	}
 	
-	public void unsetInCache() {
+	void unsetInCache() {
 		inCache.set(false);
 	}
 	
-	public boolean isInCache() {
+	boolean isInCache() {
 		return inCache.get();
 	}
 }

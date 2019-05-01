@@ -84,13 +84,8 @@ public final class Ibmap extends Block{
 		//bitIdx associated with the given inumber
 		int bitIdx = inumberToBitIndex(inumber); //inumber % ibmapBlockSize in bits
 		
-		lock();
-		try{
-			bitset.clear(bitIdx);     //mark the bit as unused
-			markLocalDirty();
-		}finally{
-			unlock();
-		}
+		bitset.clear(bitIdx);     //mark the bit as unused
+		markLocalDirty();
 	}
 	
 	@Override

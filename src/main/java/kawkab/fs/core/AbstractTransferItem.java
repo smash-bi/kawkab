@@ -1,7 +1,10 @@
 package kawkab.fs.core;
 
-public abstract class AbstractTransferItem {
+public class AbstractTransferItem {
 	private volatile boolean inQueue = false;
+	
+	public long inQCount = 0; //For debug purposes
+	public long inTries = 0; //For debug purposes
 	
 	/**
 	 * This is not an atomic function. However, the race is safe when adding this object in <code>TransferQueue</code>.
@@ -15,5 +18,9 @@ public abstract class AbstractTransferItem {
 		
 		inQueue = newVal;
 		return !newVal;
+	}
+	
+	public boolean inTransferQueue() {
+		return inQueue;
 	}
 }

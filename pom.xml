@@ -95,7 +95,10 @@
 				<configuration>
 					<enableAssertions>true</enableAssertions>
 					<argLine>-Xmx50g</argLine>
+					<!--argLine>-XX:+UseG1GC -XX:MaxGCPauseMillis=10 -XX:ParallelGCThreads=4 -XX:ConcGCThreads=4</argLine-->
+					<!--argLine>-agentpath:/home/sm3rizvi/packages/YourKit-JavaProfiler-2019.1/bin/linux-x86-64/libyjpagent.so</argLine-->
 					<!-- argLine>-Xcomp</argLine -->
+					<!--argLine>-verbose:gc</argLine -->
 					<systemPropertyVariables>
 						<propertyName>nodeID</propertyName>
 						<buildDirectory>${0}</buildDirectory>

@@ -1,14 +1,14 @@
 package kawkab.fs.core;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 public final class LocalStoreManager implements SyncCompleteListener {
 	private static final Object initLock = new Object();
@@ -19,7 +19,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private static final int maxBlocks = Configuration.instance().maxBlocksPerLocalDevice; // Number of blocks that can be created locally
 	private static final int numWorkers = Configuration.instance().syncThreadsPerDevice; // Number of worker threads and number of reqsQs
 	
-	private LinkedBlockingQueue<Block> storeQs[]; // Buffer to queue block store requests
+	private TransferQueue<Block> storeQs[]; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks locally
 	private final LocalStoreDB storedFilesMap;        // Contains the paths and IDs of the blocks that are currently stored locally
 	private final Semaphore storePermits;
@@ -28,7 +28,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	
 	private static LocalStoreManager instance;
 	
-	public static LocalStoreManager instance() { 
+	public static LocalStoreManager instance() {
 		if (instance == null) {
 			synchronized(initLock) {
 				if (instance == null)
@@ -68,9 +68,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * work based on the blocks, which is not easily achievable using ExecutorService.
 	 */
 	private void startWorkers() {
-		storeQs = new LinkedBlockingQueue[numWorkers];
+		storeQs = new TransferQueue[numWorkers];
 		for(int i=0; i<numWorkers; i++) {
-			storeQs[i] = new LinkedBlockingQueue<Block>();
+			storeQs[i] = new TransferQueue<>();
 		}
 		
 		workers = new Thread[numWorkers];
@@ -89,31 +89,22 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	/**
 	 * The workers poll the same queue 
 	 */
-	private void runStoreWorker(LinkedBlockingQueue<Block> reqs) {
-		while(true) {
-			Block block = null;
-			try {
-				block = reqs.poll(2, TimeUnit.SECONDS);
-			} catch (InterruptedException e1) {
-				if (!working) {
-					break;
-				}
-			}
-		
+	private void runStoreWorker(TransferQueue<Block> reqs) {
+		while(working) {
+			Block block = reqs.poll();
 			if (block == null) {
-				if (!working)
-					break;
+				try {
+					Thread.sleep(1); //1ms is arbitrary
+				} catch (InterruptedException e1) {}
 				continue;
 			}
-			
+		
 			try {
 				processStoreRequest(block);
 			} catch (KawkabException e) {
 				e.printStackTrace();
 			}
 		}
-		
-		
 		
 		// Perform the remaining tasks in the queue
 		Block block = null;
@@ -124,7 +115,6 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				e.printStackTrace();
 			}
 		}
-		
 		
 		System.out.println("Closing thread: " + Thread.currentThread().getName());
 	}
@@ -157,13 +147,6 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			throw new KawkabException("LocalProcessor has already received stop signal.");
 		}*/
 		
-		if (block.markInLocalQueue()) { //If the block is already in the queue, the block should not be added again.
-			//System.out.println("[LSM] Skipping: " + block.id());
-			return;
-		}
-		
-		// System.out.println("\t[LSM] Enque: " + block.id());
-		
 		//Load balance between workers, but assign same worker to the same block.
 		int queueNum = Math.abs(block.id().perBlockKey()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
 		
@@ -182,16 +165,13 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 */
 	private int processStoreRequest(Block block) throws KawkabException {
 		int syncedCnt = 0;
-		long dirtyCount = block.localDirtyCount();
 		
 		// WARNING! This functions works correctly in combination with the store(block) function only if the same block 
 		// is always assigned to the same worker thread.
 		
 		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
 		
-		block.clearInLocalQueue(); //Mark the block as not in the queue
-		
-		if (dirtyCount == 0) {
+		if (!block.getAndClearLocalDirty()) {
 			block.notifySyncComplete();
 			return 0;
 		}
@@ -199,36 +179,22 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		try {
 			fileLocks.lockFile(block.id()); // To prevent concurrent read from the GlobalStoreManager
 		} catch (InterruptedException e1) {
-			e1.printStackTrace();
-			return 0;
-		} finally {
-			fileLocks.unlockFile(block.id());
-			
+			throw new KawkabException(e1);
 		}
 		
 		try {
-			//while (dirtyCount > 0) {
-			if (dirtyCount > 0) {
-				try {
-					//syncLocally(block);
-					syncedCnt += block.storeToFile();
-				} catch (IOException e) {
-					System.out.println("Unbale to store data for ID: " + block.id());
-					e.printStackTrace();
-					//FIXME: What should we do here? Should we return?
-				}
-				
-				dirtyCount = block.subtractAndGetLocalDirty(dirtyCount); // If the data segment is not the last segment in the data block,
-				                                                  // and the segment is updated while we were syncing, resync the
-				                                                  // the segment to the localStorage. This may create head-of-line blocking for
-				                                                  // only a short duration.
-			}
+			//syncLocally(block);
+			syncedCnt += block.storeToFile();
 			
 			block.markGlobalDirty();
 			
 			if (block.shouldStoreGlobally()) { // If it the block is the last data segment or an ibmap or an inodesBlock
 				globalProc.store(block, this); // Add the block in the queue to be transferred to the globalStore
 			}
+		} catch (IOException e) {
+			System.out.println("Unbale to store data for ID: " + block.id());
+			//FIXME: What should we do here? Should we return?
+			throw new KawkabException(e);
 		} finally {
 			fileLocks.unlockFile(block.id());
 		}
@@ -242,7 +208,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		// that the MD5 hash of the file has changed. Now we update this flag in notifyStoreComplete() function.
 		
 		//if (block.subtractAndGetLocalDirty(0) > 0) {
-		if (dirtyCount > 0) {
+		if (block.isLocalDirty()) {
 			store(block);
 		} else {
 			block.notifySyncComplete();
@@ -270,8 +236,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		 * 
 		*/
 		
-		long dirtyCount = block.subtractAndGetLocalDirty(0);
-		if (dirtyCount > 0) {// We have to check the count again. We cannot simply call localDirtyCount() 
+		if (block.isLocalDirty()) {// We have to check the count again. We cannot simply call localDirtyCount()
 							// because we need to notify any thread waiting for the block to be removed 
 							// from the local queue.
 							// Otherwise, a block can be evicted from the cache while the block is still being synced to the local store.
@@ -433,6 +398,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		for (int i=0; i<storeQs.length; i++) {
 			assert storeQs[i].size() == 0;
+			storeQs[i].shutdown();
 		}
 		
 		globalProc.shutdown();

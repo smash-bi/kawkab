@@ -1,15 +1,11 @@
 package kawkab.fs.core;
 
-import java.io.IOException;
-
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Filesystem.FileMode;
-import kawkab.fs.core.exceptions.InvalidFileModeException;
-import kawkab.fs.core.exceptions.InvalidFileOffsetException;
-import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
-import kawkab.fs.core.exceptions.OutOfMemoryException;
+import kawkab.fs.core.exceptions.*;
+
+import java.io.IOException;
 
 /**
  * TODO: Store InodeBlocks in a separate table than the cache.
@@ -121,6 +117,7 @@ public final class FileHandle {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
+	
 	public synchronized int append(byte[] data, int offset, int length) throws MaxFileSizeExceededException,
 									IOException, KawkabException, InterruptedException{
 		if (fileMode != FileMode.APPEND || !onPrimaryNode) {
@@ -130,11 +127,12 @@ public final class FileHandle {
 		if (inodesBlock == null) {
 			throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
 		}
-
+		
 		int appendedBytes = inode.appendBuffered(data, offset, length);
+		
 		inodesBlock.markLocalDirty();
 		localStore.store(inodesBlock);
-
+		
 		return appendedBytes;
 	}
 

@@ -140,6 +140,12 @@ public class GlobalStoreManager {
 		//System.out.println("[GSM] Storing: " + task.block.id());
 		
 		Block block = task.block;
+		
+		block.clearInGlobalQueue(); // We must get the current dirty count after clearing the inQueue flag because a
+		// concurrent writer may want to add the block in the queue. If the concurrent
+		// writer fails to add in the queue, then this worker should add the block in the
+		// if the dirty count is non-zero.
+		
 		int count = block.globalDirtyCount();
 		
 		//assert count > 0; // count must be greater than zero because the block is added in the queue only if its dirty count is non-zero.
@@ -162,11 +168,6 @@ public class GlobalStoreManager {
 				successful = false;
 			}
 		}
-		
-		block.clearInGlobalQueue(); // We must get the current dirty count after clearing the inQueue flag because a
-		                               // concurrent writer may want to add the block in the queue. If the concurrent
-									   // writer fails to add in the queue, then this worker should add the block in the
-									   // if the dirty count is non-zero.
 		
 		count = block.decAndGetGlobalDirty(count);
 		if (count > 0) {

@@ -4,7 +4,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 
 import java.util.concurrent.atomic.AtomicLong;
 
-public class SegmentTimer extends AbstractTransferItem{
+public class SegmentTimer extends AbstractTransferItem {
 	public static final int TIMEOUT_MS = 5; //Randomly chosen, a small value should be sufficient as we want to batch back-to-back writes only
 
 	private final AtomicLong mState;

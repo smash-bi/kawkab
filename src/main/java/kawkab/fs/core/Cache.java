@@ -13,6 +13,7 @@ public abstract class Cache {
 		//return GCache.instance();
 		//return CustomCache.instance();
 		return BufferedCache.instance();
+		//return PartitionedBufferedCache.instance();
 	}
 	
 	/**

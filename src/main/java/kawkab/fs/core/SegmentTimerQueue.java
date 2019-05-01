@@ -1,11 +1,10 @@
 package kawkab.fs.core;
 
-import java.util.concurrent.ConcurrentLinkedQueue;
-
 import kawkab.fs.core.exceptions.KawkabException;
 
 public class SegmentTimerQueue {
-	private final TransferQueue<SegmentTimer> buffer;
+	//private final TransferQueue<SegmentTimer> buffer;
+	TransferQueue<SegmentTimer> buffer;
 	private final Thread timerThread;
 	private final Clock clock;
 	private volatile boolean working = true;
@@ -31,22 +30,24 @@ public class SegmentTimerQueue {
 		return instance;
 	}
 	
-	public void add(SegmentTimer timer, long inumber) {
+	public void add(SegmentTimer timer) {
 		assert working;
 		
-		buffer.add(timer, inumber);
+		buffer.add(timer);
 	}
 	
 	private void processSegments() {
 		SegmentTimer next = null;
 		
 		while(working) {
-			try {
-				next = buffer.take();
-			} catch (InterruptedException e) {
+			next = buffer.poll();
+			if (next == null) {
+				try {
+					Thread.sleep(1); //1ms is chosen randomly. It doesn't impact the performance, but a large value may result in slower expiry of the segments
+				} catch (InterruptedException e) {}
 				continue;
 			}
-			
+		
 			try {
 				process(next);
 			} catch (KawkabException e) {

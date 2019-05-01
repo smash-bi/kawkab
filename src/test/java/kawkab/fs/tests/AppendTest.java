@@ -1,6 +1,7 @@
 package kawkab.fs.tests;
 
 import kawkab.fs.api.FileOptions;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
@@ -45,6 +46,8 @@ public class AppendTest {
 		final int bufSize = Integer.parseInt(System.getProperty("bufferSize", "100"));
 		final long dataSize = Long.parseLong(System.getProperty("dataSize", "5368709120"));
 
+		System.gc();
+		
 		Stats writeStats = new Stats();
 		Stats opStats = new Stats();
 		for (int i = 0; i < numWriters; i++) {
@@ -52,7 +55,7 @@ public class AppendTest {
 			workers[i] = new Thread("Appender-"+id) {
 				public void run() {
 					try {
-						String filename = "/home/smash/twpcf-" + id;
+						String filename = "/home/smash/twpcf-"+ Configuration.instance().thisNodeID+"-" + id;
 						FileOptions opts = new FileOptions();
 						
 						System.out.println("Opening file: " + filename);
