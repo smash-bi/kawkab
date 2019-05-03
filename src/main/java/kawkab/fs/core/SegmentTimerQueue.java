@@ -85,11 +85,20 @@ public class SegmentTimerQueue {
 		//assert ret == SegmentTimer.EXPIRED;
 	}
 	
+	public void waitUntilEmpty() {
+		int size;
+		while((size = buffer.size()) > 0) {
+			System.out.println("Waiting until STQ becomes empty, current size = " + size);
+			try {
+				Thread.sleep(1);
+			} catch (InterruptedException e) {
+			}
+		}
+	}
+	
 	public void shutdown() {
 		System.out.println("Closing SegmentTimerQueue");
 		working = false;
-		
-		buffer.shutdown();
 		
 		timerThread.interrupt();
 		try {
@@ -97,5 +106,7 @@ public class SegmentTimerQueue {
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
+		
+		buffer.shutdown();
 	}
 }

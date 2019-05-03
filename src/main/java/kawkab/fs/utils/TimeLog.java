@@ -11,8 +11,8 @@ This class is not thread safe.
 public class TimeLog {
 	public enum TimeLogUnit {
 		MILLIS("ms"), NANOS("ns");
-		private String unit;
 		
+		private String unit;
 		TimeLogUnit(String unit) {
 			this.unit = unit;
 		}
@@ -20,18 +20,18 @@ public class TimeLog {
 		public String getUnit() {
 			return unit;
 		}
+		
 	};
-	
 	private Random rand;
+	
 	private TimeLogUnit unit;
 	private long lastTS;
 	private Stats stats;
 	private boolean started;
 	private int count;
-	
 	public TimeLog(TimeLogUnit unit) {
 		this.unit = unit;
-		stats = new Stats();
+		stats = new Stats(1000); //Ignore initial 1000 readings
 		rand = new Random();
 	}
 	
@@ -63,6 +63,10 @@ public class TimeLog {
 	
 	public void printStats(String tag) {
 		System.out.printf("\t%s (%s): %s, num calls: %,d\n", tag, unit.getUnit(), stats, count);
+	}
+	
+	public String getStats() {
+		return String.format("(%s): %s, num calls: %,d\n", unit.getUnit(), stats, count);
 	}
 	
 	private long timeNow() {

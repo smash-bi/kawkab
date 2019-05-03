@@ -3,11 +3,13 @@ package kawkab.fs.tests;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
+import kawkab.fs.core.Cache;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
-import kawkab.fs.core.exceptions.AlreadyConfiguredException;
-import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.SegmentTimerQueue;
+import kawkab.fs.core.exceptions.*;
+import kawkab.fs.utils.TimeLog;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -34,10 +36,12 @@ public class AppendTest {
 	
 	@Test
 	public void appendPerformanceConcurrentFilesTest()
-			throws IOException, KawkabException {
+			throws IOException, KawkabException, MaxFileSizeExceededException, FileAlreadyOpenedException, InterruptedException, IbmapsFullException {
 		System.out.println("----------------------------------------------------------------");
 		System.out.println("            Append Perofrmance Test - Concurrent Files");
 		System.out.println("----------------------------------------------------------------");
+		
+		//warmup();
 
 		final Filesystem fs = Filesystem.instance();
 
@@ -56,18 +60,18 @@ public class AppendTest {
 				public void run() {
 					try {
 						String filename = "/home/smash/twpcf-"+ Configuration.instance().thisNodeID+"-" + id;
-						FileOptions opts = new FileOptions();
 						
 						System.out.println("Opening file: " + filename);
 						
-						FileHandle file = fs.open(filename, FileMode.APPEND, opts);
+						FileHandle file = fs.open(filename, FileMode.APPEND, FileOptions.defaultOpts());
 
 						Random rand = new Random(0);
 						long appended = 0;
 
 						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
-
+						
+						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS);
 						long startTime = System.currentTimeMillis();
 						int toWrite = bufSize;
 						long ops = 0;
@@ -75,7 +79,10 @@ public class AppendTest {
 							if (dataSize-appended < bufSize)
 								toWrite = (int)(dataSize - appended);
 							
+							tlog.start();
 							appended += file.append(writeBuf, 0, toWrite);
+							tlog.end();
+							
 							ops++;
 						}
 						
@@ -88,7 +95,7 @@ public class AppendTest {
 						
 						fs.close(file);
 
-						System.out.printf("Writer %d: Data size = %.0fMB, Write tput = %,.0f MB/s, Ops tput = %,.0f OPS\n", id, sizeMB, thr, opThr);
+						System.out.printf("Writer %d: Data size = %.0fMB, Write tput = %,.0f MB/s, Ops tput = %,.0f OPS, tlog %s\n", id, sizeMB, thr, opThr, tlog.getStats());
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
@@ -107,6 +114,41 @@ public class AppendTest {
 		}
 
 		System.out.printf("\n\nWriters stats: sum=%.0f, %s, buffer size=%d, numWriters=%d\nOps stats: %s\n\n", writeStats.sum(), writeStats, bufSize, numWriters, opStats);
+	}
+	
+	private void warmup() throws MaxFileSizeExceededException, KawkabException, InterruptedException, IOException, FileAlreadyOpenedException, IbmapsFullException {
+		System.out.println("Warming up ...");
+		long st = System.currentTimeMillis();
+		
+		Filesystem fs = Filesystem.instance();
+		FileHandle file = fs.open("appendTestWarmup", FileMode.APPEND, FileOptions.defaultOpts());
+		
+		long dataSize = 5000 * 1048576; //~5GB
+		int bufSize = 10;
+		
+		Random rand = new Random(0);
+		long appended = 0;
+		
+		final byte[] writeBuf = new byte[bufSize];
+		rand.nextBytes(writeBuf);
+		
+		int toWrite = bufSize;
+		while (appended < dataSize) {
+			if (dataSize-appended < bufSize)
+				toWrite = (int)(dataSize - appended);
+			appended += file.append(writeBuf, 0, toWrite);
+		}
+		
+		fs.close(file);
+		
+		long durSec = (System.currentTimeMillis() - st)/1000;
+		
+		SegmentTimerQueue.instance().waitUntilEmpty();
+		
+		Cache.instance().flush(); //Clear the cache for the actual append test.
+		
+		System.out.printf("Warmup took %d seconds.\n",durSec);
+		
 	}
 	
 	private Properties getProperties() throws IOException {

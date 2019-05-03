@@ -10,6 +10,8 @@ import java.nio.channels.WritableByteChannel;
 
 import com.google.protobuf.ByteString;
 
+import io.grpc.netty.shaded.io.netty.buffer.ByteBuf;
+import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
@@ -22,6 +24,10 @@ public final class InodesBlock extends Block {
 	//private int version; //Inodes-block's current version number.
 	
 	private static Configuration conf = Configuration.instance();
+	
+	private boolean opened = false;
+	RandomAccessFile rwFile;
+	SeekableByteChannel channel;
 	
 	/*
 	 * The access modifier of the constructor is "default" so that it can be packaged as a library. Clients
@@ -107,20 +113,30 @@ public final class InodesBlock extends Block {
 		return bytesRead;
 	}
 	
+	private ByteBuffer buffer = ByteBuffer.allocate(conf.inodeSizeBytes);
+	
 	@Override
 	public int storeToFile() throws IOException {
-		try (
-				RandomAccessFile rwFile = new RandomAccessFile(id.localPath(), "rw");
-				SeekableByteChannel channel = rwFile.getChannel()
-			) {
-			channel.position(0);
-			//System.out.println("Store: "+id() + ": " + channel.position());
-			int bytesWritten = 0;
-			for(Inode inode : inodes) {
-				bytesWritten += inode.storeTo(channel);
+		if (!opened) {
+			synchronized (this) {
+				if (!opened) {
+					rwFile = new RandomAccessFile(id.localPath(), "rw");
+					channel = rwFile.getChannel();
+					opened = true;
+				}
 			}
-			return bytesWritten;
 		}
+		
+		channel.position(0);
+		//System.out.println("Store: "+id() + ": " + channel.position());
+		int bytesWritten = 0;
+		for(Inode inode : inodes) {
+			buffer.clear();
+			inode.storeTo(buffer);
+			buffer.rewind();
+			bytesWritten += Commons.writeTo(channel, buffer);
+		}
+		return bytesWritten;
 	}
 	
 	@Override
@@ -148,6 +164,28 @@ public final class InodesBlock extends Block {
 	@Override
 	protected void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException {
 		primaryNodeService.getInodesBlock((InodesBlockID)id(), this);
+	}
+	
+	@Override
+	void onMemoryEviction() {
+		if (opened) {
+			synchronized (this) {
+				if (opened) {
+					opened = false;
+					try {
+						rwFile.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+					
+					try {
+						channel.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}
 	}
 	
 	@Override

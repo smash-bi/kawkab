@@ -176,8 +176,6 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 			                              // decrementRefCnt() functions are only called while holding the cacheLock.
 		} finally {
 			cacheLock.unlock();
-			
-			//releaseStats.putValue((System.nanoTime()-t)/1000);
 		}
 		
 		if (blockID.onPrimaryNode() && cachedItem.block().isLocalDirty()) { // Persist blocks only through the primary node
@@ -207,10 +205,12 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	                                  // lead to performance problems because the thread sleeps while holding
 	                                  // the cacheLock. The lock cannot be released because otherwise another
 	                                  // thread can come and may acquire the block.
+			block.onMemoryEviction();
 			localStore.notifyEvictedFromCache(cachedItem.block());
 			
 			if (block.id().type() == BlockType.DATA_SEGMENT)
 				dsp.release((DataSegment) block);
+			
 		} catch (InterruptedException | KawkabException e) {
 			e.printStackTrace();
 		}
@@ -243,7 +243,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 				}
 				
 				if (cachedItem.refCount() != 0) {
-					System.out.println("Ref count is not 0: id: " + block.id() + ", count: " + cachedItem.refCount());
+					System.err.println("  ==> Ref count is not 0: id: " + block.id() + ", count: " + cachedItem.refCount());
 				}
 				
 				assert cachedItem.refCount() == 0;

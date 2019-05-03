@@ -37,6 +37,12 @@ public final class DataSegment extends Block {
 	// and the value is assigned atomically due to Java memory model.
 	private int initialAppendPos; // Index from which data will be appended the first time. This position is not modified with the appends
 	private int bytesLoaded; // Number of bytes loaded in this block from the local or remote storage
+	private boolean acquired = false;
+	
+	private boolean opened = false;
+	private RandomAccessFile rwFile;
+	private SeekableByteChannel channel;
+	private ByteBuffer storeBuffer; //Used only by file the localStoreManager
 	
 	/**
 	 * The constructor should not create a new file in the local storage. This constructor
@@ -49,6 +55,7 @@ public final class DataSegment extends Block {
 		writePos = new AtomicInteger(0);
 		
 		dataBuf = ByteBuffer.allocateDirect(segmentSizeBytes);
+		storeBuffer = dataBuf.asReadOnlyBuffer();
 	}
 	
 	void reInit(DataSegmentID segmentID) {
@@ -89,17 +96,16 @@ public final class DataSegment extends Block {
 		assert offset >= 0;
 		assert offset < data.length;
 		
-		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
+		//int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
+		int offsetInSegment = (int)(offsetInFile%segmentSizeBytes);
 		int capacity = segmentSizeBytes - offsetInSegment;
 		int toAppend = length <= capacity ? length : capacity;
 		
 		
-		int writePntr = writePos.get();
-		
 		//if (offsetInSegment != writePntr)
 		//	System.out.println(id + " - " + offsetInSegment+" != "+writePntr);
 		
-		assert writePntr == offsetInSegment;
+		assert writePos.get() == offsetInSegment;
 		assert dataBuf.position() == offsetInSegment;
 		
 		dataBuf.put(data, offset, toAppend);
@@ -243,6 +249,28 @@ public final class DataSegment extends Block {
 	}
 	
 	@Override
+	void onMemoryEviction() {
+		if (opened) {
+			synchronized (this) {
+				if (opened) {
+					opened = false;
+					try {
+						rwFile.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+					
+					try {
+						channel.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}
+	}
+	
+	@Override
 	protected synchronized void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
 		/* If never fetched or the last global-fetch has timed out, fetch from the global store.
 		 * Otherwise, if the last primary-fetch has timed out, fetch from the primary node.
@@ -306,32 +334,38 @@ public final class DataSegment extends Block {
 	
 	@Override
 	public int storeToFile() throws IOException {
-		try (
-				RandomAccessFile rwFile = new RandomAccessFile(id.localPath(), "rw");
-				SeekableByteChannel channel = rwFile.getChannel()
-		) {
-			channel.position(appendOffsetInBlock());
-			//System.out.println("Store: "+block.id() + ": " + channel.position());
-			return storeTo(channel);
+		if (!opened) {
+			synchronized (this) {
+				if (!opened) {
+					rwFile = new RandomAccessFile(id.localPath(), "rw");
+					channel = rwFile.getChannel();
+					opened = true;
+				}
+			}
 		}
+		
+		channel.position(appendOffsetInBlock());
+		//System.out.println("Store: "+block.id() + ": " + channel.position());
+		return storeTo(channel);
 	}
 	
 	@Override
 	public int storeTo(WritableByteChannel channel) throws IOException {
-		int limit = writePos.get();
-		
-		ByteBuffer buf = dataBuf.asReadOnlyBuffer(); //FIXME: Ensure that this is thread-safe in the presence of a concurrent writer!!!
-		buf.clear();
-		buf.position(dirtyOffset);
-		buf.limit(limit);
-		
-		int size = buf.remaining();
 		int bytesWritten = 0;
-		while(bytesWritten < size) {
-			bytesWritten += channel.write(buf);
+		synchronized (storeBuffer) {
+			int limit = writePos.get();
+			
+			storeBuffer.clear();
+			storeBuffer.position(dirtyOffset);
+			storeBuffer.limit(limit);
+			
+			int size = storeBuffer.remaining();
+			while (bytesWritten < size) {
+				bytesWritten += channel.write(storeBuffer);
+			}
+			
+			dirtyOffset += bytesWritten;
 		}
-		
-		dirtyOffset += bytesWritten;
 		
 		//System.out.printf("[DS] Bytes written in channel = %d, dirtyOffset=%d, dirtyLength=%d\n", bytesWritten, dirtyOffset, size);
 		

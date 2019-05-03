@@ -1,18 +1,17 @@
 package kawkab.fs.core;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.WritableByteChannel;
-import java.util.concurrent.atomic.AtomicLong;
-
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
-import kawkab.fs.utils.TimeLog;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class Inode {
 	//FIXME: fileSize can be internally staled. This is because append() is a two step process. 
@@ -130,6 +129,9 @@ public final class Inode {
 		
 		while (remaining > 0) {
 			if (timer == null) { //If null, no need to synchronize because the SegmentTimerQueue thread will never synchronize with this timer
+				assert curSeg == null;
+				assert segId == null;
+				
 				if ((fileSizeBuffered % conf.dataBlockSizeBytes) == 0L) { // if the last block is full
 					segId = createNewBlock(fileSizeBuffered);
 				} else { // Otherwise the last segment was full or we are just starting without any segment at hand
@@ -142,6 +144,7 @@ public final class Inode {
 			} else {
 				synchronized (this) {
 					if (timer == null || !timer.disableIfValid()) { // Disable the timer if it has not already expired. The condition is true if the timer has expired before it is disabled
+						segId = getSegmentID(fileSizeBuffered);
 						curSeg = (DataSegment) cache.acquireBlock(segId); // Acquire the segment again as the cache may have evicted the segment
 						timer = new SegmentTimer(segId, this); // The previous timer cannot be reused because its state cannot be changed
 					}
@@ -162,15 +165,18 @@ public final class Inode {
 			localStore.store(curSeg);
 			//tlog.end();
 			
-			timer.update();
-
-			timerQ.add(timer);
+			SegmentTimer timerTemp = timer; //This is needed because we want to first set the class variable to null and then submit in the
+											// queue. Otherwise, there can be a race condition: we add the timer in the queu, preempt, timer
+											// expires and et to null, and then we resume, finding the timer to be null
 			
 			if (curSeg.isFull()) { // If the current segment is full
 				curSeg = null;
 				segId = null;
 				timer = null;
 			}
+			
+			timerTemp.update();
+			timerQ.add(timerTemp);
 		}
 		
 		fileSize.set(fileSizeBuffered);
@@ -386,17 +392,22 @@ public final class Inode {
 	void releaseBuffer() throws KawkabException {
 		//tlog.printStats("DS.append,ls.store");
 		
-		if (timer == null)
-			return;
+		synchronized (this) {
+			if (timer == null) {
+				assert curSeg == null;
+				assert segId == null;
+				return;
+			}
 
-		if (timer.disableIfValid()) {
-			cache.releaseBlock(segId);
-
-			timer = null;
-			curSeg = null;
-			segId = null;
-
-			return;
+			if (timer.disableIfValid()) {
+				cache.releaseBlock(segId);
+				
+				timer = null;
+				curSeg = null;
+				segId = null;
+				
+				return;
+			}
 		}
 	}
 }

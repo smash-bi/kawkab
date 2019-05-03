@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class SegmentTimer extends AbstractTransferItem {
 	public static final int TIMEOUT_MS = 5; //Randomly chosen, a small value should be sufficient as we want to batch back-to-back writes only
 
-	private final AtomicLong mState;
+	private final AtomicLong mState; //State of the timer, which can be DISABLED, EXPIRED, ALREADY_EXPIRED, or last timestamp
 	private final Inode inode;
 	private final DataSegmentID segId;
 	private final static Clock clock = Clock.instance();
@@ -78,7 +78,7 @@ public class SegmentTimer extends AbstractTransferItem {
 			long diff = timeNow - state;	// The valid state contains the timestamp. 
 			
 			if (diff <= 0) 			// The diff can be negative because the state may have been updated by the writer  
-				return TIMEOUT_MS;	// thread since the caller read the wall clock. Conservatively return the timeout value
+				return TIMEOUT_MS;	// thread since the caller read the clock. Conservatively return the timeout value
 			
 			if (diff < TIMEOUT_MS)
 				return diff;

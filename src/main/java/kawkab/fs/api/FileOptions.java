@@ -10,6 +10,10 @@ public final class FileOptions {
 		//blockSizeMB = Constants.defaultBlockSize;
 	}
 	
+	public static FileOptions defaultOpts() {
+		return new FileOptions();
+	}
+	
 	/*public int blockSize(){
 		return blockSizeMB;
 	}*/

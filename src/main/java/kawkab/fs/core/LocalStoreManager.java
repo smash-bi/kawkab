@@ -325,20 +325,6 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		//block.setInLocalStore(); //Mark the block as locally saved
 	}
 	
-	/*private void syncLocally(Block block) throws IOException {
-		//FIXME: This creates a new file if it does not already exist. We should prevent that in order to make sure that
-		//first we create a file and do proper accounting for the file.
-		
-		try (
-				RandomAccessFile rwFile = new RandomAccessFile(block.id().localPath(), "rw");
-				SeekableByteChannel channel = rwFile.getChannel()
-			) {
-			channel.position(block.appendOffsetInBlock());
-			//System.out.println("Store: "+block.id() + ": " + channel.position());
-			block.storeTo(channel);
-		}
-	}*/
-	
 	/**
 	 * This is a blocking function. The block is loaded from the local store if the block is available in it. Otherwise,
 	 * the block is loaded from the global store. The function blocks until it is loaded from the local or the global
