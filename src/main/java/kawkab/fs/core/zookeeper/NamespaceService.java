@@ -26,7 +26,7 @@ public final class NamespaceService {
 		zkcluster = Configuration.instance().zkMainCluster;
 		zkclient.initService(zkcluster);
 		encoder = Base64.getUrlEncoder();
-		//createRootNode();
+		createRootNode();
 	}
 	
 	public static NamespaceService instance() throws KawkabException {

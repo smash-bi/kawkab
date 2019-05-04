@@ -111,17 +111,14 @@ public final class DataSegment extends Block {
 		dataBuf.put(data, offset, toAppend);
 		//dataBuf.position(writePntr+toAppend);
 		
-		writePos.addAndGet(toAppend);
+		int pos = writePos.addAndGet(toAppend);
 		
-		//adjustDirtyOffsets(offsetInSegment, toAppend);
 		//Mark block as full
-		if (offsetInSegment+toAppend == segmentSizeBytes) {
+		if (pos == segmentSizeBytes) {
 			segmentIsFull = true;
 		}
 		
 		markLocalDirty();
-		
-		//bytesFilled += toAppend;
 		
 		return toAppend;
 	}

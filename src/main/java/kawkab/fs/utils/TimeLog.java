@@ -44,7 +44,7 @@ public class TimeLog {
 		
 		count++;
 		
-		if (rand.nextInt(100) > 5)
+		if (rand.nextInt(100) > 3)
 			return;
 		
 		started = true;

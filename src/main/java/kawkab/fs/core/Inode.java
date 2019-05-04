@@ -161,10 +161,6 @@ public final class Inode {
 				throw new KawkabException(e);
 			}
 			
-			//tlog.start();
-			localStore.store(curSeg);
-			//tlog.end();
-			
 			SegmentTimer timerTemp = timer; //This is needed because we want to first set the class variable to null and then submit in the
 											// queue. Otherwise, there can be a race condition: we add the timer in the queu, preempt, timer
 											// expires and et to null, and then we resume, finding the timer to be null
@@ -221,70 +217,6 @@ public final class Inode {
 		int segmentInBlock = DataSegment.segmentInBlock(segmentInFile);
 		
 		return new DataSegmentID(inumber, blockInFile, segmentInBlock);
-	}
-	
-	/**
-	 * Append data at the end of the file
-	 * @param data Data to append
-	 * @param length Number of bytes to write from the data array
-	 * @return number of bytes appended
-	 * @throws InvalidFileOffsetException 
-	 * @throws IOException 
-	 * @throws KawkabException 
-	 * @throws InterruptedException 
-	 */
-	public int append(final byte[] data, int offset, final int length) throws MaxFileSizeExceededException, 
-				InvalidFileOffsetException, IOException, KawkabException, InterruptedException{
-		int remaining = length;
-		int appended = 0;
-		long tmpFileSize = this.fileSize.get();
-		
-		if (tmpFileSize + length > MAXFILESIZE) {
-			throw new MaxFileSizeExceededException();
-		}
-		
-		BlockID segId = null;
-		int curOffset = offset;
-		
-		//FIXME: What happens if an exception occurs? What append size is returned? We need to do some cleanup work
-		//to rollback any data changes.
-		
-		while(remaining > 0) {
-			int lastSegCapacity = conf.segmentSizeBytes - (int)(tmpFileSize % conf.segmentSizeBytes);
-			
-			//if (fileSize % Constants.dataBlockSizeBytes == 0) {
-			if ((int)(tmpFileSize % conf.dataBlockSizeBytes) == 0) { // if the last block is full
-				segId = createNewBlock(tmpFileSize);
-				lastSegCapacity = conf.segmentSizeBytes;
-			} else {
-				segId = getByFileOffset(tmpFileSize);
-			}
-			
-			int bytes;
-			int toAppend = remaining <= lastSegCapacity ? remaining : lastSegCapacity;
-			
-			//TODO: Delete the newly created block if append fails. Also add condition in the DataBlock.createNewBlock()
-			// to throw an exception if the file already exists.
-			DataSegment seg = null;
-			try {
-				seg = (DataSegment)cache.acquireBlock(segId);
-				bytes = seg.append(data, curOffset, toAppend, tmpFileSize);
-			} finally {
-				if (seg != null) {
-					localStore.store(seg);
-					cache.releaseBlock(seg.id());
-				}
-			}
-			
-			remaining -= bytes;
-			curOffset += bytes;
-			appended += bytes;
-			tmpFileSize += bytes;
-		}
-		
-		this.fileSize.addAndGet(appended);
-		
-		return appended;
 	}
 	
 	/**

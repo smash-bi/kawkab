@@ -170,4 +170,8 @@ public class AppendTest {
 		
 		return Integer.parseInt(System.getProperty(nodeIDProp));
 	}
+	
+	public static void main(String args[]) { test without surefire
+	
+	}
 }

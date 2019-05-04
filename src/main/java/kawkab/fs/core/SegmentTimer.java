@@ -73,7 +73,7 @@ public class SegmentTimer extends AbstractTransferItem {
 										// is already expired
 			
 			if (state == DISABLED)	// If the state is disabled, return the caller. Note that the caller should not add 
-				return 0;			// the timer again in the queue. Instead the writer thread has added again or will add again in the queue.
+				return DISABLED;			// the timer again in the queue. Instead the writer thread has added again or will add again in the queue.
 			
 			long diff = timeNow - state;	// The valid state contains the timestamp. 
 			
