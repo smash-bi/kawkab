@@ -16,6 +16,9 @@ import java.util.Properties;
 import java.util.Random;
 
 import kawkab.fs.api.FileOptions;
+import kawkab.fs.commons.Configuration;
+import kawkab.fs.commons.Stats;
+import kawkab.fs.core.Cache;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
@@ -26,6 +29,7 @@ import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
+import kawkab.fs.utils.TimeLog;
 
 public final class CLI {
 	private Filesystem fs;
@@ -55,7 +59,7 @@ public final class CLI {
 	}
 
 	private void cmd() throws IOException {
-		String cmds = "Commands: open, read, apnd, size, exit";
+		String cmds = "Commands: open, read, apnd, size, apndTest, flush, exit";
 		
 		try (BufferedReader ir = new BufferedReader(new InputStreamReader(System.in));) {
 			System.out.println("--------------------------------");
@@ -88,6 +92,10 @@ public final class CLI {
 						parseAppend(args);
 					} else if (cmd.equals("size")) {
 						parseSize(args);
+					} else if (cmd.equals("apndTest")) {
+						parseAppendTest(args);
+					} else if (cmd.equals("flush")) {
+						flushCache();
 					} else if (cmd.equals("exit")) {
 						break;
 					} else {
@@ -108,6 +116,10 @@ public final class CLI {
 		}
 	}
 	
+	private void flushCache() throws KawkabException {
+		Cache.instance().flush();
+	}
+	
 	private void parseSize(String[] args) throws IOException, OutOfMemoryException, MaxFileSizeExceededException,
 	InvalidFileOffsetException, KawkabException, InterruptedException {
 		String usage = "Usage: size <filename> ";
@@ -126,10 +138,108 @@ public final class CLI {
 		long size = file.size();
 		System.out.println("File size = " + size + " bytes");
 	}
-
+	
+	private void parseAppendTest(String[] args) throws InterruptedException, KawkabException, IOException, MaxFileSizeExceededException, IbmapsFullException, FileAlreadyOpenedException {
+		String usage = "Usage: apndTest [<req size> <num writers> <data size MB>]";
+		if (args.length != 1 && args.length != 4) {
+			System.out.println(usage);
+			return;
+		}
+		
+		int reqSize = 100;
+		int numWriters = 1;
+		long dataSizeBytes = 9999L * 1048576;
+		
+		if (args.length == 4) {
+			reqSize = Integer.parseInt(args[1]);
+			numWriters = Integer.parseInt(args[2]);
+			dataSizeBytes = Long.parseLong(args[3]) * 1048576;
+		}
+		
+		System.out.printf("%d, %d, %d\n", reqSize, numWriters, dataSizeBytes);
+		
+		appendTest(reqSize, numWriters, dataSizeBytes);
+	}
+	
+	private void appendTest(final int bufSize, final int numWriters, final long dataSize)
+			throws IOException, KawkabException {
+		System.out.println("----------------------------------------------------------------");
+		System.out.println("            Append Performance Test - Concurrent Files");
+		System.out.println("----------------------------------------------------------------");
+		
+		final Filesystem fs = Filesystem.instance();
+		
+		Thread[] workers = new Thread[numWriters];
+		
+		System.gc();
+		
+		Stats writeStats = new Stats();
+		Stats opStats = new Stats();
+		for (int i = 0; i < numWriters; i++) {
+			final int id = i;
+			workers[i] = new Thread("Appender-"+id) {
+				public void run() {
+					try {
+						String filename = "/home/smash/twpcf-"+ Configuration.instance().thisNodeID+"-" + id;
+						
+						System.out.println("Opening file: " + filename);
+						
+						FileHandle file = fs.open(filename, FileMode.APPEND, FileOptions.defaultOpts());
+						
+						Random rand = new Random(0);
+						long appended = 0;
+						
+						final byte[] writeBuf = new byte[bufSize];
+						rand.nextBytes(writeBuf);
+						
+						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS);
+						long startTime = System.currentTimeMillis();
+						int toWrite = bufSize;
+						long ops = 0;
+						while (appended < dataSize) {
+							if (dataSize-appended < bufSize)
+								toWrite = (int)(dataSize - appended);
+							
+							tlog.start();
+							appended += file.append(writeBuf, 0, toWrite);
+							tlog.end();
+							
+							ops++;
+						}
+						
+						double durSec = (System.currentTimeMillis() - startTime) / 1000.0;
+						double sizeMB = appended / (1024.0 * 1024.0);
+						double thr = sizeMB / durSec;
+						double opThr = ops / durSec;
+						writeStats.putValue(thr);
+						opStats.putValue(opThr);
+						
+						fs.close(file);
+						
+						System.out.printf("Writer %d: Data size = %.0fMB, Write tput = %,.0f MB/s, Ops tput = %,.0f OPS, tlog %s\n", id, sizeMB, thr, opThr, tlog.getStats());
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+			};
+			
+			workers[i].start();
+		}
+		
+		for (Thread worker : workers) {
+			try {
+				worker.join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		System.out.printf("\n\nWriters stats: sum=%.0f, %s, buffer size=%d, numWriters=%d\nOps stats: %s\n\n", writeStats.sum(), writeStats, bufSize, numWriters, opStats);
+	}
+	
 	private void parseAppend(String[] args) throws IOException, OutOfMemoryException, MaxFileSizeExceededException,
 			InvalidFileOffsetException, KawkabException, InterruptedException {
-		String usage = "Usage: apnd <filename> <str <string>> | file <filepath> | bytes <numBytes> <reqSize>";
+		String usage = "Usage: apnd <filename> [str <string> | file <filepath> | bytes <numBytes> <reqSize>]";
 		if (args.length < 4) {
 			System.out.println(usage);
 			return;

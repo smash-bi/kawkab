@@ -33,24 +33,24 @@ public final class FileHandle {
 	public FileHandle(long inumber, FileMode mode) throws IOException, KawkabException{
 		this.inumber = inumber;
 		this.fileMode = mode;
+		onPrimaryNode = Configuration.instance().thisNodeID == Commons.primaryWriterID(inumber); //Is this reader or writer on the primary node?
 
-		int inodesBlockIdx = (int)(inumber / inodesPerBlock);
+		int inodesBlockIdx = (int) (inumber / inodesPerBlock);
 		BlockID id = new InodesBlockID(inodesBlockIdx);
-
+		
 		InodesBlock inb = null;
 		try {
-			inb = (InodesBlock)cache.acquireBlock(id);
+			inb = (InodesBlock) cache.acquireBlock(id);
 			inb.loadBlock();
-
+			
 		} catch (IOException | KawkabException e) {
 			inode = null;
 			inodesBlock = null;
 			throw e;
 		}
-
+		
 		inodesBlock = inb;
 		inode = inodesBlock.getInode(inumber);
-		onPrimaryNode = Configuration.instance().thisNodeID == Commons.primaryWriterID(inumber); //Is this reader or writer on the primary node?
 	}
 
 	/**

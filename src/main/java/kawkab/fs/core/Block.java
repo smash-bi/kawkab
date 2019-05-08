@@ -375,11 +375,9 @@ public abstract class Block extends AbstractTransferItem {
 						loadFromGlobal(); // Load from the global store if failed to load from the local store
 					}
 					
-					//lastPrimaryFetchTimeMs = Long.MAX_VALUE;
-					isLoaded = true; //Once data is loaded on the primary, it should not expired because 
+					isLoaded = true; //Once data is loaded on the primary, it should not expired because
 				                     // the concurrent readers/writer read/modify the same block in the cache.
 				}
-				isLoaded = true;
 			} finally {
 				dataLoadLock.unlock();
 			}

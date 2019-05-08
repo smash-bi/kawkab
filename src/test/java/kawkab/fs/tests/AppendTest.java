@@ -171,7 +171,10 @@ public class AppendTest {
 		return Integer.parseInt(System.getProperty(nodeIDProp));
 	}
 	
-	public static void main(String args[]) { test without surefire
-	
+	public static void main(String args[]) throws InterruptedException, KawkabException, IOException, MaxFileSizeExceededException, IbmapsFullException, FileAlreadyOpenedException, AlreadyConfiguredException {
+		AppendTest test = new AppendTest();
+		test.initialize();
+		test.appendPerformanceConcurrentFilesTest();
+		test.terminate();
 	}
 }

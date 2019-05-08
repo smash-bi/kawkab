@@ -35,19 +35,19 @@ public final class FSTest {
 		FSTest tester = new FSTest();
 		// Constants.printConfig();
 		tester.testBootstrap();
-		tester.testBlocksCreation();
-		tester.testSmallReadWrite();
+		//tester.testBlocksCreation();
+		//tester.testSmallReadWrite();
 		// tester.testSmallRead();
-		tester.testLargeReadWrite();
-		tester.testMultipleReaders();
-		tester.testMultipleFiles();
-		// tester.testWritePerformance();
+		//tester.testLargeReadWrite();
+		//tester.testMultipleReaders();
+		//tester.testMultipleFiles();
+		//tester.testWritePerformance();
 		// tester.testWritePerformanceConcurrentFiles();
 		// tester.testReadPerformance();
-		// tester.testReadPerfMultiReadersSameFile();
+		//tester.testReadPerfMultiReadersSameFile();
 
-		// tester.testConcurrentReadWrite();
-		tester.testConcurrentReadWriteLastBlock();
+		//tester.testConcurrentReadWrite();
+		//tester.testConcurrentReadWriteLastBlock();
 
 		//tester.testRawWrites();
 
@@ -246,7 +246,7 @@ public final class FSTest {
 		
 		Random rand = new Random(0);
 		int bufSize = conf.segmentSizeBytes;//8*1024*1024;
-		long dataSize = 1L*20*conf.dataBlockSizeBytes + 1;
+		long dataSize = 1L*5*conf.dataBlockSizeBytes + 1;
 		long appended = 0;
 		
 		byte[] writeBuf = new byte[bufSize];
@@ -258,9 +258,11 @@ public final class FSTest {
 			rand.nextBytes(writeBuf);
 		}
 		
+		fs.close(file);
+		
 		System.out.println("Finished append. Staring readers.");
 		
-		int numReaders = 20;
+		int numReaders = 1;
 		final long dataAppended = appended;
 		
 		Thread[] readers = new Thread[numReaders];
@@ -355,7 +357,7 @@ public final class FSTest {
 						
 						Random rand = new Random(0);
 						int bufSize = conf.segmentSizeBytes;//8*1024*1024;
-						long dataSize = 4L*conf.dataBlockSizeBytes + 17;
+						long dataSize = 1L*conf.dataBlockSizeBytes + 1;
 						long appended = 0;
 						
 						byte[] writeBuf = new byte[bufSize];
@@ -426,7 +428,7 @@ public final class FSTest {
 		
 		Random rand = new Random(0);
 		int bufSize = 1*1024; //Constants.segmentSizeBytes;
-		long dataSize = 100L*1024*1024;
+		long dataSize = 1000L*1024*1024;
 		long appended = 0;
 		
 		byte[] writeBuf = new byte[bufSize];
@@ -591,53 +593,53 @@ public final class FSTest {
 			rand.nextBytes(writeBuf);
 		}
 		
+		fs.close(file);
+		
 		System.out.println("Finished append. Staring readers.");
 		
 		long startTime = System.currentTimeMillis();
 		final Stats readStats = new Stats();
-		int numReaders = 10;
+		int numReaders = 20;
 		Thread[] readers = new Thread[numReaders];
 		for (int i=0; i<readers.length; i++){
-			readers[i] = new Thread() {
-				public void run() {
-					byte[] readBuf = new byte[bufSize];
-					
-					FileHandle file = null;
-					try {
-						file = fs.open(filename, FileMode.READ, opts);
-					} catch (IbmapsFullException | FileAlreadyOpenedException | IOException | KawkabException | InterruptedException e) {
-						e.printStackTrace();
-						return;
-					}
-					
-					long startTime = System.currentTimeMillis();
-					
-					long read = 0;
-					while(read < dataSize) {
-						int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
-						int bytes = 0;
-						try {
-							bytes = file.read(readBuf, read, toRead);
-						} catch (IOException | IllegalArgumentException | KawkabException | InvalidFileOffsetException e) {
-							e.printStackTrace();
-							break;
-						}
-						read += bytes;
-					}
-					
-					double durSec = (System.currentTimeMillis() - startTime)/1000.0;
-					double dataMB = (1.0*read)/(1024*1024);
-					readStats.putValue(dataMB/durSec);
-					
-					try {
-						fs.close(file);
-					} catch (KawkabException e) {
-						e.printStackTrace();
-					}
-					
-					System.out.println(String.format("Data size: %.2f, Read Speed: %.2fMB/s", dataMB, dataMB/durSec));
+			readers[i] = new Thread(() -> {
+				byte[] readBuf = new byte[bufSize];
+				
+				FileHandle file1 = null;
+				try {
+					file1 = fs.open(filename, FileMode.READ, opts);
+				} catch (IbmapsFullException | FileAlreadyOpenedException | IOException | KawkabException | InterruptedException e) {
+					e.printStackTrace();
+					return;
 				}
-			};
+				
+				long startTime1 = System.currentTimeMillis();
+				
+				long read = 0;
+				while(read < dataSize) {
+					int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
+					int bytes = 0;
+					try {
+						bytes = file1.read(readBuf, read, toRead);
+					} catch (IOException | IllegalArgumentException | KawkabException | InvalidFileOffsetException e) {
+						e.printStackTrace();
+						break;
+					}
+					read += bytes;
+				}
+				
+				double durSec = (System.currentTimeMillis() - startTime1)/1000.0;
+				double dataMB = (1.0*read)/(1024*1024);
+				readStats.putValue(dataMB/durSec);
+				
+				try {
+					fs.close(file1);
+				} catch (KawkabException e) {
+					e.printStackTrace();
+				}
+				
+				System.out.println(String.format("Data size: %.2f, Read Speed: %.2fMB/s", dataMB, dataMB/durSec));
+			});
 			
 			readers[i].start();
 		}
@@ -662,7 +664,7 @@ public final class FSTest {
 		final int numWorkers = 2;
 		final int numFiles = 100;
 		final int numTasks = 1000;
-		final int appendSize = 1000;
+		final int appendSize = 10000;
 		final int bufferSize = 1*1024;
 		Thread[] workers = new Thread[numWorkers];
 		final Random rand = new Random(conf.thisNodeID);
@@ -693,7 +695,7 @@ public final class FSTest {
 							}
 							
 							if (mode == FileMode.APPEND) {
-								long sizeMB = (file.size() + appendSize)/1024/1024;
+								long sizeMB = (long)((file.size() + appendSize)/1024.0/1024.0);
 								
 								System.out.println("\t<"+workerID+"> Task: " + nTask + ", Writing file: " + fname + " up to " + sizeMB + " MB");
 								int appended = 0;

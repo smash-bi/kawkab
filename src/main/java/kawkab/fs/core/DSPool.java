@@ -31,4 +31,8 @@ public class DSPool {
 		//TODO: If the current pool size is larger than the initial capcity for a timeout, wakeup the thread to destory
 		// some DSes
 	}
+	
+	public int size() {
+		return pool.size();
+	}
 }

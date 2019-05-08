@@ -57,6 +57,8 @@ public final class Ibmap extends Block{
 		
 		long inumber = bitIdxToInumber(blockIndex, bitIdx); //Convert the bit index to inumber
 		
+		markLocalDirty();
+		
 		return inumber;
 	}
 	

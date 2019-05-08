@@ -109,7 +109,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	@Override
 	public Block acquireBlock(BlockID blockID) throws IOException, KawkabException {
 		// System.out.println("[C] acquire: " + blockID);
-
+		
 		CachedItem cachedItem = null;
 		
 		cacheLock.lock(); // Lock the whole cache. This is necessary to prevent from creating multiple references to the
@@ -158,10 +158,9 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	@Override
 	public void releaseBlock(BlockID blockID) throws KawkabException {
 		// System.out.println("[C] Release block: " + blockID);
-		
 		CachedItem cachedItem = null;
-		cacheLock.lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
 		
+		cacheLock.lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
 		try { //For cacheLock.lock()
 			cachedItem = cache.get(blockID);
 			
@@ -172,8 +171,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 				return;
 			}
 			
-			cachedItem.decrementRefCnt(); // No need to acquire any lock for the cachedItem because the incrementRefCnt() and
-			                              // decrementRefCnt() functions are only called while holding the cacheLock.
+			cachedItem.decrementRefCnt();
 		} finally {
 			cacheLock.unlock();
 		}
@@ -182,7 +180,6 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 			// If the dirty bit for the local store is set
 			localStore.store(cachedItem.block()); // The call is non-blocking. Multiple threads are allowed
 													  // to add the same block in the queue.
-			// FIXME: What to do with the exception?
 		}
 	}
 	
@@ -204,7 +201,8 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 			block.waitUntilSynced();  // FIXME: This is a blocking call and the cacheLock is locked. This may
 	                                  // lead to performance problems because the thread sleeps while holding
 	                                  // the cacheLock. The lock cannot be released because otherwise another
-	                                  // thread can come and may acquire the block.
+	                                  // thread can come and may acquire the block. The cache is not thread safe. So
+									  // only one thread should be modifying the cache at a time.
 			block.onMemoryEviction();
 			localStore.notifyEvictedFromCache(cachedItem.block());
 			
@@ -223,6 +221,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	 */
 	@Override
 	public void flush() throws KawkabException {
+		int count = 0;
 		cacheLock.lock();
 		try {
 			Iterator<Map.Entry<BlockID, CachedItem>> itr = cache.entrySet().iterator();
@@ -232,6 +231,13 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 				CachedItem cachedItem = itr.next().getValue();
 				//beforeEviction(cachedItem);
 				Block block = cachedItem.block();
+				
+				if (cachedItem.refCount() != 0) {
+					System.err.println("  ==> Ref count is not 0: id: " + block.id() + ", count: " + cachedItem.refCount());
+				}
+				
+				assert cachedItem.refCount() == 0;
+				
 				if (block.id().onPrimaryNode() && block.isLocalDirty()) {
 					localStore.store(block);
 					try {
@@ -242,18 +248,19 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 					}
 				}
 				
-				if (cachedItem.refCount() != 0) {
-					System.err.println("  ==> Ref count is not 0: id: " + block.id() + ", count: " + cachedItem.refCount());
+				if (block.id().type() == BlockType.DATA_SEGMENT) {
+					dsp.release((DataSegment)block);
 				}
 				
-				assert cachedItem.refCount() == 0;
-				
+				count++;
 				itr.remove();
 			}
 			assert cache.size() == 0;
 		} finally {
 			cacheLock.unlock();
 		}
+		
+		System.out.printf("Flushed %d entries from the cache. Current DSPool size is %d.\n", count, dsp.size());
 	}
 	
 	@Override

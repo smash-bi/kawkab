@@ -55,10 +55,10 @@ public final class DataSegment extends Block {
 		writePos = new AtomicInteger(0);
 		
 		dataBuf = ByteBuffer.allocateDirect(segmentSizeBytes);
-		storeBuffer = dataBuf.asReadOnlyBuffer();
+		storeBuffer = dataBuf.duplicate();
 	}
 	
-	void reInit(DataSegmentID segmentID) {
+	synchronized void reInit(DataSegmentID segmentID) {
 		reset(segmentID);
 		segmentInBlock = segmentID.segmentInBlock();
 		lastFetchTimeMs = 0;
@@ -133,19 +133,19 @@ public final class DataSegment extends Block {
 	int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile)
 			throws InvalidFileOffsetException {
 		int blockSize = segmentSizeBytes;
-		int offsetInBlock = offsetInSegment(offsetInFile, recordSize);
-		if (offsetInBlock >= blockSize || offsetInBlock < 0) {
+		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
+		if (offsetInSegment >= blockSize || offsetInSegment < 0) {
 			throw new InvalidFileOffsetException(
 					String.format("Given file offset %d is outside of the block. Block size = %d bytes.",
-							offsetInBlock, blockSize));
+							offsetInSegment, blockSize));
 		}
 		
-		int readSize = offsetInBlock+length <= blockSize ? length : blockSize-offsetInBlock;
+		int readSize = offsetInSegment+length <= blockSize ? length : blockSize-offsetInSegment;
 		
-		ByteBuffer buf = dataBuf.asReadOnlyBuffer(); //FIXME: Ensure that this is thread-safe in the presence of a concurrent writer!!!
+		ByteBuffer buf = dataBuf.duplicate(); //FIXME: Ensure that this is thread-safe in the presence of a concurrent writer!!!
 		
 		buf.rewind(); // We are not worried about the limit or writePos because the reader cannot read beyond the file size
-		buf.position(offsetInBlock);
+		buf.position(offsetInSegment);
 		buf.get(dstBuffer, dstBufferOffset, readSize);
 		
 		return readSize;
@@ -169,6 +169,10 @@ public final class DataSegment extends Block {
 	
 	@Override
 	public synchronized int loadFromFile() throws IOException {
+		if (initedForAppends && initialAppendPos == 0) { // The DS is already loaded by the appender
+			return 0;
+		}
+		
 		try (
 				RandomAccessFile file = new RandomAccessFile(id.localPath(), "r");
 				SeekableByteChannel channel = file.getChannel()
@@ -182,8 +186,12 @@ public final class DataSegment extends Block {
 	@Override
 	public synchronized int loadFrom(ReadableByteChannel channel) throws IOException {
 		int length = segmentSizeBytes;
-		if (initedForAppends)
+		if (initedForAppends) {
 			length = initialAppendPos;
+		}
+		
+		if (length == 0)
+			return 0;
 		
 		ByteBuffer buffer = dataBuf;
 		if (initedForAppends) {
@@ -195,11 +203,9 @@ public final class DataSegment extends Block {
 		
 		int bytesRead = Commons.readFrom(channel, buffer);
 		
-		buffer.clear();
-		
 		bytesLoaded = bytesRead;
 		
-		//System.out.printf("[DS] Loaded bytes from channel: %d, length=%d, bufPosition=%d\n", bytesRead, length, dataBuf.position());
+		System.out.printf("[DS] Loaded bytes from channel: %d, length=%d, bufPosition=%d\n", bytesRead, length, dataBuf.position());
 		
 		return bytesRead;
 	}
@@ -238,6 +244,19 @@ public final class DataSegment extends Block {
 		System.out.println("[DS] Bytes loaded: " + bytesLoaded);
 		
 		return bytesRead;
+	}
+	
+	@Override
+	public ByteString byteString() {
+		int limit = bytesLoaded;
+		if (initedForAppends) {
+			limit = writePos.get();
+		}
+		
+		ByteBuffer buf  = dataBuf.duplicate();
+		buf.rewind();
+		
+		return ByteString.copyFrom(buf, limit);
 	}
 	
 	@Override
@@ -369,19 +388,6 @@ public final class DataSegment extends Block {
 		return bytesWritten;
 	}
 	
-	
-	@Override
-	public ByteString byteString() {
-		int limit = writePos.get();
-		
-		ByteBuffer buf = null;
-		//synchronized(dataBuf) {
-		buf = dataBuf.asReadOnlyBuffer();
-		//}
-		
-		buf.rewind();
-		return ByteString.copyFrom(buf, limit);
-	}
 	
 	/**
 	 * Returns the append offset with respect to the start of the block instead of the segment

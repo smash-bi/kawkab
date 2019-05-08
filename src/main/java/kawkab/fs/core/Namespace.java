@@ -68,13 +68,12 @@ public class Namespace {
 	 */
 	public long openFile(String filename, boolean appendMode) throws IbmapsFullException, IOException,
 			InvalidFileModeException, FileAlreadyOpenedException, FileNotExistException, KawkabException, InterruptedException {
-		long inumber = -1L;
+		long inumber;
 
 		// Lock namespace for the given filename
 		locks.lock(filename);
 
 		try {
-			// inumber = filesMap.get(filename);
 			try {
 				inumber = ns.getInumber(filename);
 			} catch (FileNotExistException fnee) { // If the file does not exist
@@ -207,7 +206,6 @@ public class Namespace {
 			inodesBlock.initInode(inumber);
 		} finally {
 			if (inodesBlock != null) {
-				localStore.store(inodesBlock);
 				cache.releaseBlock(inodesBlock.id());
 			}
 		}

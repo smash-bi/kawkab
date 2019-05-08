@@ -31,6 +31,7 @@
 				<version>3.2.1</version>
 				<executions>
 					<execution>
+						<id>main</id>
 						<phase>package</phase>
 						<goals>
 							<goal>shade</goal>
@@ -44,6 +45,49 @@
 									<mainClass>kawkab.fs.Main</mainClass>
 								</transformer>
 							</transformers>
+							<finalName>main</finalName>
+							<shadeTestJar>true</shadeTestJar>
+						</configuration>
+					</execution>
+					<execution>
+						<id>cli</id>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+						<configuration>
+							<shadedArtifactAttached>true</shadedArtifactAttached>
+							<minimizeJar>false</minimizeJar>
+							<transformers>
+								<transformer
+										implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+									<mainClass>kawkab.fs.cli.CLI</mainClass>
+								</transformer>
+							</transformers>
+							<finalName>cli</finalName>
+							<shadeTestJar>true</shadeTestJar>
+						</configuration>
+					</execution>
+					<execution>
+						<id>appendTest</id>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+						<configuration>
+							<shadedArtifactAttached>true</shadedArtifactAttached>
+							<minimizeJar>false</minimizeJar>
+							<transformers>
+								<transformer
+										implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+									<file>kawkab.fs.tests.AppendTest</file>
+								</transformer>
+								<transformer
+										implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+									<mainClass>kawkab.fs.tests.AppendTest</mainClass>
+								</transformer>
+							</transformers>
+							<finalName>appendTest</finalName>
 							<shadeTestJar>true</shadeTestJar>
 						</configuration>
 					</execution>
@@ -65,8 +109,26 @@
 					<executable>java</executable>
 					<arguments>
 						<argument>-ea</argument>
-						<argument>-Xmn40g</argument>
-						<argument>-Xmx40g</argument>
+						<argument>-Xmn4g</argument>
+						<argument>-Xmx13g</argument>
+						<argument>-XX:MaxDirectMemorySize=12g</argument>
+
+<!--						<argument>-XX:+PrintGCDetails</argument>-->
+<!--						<argument>-XX:+PrintGCTimeStamps</argument>-->
+<!--						<argument>-XX:+PrintGCDateStamps</argument>-->
+<!--						<argument>-XX:+PrintTenuringDistribution</argument>-->
+<!--						<argument>-XX:+PrintGCApplicationStoppedTime</argument>-->
+
+<!--						<argument>-XX:CMSInitiatingOccupancyFraction=92</argument>-->
+<!--						<argument>-XX:+UseCMSInitiatingOccupancyOnly</argument>-->
+
+<!--						<argument>-XX:+UseConcMarkSweepGC</argument>-->
+<!--						<argument>-XX:+UseSerialGC</argument>-->
+<!--						<argument>-XX:+UseParallelGC</argument>-->
+<!--						<argument>-XX:ParallelCMSThreads=2</argument>-->
+<!--						<argument>-XX:ParallelCMSThreads=4</argument>-->
+<!--						<argument>-XX:+UseG1GC</argument>-->
+
 						<argument>-DnodeID=${nodeID}</argument>
 						<argument>-classpath</argument>
 						<classpath/>
@@ -94,7 +156,7 @@
 				<version>2.19.1</version>
 				<configuration>
 					<enableAssertions>true</enableAssertions>
-					<argLine>-Xmx50g</argLine>
+					<argLine>-Xmx15g</argLine>
 					<!--argLine>-XX:+UseG1GC -XX:MaxGCPauseMillis=10 -XX:ParallelGCThreads=4 -XX:ConcGCThreads=4</argLine-->
 					<!--argLine>-agentpath:/home/sm3rizvi/packages/YourKit-JavaProfiler-2019.1/bin/linux-x86-64/libyjpagent.so</argLine-->
 					<!-- argLine>-Xcomp</argLine -->
