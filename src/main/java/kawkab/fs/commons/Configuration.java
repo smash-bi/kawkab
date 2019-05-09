@@ -167,7 +167,7 @@ public final class Configuration {
 		//ZooKeeper cluster settings
 		zkMainCluster =	new ZKClusterConfig(zkMainClusterID, zkMainServers, connectRetrySleepMs, connectMaxRetries);
 		
-		//GCMonitor.initialize();
+		GCMonitor.initialize();
 		
 		printConfig();
 		

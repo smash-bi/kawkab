@@ -74,28 +74,33 @@ public class Namespace {
 		locks.lock(filename);
 
 		try {
-			try {
-				inumber = ns.getInumber(filename);
-			} catch (FileNotExistException fnee) { // If the file does not exist
-				if (appendMode) { // Create file if the file is opened in the append mode.
-					System.out.println("[NS] Creating new file: " + filename);
-					inumber = createNewFile();
-
-					try {
-						ns.addFile(filename, inumber);
-
-						 //System.out.println("[N] Created a new file: " + filename + ", inumber: " + inumber);
-					} catch (FileAlreadyExistsException faee) { // If the file already exists, e.g., because another
-																// node created the same file with different inumber
-						releaseInumber(inumber);
-
-						inumber = ns.getInumber(filename); // We may get another exception if another node deletes
-						// the file immediately after creating the file. In that case,
-						// the exception will be passed to the caller.
+			while (true) {
+				try {
+					inumber = ns.getInumber(filename);
+				} catch (FileNotExistException fnee) { // If the file does not exist
+					if (appendMode) { // Create file if the file is opened in the append mode.
+						System.out.println("[NS] Creating new file: " + filename);
+						inumber = createNewFile();
+						
+						try {
+							ns.addFile(filename, inumber);
+							
+							//System.out.println("[N] Created a new file: " + filename + ", inumber: " + inumber);
+						} catch (FileAlreadyExistsException faee) { // If the file already exists, e.g., because another
+							// node created the same file with different inumber
+							System.out.println("[NS] File already exists in ZK: " + filename);
+							releaseInumber(inumber);
+							continue;
+							//inumber = ns.getInumber(filename); // We may get another exception if another node deletes
+							// the file immediately after creating the file. In that case,
+							// the exception will be passed to the caller.
+						}
+					} else { // if the file cannot be created due to not being opened in the append mode.
+						throw fnee;
 					}
-				} else { // if the file cannot be created due to not being opened in the append mode.
-					throw fnee;
 				}
+				
+				break;
 			}
 
 			// TODO: update openFilesTable
@@ -159,6 +164,7 @@ public class Namespace {
 			try {
 				// System.out.println("[NS] Map number: " + mapNum);
 				ibmap = (Ibmap) (cache.acquireBlock(id));
+				ibmap.loadBlock();
 				inumber = ibmap.useNextInumber();
 				if (inumber >= 0)
 					break;

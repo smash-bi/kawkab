@@ -65,11 +65,10 @@ public final class ZKService {
 			throw new KawkabException("ZK cluster "+zkClusterID+" is not initialized.");
 		
 		try {
-			client.create().creatingParentContainersIfNeeded().forPath(path, data);
+			client.create().creatingParentsIfNeeded().forPath(path, data);
+		} catch (KeeperException e) {
+			throw e;
 		} catch(Exception e) {
-			if (e instanceof KeeperException)
-				throw (KeeperException)e;
-			
 			throw new KawkabException(e); //TODO: Check for the type of exception and then handle it appropriately
 		}
 	}
@@ -84,10 +83,9 @@ public final class ZKService {
 		byte[] res = null;
 		try {
 			res = client.getData().forPath(path);
+		} catch (KeeperException e) {
+			throw e;
 		} catch(Exception e) {
-			if (e instanceof KeeperException)
-				throw (KeeperException)e;
-			
 			throw new KawkabException(e); //TODO: Check for the type of exception and then handle it appropriately
 		}
 		

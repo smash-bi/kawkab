@@ -50,6 +50,8 @@ public final class NamespaceService {
 		//System.out.println("[NSS] Adding file in the namespace: " + filename);
 		String path = fixPath(filename);
 		
+		System.out.println("[NSS] Adding file in namespace: " + filename + ", path: " + path);
+		
 		try {
 			zkclient.addNode(zkcluster.id(), path, Commons.longToBytes(inumber));
 		} catch (KeeperException e) {
@@ -58,6 +60,7 @@ public final class NamespaceService {
 			}
 			
 			e.printStackTrace();
+			throw new KawkabException(e);
 		}
 	}
 	
@@ -69,15 +72,22 @@ public final class NamespaceService {
 	 */
 	public synchronized long getInumber(String filename) throws FileNotExistException, KawkabException {
 		String path = fixPath(filename);
+		System.out.println("[NSS] Checking path: " + path);
 		
 		long inumber = -1;
 		try {
 			byte[] res = zkclient.getData(zkcluster.id(), path);
 			inumber = Commons.bytesToLong(res);
 		} catch (KeeperException e) {
-			if (e.code() == Code.NONODE)
+			if (e.code() == Code.NONODE) {
+				System.out.println("[NSS] File not exist in ZK: " + filename + ", path: " + path);
 				throw new FileNotExistException(e.getMessage());
+			}
+			
+			throw new KawkabException(e);
 		}
+		
+		System.out.println("[NSS] File already exist: " + filename + ", inumber: " + inumber);
 		
 		return inumber;
 	}

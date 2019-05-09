@@ -129,11 +129,10 @@ public final class Ibmap extends Block{
 		byte[] bytes = new byte[ibmapBlockSizeBytes];
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		int bytesRead = Commons.readFrom(channel, buffer);
-		/*if (bytesRead < bytes.length)
-			throw new InsufficientResourcesException(String.format("[I] Full block is not loaded. Loaded "
-					+ "%d/%d bytes for block I%d.",bytesRead,bytes.length, blockIndex));*/
 		
 		bitset = BitSet.valueOf(bytes);
+		
+		System.out.println("[I] Number of inodes already in use: "+bitset.nextClearBit(0));
 
 		return bytesRead;
 	}
@@ -142,26 +141,6 @@ public final class Ibmap extends Block{
 	protected void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
 		assert false; //Loading ibmaps on a non-primary node is not allowed as each node has the ownership of a set of ibmaps
 	}
-	
-	/*@Override
-	public int fromInputStream(InputStream in) throws IOException {
-		byte[] bytes = new byte[Constants.ibmapBlockSizeBytes];
-		int read = 0;
-		int remaining = bytes.length;
-		int ret = 0;
-		while(remaining > 0 && ret >= 0) {
-			ret = in.read(bytes, read, remaining);
-			remaining -= ret;
-			read += ret;
-		}
-		
-		if (read != bytes.length)
-			throw new IOException("Unable to load Ibmap completely from the inputstream: " + name());
-		
-		bitset = BitSet.valueOf(bytes);
-		
-		return read;
-	}*/
 	
 	@Override
 	public synchronized int storeToFile() throws IOException {
@@ -228,6 +207,8 @@ public final class Ibmap extends Block{
 		if (bootstraped)
 			return;
 		
+		System.out.println("[I] Initializing Ibmaps.");
+		
 		Configuration conf = Configuration.instance();
 		
 		File folder = new File(conf.ibmapsPath);
@@ -237,31 +218,20 @@ public final class Ibmap extends Block{
 		}
 		
 		LocalStoreManager storage = LocalStoreManager.instance();
-		//Cache cache = Cache.instance();
+		
 		int rangeStart = conf.ibmapBlocksRangeStart;
 		int rangeEnd = rangeStart + conf.ibmapsPerMachine;
+		
 		for(int i=rangeStart; i<rangeEnd; i++){
 			IbmapBlockID id = new IbmapBlockID(i);
 			File file = new File(id.localPath());
+			
 			if (!file.exists()) {
+				System.out.println("[I] Creating Ibmap: " + file.getCanonicalPath());
 				storage.createBlock(id);
 				Block block = id.newBlock();
 				block.storeToFile();
-				/*try {
-					Block block = cache.acquireBlock(id, true); // This will create a new block in the local store.
-					block.markLocalDirty();
-				} finally {
-					cache.releaseBlock(id);
-				}*/
 			}
-			
-			/*Ibmap ibmap = new Ibmap(i);
-			ibmap.bitset = new BitSet(Constants.ibmapBlockSizeBytes*8);
-			
-			File file = new File(ibmap.id().localPath());
-			if (!file.exists()) {
-				cache.createBlock(ibmap);
-			}*/
 		}
 		
 		bootstraped = true;

@@ -7,6 +7,7 @@ import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
@@ -266,24 +267,7 @@ public final class DataSegment extends Block {
 	
 	@Override
 	void onMemoryEviction() {
-		if (opened) {
-			synchronized (this) {
-				if (opened) {
-					opened = false;
-					try {
-						rwFile.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-					
-					try {
-						channel.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-				}
-			}
-		}
+		closeFile();
 	}
 	
 	@Override
@@ -348,8 +332,7 @@ public final class DataSegment extends Block {
 		}
 	}
 	
-	@Override
-	public int storeToFile() throws IOException {
+	private void openFile() throws FileNotFoundException {
 		if (!opened) {
 			synchronized (this) {
 				if (!opened) {
@@ -359,10 +342,41 @@ public final class DataSegment extends Block {
 				}
 			}
 		}
+	}
+	
+	private void closeFile() {
+		if (opened) {
+			synchronized (this) {
+				if (opened) {
+					opened = false;
+					try {
+						rwFile.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+					
+					try {
+						channel.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}
+	}
+	
+	@Override
+	public int storeToFile() throws IOException {
+		openFile();
 		
 		channel.position(appendOffsetInBlock());
 		//System.out.println("Store: "+block.id() + ": " + channel.position());
-		return storeTo(channel);
+		int count = storeTo(channel);
+		
+		if (dirtyOffset == conf.segmentSizeBytes)
+			closeFile();
+		
+		return count;
 	}
 	
 	@Override

@@ -110,7 +110,7 @@
 					<arguments>
 						<argument>-ea</argument>
 						<argument>-Xmn4g</argument>
-						<argument>-Xmx13g</argument>
+						<argument>-Xmx15g</argument>
 						<argument>-XX:MaxDirectMemorySize=12g</argument>
 
 <!--						<argument>-XX:+PrintGCDetails</argument>-->
@@ -161,6 +161,11 @@
 					<!--argLine>-agentpath:/home/sm3rizvi/packages/YourKit-JavaProfiler-2019.1/bin/linux-x86-64/libyjpagent.so</argLine-->
 					<!-- argLine>-Xcomp</argLine -->
 					<!--argLine>-verbose:gc</argLine -->
+<!--					<argLine>-XX:+PrintGCDetails</argLine>-->
+<!--					<argLine>-XX:+PrintGCTimeStamps</argLine>-->
+<!--					<argLine>-XX:+PrintGCDateStamps</argLine>-->
+<!--					<argLine>-XX:+PrintTenuringDistribution</argLine>-->
+<!--					<argLine>-XX:+PrintGCApplicationStoppedTime</argLine>-->
 					<systemPropertyVariables>
 						<propertyName>nodeID</propertyName>
 						<buildDirectory>${0}</buildDirectory>
@@ -232,7 +237,7 @@
 		<dependency>
 			<groupId>org.apache.curator</groupId>
 			<artifactId>curator-framework</artifactId>
-			<version>4.1.0</version>
+			<version>4.2.0</version>
 		</dependency>
 
 		<dependency>

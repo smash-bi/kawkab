@@ -47,7 +47,7 @@ public final class InodesBlock extends Block {
 	protected void initInode(long inumber) {
 		int inumberIdx = inodeIdxFromInumber(inumber);
 		inodes[inumberIdx] = new Inode(inumber);
-		markGlobalDirty();
+		markLocalDirty();
 	}
 	
 	/**
