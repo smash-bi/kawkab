@@ -1,8 +1,5 @@
 package kawkab.fs.utils;
 
-import kawkab.fs.commons.Stats;
-import org.joda.time.field.MillisDurationField;
-
 import java.util.Random;
 
 /*
@@ -26,12 +23,12 @@ public class TimeLog {
 	
 	private TimeLogUnit unit;
 	private long lastTS;
-	private Stats stats;
+	private Accumulator stats;
 	private boolean started;
 	private int count;
 	public TimeLog(TimeLogUnit unit) {
 		this.unit = unit;
-		stats = new Stats(1000); //Ignore initial 1000 readings
+		stats = new Accumulator(); //Ignore initial 1000 readings
 		rand = new Random();
 	}
 	
@@ -56,12 +53,13 @@ public class TimeLog {
 		if (!started)
 			return;
 		
-		stats.putValue(timeNow() - lastTS);
+		stats.put((int)(timeNow() - lastTS));
 		
 		started = false;
 	}
 	
 	public void printStats(String tag) {
+		//System.out.printf("\t%s (%s): %s, num calls: %,d\n", tag, unit.getUnit(), stats, count);
 		System.out.printf("\t%s (%s): %s, num calls: %,d\n", tag, unit.getUnit(), stats, count);
 	}
 	

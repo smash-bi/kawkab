@@ -25,9 +25,9 @@ public final class Filesystem {
 	
 	private Filesystem() throws KawkabException, IOException {
 		namespace = Namespace.instance();
-		ns = new PrimaryNodeServiceServer();
+		//ns = new PrimaryNodeServiceServer();
 		//fs = new FFilesystemServiceServer(this);
-		ns.startServer();
+		//ns.startServer();
 		//fs.startServer();
 	}
 	
@@ -65,6 +65,7 @@ public final class Filesystem {
 	}
 
 	public void close(FileHandle fh) throws KawkabException {
+		System.out.println("Closing file: " + fh.inumber());
 		fh.close();
 		if (fh.mode() == FileMode.APPEND)
 			namespace.closeAppendFile(fh.inumber());
@@ -107,12 +108,13 @@ public final class Filesystem {
 		
 		closed = true;
 		//fs.stopServer();
-		ns.stopServer();
+		//ns.stopServer();
 		namespace.shutdown();
 		Ibmap.shutdown();
 		InodesBlock.shutdown();
 		SegmentTimerQueue.instance().shutdown();
 		Cache.instance().shutdown();
+		Clock.instance().shutdown();
 		
 		synchronized(instance) {
 			instance.notifyAll();

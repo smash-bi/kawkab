@@ -10,10 +10,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Random;
+import java.util.*;
 
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
@@ -36,7 +33,7 @@ public final class CLI {
 	private Map<String, FileHandle> openedFiles;
 	
 	public CLI() {
-		openedFiles = new HashMap<String, FileHandle>();
+		openedFiles = new HashMap<>();
 	}
 	
 	public static void main(String[] args) throws IOException, KawkabException, InterruptedException, AlreadyConfiguredException {
@@ -120,8 +117,7 @@ public final class CLI {
 		Cache.instance().flush();
 	}
 	
-	private void parseSize(String[] args) throws IOException, OutOfMemoryException, MaxFileSizeExceededException,
-	InvalidFileOffsetException, KawkabException, InterruptedException {
+	private void parseSize(String[] args) throws IOException, KawkabException {
 		String usage = "Usage: size <filename> ";
 		if (args.length < 2) {
 			System.out.println(usage);
@@ -135,11 +131,11 @@ public final class CLI {
 			throw new IOException("File not opened: " + fname);
 		}
 		
-		long size = file.size();
-		System.out.println("File size = " + size + " bytes");
+		long sizeMiB = file.size()/2048576;
+		System.out.println("File size = " + sizeMiB + " MiB");
 	}
 	
-	private void parseAppendTest(String[] args) throws InterruptedException, KawkabException, IOException, MaxFileSizeExceededException, IbmapsFullException, FileAlreadyOpenedException {
+	private void parseAppendTest(String[] args) throws KawkabException, IOException {
 		String usage = "Usage: apndTest [<req size> <num writers> <data size MB>]";
 		if (args.length != 1 && args.length != 4) {
 			System.out.println(usage);
@@ -217,6 +213,7 @@ public final class CLI {
 						fs.close(file);
 						
 						System.out.printf("Writer %d: Data size = %.0fMB, Write tput = %,.0f MB/s, Ops tput = %,.0f OPS, tlog %s\n", id, sizeMB, thr, opThr, tlog.getStats());
+						tlog.printStats("Append stats: ");
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
@@ -237,7 +234,7 @@ public final class CLI {
 		System.out.printf("\n\nWriters stats: sum=%.0f, %s, buffer size=%d, numWriters=%d\nOps stats: %s\n\n", writeStats.sum(), writeStats, bufSize, numWriters, opStats);
 	}
 	
-	private void parseAppend(String[] args) throws IOException, OutOfMemoryException, MaxFileSizeExceededException,
+	private void parseAppend(String[] args) throws IOException, MaxFileSizeExceededException,
 			InvalidFileOffsetException, KawkabException, InterruptedException {
 		String usage = "Usage: apnd <filename> [str <string> | file <filepath> | bytes <numBytes> <reqSize>]";
 		if (args.length < 4) {
@@ -279,9 +276,9 @@ public final class CLI {
 			return;
 		}
 	}
-
-	private void appendFile(String fn, String srcFile) throws IOException, OutOfMemoryException,
-			MaxFileSizeExceededException, InvalidFileOffsetException, KawkabException, InterruptedException {
+	
+	private void appendFile(String fn, String srcFile) throws IOException,
+			MaxFileSizeExceededException, KawkabException, InterruptedException {
 		try (DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(srcFile))))) {
 			int bufLen = 4*1024;
 			byte[] buf = new byte[bufLen];
@@ -291,9 +288,9 @@ public final class CLI {
 			}
 		}
 	}
-
-	private void appendFile(String fn, byte[] data, long dataSize, int bufLen) throws IOException, OutOfMemoryException,
-			MaxFileSizeExceededException, InvalidFileOffsetException, KawkabException, InterruptedException {
+	
+	private void appendFile(String fn, byte[] data, long dataSize, int bufLen) throws IOException,
+			MaxFileSizeExceededException, KawkabException, InterruptedException {
 		FileHandle file = null;
 		file = openedFiles.get(fn);
 		if (file == null) {
@@ -308,7 +305,7 @@ public final class CLI {
 	}
 
 	private void parseRead(String[] args)
-			throws NumberFormatException, IbmapsFullException, IOException, KawkabException, InvalidFileOffsetException {
+			throws NumberFormatException, IOException, KawkabException, InvalidFileOffsetException {
 		String usage = "Usage: read filename offset intLength <dstFile>";
 		
 		String fn = null;
@@ -363,7 +360,7 @@ public final class CLI {
 	}
 
 	private void readFile(String fn, long byteStart, long readLen, String dst)
-			throws IbmapsFullException, IOException, KawkabException, InvalidFileOffsetException {
+			throws IOException, KawkabException, InvalidFileOffsetException {
 		FileHandle file = null;
 		file = openedFiles.get(fn);
 		if (file == null) {
@@ -428,11 +425,11 @@ public final class CLI {
 		return fh;
 	}
 	
-	private void shutdown() throws KawkabException, InterruptedException, IOException {
+	private void shutdown() throws KawkabException, InterruptedException {
 		fs.shutdown();
 		System.out.println("Closed CLI");
 		
-		/*Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
+		Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
 		for (Thread thr : threadSet) {
 			System.out.println(thr.getName());
 			StackTraceElement[] stes = thr.getStackTrace();
@@ -440,7 +437,7 @@ public final class CLI {
 				System.out.println("\t"+ste);
 			}
 		}
-		System.out.println("\n");*/
+		System.out.println("\n");
 	}
 	
 	private Properties getProperties() throws IOException {

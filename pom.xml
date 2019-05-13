@@ -113,6 +113,8 @@
 						<argument>-Xmx15g</argument>
 						<argument>-XX:MaxDirectMemorySize=12g</argument>
 
+<!--						<argument>-javaagent:temp/allocation-tracker/target/allocation-tracker-agent-0.0.1-SNAPSHOT.jar=kawkab.fs</argument>-->
+
 <!--						<argument>-XX:+PrintGCDetails</argument>-->
 <!--						<argument>-XX:+PrintGCTimeStamps</argument>-->
 <!--						<argument>-XX:+PrintGCDateStamps</argument>-->

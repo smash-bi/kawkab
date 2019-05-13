@@ -34,7 +34,7 @@ public class Namespace {
 		cache = Cache.instance();
 		locks = new KeyedLock();
 		lastIbmapUsed = Configuration.instance().ibmapBlocksRangeStart;
-		openedFiles = new ConcurrentHashMap<Long, Boolean>();
+		openedFiles = new ConcurrentHashMap<>();
 		ns = NamespaceService.instance();
 		localStore = LocalStoreManager.instance();
 	}
@@ -175,7 +175,7 @@ public class Namespace {
 				}
 			} finally {
 				if (ibmap != null) {
-					localStore.store(ibmap);
+					//localStore.store(ibmap);
 					cache.releaseBlock(ibmap.id());
 				}
 			}
