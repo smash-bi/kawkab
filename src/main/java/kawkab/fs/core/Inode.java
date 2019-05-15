@@ -166,13 +166,14 @@ public final class Inode {
 											// expires and et to null, and then we resume, finding the timer to be null
 			
 			if (curSeg.isFull()) { // If the current segment is full
+				cache.releaseBlock(segId);
 				curSeg = null;
 				segId = null;
 				timer = null;
+			} else {
+				timerTemp.update();
+				timerQ.add(timerTemp);
 			}
-			
-			timerTemp.update();
-			timerQ.add(timerTemp);
 		}
 		
 		fileSize.set(fileSizeBuffered);

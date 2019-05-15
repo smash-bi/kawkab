@@ -1,7 +1,7 @@
 package kawkab.fs.core;
 
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * A semi-blocking queue to transfer objects from one thread to another thread. The producer's add operations is non-blocking
@@ -23,7 +23,7 @@ public class TransferQueue <T extends AbstractTransferItem> {
 	private long inTriesAgg = 0; //For debugging only
 	
 	public TransferQueue() {
-		unifiedQueue = new LinkedBlockingQueue<>();
+		unifiedQueue = new ArrayBlockingQueue(50000);
 	}
 	
 	/**

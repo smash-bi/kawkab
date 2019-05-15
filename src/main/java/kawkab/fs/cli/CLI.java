@@ -429,7 +429,7 @@ public final class CLI {
 		fs.shutdown();
 		System.out.println("Closed CLI");
 		
-		Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
+		/*Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
 		for (Thread thr : threadSet) {
 			System.out.println(thr.getName());
 			StackTraceElement[] stes = thr.getStackTrace();
@@ -437,7 +437,7 @@ public final class CLI {
 				System.out.println("\t"+ste);
 			}
 		}
-		System.out.println("\n");
+		System.out.println("\n");*/
 	}
 	
 	private Properties getProperties() throws IOException {

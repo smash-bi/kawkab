@@ -1,12 +1,5 @@
 package kawkab.fs.utils;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.lang.management.ManagementFactory;
-import java.lang.management.RuntimeMXBean;
-
 public class Accumulator{
     private long[] buckets;
     public long totalSum;
@@ -22,7 +15,7 @@ public class Accumulator{
     }
     
     synchronized void reset(){
-        int maxValue = 3000000; //in microseconds
+        int maxValue = 2000000; //in microseconds
         buckets = new long[maxValue];
         maxCntBucket = 0;
         this.maxValue = 0;
@@ -34,8 +27,6 @@ public class Accumulator{
     }
     
     public synchronized void put(int value){
-        assert value >= 1;
-        
         int bucket = value;
         if (bucket >= buckets.length){
             bucket = buckets.length-1;
@@ -59,31 +50,31 @@ public class Accumulator{
             minValue = value;
     }
     
-    public double getAverage(){
+    public double mean(){
         if (totalCnt > 0)
             return 1.0*totalSum/totalCnt;
         else
             return -1;
     }
     
-    public double getMinValue(){
+    public double min(){
         return minValue;
     }
     
-    public double getMaxValue(){
+    public double max(){
         return maxValue;
     }
     
-    double getVariance(){
+    double variance(){
         if (totalCnt > 0)
             return (prodSum - (totalSum*totalSum/totalCnt))/totalCnt;
         else
             return -1;
     }
     
-    double getStdDev(){
-        if (getVariance() > 0)
-            return Math.sqrt(getVariance());
+    double stdDev(){
+        if (variance() > 0)
+            return Math.sqrt(variance());
         else
             return -1;
     }
@@ -138,7 +129,7 @@ public class Accumulator{
     public String toString() {
         double[] lats = getLatencies();
         return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f,mean=%.2f,stdev=%.2f",
-                lats[0],lats[1],lats[2], getMinValue(), getMaxValue(), getAverage(), getStdDev());
+                lats[0],lats[1],lats[2], min(), max(), mean(), stdDev());
     }
     
     public void printCDF() {
