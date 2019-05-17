@@ -82,4 +82,6 @@ public abstract class Cache {
 	public abstract void flush() throws KawkabException;
 	
 	public abstract void shutdown() throws KawkabException;
+	
+	public abstract long size();
 }

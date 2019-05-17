@@ -11,7 +11,7 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 	private final int maxBlocksInCache;
 	
 	public LRUCache(int maxBlocksInCache, BlockEvictionListener evictListener) {
-		super(maxBlocksInCache + 1, 1.1f, true);
+		super(2*maxBlocksInCache + 1, 0.75f, true);
 		this.maxBlocksInCache = maxBlocksInCache;
 		this.evictListener = evictListener;
 	}
@@ -38,7 +38,7 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 						System.out.println("\t\t\t ---> Evicting just added block.");
 					}
 					
-					System.out.println("[LRUC] Cannot evict " + toEvict.block().id() + ", evicting: " + altToEvict.block().id());
+					System.out.println("[LRUC] **** Cannot evict " + toEvict.block().id() + ", evicting: " + altToEvict.block().id());
 					
 					super.remove(entry.getKey());
 					evictListener.beforeEviction(altToEvict);

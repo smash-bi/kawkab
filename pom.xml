@@ -12,6 +12,9 @@
 	    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	    <nodeID>0</nodeID>
 		<mainClass>kawkab.fs.cli.CLI</mainClass>
+          <Xmn>-Xmn4g</Xmn>
+          <Xmx>-Xmx4g</Xmx>
+          <MaxDirectMemorySize>-XX:MaxDirectMemorySize=2g</MaxDirectMemorySize>
 	  </properties>
 
 	<build>
@@ -25,6 +28,36 @@
 		  </extensions>
 
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>3.0.0-M2</version>
+				<executions>
+					<execution>
+						<id>enforce-maven</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<requireMavenVersion>
+									<version>3.0</version>
+								</requireMavenVersion>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>versions-maven-plugin</artifactId>
+                <version>2.7</version>
+                <configuration>
+                    <generateBackupPoms>false</generateBackupPoms>
+                </configuration>
+            </plugin>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
@@ -109,9 +142,9 @@
 					<executable>java</executable>
 					<arguments>
 						<argument>-ea</argument>
-						<argument>-Xmn4g</argument>
-						<argument>-Xmx15g</argument>
-						<argument>-XX:MaxDirectMemorySize=12g</argument>
+						<argument>${Xmn}</argument>
+						<argument>${Xmx}</argument>
+						<argument>${MaxDirectMemorySize}</argument>
 
 <!--						<argument>-javaagent:temp/allocation-tracker/target/allocation-tracker-agent-0.0.1-SNAPSHOT.jar=kawkab.fs</argument>-->
 
@@ -131,6 +164,14 @@
 <!--						<argument>-XX:ParallelCMSThreads=4</argument>-->
 <!--						<argument>-XX:+UseG1GC</argument>-->
 
+<!--						ZGC requires JDK 11-->
+						<argument>-XX:+UnlockExperimentalVMOptions</argument>
+						<argument>-XX:+UseZGC</argument>
+
+<!--						EpsilonGC requires JDK11-->
+<!--						<argument>-XX:+UnlockExperimentalVMOptions</argument>-->
+<!--						<argument>-XX:+UseEpsilonGC</argument>-->
+
 						<argument>-DnodeID=${nodeID}</argument>
 						<argument>-classpath</argument>
 						<classpath/>
@@ -141,11 +182,11 @@
 			</plugin>
 
 			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.8.0</version>
 				<configuration>
-					<source>1.8</source>
-					<target>1.8</target>
+					<release>11</release>
 					<excludes>
 				      <exclude>**/thrift/*.java</exclude>
 				    </excludes>
@@ -158,7 +199,8 @@
 				<version>2.19.1</version>
 				<configuration>
 					<enableAssertions>true</enableAssertions>
-					<argLine>-Xmx15g</argLine>
+					<argLine>--illegal-access=permit</argLine>
+					<argLine>${Xmx}</argLine>
 					<!--argLine>-XX:+UseG1GC -XX:MaxGCPauseMillis=10 -XX:ParallelGCThreads=4 -XX:ConcGCThreads=4</argLine-->
 					<!--argLine>-agentpath:/home/sm3rizvi/packages/YourKit-JavaProfiler-2019.1/bin/linux-x86-64/libyjpagent.so</argLine-->
 					<!-- argLine>-Xcomp</argLine -->
@@ -203,7 +245,7 @@
 			<dependency>
 				<groupId>com.amazonaws</groupId>
 				<artifactId>aws-java-sdk-bom</artifactId>
-				<version>1.11.488</version>
+				<version>1.11.553</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -215,25 +257,31 @@
 		  <!-- Chronicle Queue for batching -->
 		  <groupId>net.openhft</groupId>
 		  <artifactId>chronicle-queue</artifactId>
-		  <version>5.17.9</version>
+		  <version>5.17.13</version>
 		</dependency>
 
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
-			<version>4.12</version>
+			<version>4.13-beta-3</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>net.openhft</groupId>
 			<artifactId>chronicle-map</artifactId>
-			<version>3.17.0</version>
+			<version>3.17.2</version>
+			<exclusions>
+				<exclusion>
+					<groupId>com.sun.java</groupId>
+					<artifactId>tools</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 
 		<dependency>
 			<groupId>org.agrona</groupId>
 			<artifactId>agrona</artifactId>
-			<version>0.9.30</version>
+			<version>1.0.0</version>
 		</dependency>
 
 		<dependency>
@@ -247,26 +295,31 @@
 			<artifactId>aws-java-sdk-s3</artifactId>
 		</dependency>
 
-		<dependency>
+        <dependency>
+            <groupId>javax.annotation</groupId>
+            <artifactId>javax.annotation-api</artifactId>
+            <version>1.2</version>
+        </dependency>
+        <dependency>
 		  <groupId>io.grpc</groupId>
 			<artifactId>grpc-netty-shaded</artifactId>
-			<version>1.18.0</version>
+			<version>1.20.0</version>
 		</dependency>
 		<dependency>
 		  <groupId>io.grpc</groupId>
 		  <artifactId>grpc-protobuf</artifactId>
-		  <version>1.18.0</version>
+		  <version>1.20.0</version>
 		</dependency>
 		<dependency>
 		  <groupId>io.grpc</groupId>
 		  <artifactId>grpc-stub</artifactId>
-		  <version>1.18.0</version>
+		  <version>1.20.0</version>
 		</dependency>
 
 		<dependency>
 			<groupId>com.google.protobuf</groupId>
 			<artifactId>protobuf-java</artifactId>
-			<version>3.6.1</version>
+			<version>3.8.0-rc-1</version>
 		</dependency>
 	</dependencies>
 

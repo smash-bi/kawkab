@@ -71,7 +71,7 @@ public class AppendTest {
 						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
 						
-						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS);
+						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Main append");
 						long startTime = System.currentTimeMillis();
 						int toWrite = bufSize;
 						long ops = 0;

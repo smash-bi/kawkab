@@ -11,9 +11,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
-import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.SeekableByteChannel;
-import java.nio.channels.WritableByteChannel;
+import java.nio.channels.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class DataSegment extends Block {
@@ -336,6 +334,7 @@ public final class DataSegment extends Block {
 		if (!opened) {
 			synchronized (this) {
 				if (!opened) {
+					//System.out.println("Opening file: " + id.localPath());
 					rwFile = new RandomAccessFile(id.localPath(), "rw");
 					channel = rwFile.getChannel();
 					opened = true;
@@ -348,15 +347,16 @@ public final class DataSegment extends Block {
 		if (opened) {
 			synchronized (this) {
 				if (opened) {
+					//System.out.println("Closing file: " + id.localPath());
 					opened = false;
 					try {
-						rwFile.close();
+						channel.close();
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
 					
 					try {
-						channel.close();
+						rwFile.close(); //This closes the channel as well
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
@@ -370,8 +370,16 @@ public final class DataSegment extends Block {
 		openFile();
 		
 		channel.position(appendOffsetInBlock());
-		//System.out.println("Store: "+block.id() + ": " + channel.position());
+		//System.out.println("Store: "+id() + ": " + channel.position());
 		int count = storeTo(channel);
+		
+		try {
+			FileChannel c = (FileChannel) channel;
+			c.force(true);
+			rwFile.getFD().sync();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		
 		if (dirtyOffset == conf.segmentSizeBytes)
 			closeFile();

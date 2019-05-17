@@ -140,5 +140,10 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 		}
 	}
 	
-	//FIXME: Currently a cache entry can be evicted from the cache even if the block is dirty. 
+	//FIXME: Currently a cache entry can be evicted from the cache even if the block is dirty.
+	
+	@Override
+	public long size() {
+		return cache.size();
+	}
 }

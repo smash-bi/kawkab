@@ -26,8 +26,11 @@ public class TimeLog {
 	private Accumulator stats;
 	private boolean started;
 	private int count;
-	public TimeLog(TimeLogUnit unit) {
+	private String tag;
+	
+	public TimeLog(TimeLogUnit unit, String tag) {
 		this.unit = unit;
+		this.tag = tag;
 		stats = new Accumulator(); //Ignore initial 1000 readings
 		rand = new Random();
 	}
@@ -58,7 +61,7 @@ public class TimeLog {
 		started = false;
 	}
 	
-	public void printStats(String tag) {
+	public void printStats() {
 		//System.out.printf("\t%s (%s): %s, num calls: %,d\n", tag, unit.getUnit(), stats, count);
 		System.out.printf("\t%s (%s): %s, num calls: %,d\n", tag, unit.getUnit(), stats, count);
 	}
@@ -72,5 +75,12 @@ public class TimeLog {
 			return System.currentTimeMillis();
 		else
 			return System.nanoTime();
+	}
+	
+	public void reset() {
+		stats = new Accumulator(); //Ignore initial 1000 readings
+		count = 0;
+		lastTS = 0;
+		stats.reset();
 	}
 }

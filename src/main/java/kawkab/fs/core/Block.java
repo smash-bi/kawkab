@@ -302,8 +302,8 @@ public abstract class Block extends AbstractTransferItem {
 		if (isLocalDirty || inTransferQueue()) {
 			synchronized(localStoreSyncLock) {
 				while (isLocalDirty || inTransferQueue()) { // It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
-					//System.out.println("[B] Waiting until this block is synced to the local store and then evicted from the cache: " + id + ", isLocalDirty: " +
-					//			isLocalDirty + ", inLocalQueue="+inTransferQueue());
+					System.out.println("[B] Waiting until this block is synced to the local store and then evicted from the cache: " + id + ", isLocalDirty: " +
+								isLocalDirty + ", inLocalQueue="+inTransferQueue());
 					localStoreSyncLock.wait();
 				}
 				//System.out.println("[B] Block synced, now evicting: " + id);

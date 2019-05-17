@@ -6,6 +6,7 @@ import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
+import kawkab.fs.utils.TimeLog;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -117,7 +118,7 @@ public final class Inode {
 		return bufferOffset;
 	}
 	
-	//private TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS);
+	//public static TimeLog tlog1 = new TimeLog(TimeLog.TimeLogUnit.NANOS, "ab all");
 	public int appendBuffered(final byte[] data, int offset, final int length)
 			throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
 		int remaining = length; //Reaming size of data to append
@@ -126,6 +127,7 @@ public final class Inode {
 		if (fileSizeBuffered + length > MAXFILESIZE) {
 			throw new MaxFileSizeExceededException();
 		}
+		
 		
 		while (remaining > 0) {
 			if (timer == null) { //If null, no need to synchronize because the SegmentTimerQueue thread will never synchronize with this timer
@@ -138,7 +140,9 @@ public final class Inode {
 					segId = getSegmentID(fileSizeBuffered);
 				}
 				
+				
 				curSeg = (DataSegment) cache.acquireBlock(segId);
+				
 				curSeg.initForAppend(fileSizeBuffered);
 				timer = new SegmentTimer(segId, this);
 			} else {
@@ -152,6 +156,7 @@ public final class Inode {
 			}
 			
 			try {
+				
 				int bytes = curSeg.append(data, offset, remaining, fileSizeBuffered);
 				
 				remaining -= bytes;
@@ -165,6 +170,7 @@ public final class Inode {
 											// queue. Otherwise, there can be a race condition: we add the timer in the queu, preempt, timer
 											// expires and et to null, and then we resume, finding the timer to be null
 			
+			//tlog1.start();
 			if (curSeg.isFull()) { // If the current segment is full
 				cache.releaseBlock(segId);
 				curSeg = null;
@@ -174,6 +180,7 @@ public final class Inode {
 				timerTemp.update();
 				timerQ.add(timerTemp);
 			}
+			//tlog1.end();
 		}
 		
 		fileSize.set(fileSizeBuffered);

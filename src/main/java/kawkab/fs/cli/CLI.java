@@ -19,6 +19,7 @@ import kawkab.fs.core.Cache;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
+import kawkab.fs.core.Inode;
 import kawkab.fs.core.exceptions.AlreadyConfiguredException;
 import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
@@ -89,7 +90,7 @@ public final class CLI {
 						parseAppend(args);
 					} else if (cmd.equals("size")) {
 						parseSize(args);
-					} else if (cmd.equals("apndTest")) {
+					} else if (cmd.equals("apndTest") || cmd.equals("at")) {
 						parseAppendTest(args);
 					} else if (cmd.equals("flush")) {
 						flushCache();
@@ -136,7 +137,7 @@ public final class CLI {
 	}
 	
 	private void parseAppendTest(String[] args) throws KawkabException, IOException {
-		String usage = "Usage: apndTest [<req size> <num writers> <data size MB>]";
+		String usage = "Usage: apndTest [<num writers> <req size> <data size MB>]";
 		if (args.length != 1 && args.length != 4) {
 			System.out.println(usage);
 			return;
@@ -147,8 +148,8 @@ public final class CLI {
 		long dataSizeBytes = 9999L * 1048576;
 		
 		if (args.length == 4) {
-			reqSize = Integer.parseInt(args[1]);
-			numWriters = Integer.parseInt(args[2]);
+			numWriters = Integer.parseInt(args[1]);
+			reqSize = Integer.parseInt(args[2]);
 			dataSizeBytes = Long.parseLong(args[3]) * 1048576;
 		}
 		
@@ -163,11 +164,11 @@ public final class CLI {
 		System.out.println("            Append Performance Test - Concurrent Files");
 		System.out.println("----------------------------------------------------------------");
 		
+		System.out.println("Current cache size; " + Cache.instance().size());
+		
 		final Filesystem fs = Filesystem.instance();
 		
 		Thread[] workers = new Thread[numWriters];
-		
-		System.gc();
 		
 		Stats writeStats = new Stats();
 		Stats opStats = new Stats();
@@ -188,7 +189,7 @@ public final class CLI {
 						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
 						
-						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS);
+						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Main append");
 						long startTime = System.currentTimeMillis();
 						int toWrite = bufSize;
 						long ops = 0;
@@ -212,8 +213,14 @@ public final class CLI {
 						
 						fs.close(file);
 						
-						System.out.printf("Writer %d: Data size = %.0fMB, Write tput = %,.0f MB/s, Ops tput = %,.0f OPS, tlog %s\n", id, sizeMB, thr, opThr, tlog.getStats());
-						tlog.printStats("Append stats: ");
+						System.out.printf("Writer %d: Data size = %.0fMB, Write tput = %,.0f MB/s, Ops tput = %,.0f OPS\n", id, sizeMB, thr, opThr);
+						tlog.printStats();
+						tlog.reset();
+						
+						//Inode.tlog1.printStats();
+						//Inode.tlog1.reset();
+						
+						
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
@@ -441,9 +448,9 @@ public final class CLI {
 	}
 	
 	private Properties getProperties() throws IOException {
-		String propsFile = "/config.properties";
+		String propsFile = System.getProperty("conf", "config.properties");
 		
-		try (InputStream in = Thread.class.getResourceAsStream(propsFile)) {
+		try (InputStream in = getClass().getClassLoader().getResourceAsStream(propsFile)) {
 			assert in != null;
 			
 			if (in == null) {
@@ -452,6 +459,7 @@ public final class CLI {
 			
 			Properties props = new Properties();
 			props.load(in);
+			
 			return props;
 		}
 	}
