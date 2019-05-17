@@ -130,6 +130,12 @@
 <!--						<argument>-XX:ParallelCMSThreads=2</argument>-->
 <!--						<argument>-XX:ParallelCMSThreads=4</argument>-->
 <!--						<argument>-XX:+UseG1GC</argument>-->
+						<!--ZGC requires JDK11-->
+						<argument>-XX:+UnlockExperimentalVMOptions -XX:+UseZGC</argument>
+						<!--EpsilonGC is a no-op GC, requires JDK11-->
+<!--						<argument>-XX:+UseEpsilonGC</argument>-->
+
+<!--						<argument>XX:+UseDynamicNumberOfCompilerThreads</argument>-->
 
 						<argument>-DnodeID=${nodeID}</argument>
 						<argument>-classpath</argument>

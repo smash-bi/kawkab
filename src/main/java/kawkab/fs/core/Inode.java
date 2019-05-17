@@ -1,11 +1,10 @@
 package kawkab.fs.core;
 
+import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
-import kawkab.fs.core.exceptions.InsufficientResourcesException;
-import kawkab.fs.core.exceptions.InvalidFileOffsetException;
-import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
+import kawkab.fs.commons.FixedLenRecordUtils;
+import kawkab.fs.core.exceptions.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -23,7 +22,7 @@ public final class Inode {
 	
 	private long inumber;
 	private AtomicLong fileSize = new AtomicLong(0);
-	private int recordSize = conf.recordSize; //Temporarily set to 1 until we implement reading/writing records
+	private int recordSize; //Temporarily set to 1 until we implement reading/writing records
 	
 	private static Cache cache;
 	private static LocalStoreManager localStore;
@@ -33,7 +32,10 @@ public final class Inode {
 	private volatile SegmentTimer timer; // volatile so that the SegmentTimerQueue thread can read the most recent value
 	private SegmentTimerQueue timerQ;
 	
+	private FileIndex index;
+	
 	public static final long MAXFILESIZE;
+	
 	static {
 		MAXFILESIZE = conf.maxFileSizeBytes;//blocks * Constants.blockSegmentSizeBytes;
 		
@@ -41,8 +43,9 @@ public final class Inode {
 		localStore = LocalStoreManager.instance();
 	}
 	
-	protected Inode(long inumber){
+	protected Inode(long inumber, int recordSize) {
 		this.inumber = inumber;
+		this.recordSize = recordSize;
 		timerQ = SegmentTimerQueue.instance();
 	}
 	
@@ -50,12 +53,46 @@ public final class Inode {
 	 * Returns the ID of the segment that contains the given offset in file
 	 * @throws IOException
 	 */
-	private BlockID getByFileOffset(long offsetInFile) throws IOException {
-		long segmentInFile = DataSegment.segmentInFile(offsetInFile, recordSize);
-		int segmentInBlock = DataSegment.segmentInBlock(segmentInFile);
-		long blockInFile = DataSegment.blockInFile(segmentInFile);
+	private BlockID getByFileOffset(long offsetInFile) {
+		long segmentInFile = FixedLenRecordUtils.segmentInFile(offsetInFile, recordSize);
+		int segmentInBlock = FixedLenRecordUtils.segmentInBlock(segmentInFile);
+		long blockInFile = FixedLenRecordUtils.blockInFile(segmentInFile);
 		
 		return new DataSegmentID(inumber, blockInFile, segmentInBlock);
+	}
+	
+	/**
+	 * Performs the read operation. Single writer and multiple readers are allowed to write and read concurrently.
+	 * @return
+	 * @throws IllegalArgumentException
+	 * @throws InvalidFileOffsetException
+	 * @throws IOException
+	 * @throws KawkabException
+	 */
+	public boolean read(final Record dstRecord, final long key) throws
+			RecordNotFoundException, IOException, KawkabException {
+		
+		long offsetInFile = index.offsetInFile(key);
+		
+		//System.out.println("  Read at offset: " + offsetInFile);
+		BlockID curSegId = getByFileOffset(offsetInFile);
+		
+		//System.out.println("Reading block at offset " + offsetInFile + ": " + curBlkUuid.key);
+		
+		DataSegment curSegment = null;
+		try {
+			curSegment = (DataSegment)cache.acquireBlock(curSegId);
+			curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
+			int bytesRead = curSegment.read(dstRecord.copyInDstBuffer(), offsetInFile, recordSize);
+			
+			assert bytesRead == recordSize;
+		} finally {
+			if (curSegment != null) {
+				cache.releaseBlock(curSegment.id());
+			}
+		}
+		
+		return true;
 	}
 	
 	/**
@@ -88,7 +125,7 @@ public final class Inode {
 			
 			//System.out.println("Reading block at offset " + offsetInFile + ": " + curBlkUuid.key);
 			
-			long segNumber = DataSegment.segmentInFile(curOffsetInFile, recordSize);
+			long segNumber = FixedLenRecordUtils.segmentInFile(curOffsetInFile, recordSize);
 			long nextSegStart = (segNumber + 1) * conf.segmentSizeBytes;
 			int toRead = (int)(curOffsetInFile+remaining <= nextSegStart ? remaining : nextSegStart - curOffsetInFile);
 			int bytesRead = 0;
@@ -117,6 +154,68 @@ public final class Inode {
 		return bufferOffset;
 	}
 	
+	public int appendBuffered(final Record record)
+			throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
+		int length = record.size();
+		
+		long fileSizeBuffered = this.fileSize.get(); // Current file size
+		
+		if (fileSizeBuffered + length > MAXFILESIZE) {
+			throw new MaxFileSizeExceededException();
+		}
+		
+		if (timer == null) { //If null, no need to synchronize because the SegmentTimerQueue thread will never synchronize with this timer
+			assert curSeg == null;
+			assert segId == null;
+			
+			if ((FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L) { // if the last block is full
+				segId = createNewBlock(fileSizeBuffered);
+			} else { // Otherwise the last segment was full or we are just starting without any segment at hand
+				segId = getSegmentID(fileSizeBuffered);
+			}
+			
+			curSeg = (DataSegment) cache.acquireBlock(segId);
+			curSeg.initForAppend(fileSizeBuffered, recordSize);
+			timer = new SegmentTimer(segId, this);
+		} else {
+			synchronized (this) {
+				if (timer == null || !timer.disableIfValid()) { // Disable the timer if it has not already expired. The condition is true if the timer has expired before it is disabled
+					segId = getSegmentID(fileSizeBuffered);
+					curSeg = (DataSegment) cache.acquireBlock(segId); // Acquire the segment again as the cache may have evicted the segment
+					timer = new SegmentTimer(segId, this); // The previous timer cannot be reused because its state cannot be changed
+				}
+			}
+		}
+		
+		assert curSeg.remaining() >= length;
+		
+		try {
+			int bytes = curSeg.append(record.copyOutSrcBuffer(), fileSizeBuffered, recordSize);
+			
+			fileSizeBuffered += bytes;
+		} catch (IOException e) {
+			throw new KawkabException(e);
+		}
+		
+		if (curSeg.remaining() < record.size()) {
+			curSeg.markAsFull();
+		}
+		
+		if (curSeg.isFull()) { // If the current segment is full
+			cache.releaseBlock(segId);
+			curSeg = null;
+			segId = null;
+			timer = null;
+		} else {
+			timer.update();
+			timerQ.add(timer);
+		}
+		
+		fileSize.set(fileSizeBuffered);
+		
+		return length;
+	}
+	
 	//private TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS);
 	public int appendBuffered(final byte[] data, int offset, final int length)
 			throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
@@ -139,7 +238,7 @@ public final class Inode {
 				}
 				
 				curSeg = (DataSegment) cache.acquireBlock(segId);
-				curSeg.initForAppend(fileSizeBuffered);
+				curSeg.initForAppend(fileSizeBuffered, recordSize);
 				timer = new SegmentTimer(segId, this);
 			} else {
 				synchronized (this) {
@@ -161,18 +260,16 @@ public final class Inode {
 				throw new KawkabException(e);
 			}
 			
-			SegmentTimer timerTemp = timer; //This is needed because we want to first set the class variable to null and then submit in the
-											// queue. Otherwise, there can be a race condition: we add the timer in the queu, preempt, timer
-											// expires and et to null, and then we resume, finding the timer to be null
-			
 			if (curSeg.isFull()) { // If the current segment is full
+				cache.releaseBlock(segId);
+				
 				curSeg = null;
 				segId = null;
 				timer = null;
+			} else {
+				timer.update();
+				timerQ.add(timer);
 			}
-			
-			timerTemp.update();
-			timerQ.add(timerTemp);
 		}
 		
 		fileSize.set(fileSizeBuffered);
@@ -212,9 +309,9 @@ public final class Inode {
 	}
 
 	private DataSegmentID getSegmentID(long offsetInFile) {
-		long segmentInFile = DataSegment.segmentInFile(offsetInFile, recordSize);
-		long blockInFile = DataSegment.blockInFile(segmentInFile);
-		int segmentInBlock = DataSegment.segmentInBlock(segmentInFile);
+		long segmentInFile = FixedLenRecordUtils.segmentInFile(offsetInFile, recordSize);
+		long blockInFile = FixedLenRecordUtils.blockInFile(segmentInFile);
+		int segmentInBlock = FixedLenRecordUtils.segmentInBlock(segmentInFile);
 		
 		return new DataSegmentID(inumber, blockInFile, segmentInBlock);
 	}

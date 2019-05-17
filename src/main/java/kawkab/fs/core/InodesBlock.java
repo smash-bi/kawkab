@@ -40,13 +40,13 @@ public final class InodesBlock extends Block {
 		int blockIndex = id.blockIndex();
 		for (int j=0; j<conf.inodesPerBlock; j++) {
 			long inumber = blockIndex*conf.inodesPerBlock + j;
-			initInode(inumber);
+			initInode(inumber, 0);
 		}
 	}
 	
-	protected void initInode(long inumber) {
+	protected void initInode(long inumber, int recordSize) {
 		int inumberIdx = inodeIdxFromInumber(inumber);
-		inodes[inumberIdx] = new Inode(inumber);
+		inodes[inumberIdx] = new Inode(inumber, recordSize);
 		markLocalDirty();
 	}
 	

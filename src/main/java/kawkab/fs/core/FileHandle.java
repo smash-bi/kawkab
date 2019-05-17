@@ -1,5 +1,6 @@
 package kawkab.fs.core;
 
+import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Filesystem.FileMode;
@@ -103,6 +104,43 @@ public final class FileHandle {
 
 		return bytesRead;
 	}
+	
+	/**
+	 * Loads the dstRecord from the key (timestamp) location in the Filesystem.
+	 *
+	 * @return Whether the record is found and loaded
+	 * @throws IOException
+	 * @throws KawkabException
+	 * @throws InterruptedException
+	 */
+	public synchronized boolean read(final Record dstRecord, final long key) throws
+			IOException, KawkabException {
+		
+		InodesBlock inb = null;
+		Inode inode;
+		
+		try {
+			if (onPrimaryNode) {
+				if (inodesBlock == null) {
+					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+				}
+				inb = this.inodesBlock;
+				inode = this.inode;
+			} else {
+				int blockIndex = (int)(inumber / inodesPerBlock);
+				BlockID id = new InodesBlockID(blockIndex);
+				inb = (InodesBlock) cache.acquireBlock(id);
+				inb.loadBlock();
+				inode = inb.getInode(inumber);
+			}
+			
+			return inode.read(dstRecord, key);
+		} finally {
+			if (!onPrimaryNode && inb != null) {
+				cache.releaseBlock(inb.id());
+			}
+		}
+	}
 
 	/**
 	 * Append data at the end of the file
@@ -129,6 +167,36 @@ public final class FileHandle {
 		}
 		
 		int appendedBytes = inode.appendBuffered(data, offset, length);
+		
+		inodesBlock.markLocalDirty();
+		localStore.store(inodesBlock);
+		
+		return appendedBytes;
+	}
+	
+	/**
+	 * Append data at the end of the file and index with the given key
+	 * @param record A single file-record
+	 * @return Number of bytes appended
+	 * dataIndex.timestamp() to refer to the data just written.
+	 * @throws OutOfMemoryException
+	 * @throws InvalidFileOffsetException
+	 * @throws IOException
+	 * @throws KawkabException
+	 * @throws InterruptedException
+	 */
+	
+	public synchronized int append(final Record record) throws MaxFileSizeExceededException,
+			IOException, KawkabException, InterruptedException{
+		if (fileMode != FileMode.APPEND || !onPrimaryNode) {
+			throw new InvalidFileModeException();
+		}
+		
+		if (inodesBlock == null) {
+			throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+		}
+		
+		int appendedBytes = inode.appendBuffered(record);
 		
 		inodesBlock.markLocalDirty();
 		localStore.store(inodesBlock);

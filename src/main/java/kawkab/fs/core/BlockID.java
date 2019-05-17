@@ -15,7 +15,7 @@ public abstract class BlockID {
 		DATA_SEGMENT, 
 		INODES_BLOCK, 
 		IBMAP_BLOCK;
-		public static final BlockType values[] = values();
+		//public static final BlockType values[] = values();
 	}
 	
 	//protected final long k1, k2, k3; //To create a unique key across Ibmps, InodeBlocks, and DataSegments
@@ -23,26 +23,16 @@ public abstract class BlockID {
 	protected final BlockType type;
 	
 	public BlockID(BlockType type){
-		//this.key = key;
-//		this.k1 = k1;
-//		this.k2 = k2;
-//		this.k3 = k3;
 		this.type = type;
 	}
 	
 	public BlockID(BlockID id) {
-		//this.key = id.key;
-//		this.k1 = id.k1;
-//		this.k2 = id.k2;
-//		this.k3 = id.k3;
 		this.type = id.type;
 	}
 	
 	abstract public Block newBlock();
 	
 	abstract public int primaryNodeID();
-	
-	//abstract public String name();
 	
 	abstract public String localPath();
 	
@@ -52,7 +42,7 @@ public abstract class BlockID {
 	 * 
 	 * Keys are not unique across block types.
 	 */
-	abstract public int perBlockKey(); 
+	abstract public int perBlockKey();
 	
 	/**
 	 * Determines whether the node running this code is the primary writer of this block. 
@@ -61,13 +51,6 @@ public abstract class BlockID {
 	public boolean onPrimaryNode() {
 		return primaryNodeID() == thisNodeID;
 	}
-
-	/**
-	 * @return Globally unique string for this ID that can be used in maps
-	 */
-	/*public String uniqueKey() {
-		return key;
-	}*/
 
 	/**
 	 * @return Type of the block that is represented by this ID
