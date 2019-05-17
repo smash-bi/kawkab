@@ -5,6 +5,11 @@ import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.exceptions.*;
+import kawkab.fs.core.exceptions.InsufficientResourcesException;
+import kawkab.fs.core.exceptions.InvalidFileOffsetException;
+import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
+import kawkab.fs.utils.TimeLog;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -216,7 +221,6 @@ public final class Inode {
 		return length;
 	}
 	
-	//private TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS);
 	public int appendBuffered(final byte[] data, int offset, final int length)
 			throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
 		int remaining = length; //Reaming size of data to append
@@ -225,6 +229,7 @@ public final class Inode {
 		if (fileSizeBuffered + length > MAXFILESIZE) {
 			throw new MaxFileSizeExceededException();
 		}
+		
 		
 		while (remaining > 0) {
 			if (timer == null) { //If null, no need to synchronize because the SegmentTimerQueue thread will never synchronize with this timer
@@ -236,6 +241,7 @@ public final class Inode {
 				} else { // Otherwise the last segment was full or we are just starting without any segment at hand
 					segId = getSegmentID(fileSizeBuffered);
 				}
+				
 				
 				curSeg = (DataSegment) cache.acquireBlock(segId);
 				curSeg.initForAppend(fileSizeBuffered, recordSize);
@@ -251,6 +257,7 @@ public final class Inode {
 			}
 			
 			try {
+				
 				int bytes = curSeg.append(data, offset, remaining, fileSizeBuffered);
 				
 				remaining -= bytes;
@@ -262,7 +269,6 @@ public final class Inode {
 			
 			if (curSeg.isFull()) { // If the current segment is full
 				cache.releaseBlock(segId);
-				
 				curSeg = null;
 				segId = null;
 				timer = null;

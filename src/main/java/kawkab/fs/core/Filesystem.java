@@ -65,7 +65,7 @@ public final class Filesystem {
 	}
 
 	public void close(FileHandle fh) throws KawkabException {
-		System.out.println("Closing file: " + fh.inumber());
+		System.out.println("[FS] Closing file: " + fh.inumber());
 		fh.close();
 		if (fh.mode() == FileMode.APPEND)
 			namespace.closeAppendFile(fh.inumber());

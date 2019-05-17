@@ -288,4 +288,13 @@ public class PartitionedBufferedCache extends Cache implements BlockEvictionList
 		flush();
 		localStore.shutdown();
 	}
+	
+	@Override
+	public long size() {
+		int size = 0;
+		for (int i=0; i<numPartitions; i++) {
+			size += cache[i].size();
+		}
+		return size;
+	}
 }

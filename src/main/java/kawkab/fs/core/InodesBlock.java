@@ -21,6 +21,10 @@ public final class InodesBlock extends Block {
 	private Inode[] inodes; //Should be initialized in the bootstrap function only.
 	private long lastFetchTimeMs; 	// Clock time in ms when the block was last loaded. This must be initialized 
 									// to zero when the block is first created in memory.
+
+	private static Clock clock = Clock.instance();
+	private long lastGlobalStoreTimeMs;
+	private int globalStoreTimeGapMs = 3000;
 	//private int version; //Inodes-block's current version number.
 	
 	private static Configuration conf = Configuration.instance();
@@ -72,6 +76,11 @@ public final class InodesBlock extends Block {
 	
 	@Override
 	public boolean shouldStoreGlobally() {
+		long now = clock.currentTime();
+		if ((now - lastGlobalStoreTimeMs) < globalStoreTimeGapMs)
+			return false;
+		
+		lastGlobalStoreTimeMs = now;
 		return true;
 		//return false; //FIXME: Disabled inodesBlocks transfer to the GlobalStore
 	}

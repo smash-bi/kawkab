@@ -195,7 +195,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	 */
 	@Override
 	public void beforeEviction(CachedItem cachedItem) {
-		System.out.println("Evicting from cache: "+cachedItem.block().id());
+		System.out.println("[C] Evicting from cache: "+cachedItem.block().id());
 		Block block = cachedItem.block();
 		try {
 			block.waitUntilSynced();  // FIXME: This is a blocking call and the cacheLock is locked. This may
@@ -223,6 +223,10 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	public void flush() throws KawkabException {
 		int count = 0;
 		cacheLock.lock();
+		
+		int size = cache.size();
+		System.out.printf("Before flush: Current DSPool size is %d, cache size is %d.\n", dsp.size(), size);
+		
 		try {
 			Iterator<Map.Entry<BlockID, CachedItem>> itr = cache.entrySet().iterator();
 			while (itr.hasNext()) {
@@ -253,14 +257,15 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 				}
 				
 				count++;
-				itr.remove();
+				//itr.remove(); // This function removes the item from the cache
 			}
+			cache.clear();;
 			assert cache.size() == 0;
 		} finally {
 			cacheLock.unlock();
 		}
 		
-		System.out.printf("Flushed %d entries from the cache. Current DSPool size is %d.\n", count, dsp.size());
+		System.out.printf("Flushed %d entries from the cache. Current DSPool size is %d, cache size is %d.\n", count, dsp.size(), cache.size());
 	}
 	
 	@Override
@@ -272,5 +277,10 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
 		flush();
 		localStore.shutdown();
+	}
+	
+	@Override
+	public long size() {
+		return cache.size();
 	}
 }

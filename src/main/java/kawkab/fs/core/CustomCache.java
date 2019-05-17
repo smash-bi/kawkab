@@ -245,4 +245,9 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		flush();
 		localStore.shutdown();
 	}
+	
+	@Override
+	public long size() {
+		return cache.size();
+	}
 }
