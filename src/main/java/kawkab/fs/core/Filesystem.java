@@ -58,7 +58,7 @@ public final class Filesystem {
 	public FileHandle open(String filename, FileMode mode, FileOptions opts) 
 			throws IbmapsFullException, IOException, FileAlreadyOpenedException, FileNotExistException, KawkabException, InterruptedException {
 		//TODO: Validate input
-		long inumber = namespace.openFile(filename, mode == FileMode.APPEND);
+		long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber);
 		FileHandle file = new FileHandle(inumber, mode);
 		return file;

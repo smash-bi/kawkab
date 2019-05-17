@@ -12,9 +12,9 @@
 	    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	    <nodeID>0</nodeID>
 		<mainClass>kawkab.fs.cli.CLI</mainClass>
-          <Xmn>-Xmn4g</Xmn>
-          <Xmx>-Xmx4g</Xmx>
-          <MaxDirectMemorySize>-XX:MaxDirectMemorySize=2g</MaxDirectMemorySize>
+          <Xmn>-Xmn2g</Xmn>
+          <Xmx>-Xmx2g</Xmx>
+          <MaxDirectMemorySize>-XX:MaxDirectMemorySize=1g</MaxDirectMemorySize>
 	  </properties>
 
 	<build>

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileAlreadyExistsException;
@@ -66,7 +67,7 @@ public class Namespace {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	public long openFile(String filename, boolean appendMode) throws IbmapsFullException, IOException,
+	public long openFile(String filename, boolean appendMode, FileOptions opts) throws IbmapsFullException, IOException,
 			InvalidFileModeException, FileAlreadyOpenedException, FileNotExistException, KawkabException, InterruptedException {
 		long inumber;
 
@@ -80,7 +81,7 @@ public class Namespace {
 				} catch (FileNotExistException fnee) { // If the file does not exist
 					if (appendMode) { // Create file if the file is opened in the append mode.
 						System.out.println("[NS] Creating new file: " + filename);
-						inumber = createNewFile();
+						inumber = createNewFile(opts.recordSize());
 						
 						try {
 							ns.addFile(filename, inumber);
@@ -197,7 +198,7 @@ public class Namespace {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	private long createNewFile() throws IbmapsFullException, IOException, KawkabException, InterruptedException {
+	private long createNewFile(int recordSize) throws IbmapsFullException, IOException, KawkabException, InterruptedException {
 		long inumber = getNewInumber();
 
 		int blockIndex = InodesBlock.blockIndexFromInumber(inumber);
@@ -209,7 +210,7 @@ public class Namespace {
 
 			inodesBlock = (InodesBlock) cache.acquireBlock(id);
 			inodesBlock.loadBlock();
-			inodesBlock.initInode(inumber);
+			inodesBlock.initInode(inumber, recordSize);
 		} finally {
 			if (inodesBlock != null) {
 				cache.releaseBlock(inodesBlock.id());

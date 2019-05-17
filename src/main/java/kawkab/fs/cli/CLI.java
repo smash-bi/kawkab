@@ -448,7 +448,7 @@ public final class CLI {
 	}
 	
 	private Properties getProperties() throws IOException {
-		String propsFile = System.getProperty("conf", "config.properties");
+		String propsFile = System.getProperty("conf", "config-local.properties");
 		
 		try (InputStream in = getClass().getClassLoader().getResourceAsStream(propsFile)) {
 			assert in != null;

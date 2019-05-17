@@ -114,7 +114,7 @@ public final class FileHandle {
 	 * @throws InterruptedException
 	 */
 	public synchronized boolean read(final Record dstRecord, final long key) throws
-			IOException, KawkabException {
+			IOException, KawkabException, RecordNotFoundException {
 		
 		InodesBlock inb = null;
 		Inode inode;
