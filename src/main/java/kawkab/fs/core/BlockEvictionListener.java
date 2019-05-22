@@ -1,5 +1,8 @@
 package kawkab.fs.core;
 
 public interface BlockEvictionListener {
-	public void beforeEviction(CachedItem cachedItem);
+	/**
+	 * This function is called when the cachedItem is being evicted from the cache.
+	 */
+	public void beforeEviction(CachedItem cachedItem) ;
 }

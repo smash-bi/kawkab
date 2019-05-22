@@ -1,6 +1,6 @@
 package kawkab.fs.core.exceptions;
 
-public class InvalidFileModeException extends Exception {
+public class InvalidFileModeException extends KawkabException {
 	public InvalidFileModeException(){
 		super();
 	}

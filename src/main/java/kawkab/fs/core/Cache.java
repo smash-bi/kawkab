@@ -1,144 +1,87 @@
 package kawkab.fs.core;
 
 import java.io.IOException;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.core.exceptions.KawkabException;
 
-public class Cache implements BlockEvictionListener {
-	private static Cache instance;
-	private LRUCache cache;
-	private Lock cacheLock;
-	private SyncProcessor syncProc;
-	private volatile boolean closing = false;
-	
-	private Cache(){
-		cache = new LRUCache(this);
-		cacheLock = new ReentrantLock();
-		syncProc = new SyncProcessor(Constants.syncThreadsPerDevice);
-	}
-	
-	public static Cache instance(){
-		if (instance == null) {
-			instance = new Cache();
-		}
-		
-		return instance;
-	}
-	
-	public void createBlock(Block block) throws IOException {
-		syncProc.storeSynced(block);
+/**
+ * An LRU cache for Block objects. The objects are acquired and released using BlockIDs. This class is singleton and
+ * thread safe.
+ */
+public abstract class Cache {
+	public static Cache instance() {
+		//return GCache.instance();
+		//return CustomCache.instance();
+		return BufferedCache.instance();
+		//return PartitionedBufferedCache.instance();
 	}
 	
 	/**
+	 * Acquires a reference of the block from the LRU cache. BlockID is an immutable ID of the block, which also creates
+	 * a new block class depending on the type of the ID. The BlockID returns a unique string key that this cache uses
+	 * to index the block. Therefore, if any two callers have different objects of BlockID but same data in the objects,
+	 * both callers will acquire the same block.
+	 * 
+	 * NOTE: The caller must call releaseBlock() function to release the block and decrement its reference count, even
+	 * if this function throws an exception. This need to be changed so that the caller does not need to release the
+	 * block in the case of an exception. 
+	 * 
+	 * The function parameter createNewBlock indicates that the caller wants to create a new block. In this case, the
+	 * cache creates a new block - it first reserves a block space in memory by instantiating the object through 
+	 * blockID.newBlock(), and then the cache calls the localStore.createBlock() function to create the block
+	 * in the local store. The local store then creates the block in the local storage.
+	 * 
+	 * If the block is not already in the cache, the block is brought into the cache using the block.loadBlock()
+	 * function. The loadBlock function is a blocking function. Therefore, the calling thread blocks until the data
+	 * is loaded into the block. The block is loaded from the local store, the global store, or the primary node of 
+	 * the block.
+	 * 
+	 * If the block is not in memory, and adding a new block exceeds the size of the cache, the cache evicts the LRU block
+	 * before creating space for the new block. The existing LRU block must have zero reference count, i.e., the block 
+	 * must not be acquired by any thread. If the LRU block's reference count is not zero, it throws an exception.
+	 * 
+	 * An acquired block cannot be evicted from the cache. The cache keeps the reference count of all the acquired blocks.
+	 * 
+	 * The evicted block is first persisted to the local store if it is dirty.
+	 * 
+	 * Thread safety: The whole cache is locked to obtain the cached items. 
+	 * If the item is already in the cache, it increments the reference count so that the count is updated atomically.
+	 * If the block is not in the cache, a new block object is created and its reference count is increment. The
+	 * cache is then unlocked. In this way, two simultaneous threads cannot create two different objects for the same
+	 * block.
+	 * 
+	 * The cache lock provides mutual exclusion from the releaseBlock() function as well.
+	 * 
+	 * This function calls block.load() function to load data into the block.
+	 * 
+	 * If the function throws an exception, the caller must call the releaseBlock() function to release the block.
+	 * 
 	 * @param blockID
-	 * @param type
 	 * @return
 	 * @throws IOException 
+	 * @throws KawkabException 
+	 * @throws InterruptedException 
 	 */
-	public Block acquireBlock(BlockID blockID) throws IOException {
-		if (closing)
-			return null;
-		
-		CachedItem cached = null;
-		boolean wasCached = true;
-		
-		cacheLock.lock();
-		try { //For cached.lock()
-			try { //For cacheLock.lock()
-				cached = cache.get(blockID.key);
-				
-				//If the block is not cached
-				if (cached == null){
-					wasCached = false;
-					Block block = blockID.newBlock();
-					cached = new CachedItem(block);
-					cache.put(cached.block().name(), cached);
-				}
-				
-				//FIXME: This can stall all other threads. For example, two readers read data at the same time. 
-				//The first reader gets the lock and then performs IO on the line "cached.block().loadFromDisk()". 
-				//Now the other reader has the lock of cache and waiting for the first reader to unlock the cached block.
-				cached.lock();  
-				cached.incrementRefCnt();
-			} finally {
-				cacheLock.unlock();
-			}
-		
-			if (wasCached) {
-				return cached.block();
-			}
-			
-			//cached.block().loadFromDisk(); //TODO: Make to load from the syncProc
-			syncProc.load(cached.block());
-		} finally {
-			if (cached != null) {
-				cached.unlock();
-			}
-		}
-		
-		return cached.block();
-	}
+	public abstract Block acquireBlock(BlockID blockID) throws IOException, KawkabException;
 	
-	public void releaseBlock(BlockID blockID) {
-		CachedItem cached = null;
-		cacheLock.lock();
-		try {
-			cached = cache.get(blockID.key);
-			
-			if (cached == null) {
-				System.out.println(" Releasing non-existing block: " + blockID.key);
-				new Exception().printStackTrace();
-			}
-			
-			assert cached != null;
-			cached.lock(); //FIXME: We lock the cached object only to increment and decrement reference count. Why not to use AtomicInteger for that purpose?
-			cached.decrementRefCnt();
-			if (cached.block().dirty()) {
-				syncProc.store(cached.block());
-			}
-			cached.unlock();
-		} finally {
-			cacheLock.unlock();
-		}
-	}
+	/**
+	 * Releases the block and decrements its reference count. Blocks with reference count 0 are eligible for eviction.
+	 * 
+	 * The released block is added in a queue for persistence if the block is dirty.
+	 * 
+	 * @param blockID
+	 * @throws KawkabException 
+	 */
+	public abstract void releaseBlock(BlockID blockID) throws KawkabException;
 	
-	public void flush() { //
-		for (CachedItem cached : cache.values()) {
-			//We need to close all the readers and writers before we can empty the cache.
-			//TODO: Wait until the reference count for the cached object becomes zero.
-			if (cached.block().dirty()) {
-				//cached.block().storeToDisk();
-				syncProc.store(cached.block());
-			}
-		}
-	}
+	/**
+	 * Flushes the block in the persistent store. This should be used only for system shutdown.
+	 * 
+	 * @throws KawkabException
+	 */
+	public abstract void flush() throws KawkabException;
 	
-	public void shutdown() {
-		System.out.println("Closing cache.");
-		flush();
-		cacheLock.lock();
-		cache.clear();
-		cacheLock.unlock();
-		syncProc.stop();
-	}
-
-	@Override
-	public void beforeEviction(CachedItem cachedItem) {
-		Block block = cachedItem.block();
-		try {
-			block.waitUntilSynced();
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-		/*if (block.dirty()) {
-			try {
-				block.storeToDisk();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}*/
-	}
+	public abstract void shutdown() throws KawkabException;
 	
+	public abstract long size();
 }

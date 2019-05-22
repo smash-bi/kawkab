@@ -3,20 +3,22 @@ package kawkab.fs.core;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 
-import kawkab.fs.commons.Constants;
+import kawkab.fs.commons.Configuration;
 
 @SuppressWarnings("serial")
-public class LRUCache extends LinkedHashMap<String, CachedItem> {
+public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 	private BlockEvictionListener evictListener;
+	private final int maxBlocksInCache;
 	
-	public LRUCache(BlockEvictionListener evictListener){
-		super(Constants.maxBlocksInCache+1, 1.1f, true);
+	public LRUCache(int maxBlocksInCache, BlockEvictionListener evictListener) {
+		super(2*maxBlocksInCache + 1, 0.75f, true);
+		this.maxBlocksInCache = maxBlocksInCache;
 		this.evictListener = evictListener;
 	}
 	
 	@Override
-	protected boolean removeEldestEntry(Entry<String, CachedItem> eldest) {
-		if (!(super.size() >= Constants.maxBlocksInCache))
+	protected boolean removeEldestEntry(Entry<BlockID, CachedItem> eldest) {
+		if (super.size() < maxBlocksInCache)
 			return false;
 		
 		CachedItem toEvict = eldest.getValue();
@@ -28,13 +30,16 @@ public class LRUCache extends LinkedHashMap<String, CachedItem> {
 			
 			int count = 0;
 			int size = super.size();
-			for (Entry<String, CachedItem> entry : super.entrySet()) {
+			for (Entry<BlockID, CachedItem> entry : super.entrySet()) {
 				count++;
 				CachedItem altToEvict = entry.getValue();
 				if (altToEvict.refCount() == 0) {
 					if (count == size) {//FIXME: We just added the time. We should not remove this item.
 						System.out.println("\t\t\t ---> Evicting just added block.");
 					}
+					
+					System.out.println("[LRUC] **** Cannot evict " + toEvict.block().id() + ", evicting: " + altToEvict.block().id());
+					
 					super.remove(entry.getKey());
 					evictListener.beforeEviction(altToEvict);
 					

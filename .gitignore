@@ -5,3 +5,7 @@ target
 .settings
 ~*
 Thumbs.db
+/target/
+zookeeper-*
+/fs
+/minio

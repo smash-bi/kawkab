@@ -3,19 +3,21 @@ package kawkab.fs.commons;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ByteChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.util.Base64;
 
-public class Commons {
-	public static long maxDataSize(int indexLevel){
-		return (long)Math.pow(Constants.numPointersInIndexBlock, indexLevel) * Constants.dataBlockSizeBytes;
+public final class Commons {
+	private static final int ibmapBlockSizeBytes;
+	private static final int ibmapsPerMachine;
+	
+	static {
+		Configuration conf = Configuration.instance();
+		ibmapBlockSizeBytes = conf.ibmapBlockSizeBytes;
+		ibmapsPerMachine = conf.ibmapsPerMachine;
 	}
 	
-	public static long maxBlocksCount(int indexLevel){
-		return (long)Math.pow(Constants.numPointersInIndexBlock, indexLevel);
-	}
-	
-	public static String uuidToString(long uuidHigh, long uuidLow){
+	public static String uuidToBase64String(long uuidHigh, long uuidLow){
 		byte[] id = new byte[16];
 		ByteBuffer buffer = ByteBuffer.wrap(id);
 		buffer.putLong(uuidHigh);
@@ -43,22 +45,24 @@ public class Commons {
         }
     }
     
+
     /**
-     * Reads toBuffer.remaining() bytes from the channel into the toBuffer.
+     * Reads dstBuffer.remaining() bytes from the channel into the toBuffer.
      * 
-     * @param channel Read from the channel
-     * @param toBuffer Read into the buffer
-     * @param size Number of bytes to read
-     * @return Total number of bytes read from the channel.
+     * @param channel Source channel
+     * @param dstBuffer Destination buffer
+     * @return Total number of bytes read from the channel
      * @throws IOException
      */
-    public static int readFrom(ByteChannel channel, ByteBuffer toBuffer) throws IOException {
+    public static int readFrom(ReadableByteChannel channel, ByteBuffer dstBuffer) throws IOException {
     	int readNow = 0;
     	int totalRead = 0;
-    	int size = toBuffer.remaining();
-    	
-    	while(readNow >= 0 && totalRead < size) {
-    		readNow = channel.read(toBuffer);
+
+    	while(dstBuffer.remaining() > 0) {
+    		readNow = channel.read(dstBuffer);
+    		if (readNow == -1)
+    			break;
+
     		totalRead += readNow;
     	}
     	
@@ -66,21 +70,50 @@ public class Commons {
     }
     
     /**
-     * Writes fromBuffer.remaining() bytes from fromBuffer into toChannel.
-     * @param toChannel
-     * @param fromBuffer
-     * @param size
+     * Writes srcBuffer.remaining() bytes from srcBuffer into dstChannel.
+     * @param dstChannel
+     * @param srcBuffer
      * @return The number of bytes written into the channel.
      * @throws IOException
      */
-    public static int writeTo(ByteChannel toChannel, ByteBuffer fromBuffer) throws IOException {
+    public static int writeTo(WritableByteChannel dstChannel, ByteBuffer srcBuffer) throws IOException {
     	int bytesWritten = 0;
-    	int size = fromBuffer.remaining();
+    	int size = srcBuffer.remaining();
     	while(bytesWritten < size) {
-    		bytesWritten += toChannel.write(fromBuffer);
+    		bytesWritten += dstChannel.write(srcBuffer);
     	}
     	
     	return bytesWritten;
+    }
+    
+    public static byte[] longToBytes(long longNum) {
+        byte[] result = new byte[Long.BYTES];
+        for (int i = Long.BYTES-1; i >= 0; i--) {
+            result[i] = (byte)(longNum & 0xFF);
+            longNum >>= Byte.SIZE;
+        }
+        return result;
+    }
+
+    public static long bytesToLong(byte[] b) {
+        long result = 0;
+        for (int i = 0; i < Long.BYTES; i++) {
+            result <<= Byte.SIZE;
+            result |= (b[i] & 0xFF);
+        }
+        
+        return result;
+    }
+    
+    public static int primaryWriterID(long inumber) {
+		long inodeBlocksPerIbmap = ibmapBlockSizeBytes * Byte.SIZE;
+		long ibmapNum = inumber / inodeBlocksPerIbmap;
+		
+		return ibmapOwner(ibmapNum);
+	}
+    
+    public static int ibmapOwner(long ibmapNum) {
+    	return (int)(ibmapNum / ibmapsPerMachine); //TODO: Get this number from ZooKeeper
     }
 }
 

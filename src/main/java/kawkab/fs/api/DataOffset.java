@@ -1,6 +1,6 @@
 package kawkab.fs.api;
 
-public class DataOffset {
+public final class DataOffset {
 	private final long fileOffset;
 	private final long dataSize;
 	
