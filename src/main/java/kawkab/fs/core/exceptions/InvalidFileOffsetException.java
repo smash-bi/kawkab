@@ -1,6 +1,6 @@
 package kawkab.fs.core.exceptions;
 
-public class InvalidFileOffsetException extends Exception{
+public class InvalidFileOffsetException extends KawkabException{
 	public InvalidFileOffsetException(){
 		super();
 	}

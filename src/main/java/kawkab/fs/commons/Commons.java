@@ -1,11 +1,15 @@
 package kawkab.fs.commons;
 
+import kawkab.fs.core.exceptions.KawkabException;
+
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Base64;
+import java.util.Properties;
 
 public final class Commons {
 	private static final int ibmapBlockSizeBytes;
@@ -55,7 +59,7 @@ public final class Commons {
      * @throws IOException
      */
     public static int readFrom(ReadableByteChannel channel, ByteBuffer dstBuffer) throws IOException {
-    	int readNow = 0;
+    	int readNow;
     	int totalRead = 0;
 
     	while(dstBuffer.remaining() > 0) {

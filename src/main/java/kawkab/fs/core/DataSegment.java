@@ -140,9 +140,10 @@ public final class DataSegment extends Block {
 	int append(final ByteBuffer srcBuffer, long offsetInFile, int recordSize) throws IOException {
 		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
 		
-		int length = srcBuffer.remaining();
 		assert writePos.get() == offsetInSegment;
 		assert dataBuf.position() == offsetInSegment;
+		
+		int length = srcBuffer.remaining();
 		assert remaining() >= length;
 		
 		dataBuf.put(srcBuffer);
@@ -201,7 +202,7 @@ public final class DataSegment extends Block {
 		ByteBuffer buf = dataBuf.duplicate(); //FIXME: Ensure that this is thread-safe in the presence of a concurrent writer!!!
 		
 		buf.position(offsetInSegment);
-		buf.limit(recordSize);
+		buf.limit(offsetInSegment+recordSize);
 		dstBuffer.put(buf);
 		
 		return recordSize;

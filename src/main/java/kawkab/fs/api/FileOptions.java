@@ -15,7 +15,7 @@ public final class FileOptions {
 	
 	public FileOptions(int recordSize){ this.recordSize = recordSize; }
 	
-	public static FileOptions defaultOpts() { return new FileOptions(); }
+	public static FileOptions defaults() { return new FileOptions(); }
 	
 	public int recordSize() { return recordSize; }
 }

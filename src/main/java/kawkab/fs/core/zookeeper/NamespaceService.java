@@ -72,7 +72,7 @@ public final class NamespaceService {
 	 */
 	public synchronized long getInumber(String filename) throws FileNotExistException, KawkabException {
 		String path = fixPath(filename);
-		System.out.println("[NSS] Checking path: " + path);
+		//System.out.println("[NSS] Checking path: " + path);
 		
 		long inumber = -1;
 		try {

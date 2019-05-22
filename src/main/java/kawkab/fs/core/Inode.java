@@ -96,6 +96,39 @@ public final class Inode {
 	}
 	
 	/**
+	 * @return
+	 * @throws IllegalArgumentException
+	 * @throws InvalidFileOffsetException
+	 * @throws IOException
+	 * @throws KawkabException
+	 */
+	public boolean readRecordN(final Record dstRecord, final long recNum) throws
+			RecordNotFoundException, IOException, KawkabException {
+		
+		long offsetInFile = (recNum-1L) * recordSize;
+		
+		//System.out.println("  Read at offset: " + offsetInFile);
+		BlockID curSegId = getByFileOffset(offsetInFile);
+		
+		//System.out.println("Reading block at offset " + offsetInFile + ": " + curBlkUuid.key);
+		
+		DataSegment curSegment = null;
+		try {
+			curSegment = (DataSegment)cache.acquireBlock(curSegId);
+			curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
+			int bytesRead = curSegment.read(dstRecord.copyInDstBuffer(), offsetInFile, recordSize);
+			
+			assert bytesRead == recordSize;
+		} finally {
+			if (curSegment != null) {
+				cache.releaseBlock(curSegment.id());
+			}
+		}
+		
+		return true;
+	}
+	
+	/**
 	 * Performs the read operation. Single writer and multiple readers are allowed to write and read concurrently. 
 	 * @param buffer
 	 * @param length
@@ -155,7 +188,7 @@ public final class Inode {
 	}
 	
 	public int appendBuffered(final Record record)
-			throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
+			throws IOException, InterruptedException, KawkabException {
 		int length = record.size();
 		
 		long fileSizeBuffered = this.fileSize.get(); // Current file size

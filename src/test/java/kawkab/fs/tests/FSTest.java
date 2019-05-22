@@ -1,37 +1,24 @@
 package kawkab.fs.tests;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Properties;
-import java.util.Random;
-
-import org.junit.Test;
-
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
-import kawkab.fs.core.exceptions.AlreadyConfiguredException;
-import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
-import kawkab.fs.core.exceptions.FileNotExistException;
-import kawkab.fs.core.exceptions.IbmapsFullException;
-import kawkab.fs.core.exceptions.InvalidFileModeException;
-import kawkab.fs.core.exceptions.InvalidFileOffsetException;
-import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
-import kawkab.fs.core.exceptions.OutOfMemoryException;
+import kawkab.fs.core.exceptions.*;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Properties;
+import java.util.Random;
 
 public final class FSTest {
 	private Configuration conf;
-	private Filesystem fs;
 	
-	public static void main(String args[]) throws MaxFileSizeExceededException,
-			InterruptedException, IbmapsFullException,
-			IOException, IllegalArgumentException, KawkabException, AlreadyConfiguredException, FileAlreadyOpenedException, InvalidFileOffsetException {
+	public static void main(String args[]) throws InterruptedException, IOException, IllegalArgumentException, KawkabException {
 		FSTest tester = new FSTest();
 		// Constants.printConfig();
 		tester.testBootstrap();
@@ -65,44 +52,23 @@ public final class FSTest {
 	 * This must be called first to bootstrap the system.
 	 * @throws AlreadyConfiguredException 
 	 */
-	private void testBootstrap() throws IOException, KawkabException, InterruptedException, AlreadyConfiguredException{
+	private void testBootstrap() throws IOException, KawkabException, InterruptedException {
 		System.out.println("---------------------------------------------");
 		System.out.println("            Bootstrap test");
 		System.out.println("---------------------------------------------");
 		
-		int nodeID = getNodeID();
-		Properties props = getProperties();
+		int nodeID = Configuration.getNodeID();
+		Properties props = Configuration.getProperties(Configuration.propsFileLocal);
 		
-		fs = Filesystem.bootstrap(nodeID, props);
+		Filesystem fs = Filesystem.bootstrap(nodeID, props);
 		conf = fs.getConf();
-	}
-	
-	private Properties getProperties() throws IOException {
-		String propsFile = "/config.properties";
-		
-		try (InputStream in = Thread.class.getResourceAsStream(propsFile)) {
-			Properties props = new Properties();
-			props.load(in);
-			return props;
-		}
-	}
-	
-	private int getNodeID() throws KawkabException {
-		String nodeIDProp = "nodeID";
-		
-		if (System.getProperty(nodeIDProp) == null) {
-			throw new KawkabException("System property nodeID is not defined.");
-		}
-		
-		return Integer.parseInt(System.getProperty(nodeIDProp));
 	}
 	
 	/**
 	 * Tests the creation of blocks for a new file.
 	 * @throws AlreadyConfiguredException 
 	 */
-	private void testBlocksCreation() throws IbmapsFullException, FileAlreadyOpenedException,
-				MaxFileSizeExceededException, IOException, KawkabException, InterruptedException {
+	private void testBlocksCreation() throws IOException, KawkabException, InterruptedException {
 		System.out.println("-------------------------------------------------");
 		System.out.println("            Blocks creation test");
 		System.out.println("-------------------------------------------------");
@@ -120,8 +86,7 @@ public final class FSTest {
 	/**
 	 * Test reading and writing a small file
 	 */
-	private void testSmallReadWrite() throws MaxFileSizeExceededException, IbmapsFullException, FileAlreadyOpenedException,
-			IOException, IllegalArgumentException, KawkabException, InterruptedException, InvalidFileOffsetException {
+	private void testSmallReadWrite() throws IOException, IllegalArgumentException, KawkabException, InterruptedException {
 		System.out.println("--------------------------------------------");
 		System.out.println("            Small file test read and write");
 		System.out.println("--------------------------------------------");
@@ -160,7 +125,7 @@ public final class FSTest {
 	 * Tests reading an existing file.
 	 */
 	private void testSmallRead()
-			throws IbmapsFullException, FileAlreadyOpenedException, IOException, IllegalArgumentException, KawkabException, InterruptedException, InvalidFileOffsetException {
+			throws IOException, IllegalArgumentException, KawkabException, InterruptedException {
 		System.out.println("--------------------------------------------");
 		System.out.println("            Small file test read");
 		System.out.println("--------------------------------------------");
@@ -195,8 +160,7 @@ public final class FSTest {
 	/**
 	 * Tests writing a large file.
 	 */
-	private void testLargeReadWrite() throws MaxFileSizeExceededException, IbmapsFullException, FileAlreadyOpenedException,
-			IOException, IllegalArgumentException, KawkabException, InterruptedException, InvalidFileOffsetException {
+	private void testLargeReadWrite() throws IOException, IllegalArgumentException, KawkabException, InterruptedException {
 		System.out.println("--------------------------------------------");
 		System.out.println("            Large files test");
 		System.out.println("--------------------------------------------");
@@ -232,8 +196,7 @@ public final class FSTest {
 	/**
 	 * Tests multiple readers concurrently reading the same file
 	 */
-	private void testMultipleReaders() throws IbmapsFullException, FileAlreadyOpenedException,
-	MaxFileSizeExceededException, IOException, KawkabException, InterruptedException {
+	private void testMultipleReaders() throws IOException, KawkabException, InterruptedException {
 		System.out.println("--------------------------------------------");
 		System.out.println("            Multiple Readers Test");
 		System.out.println("--------------------------------------------");
@@ -267,63 +230,61 @@ public final class FSTest {
 		
 		Thread[] readers = new Thread[numReaders];
 		for (int i=0; i<readers.length; i++){
-			readers[i] = new Thread() {
-				public void run() {
-					byte[] writeBuf = new byte[bufSize];
-					byte[] readBuf = new byte[bufSize];
-					Random rand = new Random(0);
-					Random waitRand = new Random();
-					
-					FileHandle file = null;
-					try {
-						file = fs.open(filename, FileMode.READ, opts);
-					} catch (IbmapsFullException | FileAlreadyOpenedException | IOException | KawkabException | InterruptedException e) {
-						e.printStackTrace();
-						return;
-					}
-					long nextOffset = offset;
-					
-					long read = 0;
-					while(read < dataSize) {
-						int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
-						int bytes = 0;
-						try {
-							bytes = file.read(readBuf, nextOffset, toRead);
-							nextOffset += bytes;
-						} catch (IOException | IllegalArgumentException | KawkabException | InvalidFileOffsetException e) {
-							e.printStackTrace();
-							break;
-						}
-						read += bytes;
-						
-						rand.nextBytes(writeBuf);
-						if (bytes< writeBuf.length) {
-							for(int i=0; i<bytes; i++){
-								assert readBuf[i] == writeBuf[i];
-							}
-						} else {
-							assert Arrays.equals(readBuf, writeBuf);
-						}
-						
-						//LockSupport.parkNanos(waitRand.nextInt(90000));
-					}
-					
-					try {
-						fs.close(file);
-					} catch (KawkabException e) {
-						e.printStackTrace();
-					}
-					
-					assert dataAppended == read;
+			readers[i] = new Thread(() -> {
+				byte[] writeBuf1 = new byte[bufSize];
+				byte[] readBuf = new byte[bufSize];
+				Random rand1 = new Random(0);
+				//Random waitRand = new Random();
+				
+				FileHandle file1;
+				try {
+					file1 = fs.open(filename, FileMode.READ, opts);
+				} catch (IOException | KawkabException | InterruptedException e) {
+					e.printStackTrace();
+					return;
 				}
-			};
+				long nextOffset = offset;
+				
+				long read = 0;
+				while(read < dataSize) {
+					int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
+					int bytes;
+					try {
+						bytes = file1.read(readBuf, nextOffset, toRead);
+						nextOffset += bytes;
+					} catch (IOException | IllegalArgumentException | KawkabException e) {
+						e.printStackTrace();
+						break;
+					}
+					read += bytes;
+					
+					rand1.nextBytes(writeBuf1);
+					if (bytes< writeBuf1.length) {
+						for(int i1 = 0; i1 <bytes; i1++){
+							assert readBuf[i1] == writeBuf1[i1];
+						}
+					} else {
+						assert Arrays.equals(readBuf, writeBuf1);
+					}
+					
+					//LockSupport.parkNanos(waitRand.nextInt(90000));
+				}
+				
+				try {
+					fs.close(file1);
+				} catch (KawkabException e) {
+					e.printStackTrace();
+				}
+				
+				assert dataAppended == read;
+			});
 			
 			readers[i].start();
 		}
 		
-		for (int i=0; i<readers.length; i++){
+		for (Thread reader : readers) {
 			try {
-				readers[i].join();
+				reader.join();
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
@@ -345,67 +306,65 @@ public final class FSTest {
 		
 		for (int i=0; i<numFiles; i++) {
 			final int id = i;
-			workers[i] = new Thread(){
-				public void run(){
-					try {
-						String filename = "/home/smash/testMultipleFiles-"+id;
-						FileOptions opts = new FileOptions();
-						FileHandle file = fs.open(filename, FileMode.APPEND, opts);
-						long readOffset = file.size();
-						
-						//System.out.println("Opening file: " + filename + ", current size="+initialSize);
-						
-						Random rand = new Random(0);
-						int bufSize = conf.segmentSizeBytes;//8*1024*1024;
-						long dataSize = 1L*conf.dataBlockSizeBytes + 1;
-						long appended = 0;
-						
-						byte[] writeBuf = new byte[bufSize];
+			workers[i] = new Thread(() -> {
+				try {
+					String filename = "/home/smash/testMultipleFiles-"+id;
+					FileOptions opts = new FileOptions();
+					FileHandle file = fs.open(filename, FileMode.APPEND, opts);
+					long readOffset = file.size();
+					
+					//System.out.println("Opening file: " + filename + ", current size="+initialSize);
+					
+					Random rand = new Random(0);
+					int bufSize = conf.segmentSizeBytes;//8*1024*1024;
+					long dataSize = 1L*conf.dataBlockSizeBytes + 1;
+					long appended = 0;
+					
+					byte[] writeBuf = new byte[bufSize];
+					rand.nextBytes(writeBuf);
+					
+					while(appended < dataSize) {
+						int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
+						int bytes = file.append(writeBuf, 0, toWrite);
+						appended += bytes;
 						rand.nextBytes(writeBuf);
-						
-						while(appended < dataSize) {
-							int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
-							int bytes = file.append(writeBuf, 0, toWrite);
-							appended += bytes;
-							rand.nextBytes(writeBuf);
-						}
-						
-						byte[] readBuf = new byte[bufSize];
-						rand = new Random(0);
-						
-						long read = 0;
-						while(read < dataSize) {
-							int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
-							int bytes = file.read(readBuf, readOffset, toRead);
-							read += bytes;
-							readOffset += bytes;
-							
-							rand.nextBytes(writeBuf);
-							if (bytes < bufSize){
-								for(int i=0; i<bytes; i++){
-									assert readBuf[i] == writeBuf[i];
-								}
-							} else {
-								assert Arrays.equals(readBuf, writeBuf);
-							}
-						}
-
-						fs.close(file);
-						
-						assert appended == read;
-					} catch (Exception e){
-						e.printStackTrace();
-						return;
 					}
+					
+					byte[] readBuf = new byte[bufSize];
+					rand = new Random(0);
+					
+					long read = 0;
+					while(read < dataSize) {
+						int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
+						int bytes = file.read(readBuf, readOffset, toRead);
+						read += bytes;
+						readOffset += bytes;
+						
+						rand.nextBytes(writeBuf);
+						if (bytes < bufSize){
+							for(int i1 = 0; i1 <bytes; i1++){
+								assert readBuf[i1] == writeBuf[i1];
+							}
+						} else {
+							assert Arrays.equals(readBuf, writeBuf);
+						}
+					}
+
+					fs.close(file);
+					
+					assert appended == read;
+				} catch (Exception e){
+					e.printStackTrace();
+					return;
 				}
-			};
+			});
 			
 			workers[i].start();
 		}
 		
-		for (int i=0; i<workers.length; i++) {
+		for (Thread worker : workers) {
 			try {
-				workers[i].join();
+				worker.join();
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
@@ -416,8 +375,7 @@ public final class FSTest {
 	/**
 	 * Tests the performance of writing a single file
 	 */
-	private void testWritePerformance() throws IOException, IbmapsFullException, FileAlreadyOpenedException,
-			MaxFileSizeExceededException, KawkabException, InterruptedException{
+	private void testWritePerformance() throws IOException, KawkabException, InterruptedException{
 		System.out.println("--------------------------------------------");
 		System.out.println("            Write Performance Test");
 		System.out.println("--------------------------------------------");
@@ -469,48 +427,46 @@ public final class FSTest {
 		Stats writeStats = new Stats();
 		for (int i=0; i<numWriters; i++) {
 			final int id = i;
-			workers[i] = new Thread(){
-				public void run(){
-					try {
-						String filename = "/home/smash/twpcf-"+id;
-						FileOptions opts = new FileOptions();
-						FileHandle file = fs.open(filename, FileMode.APPEND, opts);
-						
-						System.out.println("Opening file: " + filename + ", current size="+file.size());
-						
-						Random rand = new Random(0);
-						long appended = 0;
-						
-						final byte[] writeBuf = new byte[bufSize];
-						rand.nextBytes(writeBuf);
-						
-						long startTime = System.currentTimeMillis();
-						while(appended < dataSize) {
-							int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
-							appended += file.append(writeBuf, 0, toWrite);
-						}
-						
-						double durSec = (System.currentTimeMillis() - startTime)/1000.0;
-						double sizeMB = appended/(1024.0*1024);
-						double thr = sizeMB/durSec;
-						writeStats.putValue(thr);
-
-						fs.close(file);
-						
-						System.out.println(String.format("File %d: Data size = %.0fMB, Write thr = %.0fMB/s", id, sizeMB, thr));
-					} catch (Exception e){
-						e.printStackTrace();
-						return;
+			workers[i] = new Thread(() -> {
+				try {
+					String filename = "/home/smash/twpcf-"+id;
+					FileOptions opts = new FileOptions();
+					FileHandle file = fs.open(filename, FileMode.APPEND, opts);
+					
+					System.out.println("Opening file: " + filename + ", current size="+file.size());
+					
+					Random rand = new Random(0);
+					long appended = 0;
+					
+					final byte[] writeBuf = new byte[bufSize];
+					rand.nextBytes(writeBuf);
+					
+					long startTime = System.currentTimeMillis();
+					while(appended < dataSize) {
+						int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
+						appended += file.append(writeBuf, 0, toWrite);
 					}
+					
+					double durSec = (System.currentTimeMillis() - startTime)/1000.0;
+					double sizeMB = appended/(1024.0*1024);
+					double thr = sizeMB/durSec;
+					writeStats.putValue(thr);
+
+					fs.close(file);
+					
+					System.out.println(String.format("File %d: Data size = %.0fMB, Write thr = %.0fMB/s", id, sizeMB, thr));
+				} catch (Exception e){
+					e.printStackTrace();
+					return;
 				}
-			};
+			});
 			
 			workers[i].start();
 		}
 		
-		for (int i=0; i<workers.length; i++) {
+		for (Thread worker : workers) {
 			try {
-				workers[i].join();
+				worker.join();
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
@@ -523,8 +479,7 @@ public final class FSTest {
 	/**
 	 * Tests the performance of reads on the primary node
 	 */
-	private void testReadPerformance() throws IOException, IbmapsFullException, FileAlreadyOpenedException,
-			MaxFileSizeExceededException, IllegalArgumentException, KawkabException, InterruptedException, InvalidFileOffsetException {
+	private void testReadPerformance() throws IOException, IllegalArgumentException, KawkabException, InterruptedException {
 		System.out.println("--------------------------------------------");
 		System.out.println("            Read Performance Test");
 		System.out.println("--------------------------------------------");
@@ -568,8 +523,7 @@ public final class FSTest {
 	/**
 	 * Read performance of the same file concurrently read by multiple readers
 	 */
-	private void testReadPerfMultiReadersSameFile() throws IbmapsFullException, FileAlreadyOpenedException,
-				MaxFileSizeExceededException, IOException, KawkabException, InterruptedException {
+	private void testReadPerfMultiReadersSameFile() throws IOException, KawkabException, InterruptedException {
 		System.out.println("-----------------------------------------------------------------");
 		System.out.println("       Read Performance Multiple Readers Same File Test");
 		System.out.println("-----------------------------------------------------------------");
@@ -605,10 +559,10 @@ public final class FSTest {
 			readers[i] = new Thread(() -> {
 				byte[] readBuf = new byte[bufSize];
 				
-				FileHandle file1 = null;
+				FileHandle file1;
 				try {
 					file1 = fs.open(filename, FileMode.READ, opts);
-				} catch (IbmapsFullException | FileAlreadyOpenedException | IOException | KawkabException | InterruptedException e) {
+				} catch (IOException | KawkabException | InterruptedException e) {
 					e.printStackTrace();
 					return;
 				}
@@ -618,10 +572,10 @@ public final class FSTest {
 				long read = 0;
 				while(read < dataSize) {
 					int toRead = (int)(read+bufSize < dataSize ? bufSize : dataSize - read);
-					int bytes = 0;
+					int bytes;
 					try {
 						bytes = file1.read(readBuf, read, toRead);
-					} catch (IOException | IllegalArgumentException | KawkabException | InvalidFileOffsetException e) {
+					} catch (IOException | IllegalArgumentException | KawkabException e) {
 						e.printStackTrace();
 						break;
 					}
@@ -644,8 +598,8 @@ public final class FSTest {
 			readers[i].start();
 		}
 		
-		for (int i=0; i<readers.length; i++){
-			readers[i].join();
+		for (Thread reader : readers) {
+			reader.join();
 		}
 		double durSec = (System.currentTimeMillis()-startTime)/1000.0;
 		
@@ -682,7 +636,7 @@ public final class FSTest {
 						byte[] buffer = new byte[bufferSize];
 						
 						for (int nTask=0; nTask<numTasks; nTask++) {
-							FileHandle file = null;
+							FileHandle file;
 							String fname = prefix+rand.nextInt(numFiles);
 							FileMode mode = rand.nextBoolean() ? FileMode.APPEND : FileMode.READ;
 							
@@ -700,7 +654,7 @@ public final class FSTest {
 								System.out.println("\t<"+workerID+"> Task: " + nTask + ", Writing file: " + fname + " up to " + sizeMB + " MB");
 								int appended = 0;
 								while(appended < appendSize) {
-									int toWrite = (int)(appended+bufferSize <= appendSize ? bufferSize : appendSize - appended);
+									int toWrite = appended+bufferSize <= appendSize ? bufferSize : appendSize - appended;
 									rand.nextBytes(buffer);
 									appended += file.append(buffer, 0, toWrite);
 									//rand.nextBytes(writeBuf);
@@ -713,10 +667,10 @@ public final class FSTest {
 								
 								while(read < dataSize) {
 									int toRead = (int)(read+bufferSize < dataSize ? bufferSize : dataSize - read);
-									int bytes = 0;
+									int bytes;
 									try {
 										bytes = file.read(buffer, read, toRead);
-									} catch (IOException | IllegalArgumentException | KawkabException | InvalidFileOffsetException e) {
+									} catch (IOException | IllegalArgumentException | KawkabException e) {
 										e.printStackTrace();
 										break;
 									}
@@ -726,7 +680,7 @@ public final class FSTest {
 
 							fs.close(file);
 						}
-					} catch (KawkabException | IOException | IbmapsFullException | InterruptedException | MaxFileSizeExceededException e) {
+					} catch (KawkabException | IOException | InterruptedException e) {
 						e.printStackTrace();
 					}
 				}
@@ -764,7 +718,7 @@ public final class FSTest {
 						byte[] buffer = new byte[bufferSize];
 						
 						String fname = "CRWLBTest-"+rand.nextInt(numFiles);
-						FileHandle file = null;
+						FileHandle file;
 						FileMode mode = workerID == 0 ? FileMode.APPEND : FileMode.READ;
 						
 						try {
@@ -786,7 +740,7 @@ public final class FSTest {
 								System.out.println("\t<"+workerID+"> Task: " + nTask + ", Writing file: " + fname + " up to " + sizeMB + " MB");
 								int appended = 0;
 								while(appended < appendSize) {
-									int toWrite = (int)(appended+bufferSize <= appendSize ? bufferSize : appendSize - appended);
+									int toWrite = appended+bufferSize <= appendSize ? bufferSize : appendSize - appended;
 									rand.nextBytes(buffer);
 									appended += file.append(buffer, 0, toWrite);
 									//rand.nextBytes(writeBuf);
@@ -803,7 +757,7 @@ public final class FSTest {
 									int bytes = 0;
 									try {
 										bytes = file.read(buffer, readOffset, toRead);
-									} catch (IOException | IllegalArgumentException | KawkabException | InvalidFileOffsetException e) {
+									} catch (IOException | IllegalArgumentException | KawkabException e) {
 										e.printStackTrace();
 										break;
 									}
@@ -815,7 +769,7 @@ public final class FSTest {
 
 						fs.close(file);
 						
-					} catch (KawkabException | IOException | IbmapsFullException | InterruptedException | MaxFileSizeExceededException e) {
+					} catch (KawkabException | IOException | InterruptedException e) {
 						e.printStackTrace();
 					}
 				}
@@ -846,48 +800,46 @@ public final class FSTest {
 		Stats writeStats = new Stats();
 		for (int i=0; i<numWriters; i++) {
 			final int id = i;
-			workers[i] = new Thread(){
-				public void run(){
-					try {
-						byte[] writeBuf = new byte[bufSize];
-						new Random().nextBytes(writeBuf);
+			workers[i] = new Thread(() -> {
+				try {
+					byte[] writeBuf = new byte[bufSize];
+					new Random().nextBytes(writeBuf);
+					
+					long appended = 0;
+					long startTime = System.currentTimeMillis();
+					
+					ByteBuffer dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
+					while(appended < dataSize) {
+						int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
 						
-						long appended = 0;
-						long startTime = System.currentTimeMillis();
-						
-						ByteBuffer dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
-						while(appended < dataSize) {
-							int toWrite = (int)(appended+bufSize <= dataSize ? bufSize : dataSize - appended);
-							
-							if (toWrite > dataBuf.remaining()) {
-								dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
-								assert toWrite <= dataBuf.remaining();
-							}
-							
-							dataBuf.position(0);
-							dataBuf.put(writeBuf, 0, toWrite);
-							appended += toWrite;
+						if (toWrite > dataBuf.remaining()) {
+							dataBuf = ByteBuffer.allocateDirect(conf.segmentSizeBytes);
+							assert toWrite <= dataBuf.remaining();
 						}
 						
-						double durSec = (System.currentTimeMillis() - startTime)/1000.0;
-						double sizeMB = appended/(1024.0*1024);
-						double thr = sizeMB/durSec;
-						writeStats.putValue(thr);
-						
-						System.out.println(String.format("File %d: Data size = %.0fMB, Write thr = %.0fMB/s", id, sizeMB, thr));
-					} catch (Exception e){
-						e.printStackTrace();
-						return;
+						dataBuf.position(0);
+						dataBuf.put(writeBuf, 0, toWrite);
+						appended += toWrite;
 					}
+					
+					double durSec = (System.currentTimeMillis() - startTime)/1000.0;
+					double sizeMB = appended/(1024.0*1024);
+					double thr = sizeMB/durSec;
+					writeStats.putValue(thr);
+					
+					System.out.println(String.format("File %d: Data size = %.0fMB, Write thr = %.0fMB/s", id, sizeMB, thr));
+				} catch (Exception e){
+					e.printStackTrace();
+					return;
 				}
-			};
+			});
 			
 			workers[i].start();
 		}
 		
-		for (int i=0; i<workers.length; i++) {
+		for (Thread worker : workers) {
 			try {
-				workers[i].join();
+				worker.join();
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
@@ -912,10 +864,7 @@ public final class FSTest {
 	}
 	
 	@Test
-	public void mainTest() throws MaxFileSizeExceededException, InterruptedException,
-			IbmapsFullException, IOException, IllegalArgumentException,
-			KawkabException, AlreadyConfiguredException, FileAlreadyOpenedException, InvalidFileOffsetException {
-		
+	public void mainTest() throws InterruptedException, IOException, IllegalArgumentException, KawkabException {
 		FSTest.main(null);
 	}
 }

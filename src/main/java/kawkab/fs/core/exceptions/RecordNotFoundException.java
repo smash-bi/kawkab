@@ -1,6 +1,6 @@
 package kawkab.fs.core.exceptions;
 
-public class RecordNotFoundException extends Exception{
+public class RecordNotFoundException extends KawkabException{
 	public RecordNotFoundException(){
 		super();
 	}

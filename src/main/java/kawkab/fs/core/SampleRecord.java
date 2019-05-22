@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.api.Record;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 public class SampleRecord implements Record {
 	private final ByteBuffer buffer; //The buffer that holds the record's fields in sequence
@@ -16,7 +17,7 @@ public class SampleRecord implements Record {
 	private static final int ASK_QUANTITY;
 	private static final int ASK_EXECUTABLE;
 	
-	private static byte TRUE = 1;
+	private static byte TRUE  = 1;
 	private static byte FALSE = 0;
 	
 	//Size of this record in bytes
@@ -32,6 +33,10 @@ public class SampleRecord implements Record {
 		ASK_EXECUTABLE	= ASK_QUANTITY + Float.BYTES;
 		
 		SIZE = ASK_EXECUTABLE + Byte.BYTES;
+	}
+	
+	public SampleRecord () {
+		buffer = ByteBuffer.allocate(SIZE);
 	}
 	
 	public SampleRecord(long timestamp, float bidPrice, float bidQuantity, boolean bidExecutable, float askPrice, float askQuantity, boolean askExecutable) {
@@ -97,5 +102,31 @@ public class SampleRecord implements Record {
 	
 	public boolean askExecutable() {
 		return buffer.get(ASK_EXECUTABLE) == TRUE;
+	}
+	
+	@Override
+	public String toString() {
+		return String.format("ts=%d,bp=%.2f,bq=%.2f,be=%s,ap=%.2f,aq=%.2f,ae=%s\n",
+				timestamp(), bidPrice(), bidQuantity(), bidExecutable(), askPrice(), askQuantity(), askExecutable());
+	}
+	
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+		SampleRecord that = (SampleRecord) o;
+		return	this.size() 		== that.size() &&
+				this.timestamp() 	== that.timestamp() &&
+				this.bidPrice() 	== that.bidPrice() &&
+				this.bidQuantity() 	== that.bidQuantity() &&
+				this.bidExecutable() == that.bidExecutable() &&
+				this.askPrice() 	== that.askPrice() &&
+				this.askQuantity() 	== that.askQuantity() &&
+				this.askExecutable() == that.askExecutable();
+	}
+	
+	@Override
+	public int hashCode() {
+		return Objects.hash(buffer);
 	}
 }

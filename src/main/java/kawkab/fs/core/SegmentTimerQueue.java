@@ -2,10 +2,14 @@ package kawkab.fs.core;
 
 import kawkab.fs.core.exceptions.KawkabException;
 
+/**
+ * A FIFO queue to expire the segments and return them to the cache. This implementation potentially returns items
+ * to the cache much slower than required in some cases. As a result, the cache have some items that are eligible
+ * for eviction but the cache cannot evict them as their reference count is greater than 0. .
+ */
 public class SegmentTimerQueue {
-	//private final TransferQueue<SegmentTimer> buffer;
-	TransferQueue<SegmentTimer> buffer;
-	private final Thread timerThread;
+	private TransferQueue<SegmentTimer> buffer;
+	private final Thread processorThr;
 	private final Clock clock;
 	private volatile boolean working = true;
 	
@@ -14,13 +18,13 @@ public class SegmentTimerQueue {
 	private SegmentTimerQueue () {
 		buffer = new TransferQueue<>();
 		clock = Clock.instance();
-		timerThread = new Thread("SegmentTimerQueueThread") {
+		processorThr = new Thread("SegmentTimerQueueThread") {
 			public void run() {
 				processSegments();
 			}
 		};
 		
-		timerThread.start();
+		processorThr.start();
 	}
 	
 	public static synchronized SegmentTimerQueue instance() {
@@ -30,19 +34,26 @@ public class SegmentTimerQueue {
 		return instance;
 	}
 	
+	/**
+	 * Adds the timer object in the queue. The timer object is associated with a DataSegment.
+	 * @param timer
+	 */
 	public void add(SegmentTimer timer) {
 		assert working;
 		
 		buffer.add(timer);
 	}
 	
+	/**
+	 * Takes items from the queue,
+	 */
 	private void processSegments() {
 		SegmentTimer next = null;
 		
 		while(working) {
 			next = buffer.poll();
 			if (next == null) {
-				try {
+				try { //Sleeping because the buffer is non-blocking
 					Thread.sleep(1); //1ms is chosen randomly. It doesn't impact the performance, but a large value may result in slower expiry of the segments
 				} catch (InterruptedException e) {}
 				continue;
@@ -67,6 +78,10 @@ public class SegmentTimerQueue {
 		}
 	}
 	
+	/**
+	 * @param timer
+	 * @throws KawkabException
+	 */
 	private void process(SegmentTimer timer) throws KawkabException {
 		long timeNow = clock.currentTime();
 		long ret = timer.tryExpire(timeNow);
@@ -100,9 +115,9 @@ public class SegmentTimerQueue {
 		System.out.println("Closing SegmentTimerQueue");
 		working = false;
 		
-		timerThread.interrupt();
+		processorThr.interrupt();
 		try {
-			timerThread.join();
+			processorThr.join();
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
