@@ -1,43 +1,38 @@
 package kawkab.fs.tests;
 
 import kawkab.fs.api.FileOptions;
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Cache;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
-import kawkab.fs.core.exceptions.*;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import kawkab.fs.core.exceptions.KawkabException;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
 import java.util.Properties;
 import java.util.Random;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertTrue;
-
 public class PartialReadTest {
 
-	@Before
-	public void initialize() throws IOException, InterruptedException, KawkabException, AlreadyConfiguredException {
-		int nodeID = getNodeID();
-		Properties props = getProperties();
+	@BeforeAll
+	public static void initialize() throws IOException, InterruptedException, KawkabException {
+		int nodeID = Configuration.getNodeID();
+		Properties props = Configuration.getProperties(Configuration.propsFileLocal);
 		
 		Filesystem.bootstrap(nodeID, props);
 	}
 	
-	@After
-	public void terminate() throws KawkabException, InterruptedException, IOException {
+	@AfterAll
+	public static void terminate() throws KawkabException, InterruptedException, IOException {
 		Filesystem.instance().shutdown();
 	}
 	
 	@Test
-	public void partialReadSameThreadTest()
-			throws IbmapsFullException, OutOfMemoryException, MaxFileSizeExceededException, InvalidFileOffsetException,
-			IOException, KawkabException, InterruptedException, FileAlreadyOpenedException {
+	public void partialReadSameThreadTest() throws IOException, KawkabException, InterruptedException {
 		System.out.println("----------------------------------------------------------------");
 		System.out.println("            Partial Read Test - Same Thread");
 		System.out.println("----------------------------------------------------------------");
@@ -84,29 +79,9 @@ public class PartialReadTest {
 		System.out.println(Arrays.toString(afterFlushData));
 		System.out.println(Arrays.toString(allData));*/
 
-		assertArrayEquals(beforeFlushData, readData);
+		Assertions.assertArrayEquals(beforeFlushData, readData);
 
 		fs.close(file);
-	}
-	
-	private Properties getProperties() throws IOException {
-		String propsFile = "/config.properties";
-		
-		try (InputStream in = Thread.class.getResourceAsStream(propsFile)) {
-			Properties props = new Properties();
-			props.load(in);
-			return props;
-		}
-	}
-	
-	private int getNodeID() throws KawkabException {
-		String nodeIDProp = "nodeID";
-		
-		if (System.getProperty(nodeIDProp) == null) {
-			throw new KawkabException("System property nodeID is not defined.");
-		}
-		
-		return Integer.parseInt(System.getProperty(nodeIDProp));
 	}
 
 	private byte[] randomData(int length) {

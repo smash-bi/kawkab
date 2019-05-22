@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import com.google.protobuf.ByteString;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
+import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
@@ -14,9 +15,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static kawkab.fs.commons.FixedLenRecordUtils.offsetInSegment;
+
 public final class DataSegment extends Block {
 	private final static Configuration conf = Configuration.instance();
-	private final static int recordSize = conf.recordSize; //Temporarily set to 1 until we implement reading/writing records
 	private final static int segmentSizeBytes = conf.segmentSizeBytes;
 	
 	private ByteBuffer dataBuf; // Buffer to hold actual segment data
@@ -67,7 +69,7 @@ public final class DataSegment extends Block {
 		initedForAppends = false;
 	}
 	
-	synchronized void initForAppend(long offsetInFile) {
+	synchronized void initForAppend(long offsetInFile, int recordSize) {
 		if (initedForAppends)
 			return;
 		
@@ -81,6 +83,14 @@ public final class DataSegment extends Block {
 	
 	boolean isFull() {
 		return segmentIsFull;
+	}
+	
+	int remaining() {
+		return segmentSizeBytes - writePos.get();
+	}
+	
+	void markAsFull() {
+		segmentIsFull = true;
 	}
 	
 	/**
@@ -99,7 +109,6 @@ public final class DataSegment extends Block {
 		int offsetInSegment = (int)(offsetInFile%segmentSizeBytes);
 		int capacity = segmentSizeBytes - offsetInSegment;
 		int toAppend = length <= capacity ? length : capacity;
-		
 		
 		//if (offsetInSegment != writePntr)
 		//	System.out.println(id + " - " + offsetInSegment+" != "+writePntr);
@@ -123,6 +132,35 @@ public final class DataSegment extends Block {
 	}
 	
 	/**
+	 * @param srcBuffer Source buffer
+	 * @param offsetInFile
+	 * @return number of bytes appended starting from the offset
+	 * @throws IOException
+	 */
+	int append(final ByteBuffer srcBuffer, long offsetInFile, int recordSize) throws IOException {
+		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
+		
+		assert writePos.get() == offsetInSegment;
+		assert dataBuf.position() == offsetInSegment;
+		
+		int length = srcBuffer.remaining();
+		assert remaining() >= length;
+		
+		dataBuf.put(srcBuffer);
+		
+		int pos = writePos.addAndGet(length);
+		
+		//Mark block as full
+		if (pos == segmentSizeBytes) {
+			segmentIsFull = true;
+		}
+		
+		markLocalDirty();
+		
+		return length;
+	}
+	
+	/**
 	 * @param dstBuffer output buffer
 	 * @param dstBufferOffset offset in the buffer to where data will be copied
 	 * @param length length of data to be read
@@ -132,7 +170,8 @@ public final class DataSegment extends Block {
 	int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile)
 			throws InvalidFileOffsetException {
 		int blockSize = segmentSizeBytes;
-		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
+		int offsetInSegment = (int)(offsetInFile%segmentSizeBytes);
+		
 		if (offsetInSegment >= blockSize || offsetInSegment < 0) {
 			throw new InvalidFileOffsetException(
 					String.format("Given file offset %d is outside of the block. Block size = %d bytes.",
@@ -148,6 +187,25 @@ public final class DataSegment extends Block {
 		buf.get(dstBuffer, dstBufferOffset, readSize);
 		
 		return readSize;
+	}
+	
+	/**
+	 * @param dstBuffer output buffer
+	 * @return number of bytes read starting from the offsetInFile
+	 * @throws IOException
+	 */
+	int read(final ByteBuffer dstBuffer, long offsetInFile, int recordSize) {
+		assert dstBuffer.remaining() >= recordSize;
+		
+		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
+		
+		ByteBuffer buf = dataBuf.duplicate(); //FIXME: Ensure that this is thread-safe in the presence of a concurrent writer!!!
+		
+		buf.position(offsetInSegment);
+		buf.limit(offsetInSegment+recordSize);
+		dstBuffer.put(buf);
+		
+		return recordSize;
 	}
 	
 	@Override
@@ -441,62 +499,5 @@ public final class DataSegment extends Block {
 	@Override
 	public String toString(){
 		return id().toString();
-	}
-	
-	/**
-	 * Number of records of the given size that can fit in a segment
-	 * @param recordSize
-	 * @return
-	 */
-	public static int recordsPerSegment(int recordSize) {
-		return segmentSizeBytes / recordSize;
-	}
-	
-	/**
-	 * Is the given segment the last segment in the block
-	 */
-	public static boolean isLastSegment(long segmentInFile, long fileSize, int recordSize) {
-		return segmentInFile == segmentInFile(fileSize, recordSize);
-	}
-	
-	/**
-	 * Returns the segment number in the file that contains the given offset in the file
-	 */
-	public static long segmentInFile(long offsetInFile, int recordSize) {
-		// segmentInFile := recordInFile / recordsPerSegment
-		return (offsetInFile/recordSize) / recordsPerSegment(recordSize);
-	}
-	
-	/**
-	 * Returns the block number in the file that contains the given segment number in the file
-	 */
-	public static long blockInFile(long segmentInFile) {
-		// blockInFile := segmentInFile x segmentSize / blockSize
-		return segmentInFile * segmentSizeBytes / conf.dataBlockSizeBytes;
-	}
-	
-	/**
-	 * Returns the segment number in the block that corresponds to the given segment number in the file
-	 */
-	public static int segmentInBlock(long segmentInFile) {
-		// segmentInBlock := segmentInFile % segmentsPerBlock
-		return (int)(segmentInFile % conf.segmentsPerBlock);
-	}
-	
-	/**
-	 * Returns the record number in its segment that contains the given offset in the file
-	 */
-	public static int recordInSegment(long offsetInFile, int recordSize) {
-		return (int)((offsetInFile/recordSize) % recordsPerSegment(recordSize));
-	}
-	
-	/**
-	 * Converts the offset in file to the offset in the segemnt
-	 */
-	public static int offsetInSegment(long offsetInFile, int recordSize) {
-		// offsetInSegment = recordInSegment + offsetInRecord
-		//return (int)(recordInSegment(offsetInFile, recordSize) + (offsetInFile % recordSize));
-		
-		return (int)((offsetInFile) % segmentSizeBytes);
 	}
 }

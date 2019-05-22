@@ -66,7 +66,7 @@ public final class InodesBlockID extends BlockID{
 		final int prime = 11; //randomly selected
 		int result = 19; //randomly selected
 		result = prime * result + blockIndex;
-		result = prime * result + ((type == null) ? 0 : (type.ordinal()*17)); //17 is just a random prime
+		result = prime * result + 17; //17 is just a random prime to differentiate it from the Ibmap block
 		return result;
 	}
 

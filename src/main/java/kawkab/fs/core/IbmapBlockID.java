@@ -64,7 +64,7 @@ public final class IbmapBlockID extends BlockID {
 		final int prime = 31;
 		int result = 1;
 		result = prime * result + mapNum;
-		result = prime * result + ((type == null) ? 0 : (type.ordinal()*37)); //37 is just a random prime number
+		result = prime * result + 37; //37 is just a random prime number to differentiate this block from InodesBlock
 		return result;
 	}
 

@@ -1,16 +1,21 @@
 package kawkab.fs.commons;
 
+import kawkab.fs.core.NodeInfo;
+import kawkab.fs.core.exceptions.AlreadyConfiguredException;
+import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.zookeeper.ZKClusterConfig;
+
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import kawkab.fs.core.NodeInfo;
-import kawkab.fs.core.exceptions.AlreadyConfiguredException;
-import kawkab.fs.core.zookeeper.ZKClusterConfig;
-import kawkab.fs.utils.GCMonitor;
-
 public final class Configuration {
 	private static Configuration instance;
+	
+	public final static String propsFileLocal = "config-local.properties";
+	public final static String propsFile = "config.properties";
 	
 	public final int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
 	
@@ -215,5 +220,26 @@ public final class Configuration {
 		assert maxBlocksPerLocalDevice > inodeBlocksPerMachine + ibmapsPerMachine;
 		
 		assert cacheSizeMiB > (segmentSizeBytes/1048576.0);
+	}
+	
+	public static Properties getProperties(String propsFile) throws IOException {
+		try (InputStream in = Commons.class.getClassLoader().getResourceAsStream(propsFile)) {
+			assert in != null;
+			
+			Properties props = new Properties();
+			props.load(in);
+			
+			return props;
+		}
+	}
+	
+	public static int getNodeID() throws KawkabException {
+		String nodeIDProp = "nodeID";
+		
+		if (System.getProperty(nodeIDProp) == null) {
+			throw new KawkabException("System property nodeID is not defined.");
+		}
+		
+		return Integer.parseInt(System.getProperty(nodeIDProp));
 	}
 }

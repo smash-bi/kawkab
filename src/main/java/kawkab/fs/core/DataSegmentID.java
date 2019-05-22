@@ -1,6 +1,7 @@
 package kawkab.fs.core;
 
 import java.io.File;
+import java.util.Objects;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
@@ -22,7 +23,6 @@ public final class DataSegmentID extends BlockID {
 	 * @param inumber inode number of the file
 	 * @param blockInFile block number in the file
 	 * @param segmentInBlock segment number in the block
-	 * @param loadFromPrimary Loading from the primary node is enabled or not
 	 */
 	public DataSegmentID(long inumber, long blockInFile, int segmentInBlock) {
 		super(BlockType.DATA_SEGMENT);
@@ -40,16 +40,6 @@ public final class DataSegmentID extends BlockID {
 	public Block newBlock() {
 		return new DataSegment(this);
 	}
-	
-	/*public static String name(long inumber, long blockInFile, int segmentInBlock) {
-		return "D"+inumber+"-"+blockInFile+"-"+segmentInBlock;
-		//return String.format("DS%d-%d-%d", inumber, blockInFile, segmentInBlock);
-	}*/
-
-	/*@Override
-	public String name() {
-		return this.uniqueKey();
-	}*/
 
 	@Override
 	public String localPath() {
@@ -112,18 +102,9 @@ public final class DataSegmentID extends BlockID {
 	 */
 	@Override
 	public int hashCode() {
-		if (hash != 0)
-			return hash;
-		
-		final int prime = 13; // [SR] random prime
-		int result = 17; // [SR] random
-		result = prime * result + (int) (blockInFile ^ (blockInFile >>> 32));
-		result = prime * result + (int) (inumber ^ (inumber >>> 32));
-		result = prime * result + segmentInBlock;
-		result = prime * result + ((type == null) ? 0 : (type.ordinal()*7)); // [SR] 7 is a random prime
-		
-		hash = result;
-		return result;
+		if (hash == 0)
+			hash = Objects.hash(inumber, blockInFile, segmentInBlock);
+		return hash;
 	}
 
 	/* (non-Javadoc)

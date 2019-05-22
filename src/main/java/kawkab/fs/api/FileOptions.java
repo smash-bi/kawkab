@@ -1,20 +1,21 @@
 package kawkab.fs.api;
 
+import java.io.File;
+
 public final class FileOptions {
-	//private int blockSizeMB; //Our system should control the block size
-	//private CachingOptions chacheOpts;
-	//private ReplicationOptions repOpts;
-	//private StorageOptions storageOpts;
+	final int recordSize;
 	
-	public FileOptions(){
-		//blockSizeMB = Constants.defaultBlockSize;
+	public enum FileType {
+		BINARY,
+		FIXED_LEN_RECORDS
+		//public static final FileType values[] = values();
 	}
 	
-	public static FileOptions defaultOpts() {
-		return new FileOptions();
-	}
+	public FileOptions() { this(1); }
 	
-	/*public int blockSize(){
-		return blockSizeMB;
-	}*/
+	public FileOptions(int recordSize){ this.recordSize = recordSize; }
+	
+	public static FileOptions defaults() { return new FileOptions(); }
+	
+	public int recordSize() { return recordSize; }
 }
