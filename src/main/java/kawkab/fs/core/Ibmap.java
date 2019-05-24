@@ -1,23 +1,20 @@
 package kawkab.fs.core;
 
+import com.google.protobuf.ByteString;
+import kawkab.fs.commons.Commons;
+import kawkab.fs.commons.Configuration;
+import kawkab.fs.core.exceptions.InodeNumberOutOfRangeException;
+import kawkab.fs.core.exceptions.InsufficientResourcesException;
+import kawkab.fs.core.exceptions.KawkabException;
+
+import javax.naming.OperationNotSupportedException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
+import java.nio.file.Files;
 import java.util.BitSet;
-
-import javax.naming.OperationNotSupportedException;
-
-import com.google.common.io.Files;
-import com.google.protobuf.ByteString;
-
-import kawkab.fs.commons.Commons;
-import kawkab.fs.commons.Configuration;
-import kawkab.fs.core.exceptions.FileNotExistException;
-import kawkab.fs.core.exceptions.InodeNumberOutOfRangeException;
-import kawkab.fs.core.exceptions.InsufficientResourcesException;
-import kawkab.fs.core.exceptions.KawkabException;
 
 public final class Ibmap extends Block{
 	private static final int bitsPerByte = Byte.SIZE;
@@ -45,7 +42,7 @@ public final class Ibmap extends Block{
 	 * @return Returns next unused inumber, or -1 if the block is full.
 	 */
 	synchronized long useNextInumber(){
-		int bitIdx = -1;
+		int bitIdx;
 		
 		try {
 			bitIdx = bitset.nextClearBit(0);
@@ -63,9 +60,7 @@ public final class Ibmap extends Block{
 	}
 	
 	private long bitIdxToInumber(int ibmapIdx, int bitIndex){
-		long inumber = (8L*ibmapIdx*ibmapBlockSizeBytes) + bitIndex;
-		//System.out.println("[Ibmap] blockIdx: " + ibmapIdx + ", bitIdx: " + bitIndex + ", inumber: " + inumber);
-		return inumber;
+		return (8L*ibmapIdx*ibmapBlockSizeBytes) + bitIndex;
 	}
 	
 	private int inumberToBitIndex(long inumber){
@@ -118,9 +113,8 @@ public final class Ibmap extends Block{
 	
 	@Override
 	public synchronized int loadFromFile() throws IOException {
-		byte[] bytes = Files.toByteArray(new File(id.localPath()));
+		byte[] bytes = Files.readAllBytes(new File(id.localPath()).toPath());
 		bitset = BitSet.valueOf(bytes);
-
 		return bytes.length;
 	}
 	
@@ -138,15 +132,14 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	protected void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
+	protected void loadBlockOnNonPrimary() {
 		assert false; //Loading ibmaps on a non-primary node is not allowed as each node has the ownership of a set of ibmaps
 	}
 	
 	@Override
 	public synchronized int storeToFile() throws IOException {
 		byte[] bytes = bitset.toByteArray();
-		File file = new File(id.localPath());
-		Files.write(bytes, file);
+		Files.write(new File(id.localPath()).toPath(), bytes);
 		return bytes.length;
 	}
 	
@@ -173,20 +166,10 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	protected void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException {
+	protected void loadBlockFromPrimary()  throws KawkabException {
 		throw new KawkabException(new OperationNotSupportedException());
 	}
 
-	@Override
-	public int appendOffsetInBlock() {
-		return 0;
-	}
-	
-	@Override
-	public int memorySizeBytes() {
-		return ibmapBlockSizeBytes + 16; //FIXME: Get the exact number
-	}
-	
 	@Override
 	public int sizeWhenSerialized() {
 		//FIXME: This creates a copy in memory. Get size without memory copy.
@@ -201,9 +184,8 @@ public final class Ibmap extends Block{
 	 * 
 	 * @throws IOException
 	 * @throws InterruptedException 
-	 * @throws KawkabException 
 	 */
-	static void bootstrap() throws IOException, InterruptedException, KawkabException{
+	static void bootstrap() throws IOException, InterruptedException {
 		if (bootstraped)
 			return;
 		
@@ -214,7 +196,9 @@ public final class Ibmap extends Block{
 		File folder = new File(conf.ibmapsPath);
 		if (!folder.exists()) {
 			System.out.println("  Creating folder: " + folder.getAbsolutePath());
-			folder.mkdirs();
+			if (!folder.mkdirs()) {
+				throw new IOException("Unable to create parent directories for path: " + folder.getAbsolutePath());
+			}
 		}
 		
 		LocalStoreManager storage = LocalStoreManager.instance();

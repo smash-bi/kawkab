@@ -225,6 +225,7 @@
 						<buildDirectory>${0}</buildDirectory>
 					</systemPropertyVariables>
 					<useFile>false</useFile>
+					<printSummary>true</printSummary>
 				</configuration>
 			</plugin>
 

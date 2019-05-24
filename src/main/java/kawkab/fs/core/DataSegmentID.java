@@ -53,24 +53,23 @@ public final class DataSegmentID extends BlockID {
 		
 		String uuid = Commons.uuidToBase64String(inumber, blockInFile); //highBits=inumber, lowBits=BlockNumber
 		int uuidLen = uuid.length();
-		
 		int wordSize = 3; //Number of characters of the Base64 encoding that make a directory
 		int levels = 6; //Number of directory levels //FIXME: we will have 64^3 files in a directory, 
 						//which is 262144. This may slow down the underlying filesystem.
 		
 		assert wordSize * levels < uuidLen-1;
 		
-		StringBuilder path = new StringBuilder(blocksPath.length()+uuidLen+levels);
+		StringBuilder path = new StringBuilder(blocksPath.length()+uuidLen+levels+2); //2 for extra head-room
 		path.append(blocksPath + File.separator);
 		
-		int rootLen = uuidLen - levels*wordSize;
+		int rootLen = uuidLen - levels*wordSize; // The root folder can have more characters than wordSize
 		path.append(uuid.substring(0, rootLen));
 		
 		for (int i=0; i<levels; i++){
 			path.append(File.separator).append(uuid.substring(rootLen+i*wordSize, rootLen+i*wordSize+wordSize));
 		}
 		
-		localPath = path.toString();
+		localPath = path.toString(); //TODO: Should we intern() this string?
 		
 		return localPath;
 	}
@@ -96,39 +95,21 @@ public final class DataSegmentID extends BlockID {
 	public String toString() {
 		return "D-"+inumber+"-"+blockInFile+"-"+segmentInBlock;
 	}
-
-	/* (non-Javadoc)
-	 * @see java.lang.Object#hashCode()
-	 */
+	
 	@Override
 	public int hashCode() {
 		if (hash == 0)
 			hash = Objects.hash(inumber, blockInFile, segmentInBlock);
 		return hash;
 	}
-
-	/* (non-Javadoc)
-	 * @see java.lang.Object#equals(java.lang.Object)
-	 */
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		DataSegmentID other = (DataSegmentID) obj;
-		if (blockInFile != other.blockInFile)
-			return false;
-		if (inumber != other.inumber)
-			return false;
-		if (segmentInBlock != other.segmentInBlock)
-			return false;
-		if (type != other.type)
-			return false;
-		return true;
-	}
-
 	
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+		DataSegmentID that = (DataSegmentID) o;
+		return inumber == that.inumber &&
+				blockInFile == that.blockInFile &&
+				segmentInBlock == that.segmentInBlock;
+	}
 }

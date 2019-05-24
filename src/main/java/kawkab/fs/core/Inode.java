@@ -5,6 +5,7 @@ import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.exceptions.*;
+import kawkab.fs.core.index.FileIndex;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -17,12 +18,13 @@ public final class Inode {
 	// The FileHandle first calls append and then calls updateSize to update the fileSize. Ideally, 
 	// We should update the fileSize immediately after adding a new block. The fileSize is not being
 	// updated immediately to allow concurrent reading and writing to the same dataBlock.
-
+	
 	private static final Configuration conf = Configuration.instance();
 	
 	private long inumber;
 	private AtomicLong fileSize = new AtomicLong(0);
 	private int recordSize; //Temporarily set to 1 until we implement reading/writing records
+	private FileIndex index;
 	
 	private static Cache cache;
 	private static LocalStoreManager localStore;
@@ -31,8 +33,7 @@ public final class Inode {
 	private DataSegment curSeg;
 	private volatile SegmentTimer timer; // volatile so that the SegmentTimerQueue thread can read the most recent value
 	private SegmentTimerQueue timerQ;
-	
-	private FileIndex index;
+	private final Object timerLock = new Object();
 	
 	public static final long MAXFILESIZE;
 	
@@ -225,6 +226,8 @@ public final class Inode {
 		try {
 			int bytes = curSeg.append(record.copyOutSrcBuffer(), fileSizeBuffered, recordSize);
 			
+			index.append(record.key(), fileSizeBuffered);
+			
 			fileSizeBuffered += bytes;
 		} catch (IOException e) {
 			throw new KawkabException(e);
@@ -275,7 +278,7 @@ public final class Inode {
 				curSeg.initForAppend(fileSizeBuffered, recordSize);
 				timer = new SegmentTimer(segId, this);
 			} else {
-				synchronized (this) {
+				synchronized (timerLock) {
 					if (timer == null || !timer.disableIfValid()) { // Disable the timer if it has not already expired. The condition is true if the timer has expired before it is disabled
 						segId = getSegmentID(fileSizeBuffered);
 						curSeg = (DataSegment) cache.acquireBlock(segId); // Acquire the segment again as the cache may have evicted the segment
@@ -329,7 +332,7 @@ public final class Inode {
 		// timer object. Therefore, the timer object is volatile to ensure that it doesn't red the staled value.
 
 		if (expiredTimer == timer) {// Checking the references because the same timers should have same reference
-			synchronized (this) {
+			synchronized (timerLock) {
 				if (expiredTimer == timer) { // Have to check again so that this thread and the appender synchronize on the same object
 					curSeg = null;
 					segId = null;
@@ -386,7 +389,7 @@ public final class Inode {
 
 		System.out.printf("Loaded inode %d: fs=%d\n",inumber, fileSize.get());
 
-		return Long.BYTES*2 + Integer.BYTES;
+		return Long.BYTES + Long.BYTES + Integer.BYTES; //FIXME: Define constant size or get value from the position in the buffer
 	}
 
 	/**
@@ -455,7 +458,7 @@ public final class Inode {
 	void releaseBuffer() throws KawkabException {
 		//tlog.printStats("DS.append,ls.store");
 		
-		synchronized (this) {
+		synchronized (timerLock) { // Synchronize with the SegmentTimeQueue.
 			if (timer == null) {
 				assert curSeg == null;
 				assert segId == null;

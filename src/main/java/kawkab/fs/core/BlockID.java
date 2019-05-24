@@ -14,7 +14,8 @@ public abstract class BlockID {
 	public enum BlockType {
 		DATA_SEGMENT, 
 		INODES_BLOCK, 
-		IBMAP_BLOCK;
+		IBMAP_BLOCK,
+		INDEX_BLOCK;
 		//public static final BlockType values[] = values();
 	}
 	
@@ -22,18 +23,28 @@ public abstract class BlockID {
 	//private final String key; // A globally unique key based on the unique name of the block
 	protected final BlockType type;
 	
+	/**
+	 * @param type Type of the block of this ID
+	 */
 	public BlockID(BlockType type){
 		this.type = type;
 	}
 	
-	public BlockID(BlockID id) {
-		this.type = id.type;
-	}
-	
+	/**
+	 * Creates a new block of the type corresponding to this ID.
+	 * @return the reference to they new block
+	 */
 	abstract public Block newBlock();
 	
+	/**
+	 * @return ID of the primary node of this block
+	 */
 	abstract public int primaryNodeID();
 	
+	/**
+	 *
+	 * @return Path of this block's file in the local storage
+	 */
 	abstract public String localPath();
 	
 	/**
@@ -70,6 +81,4 @@ public abstract class BlockID {
 	 */
 	@Override
 	public abstract boolean equals(Object obj);
-	
-	
 }

@@ -86,7 +86,7 @@ public class SegmentTimerQueue {
 		long timeNow = clock.currentTime();
 		long ret = timer.tryExpire(timeNow);
 		
-		while (ret > 0) { //While (!EXPIRED && !DISABLED)
+		while (ret > 0) { //While (!EXPIRED && !DISABLED), which implies VALID, which implies a positive value greater than zero
 			try {
 				Thread.sleep(ret);
 			} catch (InterruptedException e) {}
@@ -94,10 +94,6 @@ public class SegmentTimerQueue {
 			timeNow = clock.currentTime();
 			ret = timer.tryExpire(timeNow);
 		}
-		
-		// if (ret == SegmentTimer.DISABLED || ret == SegmentTimer.ALREADY_EXPIRED)
-		//	return;
-		//assert ret == SegmentTimer.EXPIRED;
 	}
 	
 	public void waitUntilEmpty() {

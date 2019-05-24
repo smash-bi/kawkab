@@ -472,8 +472,7 @@ public final class DataSegment extends Block {
 	/**
 	 * Returns the append offset with respect to the start of the block instead of the segment
 	 */
-	@Override
-	public int appendOffsetInBlock() {
+	private int appendOffsetInBlock() {
 		//dirtyBytesLock.lock();
 		//int offsetInSegment = dirtyBytesLength > 0 ? dirtyBytesStart : 0;
 		//dirtyBytesLock.unlock();
@@ -484,11 +483,6 @@ public final class DataSegment extends Block {
 		assert offset <= conf.dataBlockSizeBytes;
 		
 		return offset;
-	}
-	
-	@Override
-	public int memorySizeBytes() {
-		return segmentSizeBytes + 8; //FIXME: Get the exact number
 	}
 	
 	@Override
