@@ -4,7 +4,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 
 public class SegmentTimerQueue {
 	//private final TransferQueue<SegmentTimer> buffer;
-	TransferQueue<SegmentTimer> buffer;
+	TransferQueue<BufferedSegment> buffer;
 	private final Thread timerThread;
 	private final Clock clock;
 	private volatile boolean working = true;
@@ -30,14 +30,14 @@ public class SegmentTimerQueue {
 		return instance;
 	}
 	
-	public void add(SegmentTimer timer) {
+	public void add(BufferedSegment segment) {
 		assert working;
 		
-		buffer.add(timer);
+		buffer.add(segment);
 	}
 	
 	private void processSegments() {
-		SegmentTimer next = null;
+		BufferedSegment next = null;
 		
 		while(working) {
 			next = buffer.poll();
@@ -67,9 +67,9 @@ public class SegmentTimerQueue {
 		}
 	}
 	
-	private void process(SegmentTimer timer) throws KawkabException {
+	private void process(BufferedSegment bseg) throws KawkabException {
 		long timeNow = clock.currentTime();
-		long ret = timer.tryExpire(timeNow);
+		long ret = bseg.tryExpire(timeNow);
 		
 		while (ret > 0) { //While (!EXPIRED && !DISABLED)
 			try {
@@ -77,12 +77,11 @@ public class SegmentTimerQueue {
 			} catch (InterruptedException e) {}
 			
 			timeNow = clock.currentTime();
-			ret = timer.tryExpire(timeNow);
+			ret = bseg.tryExpire(timeNow);
 		}
 		
-		// if (ret == SegmentTimer.DISABLED || ret == SegmentTimer.ALREADY_EXPIRED)
-		//	return;
-		//assert ret == SegmentTimer.EXPIRED;
+		// The timer in the bseg is now expired. So bseg cannot be updated and now it is safe to release the internal DS.
+		bseg.release();
 	}
 	
 	public void waitUntilEmpty() {

@@ -1,17 +1,5 @@
 package kawkab.fs.cli;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.DataInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.*;
-
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
@@ -19,15 +7,14 @@ import kawkab.fs.core.Cache;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
-import kawkab.fs.core.Inode;
-import kawkab.fs.core.exceptions.AlreadyConfiguredException;
-import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
-import kawkab.fs.core.exceptions.IbmapsFullException;
-import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
-import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.utils.TimeLog;
+
+import java.io.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Random;
 
 public final class CLI {
 	private Filesystem fs;
@@ -37,7 +24,7 @@ public final class CLI {
 		openedFiles = new HashMap<>();
 	}
 	
-	public static void main(String[] args) throws IOException, KawkabException, InterruptedException, AlreadyConfiguredException {
+	public static void main(String[] args) throws IOException, KawkabException, InterruptedException {
 		CLI c = new CLI();
 
 		c.initFS();
@@ -45,13 +32,14 @@ public final class CLI {
 		c.shutdown();
 	}
 
-	private void initFS() throws IOException, KawkabException, InterruptedException, AlreadyConfiguredException {
+	private void initFS() throws IOException, KawkabException, InterruptedException {
 		//Constants.printConfig();
-		int nodeID = getNodeID();
+		int nodeID = Configuration.getNodeID();
 		
 		System.out.println("Node ID = " + nodeID);
 		
-		Properties props = getProperties();
+		String propsFile = System.getProperty("conf", Configuration.propsFileLocal);
+		Properties props = Configuration.getProperties(propsFile);
 		
 		fs = Filesystem.bootstrap(nodeID, props);
 	}
@@ -59,13 +47,14 @@ public final class CLI {
 	private void cmd() throws IOException {
 		String cmds = "Commands: open, read, apnd, size, apndTest, flush, exit";
 		
-		try (BufferedReader ir = new BufferedReader(new InputStreamReader(System.in));) {
+		try (BufferedReader ir = new BufferedReader(new InputStreamReader(System.in))) {
 			System.out.println("--------------------------------");
 			System.out.println(cmds);
 			System.out.println("--------------------------------");
 			String line;
-
-			while (true) {
+			boolean next = true;
+			
+			while (next) {
 				System.out.print("\n$>");
 				System.out.flush();
 
@@ -78,32 +67,43 @@ public final class CLI {
 					if (line.length() == 0)
 						continue;
 
-					String args[] = line.split(" ");
+					String[] args = line.split(" ");
 
 					String cmd = args[0];
-
-					if (cmd.equals("open")) {
-						parseOpen(args);
-					} else if (cmd.equals("read")) {
-						parseRead(args);
-					} else if (cmd.equals("apnd")) {
-						parseAppend(args);
-					} else if (cmd.equals("size")) {
-						parseSize(args);
-					} else if (cmd.equals("apndTest") || cmd.equals("at")) {
-						parseAppendTest(args);
-					} else if (cmd.equals("flush")) {
-						flushCache();
-					} else if (cmd.equals("exit")) {
-						break;
-					} else {
-						System.out.println(cmds);
+					
+					switch (cmd) {
+						case "open":
+							parseOpen(args);
+							continue;
+						case "read":
+							parseRead(args);
+							continue;
+						case "apnd":
+							parseAppend(args);
+							continue;
+						case "size":
+							parseSize(args);
+							continue;
+						case "apndTest":
+						case "at":
+							parseAppendTest(args);
+							continue;
+						case "flush":
+							flushCache();
+							continue;
+						case "exit":
+							next = false;
+							break;
+						default:
+							System.out.println(cmds);
+							next = false;
+							break;
 					}
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
 			}
-
+			
 			for (FileHandle file: openedFiles.values()) {
 				try {
 					fs.close(file);
@@ -126,8 +126,7 @@ public final class CLI {
 		}
 		
 		String fname = args[1];
-		FileHandle file = null;
-		file = openedFiles.get(fname);
+		FileHandle file = openedFiles.get(fname);
 		if (file == null) {
 			throw new IOException("File not opened: " + fname);
 		}
@@ -181,7 +180,7 @@ public final class CLI {
 						
 						System.out.println("Opening file: " + filename);
 						
-						FileHandle file = fs.open(filename, FileMode.APPEND, FileOptions.defaultOpts());
+						FileHandle file = fs.open(filename, FileMode.APPEND, FileOptions.defaults());
 						
 						Random rand = new Random(0);
 						long appended = 0;
@@ -241,8 +240,7 @@ public final class CLI {
 		System.out.printf("\n\nWriters stats: sum=%.0f, %s, buffer size=%d, numWriters=%d\nOps stats: %s\n\n", writeStats.sum(), writeStats, bufSize, numWriters, opStats);
 	}
 	
-	private void parseAppend(String[] args) throws IOException, MaxFileSizeExceededException,
-			InvalidFileOffsetException, KawkabException, InterruptedException {
+	private void parseAppend(String[] args) throws IOException, KawkabException, InterruptedException {
 		String usage = "Usage: apnd <filename> [str <string> | file <filepath> | bytes <numBytes> <reqSize>]";
 		if (args.length < 4) {
 			System.out.println(usage);
@@ -251,45 +249,51 @@ public final class CLI {
 
 		String fname = args[1];
 		String cmd = args[2];
-		if (cmd.equals("str")) {
-			StringBuilder sb = new StringBuilder().append(args[3]);
-			for (int i=4; i<args.length; i++) {
-				sb.append(' ').append(args[i]);
+		switch (cmd) {
+			case "str": {
+				StringBuilder sb = new StringBuilder().append(args[3]);
+				for (int i = 4; i < args.length; i++) {
+					sb.append(' ').append(args[i]);
+				}
+				byte[] data = sb.toString().getBytes();
+				appendFile(fname, data, data.length, data.length);
+				break;
 			}
-			byte[] data = sb.toString().getBytes();
-			appendFile(fname, data, data.length, data.length);
-		} else if (cmd.equals("bytes")) {
-			if (args.length < 5) {
+			case "bytes": {
+				if (args.length < 5) {
+					System.out.println(usage);
+					return;
+				}
+				long dataSize;
+				int bufLen;
+				try {
+					dataSize = Long.parseLong(args[3]);
+					bufLen = Integer.parseInt(args[4]);
+				} catch (NumberFormatException e) {
+					System.out.println("Given invalid bytes numBytes or reqSize. " + usage);
+					return;
+				}
+				
+				byte[] data = randomData(bufLen);
+				
+				appendFile(fname, data, dataSize, bufLen);
+				break;
+			}
+			case "file":
+				appendFile(fname, args[3]);
+				break;
+			default:
 				System.out.println(usage);
-				return;
-			}
-			long dataSize = -1;
-			int bufLen = 0;
-			try {
-				dataSize = Long.parseLong(args[3]);
-				bufLen = Integer.parseInt(args[4]);
-			} catch (NumberFormatException e) {
-				System.out.println("Given invalid bytes numBytes or reqSize. " + usage);
-				return;
-			}
-
-			byte[] data = randomData(bufLen);
-			
-			appendFile(fname, data, dataSize, bufLen);
-		} else if (cmd.equals("file")) {
-			appendFile(fname, args[3]);
-		} else {
-			System.out.println(usage);
-			return;
+				break;
 		}
 	}
 	
 	private void appendFile(String fn, String srcFile) throws IOException,
-			MaxFileSizeExceededException, KawkabException, InterruptedException {
+			KawkabException, InterruptedException {
 		try (DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(srcFile))))) {
 			int bufLen = 4*1024;
 			byte[] buf = new byte[bufLen];
-			int dataSize = 0;
+			int dataSize;
 			while ((dataSize = dis.read(buf)) != -1) {
 				appendFile(fn, buf, dataSize, buf.length);
 			}
@@ -297,9 +301,8 @@ public final class CLI {
 	}
 	
 	private void appendFile(String fn, byte[] data, long dataSize, int bufLen) throws IOException,
-			MaxFileSizeExceededException, KawkabException, InterruptedException {
-		FileHandle file = null;
-		file = openedFiles.get(fn);
+			KawkabException, InterruptedException {
+		FileHandle file = openedFiles.get(fn);
 		if (file == null) {
 			throw new IOException("File not opened: " + fn);
 		}
@@ -312,10 +315,10 @@ public final class CLI {
 	}
 
 	private void parseRead(String[] args)
-			throws NumberFormatException, IOException, KawkabException, InvalidFileOffsetException {
+			throws NumberFormatException, IOException, KawkabException {
 		String usage = "Usage: read filename offset intLength <dstFile>";
 		
-		String fn = null;
+		String fn;
 		String dstFile = null;
 		long offset = 0;
 		long len = 0;
@@ -367,9 +370,8 @@ public final class CLI {
 	}
 
 	private void readFile(String fn, long byteStart, long readLen, String dst)
-			throws IOException, KawkabException, InvalidFileOffsetException {
-		FileHandle file = null;
-		file = openedFiles.get(fn);
+			throws IOException, KawkabException {
+		FileHandle file = openedFiles.get(fn);
 		if (file == null) {
 			throw new IOException("File not opened: " + fn);
 		}
@@ -405,19 +407,22 @@ public final class CLI {
 			if (out != null)
 				out.close();
 		}
-		System.out.println("");
+		System.out.println();
 	}
 
-	private void parseOpen(String[] args) throws IOException, IbmapsFullException, KawkabException, InterruptedException, FileAlreadyOpenedException {
+	private void parseOpen(String[] args) throws IOException, KawkabException, InterruptedException {
 		if (args.length < 3) {
 			System.out.println("Usage: open <filename> <r|a>");
 			return;
 		}
 
-		openFile(args[1], args[2]);
+		String fn = args[1];
+		String mode = args[2];
+		FileHandle fh = openFile(fn, mode);
+		openedFiles.put(fn, fh);
 	}
 
-	private FileHandle openFile(String fn, String fm) throws IOException, IbmapsFullException, KawkabException, InterruptedException, FileAlreadyOpenedException {
+	private FileHandle openFile(String fn, String fm) throws IOException, KawkabException, InterruptedException {
 		FileMode mode;
 		if (fm.equals("r"))
 			mode = FileMode.READ;
@@ -426,53 +431,14 @@ public final class CLI {
 		else
 			throw new IOException("Invalid file mode");
 
-		FileHandle fh = fs.open(fn, mode, new FileOptions());
-		openedFiles.put(fn, fh);
-
-		return fh;
+		return fs.open(fn, mode, new FileOptions());
 	}
 	
 	private void shutdown() throws KawkabException, InterruptedException {
 		fs.shutdown();
 		System.out.println("Closed CLI");
-		
-		/*Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
-		for (Thread thr : threadSet) {
-			System.out.println(thr.getName());
-			StackTraceElement[] stes = thr.getStackTrace();
-			for (StackTraceElement ste : stes) {
-				System.out.println("\t"+ste);
-			}
-		}
-		System.out.println("\n");*/
 	}
-	
-	private Properties getProperties() throws IOException {
-		String propsFile = System.getProperty("conf", "config.properties");
-		
-		try (InputStream in = getClass().getClassLoader().getResourceAsStream(propsFile)) {
-			assert in != null;
-			
-			if (in == null) {
-				System.out.println("in is null");
-			}
-			
-			Properties props = new Properties();
-			props.load(in);
-			
-			return props;
-		}
-	}
-	
-	private int getNodeID() throws KawkabException {
-		String nodeIDProp = "nodeID";
-		
-		if (System.getProperty(nodeIDProp) == null) {
-			throw new KawkabException("System property nodeID is not defined.");
-		}
-		
-		return Integer.parseInt(System.getProperty(nodeIDProp));
-	}
+
 
 	private byte[] randomData(int length) {
 		String chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";

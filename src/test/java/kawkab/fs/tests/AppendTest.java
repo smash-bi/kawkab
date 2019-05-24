@@ -8,11 +8,11 @@ import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.SegmentTimerQueue;
-import kawkab.fs.core.exceptions.*;
+import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.utils.TimeLog;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,22 +21,21 @@ import java.util.Random;
 
 public class AppendTest {
 
-	@Before
-	public void initialize() throws IOException, InterruptedException, KawkabException, AlreadyConfiguredException {
-		int nodeID = getNodeID();
-		Properties props = getProperties();
+	@BeforeAll
+	public static void initialize() throws IOException, InterruptedException, KawkabException {
+		int nodeID = Configuration.getNodeID();
+		Properties props = Configuration.getProperties(Configuration.propsFileLocal);
 		
 		Filesystem.bootstrap(nodeID, props);
 	}
 	
-	@After
-	public void terminate() throws KawkabException, InterruptedException, IOException {
+	@AfterAll
+	public static void terminate() throws KawkabException, InterruptedException, IOException {
 		Filesystem.instance().shutdown();
 	}
 	
 	@Test
-	public void appendPerformanceConcurrentFilesTest()
-			throws IOException, KawkabException, MaxFileSizeExceededException, FileAlreadyOpenedException, InterruptedException, IbmapsFullException {
+	public void appendPerformanceConcurrentFilesTest() throws IOException, KawkabException {
 		System.out.println("----------------------------------------------------------------");
 		System.out.println("            Append Perofrmance Test - Concurrent Files");
 		System.out.println("----------------------------------------------------------------");
@@ -63,7 +62,7 @@ public class AppendTest {
 						
 						System.out.println("Opening file: " + filename);
 						
-						FileHandle file = fs.open(filename, FileMode.APPEND, FileOptions.defaultOpts());
+						FileHandle file = fs.open(filename, FileMode.APPEND, FileOptions.defaults());
 
 						Random rand = new Random(0);
 						long appended = 0;
@@ -116,12 +115,12 @@ public class AppendTest {
 		System.out.printf("\n\nWriters stats: sum=%.0f, %s, buffer size=%d, numWriters=%d\nOps stats: %s\n\n", writeStats.sum(), writeStats, bufSize, numWriters, opStats);
 	}
 	
-	private void warmup() throws MaxFileSizeExceededException, KawkabException, InterruptedException, IOException, FileAlreadyOpenedException, IbmapsFullException {
+	private void warmup() throws KawkabException, InterruptedException, IOException {
 		System.out.println("Warming up ...");
 		long st = System.currentTimeMillis();
 		
 		Filesystem fs = Filesystem.instance();
-		FileHandle file = fs.open("appendTestWarmup", FileMode.APPEND, FileOptions.defaultOpts());
+		FileHandle file = fs.open("appendTestWarmup", FileMode.APPEND, FileOptions.defaults());
 		
 		long dataSize = 5000 * 1048576; //~5GB
 		int bufSize = 10;
@@ -161,17 +160,7 @@ public class AppendTest {
 		}
 	}
 	
-	private int getNodeID() throws KawkabException {
-		String nodeIDProp = "nodeID";
-		
-		if (System.getProperty(nodeIDProp) == null) {
-			throw new KawkabException("System property nodeID is not defined.");
-		}
-		
-		return Integer.parseInt(System.getProperty(nodeIDProp));
-	}
-	
-	public static void main(String args[]) throws InterruptedException, KawkabException, IOException, MaxFileSizeExceededException, IbmapsFullException, FileAlreadyOpenedException, AlreadyConfiguredException {
+	public static void main(String args[]) throws InterruptedException, KawkabException, IOException {
 		AppendTest test = new AppendTest();
 		test.initialize();
 		test.appendPerformanceConcurrentFilesTest();

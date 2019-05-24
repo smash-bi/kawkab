@@ -12,9 +12,9 @@
 	    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	    <nodeID>0</nodeID>
 		<mainClass>kawkab.fs.cli.CLI</mainClass>
-          <Xmn>-Xmn4g</Xmn>
-          <Xmx>-Xmx4g</Xmx>
-          <MaxDirectMemorySize>-XX:MaxDirectMemorySize=2g</MaxDirectMemorySize>
+          <Xmn>-Xmn2g</Xmn>
+          <Xmx>-Xmx2g</Xmx>
+          <MaxDirectMemorySize>-XX:MaxDirectMemorySize=1g</MaxDirectMemorySize>
 	  </properties>
 
 	<build>
@@ -163,6 +163,12 @@
 <!--						<argument>-XX:ParallelCMSThreads=2</argument>-->
 <!--						<argument>-XX:ParallelCMSThreads=4</argument>-->
 <!--						<argument>-XX:+UseG1GC</argument>-->
+						<!--ZGC requires JDK11-->
+						<argument>-XX:+UnlockExperimentalVMOptions -XX:+UseZGC</argument>
+						<!--EpsilonGC is a no-op GC, requires JDK11-->
+<!--						<argument>-XX:+UseEpsilonGC</argument>-->
+
+<!--						<argument>XX:+UseDynamicNumberOfCompilerThreads</argument>-->
 
 <!--						ZGC requires JDK 11-->
 						<argument>-XX:+UnlockExperimentalVMOptions</argument>
@@ -194,9 +200,13 @@
 			</plugin>
 
 			<plugin>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<version>3.0.0-M3</version>
+			</plugin>
+			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
-				<version>2.19.1</version>
+				<version>3.0.0-M3</version>
 				<configuration>
 					<enableAssertions>true</enableAssertions>
 					<argLine>--illegal-access=permit</argLine>
@@ -214,6 +224,7 @@
 						<propertyName>nodeID</propertyName>
 						<buildDirectory>${0}</buildDirectory>
 					</systemPropertyVariables>
+					<useFile>false</useFile>
 				</configuration>
 			</plugin>
 
@@ -261,9 +272,15 @@
 		</dependency>
 
 		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.13-beta-3</version>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-api</artifactId>
+			<version>5.4.2</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-engine</artifactId>
+			<version>5.4.2</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
