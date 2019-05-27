@@ -8,8 +8,14 @@ import kawkab.fs.core.exceptions.KawkabException;
  * for eviction but the cache cannot evict them as their reference count is greater than 0. .
  */
 public class SegmentTimerQueue {
+<<<<<<< HEAD
 	private TransferQueue<SegmentTimer> buffer;
 	private final Thread processorThr;
+=======
+	//private final TransferQueue<SegmentTimer> buffer;
+	TransferQueue<BufferedSegment> buffer;
+	private final Thread timerThread;
+>>>>>>> batching
 	private final Clock clock;
 	private volatile boolean working = true;
 	
@@ -34,21 +40,25 @@ public class SegmentTimerQueue {
 		return instance;
 	}
 	
+<<<<<<< HEAD
 	/**
 	 * Adds the timer object in the queue. The timer object is associated with a DataSegment.
 	 * @param timer
 	 */
 	public void add(SegmentTimer timer) {
+=======
+	public void add(BufferedSegment segment) {
+>>>>>>> batching
 		assert working;
 		
-		buffer.add(timer);
+		buffer.add(segment);
 	}
 	
 	/**
 	 * Takes items from the queue,
 	 */
 	private void processSegments() {
-		SegmentTimer next = null;
+		BufferedSegment next = null;
 		
 		while(working) {
 			next = buffer.poll();
@@ -78,13 +88,17 @@ public class SegmentTimerQueue {
 		}
 	}
 	
+<<<<<<< HEAD
 	/**
 	 * @param timer
 	 * @throws KawkabException
 	 */
 	private void process(SegmentTimer timer) throws KawkabException {
+=======
+	private void process(BufferedSegment bseg) throws KawkabException {
+>>>>>>> batching
 		long timeNow = clock.currentTime();
-		long ret = timer.tryExpire(timeNow);
+		long ret = bseg.tryExpire(timeNow);
 		
 		while (ret > 0) { //While (!EXPIRED && !DISABLED), which implies VALID, which implies a positive value greater than zero
 			try {
@@ -92,8 +106,17 @@ public class SegmentTimerQueue {
 			} catch (InterruptedException e) {}
 			
 			timeNow = clock.currentTime();
-			ret = timer.tryExpire(timeNow);
+			ret = bseg.tryExpire(timeNow);
 		}
+<<<<<<< HEAD
+=======
+		
+		if (ret == 0) // If the bseg is frozen by the appender
+			return;
+		
+		// The timer in the bseg is now expired. So bseg cannot be updated and now it is safe to release the internal DS.
+		bseg.release();
+>>>>>>> batching
 	}
 	
 	public void waitUntilEmpty() {

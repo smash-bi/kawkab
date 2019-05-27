@@ -3,9 +3,16 @@ package kawkab.fs.core;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
+<<<<<<< HEAD
 import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.index.FileIndex;
+=======
+import kawkab.fs.core.exceptions.InsufficientResourcesException;
+import kawkab.fs.core.exceptions.InvalidFileOffsetException;
+import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
+>>>>>>> batching
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -23,17 +30,31 @@ public final class Inode {
 	
 	private long inumber;
 	private AtomicLong fileSize = new AtomicLong(0);
+<<<<<<< HEAD
 	private int recordSize; //Temporarily set to 1 until we implement reading/writing records
 	private FileIndex index;
+=======
+	private int recordSize = 1; //Temporarily set to 1 until we implement reading/writing records
+>>>>>>> batching
 	
 	private static Cache cache;
 	private static LocalStoreManager localStore;
 	
+<<<<<<< HEAD
 	private DataSegmentID segId;
 	private DataSegment curSeg;
 	private volatile SegmentTimer timer; // volatile so that the SegmentTimerQueue thread can read the most recent value
 	private SegmentTimerQueue timerQ;
 	private final Object timerLock = new Object();
+=======
+//	private DataSegmentID segId;
+//	private DataSegment curSeg;
+//	private volatile SegmentTimer timer; // volatile so that the SegmentTimerQueue thread can read the most recent value
+	
+	private volatile BufferedSegment acquiredSeg;
+	//private SegmentTimerQueue timerQ;
+	//private final Object timerLock = new Object();
+>>>>>>> batching
 	
 	public static final long MAXFILESIZE;
 	
@@ -46,8 +67,12 @@ public final class Inode {
 	
 	protected Inode(long inumber, int recordSize) {
 		this.inumber = inumber;
+<<<<<<< HEAD
 		this.recordSize = recordSize;
 		timerQ = SegmentTimerQueue.instance();
+=======
+		//timerQ = SegmentTimerQueue.instance();
+>>>>>>> batching
 	}
 	
 	/**
@@ -188,6 +213,7 @@ public final class Inode {
 		return bufferOffset;
 	}
 	
+<<<<<<< HEAD
 	public int appendBuffered(final Record record)
 			throws IOException, InterruptedException, KawkabException {
 		int length = record.size();
@@ -253,6 +279,10 @@ public final class Inode {
 	}
 	
 	public int appendBuffered(final byte[] data, int offset, final int length)
+=======
+	//public static TimeLog tlog1 = new TimeLog(TimeLog.TimeLogUnit.NANOS, "ab all");
+	public synchronized int appendBuffered(final byte[] data, int offset, final int length) //Syncrhonized with close() due to acquiredSeg
+>>>>>>> batching
 			throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
 		int remaining = length; //Reaming size of data to append
 		long fileSizeBuffered = this.fileSize.get(); // Current file size
@@ -263,16 +293,15 @@ public final class Inode {
 		
 		
 		while (remaining > 0) {
-			if (timer == null) { //If null, no need to synchronize because the SegmentTimerQueue thread will never synchronize with this timer
-				assert curSeg == null;
-				assert segId == null;
-				
+			if (acquiredSeg == null) { //If null, no need to synchronize because the SegmentTimerQueue thread will never synchronize with this timer
+				DataSegmentID segId;
 				if ((fileSizeBuffered % conf.dataBlockSizeBytes) == 0L) { // if the last block is full
 					segId = createNewBlock(fileSizeBuffered);
 				} else { // Otherwise the last segment was full or we are just starting without any segment at hand
 					segId = getSegmentID(fileSizeBuffered);
 				}
 				
+<<<<<<< HEAD
 				
 				curSeg = (DataSegment) cache.acquireBlock(segId);
 				curSeg.initForAppend(fileSizeBuffered, recordSize);
@@ -284,12 +313,20 @@ public final class Inode {
 						curSeg = (DataSegment) cache.acquireBlock(segId); // Acquire the segment again as the cache may have evicted the segment
 						timer = new SegmentTimer(segId, this); // The previous timer cannot be reused because its state cannot be changed
 					}
+=======
+				acquiredSeg = new BufferedSegment(segId, fileSizeBuffered);
+			} else {
+				if (!acquiredSeg.freeze()) {	// Tries to freeze the bufferedSegment so that the acquired segement cannot be returned back to the cache.The condition is true if the timer has expired before it is disabled
+					DataSegmentID segId = getSegmentID(fileSizeBuffered);	// Acquire the segment again as the cache may have evicted the segment. //
+																			// The previous timer cannot be reused because its state cannot be changed
+					acquiredSeg = new BufferedSegment(segId, fileSizeBuffered);
+>>>>>>> batching
 				}
 			}
 			
 			try {
 				
-				int bytes = curSeg.append(data, offset, remaining, fileSizeBuffered);
+				int bytes = acquiredSeg.append(data, offset, remaining, fileSizeBuffered);
 				
 				remaining -= bytes;
 				offset += bytes;
@@ -298,6 +335,7 @@ public final class Inode {
 				throw new KawkabException(e);
 			}
 			
+<<<<<<< HEAD
 			if (curSeg.isFull()) { // If the current segment is full
 				cache.releaseBlock(segId);
 				curSeg = null;
@@ -306,6 +344,17 @@ public final class Inode {
 			} else {
 				timer.update();
 				timerQ.add(timer);
+=======
+			//tlog1.start();
+			if (acquiredSeg.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
+										// is now immutable. We can return the segment to the cache.
+				
+				acquiredSeg.release(); 	// Don't add back in the queue as the timer will not be reused again. The segmentTimerQueue
+										// thread will just throw way the timer because it is disabled.
+				acquiredSeg = null;
+			} else {
+				acquiredSeg.unfreeze();
+>>>>>>> batching
 			}
 		}
 		
@@ -314,6 +363,7 @@ public final class Inode {
 		return length;
 	}
 
+<<<<<<< HEAD
 	/**
 	 * Releases the dataSegment if the timer has expired, while synchronizing with the append thread in the
 	 * <code>appendBuffered()</code> function.
@@ -345,6 +395,8 @@ public final class Inode {
 		cache.releaseBlock(expiredSegId);
 	}
 
+=======
+>>>>>>> batching
 	private DataSegmentID getSegmentID(long offsetInFile) {
 		long segmentInFile = FixedLenRecordUtils.segmentInFile(offsetInFile, recordSize);
 		long blockInFile = FixedLenRecordUtils.blockInFile(segmentInFile);
@@ -453,10 +505,11 @@ public final class Inode {
 
 	/**
 	 * This function must not be concurrent to the append function. So this should be called from the same thread as
-	 * the append function. Otherwise, we should make the append and close synchronized.
+	 * the append function. Otherwise, we should synchronize the caller and the appender in append and close functions.
 	 */
-	void releaseBuffer() throws KawkabException {
+	synchronized void releaseBuffer() throws KawkabException { //Syncrhonized with appendBuffered() due to acquiredSeg
 		//tlog.printStats("DS.append,ls.store");
+<<<<<<< HEAD
 		
 		synchronized (timerLock) { // Synchronize with the SegmentTimeQueue.
 			if (timer == null) {
@@ -474,6 +527,12 @@ public final class Inode {
 				
 				return;
 			}
+=======
+		if (acquiredSeg != null) {
+			acquiredSeg.freeze();
+			acquiredSeg.release();
+			acquiredSeg = null;
+>>>>>>> batching
 		}
 	}
 }

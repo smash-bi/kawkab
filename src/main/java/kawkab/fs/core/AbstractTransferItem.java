@@ -1,5 +1,10 @@
 package kawkab.fs.core;
 
+<<<<<<< HEAD
+=======
+import kawkab.fs.core.exceptions.KawkabException;
+
+>>>>>>> batching
 public abstract class AbstractTransferItem {
 	private volatile boolean inQueue = false;
 	

@@ -58,7 +58,14 @@ public final class FSTest {
 		System.out.println("---------------------------------------------");
 		
 		int nodeID = Configuration.getNodeID();
+<<<<<<< HEAD
 		Properties props = Configuration.getProperties(Configuration.propsFileLocal);
+=======
+		Properties props = Configuration.getProperties(Configuration.propsFileCluster);
+		
+		System.out.println("Node ID = " + nodeID);
+		System.out.println("Loading properties from: " + props);
+>>>>>>> batching
 		
 		Filesystem fs = Filesystem.bootstrap(nodeID, props);
 		conf = fs.getConf();

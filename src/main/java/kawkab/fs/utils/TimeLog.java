@@ -63,11 +63,11 @@ public class TimeLog {
 	
 	public void printStats() {
 		//System.out.printf("\t%s (%s): %s, num calls: %,d\n", tag, unit.getUnit(), stats, count);
-		System.out.printf("\t%s (%s): %s, num calls: %,d\n", tag, unit.getUnit(), stats, count);
+		System.out.printf("\t%s (%s): %s, num calls = %,d, sampled = %d\n", tag, unit.getUnit(), stats, count, stats.count());
 	}
 	
 	public String getStats() {
-		return String.format("(%s): %s, num calls: %,d\n", unit.getUnit(), stats, count);
+		return String.format("(%s): %s, total calls = %,d, sampled = %d\n", unit.getUnit(), stats, count,stats.count());
 	}
 	
 	private long timeNow() {

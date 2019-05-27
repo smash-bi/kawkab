@@ -2,19 +2,19 @@ package kawkab.fs.utils;
 
 public class Accumulator{
     private long[] buckets;
-    public long totalSum;
-    public long totalCnt;
-    double prodSum = 0;
+    private long totalSum;
+    private long totalCnt;
+    private double prodSum = 0;
     private int maxCntBucket;
-    public double maxValue;
-    public double minValue = Double.MAX_VALUE;
+    private double maxValue;
+    private double minValue = Double.MAX_VALUE;
     
     
     public Accumulator(){
         reset();
     }
     
-    synchronized void reset(){
+    public synchronized void reset(){
         int maxValue = 2000000; //in microseconds
         buckets = new long[maxValue];
         maxCntBucket = 0;
@@ -50,39 +50,43 @@ public class Accumulator{
             minValue = value;
     }
     
-    public double mean(){
+    public synchronized double mean(){
         if (totalCnt > 0)
             return 1.0*totalSum/totalCnt;
         else
             return -1;
     }
     
-    public double min(){
+    public synchronized double min(){
         return minValue;
     }
     
-    public double max(){
+    public synchronized double max(){
         return maxValue;
     }
     
-    double variance(){
+    public double variance(){
         if (totalCnt > 0)
             return (prodSum - (totalSum*totalSum/totalCnt))/totalCnt;
         else
             return -1;
     }
     
-    double stdDev(){
+    public synchronized double stdDev(){
         if (variance() > 0)
             return Math.sqrt(variance());
         else
             return -1;
     }
     
+    public synchronized long count() {
+        return totalCnt;
+    }
+    
     /**
      * @return Returns [median lat, 95 %ile lat, 99 %ile lat]
      * */
-    public double[] getLatencies() {
+    public synchronized double[] getLatencies() {
         int medianBucket = buckets.length;
         int perc95Bucket = buckets.length;
         int perc99Bucket = buckets.length;
@@ -107,7 +111,7 @@ public class Accumulator{
     
     /*Adapted from the book "Digital Image Processing: An Algorithmic Introduction Using Java", 
      * page 70, Figure 5.3: five point operations*/
-    private double[] histToCdf(long[] hist){
+    private synchronized double[] histToCdf(long[] hist){
        int k = hist.length;
        int n = 0;
        for(int i=0; i<k; i++) { //sum all histogram values
@@ -126,13 +130,13 @@ public class Accumulator{
     }
     
     @Override
-    public String toString() {
+    public synchronized String toString() {
         double[] lats = getLatencies();
         return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f,mean=%.2f,stdev=%.2f",
                 lats[0],lats[1],lats[2], min(), max(), mean(), stdDev());
     }
     
-    public void printCDF() {
+    public synchronized void printCDF() {
         long[] cdf2 = cdf();
         for(int i=1; i<=100; i++) {
             System.out.print(i+"="+cdf2[i]+", ");
@@ -140,7 +144,7 @@ public class Accumulator{
         System.out.println();
     }
     
-    void print(){
+    synchronized void print(){
         for (int i=0; i<buckets.length; i++){
             if (buckets[i] > 0)
                 System.out.print((i+1)+":"+buckets[i]+", ");
@@ -148,11 +152,11 @@ public class Accumulator{
         System.out.println();
     }
     
-    public long[] histogram(){
+    public synchronized long[] histogram(){
         return buckets;
     }
     
-    public long[] cdf(){
+    public synchronized long[] cdf(){
         long[] cdf = new long[101];
         long cnt = 0; 
         for(int i=0; i<buckets.length; i++){

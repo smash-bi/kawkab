@@ -19,6 +19,10 @@ import static kawkab.fs.commons.FixedLenRecordUtils.offsetInSegment;
 
 public final class DataSegment extends Block {
 	private final static Configuration conf = Configuration.instance();
+<<<<<<< HEAD
+=======
+	private final static int recordSize = 1; //Temporarily set to 1 until we implement reading/writing records
+>>>>>>> batching
 	private final static int segmentSizeBytes = conf.segmentSizeBytes;
 	
 	private ByteBuffer dataBuf; // Buffer to hold actual segment data
@@ -38,7 +42,6 @@ public final class DataSegment extends Block {
 	// and the value is assigned atomically due to Java memory model.
 	private int initialAppendPos; // Index from which data will be appended the first time. This position is not modified with the appends
 	private int bytesLoaded; // Number of bytes loaded in this block from the local or remote storage
-	private boolean acquired = false;
 	
 	private boolean opened = false;
 	private RandomAccessFile rwFile;
@@ -62,11 +65,20 @@ public final class DataSegment extends Block {
 	synchronized void reInit(DataSegmentID segmentID) {
 		reset(segmentID);
 		segmentInBlock = segmentID.segmentInBlock();
-		lastFetchTimeMs = 0;
+		
 		dataBuf.clear();
+		storeBuffer.clear();
+		
+		lastFetchTimeMs = 0;
 		dirtyOffset = 0;
 		writePos.set(0);
+		segmentIsFull = false;
+		initialAppendPos = 0;
 		initedForAppends = false;
+		bytesLoaded = 0;
+		opened = false;
+		rwFile = null;
+		channel = null;
 	}
 	
 	synchronized void initForAppend(long offsetInFile, int recordSize) {
@@ -406,7 +418,6 @@ public final class DataSegment extends Block {
 			synchronized (this) {
 				if (opened) {
 					//System.out.println("Closing file: " + id.localPath());
-					opened = false;
 					try {
 						channel.close();
 					} catch (IOException e) {
@@ -418,6 +429,10 @@ public final class DataSegment extends Block {
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
+					
+					opened = false;
+					channel = null;
+					rwFile = null;
 				}
 			}
 		}
