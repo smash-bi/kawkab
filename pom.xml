@@ -13,8 +13,8 @@
 	    <nodeID>0</nodeID>
 		<mainClass>kawkab.fs.cli.CLI</mainClass>
           <Xmn>-Xmn2g</Xmn>
-          <Xmx>-Xmx2g</Xmx>
-          <MaxDirectMemorySize>-XX:MaxDirectMemorySize=1g</MaxDirectMemorySize>
+          <Xmx>-Xmx4g</Xmx>
+          <MaxDirectMemorySize>-XX:MaxDirectMemorySize=2g</MaxDirectMemorySize>
 	  </properties>
 
 	<build>
@@ -163,18 +163,13 @@
 <!--						<argument>-XX:ParallelCMSThreads=2</argument>-->
 <!--						<argument>-XX:ParallelCMSThreads=4</argument>-->
 <!--						<argument>-XX:+UseG1GC</argument>-->
-						<!--ZGC requires JDK11-->
-						<argument>-XX:+UnlockExperimentalVMOptions -XX:+UseZGC</argument>
-						<!--EpsilonGC is a no-op GC, requires JDK11-->
-<!--						<argument>-XX:+UseEpsilonGC</argument>-->
-
 <!--						<argument>XX:+UseDynamicNumberOfCompilerThreads</argument>-->
 
-<!--						ZGC requires JDK 11-->
+							<!-- ZGC requires JDK 11 -->
 						<argument>-XX:+UnlockExperimentalVMOptions</argument>
 						<argument>-XX:+UseZGC</argument>
 
-<!--						EpsilonGC requires JDK11-->
+						<!-- EpsilonGC, a no-op GC, requires JDK11 -->
 <!--						<argument>-XX:+UnlockExperimentalVMOptions</argument>-->
 <!--						<argument>-XX:+UseEpsilonGC</argument>-->
 

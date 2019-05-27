@@ -1,6 +1,6 @@
 package kawkab.fs.core.exceptions;
 
-public class OutOfMemoryException extends Exception{
+public class OutOfMemoryException extends KawkabException{
 	public OutOfMemoryException(){
 		super();
 	}

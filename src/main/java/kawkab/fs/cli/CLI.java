@@ -3,6 +3,7 @@ package kawkab.fs.cli;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
+import kawkab.fs.core.BufferedCache;
 import kawkab.fs.core.Cache;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
@@ -35,17 +36,17 @@ public final class CLI {
 	private void initFS() throws IOException, KawkabException, InterruptedException {
 		//Constants.printConfig();
 		int nodeID = Configuration.getNodeID();
+		String propsFile = System.getProperty("conf", Configuration.propsFileCluster);
 		
 		System.out.println("Node ID = " + nodeID);
+		System.out.println("Loading properties from: " + propsFile);
 		
-		String propsFile = System.getProperty("conf", Configuration.propsFileLocal);
 		Properties props = Configuration.getProperties(propsFile);
-		
 		fs = Filesystem.bootstrap(nodeID, props);
 	}
 
 	private void cmd() throws IOException {
-		String cmds = "Commands: open, read, apnd, size, apndTest, flush, exit";
+		String cmds = "Commands: open, read, apnd, size, apndTest|at, flush, exit";
 		
 		try (BufferedReader ir = new BufferedReader(new InputStreamReader(System.in))) {
 			System.out.println("--------------------------------");
@@ -96,8 +97,7 @@ public final class CLI {
 							break;
 						default:
 							System.out.println(cmds);
-							next = false;
-							break;
+							continue;
 					}
 				} catch (Exception e) {
 					e.printStackTrace();
@@ -212,14 +212,12 @@ public final class CLI {
 						
 						fs.close(file);
 						
-						System.out.printf("Writer %d: Data size = %.0fMB, Write tput = %,.0f MB/s, Ops tput = %,.0f OPS\n", id, sizeMB, thr, opThr);
+						System.out.printf("Writer %d: buffer=%dB, dataSize=%.0fMB, writeTput=%,.0f MB/s, opsTput=%,.0f OPS\n", id, bufSize, sizeMB, thr, opThr);
 						tlog.printStats();
 						tlog.reset();
 						
 						//Inode.tlog1.printStats();
 						//Inode.tlog1.reset();
-						
-						
 					} catch (Exception e) {
 						e.printStackTrace();
 					}

@@ -1,6 +1,6 @@
 package kawkab.fs.core.exceptions;
 
-public class InodeNumberOutOfRangeException extends Exception{
+public class InodeNumberOutOfRangeException extends KawkabException {
 	public InodeNumberOutOfRangeException(){
 		super();
 	}

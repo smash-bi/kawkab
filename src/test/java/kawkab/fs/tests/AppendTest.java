@@ -24,8 +24,7 @@ public class AppendTest {
 	@BeforeAll
 	public static void initialize() throws IOException, InterruptedException, KawkabException {
 		int nodeID = Configuration.getNodeID();
-		Properties props = Configuration.getProperties(Configuration.propsFileLocal);
-		
+		Properties props = Configuration.getProperties(Configuration.propsFileCluster);
 		Filesystem.bootstrap(nodeID, props);
 	}
 	

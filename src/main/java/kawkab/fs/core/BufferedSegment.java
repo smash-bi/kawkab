@@ -5,12 +5,14 @@ import kawkab.fs.core.exceptions.KawkabException;
 import java.io.IOException;
 
 /**
- * Call release() only after calling the freeze()
+ * Call release() only after calling freeze()
+ *
+ * Once you have called release(), the same BufferedSegment object cannot be reused to append the DS or for another DS.
  */
 public class BufferedSegment extends AbstractTransferItem {
 	private DataSegmentID dsid;
 	private DataSegment ds;
-	private SegmentTimer timer;
+	private final SegmentTimer timer;
 	
 	private static final Cache cache = Cache.instance();
 	private static final SegmentTimerQueue timerQ = SegmentTimerQueue.instance();
@@ -19,8 +21,9 @@ public class BufferedSegment extends AbstractTransferItem {
 		this.dsid = dsid;
 		
 		ds = (DataSegment) cache.acquireBlock(dsid);
+		ds.initForAppend(fileSize);
+		
 		timer = new SegmentTimer();
-		this.ds.initForAppend(fileSize);
 	}
 	
 	/**
@@ -32,9 +35,8 @@ public class BufferedSegment extends AbstractTransferItem {
 	 * @throws IOException
 	 */
 	public int append(byte[] data, int offset, int length, long offsetInFile) throws IOException {
-		if (!timer.isDisabled())
-			System.out.println("[BS] Error: Illegal state: you must first call freeze() before append.");
-		assert timer.isDisabled();
+		assert timer.isDisabled() : "[BS] Error: Illegal state: you must first call freeze() before append.";
+		
 		return ds.append(data, offset, length, offsetInFile);
 	}
 	
@@ -48,9 +50,7 @@ public class BufferedSegment extends AbstractTransferItem {
 	}
 	
 	public void unfreeze() {
-		if (!timer.isDisabled()) //FIXME: WHY?? Is it a mandatory error? What will go wrong if we allow unfreeze() an already unfreeze() BS???
-			System.out.println("[BS] Illegal state");
-		assert timer.isDisabled();
+		assert timer.isDisabled() : "[BS] Illegal state in unfreeze; timer is not disabled"; //FIXME: WHY?? Is it a mandatory error? What will go wrong if we allow unfreeze() an already unfreeze() BS???
 		
 		timer.update();
 		timerQ.add(this);
@@ -60,23 +60,26 @@ public class BufferedSegment extends AbstractTransferItem {
 		// This function does not need to be synchronized with any other function because release() is only allowed to be called
 		// after freeze() or after reminingTime() functions.
 		
-		if (timer == null)
+		if (ds == null)
 			return; // The DS has been already released through this release() function call
 		
-		assert timer.isDisabled() || timer.isExpired();
+		assert timer.isDisabled() || timer.isExpired() : "Invalid timer state: " + timer.state();
 		
-		cache.releaseBlock(dsid);
 		ds = null;
+		cache.releaseBlock(dsid);
 		dsid = null;
-		timer = null;	// Don't add back in the queue as the timer will not be reused again. The segmentTimerQueue
+		//timer = null;	// Don't add back in the queue as the timer will not be reused again. The segmentTimerQueue
 						// thread will just throw way the timer because it is disabled.
 	}
 	
 	/**
 	 * @param timeNow Current time in millis
+	 *
 	 * @return if the timer is valid, it returns the remaining number of millis in the timer until it is expired.
 	 * A valid timer has some time remaining until it is expired.
-	 * Otherwise, it returns 0 if the segment is invalid or a negative value if the timer is redundantly being tried to expire.
+	 * Otherwise, if the timer is not valid, it returns 0 if the segment is freezed, or returns a negative value if the timer
+	 * has expired.
+	 *
 	 * @throws KawkabException
 	 */
 	public long tryExpire(long timeNow) throws KawkabException {

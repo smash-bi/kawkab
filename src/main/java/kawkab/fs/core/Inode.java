@@ -23,7 +23,7 @@ public final class Inode {
 	
 	private long inumber;
 	private AtomicLong fileSize = new AtomicLong(0);
-	private int recordSize = conf.recordSize; //Temporarily set to 1 until we implement reading/writing records
+	private int recordSize = 1; //Temporarily set to 1 until we implement reading/writing records
 	
 	private static Cache cache;
 	private static LocalStoreManager localStore;
@@ -142,7 +142,7 @@ public final class Inode {
 				
 				acquiredSeg = new BufferedSegment(segId, fileSizeBuffered);
 			} else {
-				if (acquiredSeg == null || !acquiredSeg.freeze()) {	// Tries to freeze the bufferedSegment so that the acquired segement cannot be returned back to the cache.The condition is true if the timer has expired before it is disabled
+				if (!acquiredSeg.freeze()) {	// Tries to freeze the bufferedSegment so that the acquired segement cannot be returned back to the cache.The condition is true if the timer has expired before it is disabled
 					DataSegmentID segId = getSegmentID(fileSizeBuffered);	// Acquire the segment again as the cache may have evicted the segment. //
 																			// The previous timer cannot be reused because its state cannot be changed
 					acquiredSeg = new BufferedSegment(segId, fileSizeBuffered);
@@ -166,6 +166,7 @@ public final class Inode {
 				
 				acquiredSeg.release(); 	// Don't add back in the queue as the timer will not be reused again. The segmentTimerQueue
 										// thread will just throw way the timer because it is disabled.
+				acquiredSeg = null;
 			} else {
 				acquiredSeg.unfreeze();
 			}
@@ -289,9 +290,10 @@ public final class Inode {
 	 */
 	synchronized void releaseBuffer() throws KawkabException { //Syncrhonized with appendBuffered() due to acquiredSeg
 		//tlog.printStats("DS.append,ls.store");
-		if (acquiredSeg != null)
+		if (acquiredSeg != null) {
 			acquiredSeg.freeze();
 			acquiredSeg.release();
-		
+			acquiredSeg = null;
+		}
 	}
 }

@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * state is Disabled. States can transition as: Disabled -> Valid,  valid -> Disabled, valid -> Expired.
  *
  * I am not sure if we allow the following transitions: disabled -> disabled, valid -> valid. These look like safe and
- * enabled in the code, but the safety need to be verified. Transition expired -> expired is prevented in the code.
+ * enabled in the code, but the safety need to be verified. The transition expired -> expired is prevented in the code.
  *
  * A valud state means the mState contains the remaining amount of time in millis. Disabled means the timer has to
  * be renabled and the timer cannot be expired. Expired means that the timer was valid and the timer has now expired.
@@ -130,7 +130,10 @@ public class SegmentTimer {
 	}
 	
 	public boolean isExpired() {
-		long state = mState.get();
-		return state == EXPIRED;
+		return mState.get() == EXPIRED;
+	}
+	
+	public long state() {
+		return mState.get();
 	}
 }

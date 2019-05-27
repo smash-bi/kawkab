@@ -1,6 +1,6 @@
 package kawkab.fs.core.exceptions;
 
-public class FileAlreadyOpenedException extends Exception {
+public class FileAlreadyOpenedException extends KawkabException {
 	public FileAlreadyOpenedException(){
 		super();
 	}

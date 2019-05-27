@@ -65,7 +65,6 @@ public abstract class Block extends AbstractTransferItem {
 		
 		isLocalDirty = false;
 		globalDirtyCnt = new AtomicInteger(0);
-		//inLocalQueue   = false;
 		inGlobalQueue  = new AtomicBoolean(false);
 		inLocalStore   = new AtomicBoolean(false);
 		inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and 
@@ -76,10 +75,10 @@ public abstract class Block extends AbstractTransferItem {
 		this.id = id;
 		isLocalDirty = false;
 		globalDirtyCnt.set(0);
-		//inLocalQueue = false;
 		inGlobalQueue.set(false);
 		inLocalStore.set(false);
 		inCache.set(false);
+		isLoaded = false;
 	}
 	
 	/**

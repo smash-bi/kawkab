@@ -80,6 +80,9 @@ public class SegmentTimerQueue {
 			ret = bseg.tryExpire(timeNow);
 		}
 		
+		if (ret == 0) // If the bseg is frozen by the appender
+			return;
+		
 		// The timer in the bseg is now expired. So bseg cannot be updated and now it is safe to release the internal DS.
 		bseg.release();
 	}
