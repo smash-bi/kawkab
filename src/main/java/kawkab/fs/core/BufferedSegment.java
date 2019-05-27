@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.core.exceptions.KawkabException;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * Call release() only after calling freeze()
@@ -17,11 +18,11 @@ public class BufferedSegment extends AbstractTransferItem {
 	private static final Cache cache = Cache.instance();
 	private static final SegmentTimerQueue timerQ = SegmentTimerQueue.instance();
 	
-	public BufferedSegment(DataSegmentID dsid, long fileSize) throws IOException, KawkabException {
+	public BufferedSegment(DataSegmentID dsid, long fileSize, int recordSize) throws IOException, KawkabException {
 		this.dsid = dsid;
 		
 		ds = (DataSegment) cache.acquireBlock(dsid);
-		ds.initForAppend(fileSize);
+		ds.initForAppend(fileSize, recordSize);
 		
 		timer = new SegmentTimer();
 	}
@@ -38,6 +39,10 @@ public class BufferedSegment extends AbstractTransferItem {
 		assert timer.isDisabled() : "[BS] Error: Illegal state: you must first call freeze() before append.";
 		
 		return ds.append(data, offset, length, offsetInFile);
+	}
+	
+	public int append(final ByteBuffer srcBuffer, long offsetInFile, int recordSize) throws IOException {
+		return ds.append(srcBuffer, offsetInFile, recordSize);
 	}
 	
 	/**

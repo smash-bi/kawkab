@@ -3,16 +3,13 @@ package kawkab.fs.core;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
-<<<<<<< HEAD
 import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.index.FileIndex;
-=======
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
->>>>>>> batching
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -30,31 +27,13 @@ public final class Inode {
 	
 	private long inumber;
 	private AtomicLong fileSize = new AtomicLong(0);
-<<<<<<< HEAD
 	private int recordSize; //Temporarily set to 1 until we implement reading/writing records
 	private FileIndex index;
-=======
-	private int recordSize = 1; //Temporarily set to 1 until we implement reading/writing records
->>>>>>> batching
 	
 	private static Cache cache;
 	private static LocalStoreManager localStore;
 	
-<<<<<<< HEAD
-	private DataSegmentID segId;
-	private DataSegment curSeg;
-	private volatile SegmentTimer timer; // volatile so that the SegmentTimerQueue thread can read the most recent value
-	private SegmentTimerQueue timerQ;
-	private final Object timerLock = new Object();
-=======
-//	private DataSegmentID segId;
-//	private DataSegment curSeg;
-//	private volatile SegmentTimer timer; // volatile so that the SegmentTimerQueue thread can read the most recent value
-	
 	private volatile BufferedSegment acquiredSeg;
-	//private SegmentTimerQueue timerQ;
-	//private final Object timerLock = new Object();
->>>>>>> batching
 	
 	public static final long MAXFILESIZE;
 	
@@ -67,12 +46,7 @@ public final class Inode {
 	
 	protected Inode(long inumber, int recordSize) {
 		this.inumber = inumber;
-<<<<<<< HEAD
 		this.recordSize = recordSize;
-		timerQ = SegmentTimerQueue.instance();
-=======
-		//timerQ = SegmentTimerQueue.instance();
->>>>>>> batching
 	}
 	
 	/**
@@ -213,7 +187,6 @@ public final class Inode {
 		return bufferOffset;
 	}
 	
-<<<<<<< HEAD
 	public int appendBuffered(final Record record)
 			throws IOException, InterruptedException, KawkabException {
 		int length = record.size();
@@ -224,53 +197,39 @@ public final class Inode {
 			throw new MaxFileSizeExceededException();
 		}
 		
-		if (timer == null) { //If null, no need to synchronize because the SegmentTimerQueue thread will never synchronize with this timer
-			assert curSeg == null;
-			assert segId == null;
-			
+		if (acquiredSeg == null) { //If null, no need to synchronize because the SegmentTimerQueue thread will never synchronize with this timer
+			DataSegmentID segId;
 			if ((FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L) { // if the last block is full
 				segId = createNewBlock(fileSizeBuffered);
 			} else { // Otherwise the last segment was full or we are just starting without any segment at hand
 				segId = getSegmentID(fileSizeBuffered);
 			}
-			
-			curSeg = (DataSegment) cache.acquireBlock(segId);
-			curSeg.initForAppend(fileSizeBuffered, recordSize);
-			timer = new SegmentTimer(segId, this);
-		} else {
-			synchronized (this) {
-				if (timer == null || !timer.disableIfValid()) { // Disable the timer if it has not already expired. The condition is true if the timer has expired before it is disabled
-					segId = getSegmentID(fileSizeBuffered);
-					curSeg = (DataSegment) cache.acquireBlock(segId); // Acquire the segment again as the cache may have evicted the segment
-					timer = new SegmentTimer(segId, this); // The previous timer cannot be reused because its state cannot be changed
-				}
-			}
+			acquiredSeg = new BufferedSegment(segId, fileSizeBuffered, recordSize);
+		} else if (!acquiredSeg.freeze()) {	// Tries to freeze the bufferedSegment so that the acquired segement cannot be returned back to the cache.The condition is true if the timer has expired before it is disabled
+			DataSegmentID segId = getSegmentID(fileSizeBuffered);	// Acquire the segment again as the cache may have evicted the segment. //
+			// The previous timer cannot be reused because its state cannot be changed
+			acquiredSeg = new BufferedSegment(segId, fileSizeBuffered, recordSize);
 		}
 		
-		assert curSeg.remaining() >= length;
-		
 		try {
-			int bytes = curSeg.append(record.copyOutSrcBuffer(), fileSizeBuffered, recordSize);
+			int bytes = acquiredSeg.append(record.copyOutSrcBuffer(), fileSizeBuffered, recordSize);
 			
-			index.append(record.key(), fileSizeBuffered);
+			//index.append(record.key(), fileSizeBuffered);
 			
 			fileSizeBuffered += bytes;
 		} catch (IOException e) {
 			throw new KawkabException(e);
 		}
 		
-		if (curSeg.remaining() < record.size()) {
-			curSeg.markAsFull();
-		}
-		
-		if (curSeg.isFull()) { // If the current segment is full
-			cache.releaseBlock(segId);
-			curSeg = null;
-			segId = null;
-			timer = null;
+		//tlog1.start();
+		if (acquiredSeg.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
+			// is now immutable. We can return the segment to the cache.
+			
+			acquiredSeg.release(); 	// Don't add back in the queue as the timer will not be reused again. The segmentTimerQueue
+			// thread will just throw way the timer because it is disabled.
+			acquiredSeg = null;
 		} else {
-			timer.update();
-			timerQ.add(timer);
+			acquiredSeg.unfreeze();
 		}
 		
 		fileSize.set(fileSizeBuffered);
@@ -278,11 +237,8 @@ public final class Inode {
 		return length;
 	}
 	
-	public int appendBuffered(final byte[] data, int offset, final int length)
-=======
 	//public static TimeLog tlog1 = new TimeLog(TimeLog.TimeLogUnit.NANOS, "ab all");
 	public synchronized int appendBuffered(final byte[] data, int offset, final int length) //Syncrhonized with close() due to acquiredSeg
->>>>>>> batching
 			throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
 		int remaining = length; //Reaming size of data to append
 		long fileSizeBuffered = this.fileSize.get(); // Current file size
@@ -301,27 +257,11 @@ public final class Inode {
 					segId = getSegmentID(fileSizeBuffered);
 				}
 				
-<<<<<<< HEAD
-				
-				curSeg = (DataSegment) cache.acquireBlock(segId);
-				curSeg.initForAppend(fileSizeBuffered, recordSize);
-				timer = new SegmentTimer(segId, this);
-			} else {
-				synchronized (timerLock) {
-					if (timer == null || !timer.disableIfValid()) { // Disable the timer if it has not already expired. The condition is true if the timer has expired before it is disabled
-						segId = getSegmentID(fileSizeBuffered);
-						curSeg = (DataSegment) cache.acquireBlock(segId); // Acquire the segment again as the cache may have evicted the segment
-						timer = new SegmentTimer(segId, this); // The previous timer cannot be reused because its state cannot be changed
-					}
-=======
-				acquiredSeg = new BufferedSegment(segId, fileSizeBuffered);
-			} else {
-				if (!acquiredSeg.freeze()) {	// Tries to freeze the bufferedSegment so that the acquired segement cannot be returned back to the cache.The condition is true if the timer has expired before it is disabled
-					DataSegmentID segId = getSegmentID(fileSizeBuffered);	// Acquire the segment again as the cache may have evicted the segment. //
-																			// The previous timer cannot be reused because its state cannot be changed
-					acquiredSeg = new BufferedSegment(segId, fileSizeBuffered);
->>>>>>> batching
-				}
+				acquiredSeg = new BufferedSegment(segId, fileSizeBuffered, recordSize);
+			} else if (!acquiredSeg.freeze()) {	// Tries to freeze the bufferedSegment so that the acquired segement cannot be returned back to the cache.The condition is true if the timer has expired before it is disabled
+				DataSegmentID segId = getSegmentID(fileSizeBuffered);	// Acquire the segment again as the cache may have evicted the segment. //
+																		// The previous timer cannot be reused because its state cannot be changed
+				acquiredSeg = new BufferedSegment(segId, fileSizeBuffered, recordSize);
 			}
 			
 			try {
@@ -335,16 +275,6 @@ public final class Inode {
 				throw new KawkabException(e);
 			}
 			
-<<<<<<< HEAD
-			if (curSeg.isFull()) { // If the current segment is full
-				cache.releaseBlock(segId);
-				curSeg = null;
-				segId = null;
-				timer = null;
-			} else {
-				timer.update();
-				timerQ.add(timer);
-=======
 			//tlog1.start();
 			if (acquiredSeg.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
 										// is now immutable. We can return the segment to the cache.
@@ -354,7 +284,6 @@ public final class Inode {
 				acquiredSeg = null;
 			} else {
 				acquiredSeg.unfreeze();
->>>>>>> batching
 			}
 		}
 		
@@ -363,40 +292,6 @@ public final class Inode {
 		return length;
 	}
 
-<<<<<<< HEAD
-	/**
-	 * Releases the dataSegment if the timer has expired, while synchronizing with the append thread in the
-	 * <code>appendBuffered()</code> function.
-	 * @param expiredTimer Expired SegmemtTimer
-	 * @param expiredSegId ID of the data segment that should be returned to the cache for reference counting
-	 */
-	void onTimerExpiry(SegmentTimer expiredTimer, DataSegmentID expiredSegId) throws KawkabException {
-		assert expiredTimer != null;
-
-		// FIXME: Need a review about synchronization
-		// We don't need to synchronize because (a) the timer expiry thread can reach here only when the timer has
-		// expired, (b) the appender can either read the stale value or find the timer field to be null. In both of the
-		// cases, the appender creates a new timer object and acquire the data segment from the cache. So it is safe to
-		// update timer, curSeg, and segId fields to null without synchronizing with the appender.
-		// However, this thread, which is the SegmentTimerQueue thread, has to read the most recent value of the
-		// timer object. Therefore, the timer object is volatile to ensure that it doesn't red the staled value.
-
-		if (expiredTimer == timer) {// Checking the references because the same timers should have same reference
-			synchronized (timerLock) {
-				if (expiredTimer == timer) { // Have to check again so that this thread and the appender synchronize on the same object
-					curSeg = null;
-					segId = null;
-					timer = null; 	// Note: It is important to set timer to null after setting the segId to null.
-									// Otherwise, the "if (timer == null)" condition in the appendBuffered function may fail.
-				}
-			}
-		}
-
-		cache.releaseBlock(expiredSegId);
-	}
-
-=======
->>>>>>> batching
 	private DataSegmentID getSegmentID(long offsetInFile) {
 		long segmentInFile = FixedLenRecordUtils.segmentInFile(offsetInFile, recordSize);
 		long blockInFile = FixedLenRecordUtils.blockInFile(segmentInFile);
@@ -509,30 +404,11 @@ public final class Inode {
 	 */
 	synchronized void releaseBuffer() throws KawkabException { //Syncrhonized with appendBuffered() due to acquiredSeg
 		//tlog.printStats("DS.append,ls.store");
-<<<<<<< HEAD
-		
-		synchronized (timerLock) { // Synchronize with the SegmentTimeQueue.
-			if (timer == null) {
-				assert curSeg == null;
-				assert segId == null;
-				return;
-			}
 
-			if (timer.disableIfValid()) {
-				cache.releaseBlock(segId);
-				
-				timer = null;
-				curSeg = null;
-				segId = null;
-				
-				return;
-			}
-=======
 		if (acquiredSeg != null) {
 			acquiredSeg.freeze();
 			acquiredSeg.release();
 			acquiredSeg = null;
->>>>>>> batching
 		}
 	}
 }

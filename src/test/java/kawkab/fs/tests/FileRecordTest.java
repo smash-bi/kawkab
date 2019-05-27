@@ -7,10 +7,7 @@ import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.SampleRecord;
 import kawkab.fs.core.exceptions.KawkabException;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,7 +23,7 @@ public class FileRecordTest {
 		System.out.println("-------------------------------");
 		
 		int nodeID = Configuration.getNodeID();
-		Properties props = Configuration.getProperties(Configuration.propsFileLocal);
+		Properties props = Configuration.getProperties(Configuration.propsFileCluster);
 		Filesystem.bootstrap(nodeID, props);
 	}
 	

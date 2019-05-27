@@ -226,9 +226,6 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		int count = 0;
 		cacheLock.lock();
 		
-		int size = cache.size();
-		System.out.printf("Before flush: Current DSPool size is %d, cache size is %d.\n", dsp.size(), size);
-		
 		try {
 			Iterator<Map.Entry<BlockID, CachedItem>> itr = cache.entrySet().iterator();
 			while (itr.hasNext()) {

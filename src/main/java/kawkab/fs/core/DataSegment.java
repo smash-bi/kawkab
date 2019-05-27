@@ -19,10 +19,6 @@ import static kawkab.fs.commons.FixedLenRecordUtils.offsetInSegment;
 
 public final class DataSegment extends Block {
 	private final static Configuration conf = Configuration.instance();
-<<<<<<< HEAD
-=======
-	private final static int recordSize = 1; //Temporarily set to 1 until we implement reading/writing records
->>>>>>> batching
 	private final static int segmentSizeBytes = conf.segmentSizeBytes;
 	
 	private ByteBuffer dataBuf; // Buffer to hold actual segment data
@@ -101,10 +97,6 @@ public final class DataSegment extends Block {
 		return segmentSizeBytes - writePos.get();
 	}
 	
-	void markAsFull() {
-		segmentIsFull = true;
-	}
-	
 	/**
 	 * @param data Data to be appended
 	 * @param offset  Offset in data
@@ -163,7 +155,7 @@ public final class DataSegment extends Block {
 		int pos = writePos.addAndGet(length);
 		
 		//Mark block as full
-		if (pos == segmentSizeBytes) {
+		if (pos+recordSize > segmentSizeBytes) { //Cannot add any more records
 			segmentIsFull = true;
 		}
 		

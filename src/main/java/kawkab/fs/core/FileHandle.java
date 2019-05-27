@@ -220,6 +220,9 @@ public final class FileHandle {
 		return appendedBytes;
 	}
 	
+	// FIXME: Create a separate interface for binary and structured files. Binary append and record-based appends
+	// are mutually exclusive. They should not be mixed in the same file.
+	
 	/**
 	 * Append data at the end of the file and index with the given key
 	 * @param record A single file-record
@@ -231,7 +234,6 @@ public final class FileHandle {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	
 	public synchronized int append(final Record record) throws MaxFileSizeExceededException,
 			IOException, KawkabException, InterruptedException{
 		if (fileMode != FileMode.APPEND || !onPrimaryNode) {

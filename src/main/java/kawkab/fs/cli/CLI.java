@@ -3,7 +3,6 @@ package kawkab.fs.cli;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
-import kawkab.fs.core.BufferedCache;
 import kawkab.fs.core.Cache;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
@@ -36,21 +35,12 @@ public final class CLI {
 	private void initFS() throws IOException, KawkabException, InterruptedException {
 		//Constants.printConfig();
 		int nodeID = Configuration.getNodeID();
-<<<<<<< HEAD
-=======
 		String propsFile = System.getProperty("conf", Configuration.propsFileCluster);
->>>>>>> batching
 		
 		System.out.println("Node ID = " + nodeID);
 		System.out.println("Loading properties from: " + propsFile);
 		
-<<<<<<< HEAD
-		String propsFile = System.getProperty("conf", Configuration.propsFileLocal);
 		Properties props = Configuration.getProperties(propsFile);
-		
-=======
-		Properties props = Configuration.getProperties(propsFile);
->>>>>>> batching
 		fs = Filesystem.bootstrap(nodeID, props);
 	}
 
@@ -106,12 +96,7 @@ public final class CLI {
 							break;
 						default:
 							System.out.println(cmds);
-<<<<<<< HEAD
-							next = false;
-							break;
-=======
 							continue;
->>>>>>> batching
 					}
 				} catch (Exception e) {
 					e.printStackTrace();
