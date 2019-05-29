@@ -13,9 +13,9 @@ import java.nio.channels.WritableByteChannel;
 
 public class TimeSeriesIndex implements FileIndex {
 	// Persistent fields
-	private int blocksCount;
 	private long lastTimestamp;
 	private long lastTSByteOffset;
+	private long indexLength; //Number of entries in the index
 	
 	// Other fields
 	private final long inumber;
@@ -94,8 +94,6 @@ public class TimeSeriesIndex implements FileIndex {
 	 */
 	int loadFrom(final ByteBuffer srcBuffer) throws IOException {
 		assert srcBuffer.remaining() >= SIZE;
-		
-		blocksCount = srcBuffer.getInt();
 		
 		return 0;
 	}

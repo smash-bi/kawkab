@@ -1,5 +1,7 @@
-package kawkab.fs.core;
+package kawkab.fs.core.timerqueue;
 
+import kawkab.fs.core.Clock;
+import kawkab.fs.core.TransferQueue;
 import kawkab.fs.core.exceptions.KawkabException;
 
 /**
@@ -7,15 +9,15 @@ import kawkab.fs.core.exceptions.KawkabException;
  * to the cache much slower than required in some cases. As a result, the cache have some items that are eligible
  * for eviction but the cache cannot evict them as their reference count is greater than 0. .
  */
-public class SegmentTimerQueue {
+public class TimerQueue {
 	private final Thread processorThr;
-	private TransferQueue<BufferedSegment> buffer;
+	private TransferQueue<TimerQueueItem> buffer;
 	private final Clock clock;
 	private volatile boolean working = true;
 	
-	private static SegmentTimerQueue instance;
+	private static TimerQueue instance;
 	
-	private SegmentTimerQueue () {
+	private TimerQueue() {
 		buffer = new TransferQueue<>();
 		clock = Clock.instance();
 		processorThr = new Thread("SegmentTimerQueueThread") {
@@ -27,24 +29,24 @@ public class SegmentTimerQueue {
 		processorThr.start();
 	}
 	
-	public static synchronized SegmentTimerQueue instance() {
+	public static synchronized TimerQueue instance() {
 		if (instance == null)
-			instance = new SegmentTimerQueue();
+			instance = new TimerQueue();
 		
 		return instance;
 	}
 	
-	public void add(BufferedSegment segment) {
+	public void add(TimerQueueItem item) {
 		assert working;
 		
-		buffer.add(segment);
+		buffer.add(item);
 	}
 	
 	/**
 	 * Takes items from the queue,
 	 */
 	private void processSegments() {
-		BufferedSegment next = null;
+		TimerQueueItem next = null;
 		
 		while(working) {
 			next = buffer.poll();
@@ -74,24 +76,16 @@ public class SegmentTimerQueue {
 		}
 	}
 	
-	private void process(BufferedSegment bseg) throws KawkabException {
-		long timeNow = clock.currentTime();
-		long ret = bseg.tryExpire(timeNow);
+	private void process(TimerQueueItem item) throws KawkabException {
+		long ret = item.tryWorkIfExpired();
 		
 		while (ret > 0) { //While (!EXPIRED && !DISABLED), which implies VALID, which implies a positive value greater than zero
 			try {
 				Thread.sleep(ret);
 			} catch (InterruptedException e) {}
 			
-			timeNow = clock.currentTime();
-			ret = bseg.tryExpire(timeNow);
+			ret = item.tryWorkIfExpired();
 		}
-		
-		if (ret == 0) // If the bseg is frozen by the appender
-			return;
-		
-		// The timer in the bseg is now expired. So bseg cannot be updated and now it is safe to release the internal DS.
-		bseg.release();
 	}
 	
 	public void waitUntilEmpty() {
@@ -106,7 +100,7 @@ public class SegmentTimerQueue {
 	}
 	
 	public void shutdown() {
-		System.out.println("Closing SegmentTimerQueue");
+		System.out.println("Closing TimerQueue");
 		working = false;
 		
 		processorThr.interrupt();

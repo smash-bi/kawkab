@@ -94,4 +94,32 @@ public class FileRecordTest {
 		
 		fs.close(file);
 	}
+	
+	@Test
+	public void simpleRecordReadTest() throws IOException, KawkabException, InterruptedException {
+		System.out.println("---------------------------");
+		System.out.println("- Simple Record Read Test -");
+		System.out.println("---------------------------");
+		Random rand = new Random();
+		Record rec = new SampleRecord(System.currentTimeMillis(),
+				rand.nextFloat(), rand.nextFloat(), rand.nextBoolean(),
+				rand.nextFloat(), rand.nextFloat(), rand.nextBoolean());
+		
+		Filesystem fs = Filesystem.instance();
+		
+		FileHandle file = fs.open("SimpleRecordReadTest", Filesystem.FileMode.APPEND, new FileOptions(rec.size()));
+		
+		file.append(rec);
+		
+		Record recordOutNum = new SampleRecord();
+		Record recordOutAt = new SampleRecord();
+		
+		file.recordNum(recordOutNum, file.size()/rec.size());
+		file.recordAt(recordOutAt, rec.key());
+		
+		fs.close(file);
+		
+		Assertions.assertEquals(rec, recordOutNum);
+		Assertions.assertEquals(rec, recordOutAt);
+	}
 }

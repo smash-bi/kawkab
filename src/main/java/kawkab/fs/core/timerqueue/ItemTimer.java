@@ -1,53 +1,49 @@
-package kawkab.fs.core;
+package kawkab.fs.core.timerqueue;
 
 import kawkab.fs.core.exceptions.KawkabException;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * This timer is used with BufferedSegment objects to expire them after a timeout.
+ * This timer is used with TimerQueueItem objects to expire them after a timeout.
  * The caller should follow the following semantics: <code>
-	 // Later on before following the critical path associated with this timer
+	 
+ 	// Later on before following the critical path associated with this timer
 	 if (!timer.diableIfNotExpired()) {
-	 timer = new SegmentTimer();
+	 	timer = new ItemTimer();
 	 }
 	 ...
 	 // Perform mutually exclusive task
+ 	 ...
 	 timer.update()
-	 addInQueue(timer)
-	 }
+	 addInSomeQueue(timer)
  * </code>
  *
  *
- * The worker that dequeues the timer can turn off the timer if the timer's time has expired. The worker calls the
- * tryExpire() function to turn off the timer. The timer is turned off only if it is not disabled or not already turned
- * off.
+ * The worker that dequeues the item should call the tryExpire() function to turn off the timer.
+ * The timer is expired only if it is not disabled or not already expired.
  *
- * Note that the disableIfNotExpired() and update() functions must duel. First create object, then disableIfNotExpired(),
- * update(), disableIfNotExpired(), update, and so on.
- *
- * The mState has only three states: (1) Disabled, (2) Expired, and (3) Valid. Expired is a terminal state. Initial
+ * Internals:
+ * The timer has three states: (1) Disabled, (2) Expired, and (3) Valid. Expired is a terminal state. Initial
  * state is Disabled. States can transition as: Disabled -> Valid,  valid -> Disabled, valid -> Expired.
  *
- * I am not sure if we allow the following transitions: disabled -> disabled, valid -> valid. These look like safe and
- * enabled in the code, but the safety need to be verified. The transition expired -> expired is prevented in the code.
+ * I am not sure if we should allow the following transitions: disabled -> disabled, valid -> valid. These look safe and
+ * currently allowed in the implementation. The transition Expired -> Expired is not allowed and it is
+ * prevented in the implementation.
  *
- * A valud state means the mState contains the remaining amount of time in millis. Disabled means the timer has to
- * be renabled and the timer cannot be expired. Expired means that the timer was valid and the timer has now expired.
- * The timer cannot be disabled or made valid after it has been expired.
+ * A valid state means the mState contains the absolute time  in millis. Disabled means the timer has to
+ * be renabled and the timer cannot be expired. Expired means that the timer has expired and can no longer be disabled or
+ * updated.
  */
 
-public class SegmentTimer {
-	public static final int TIMEOUT_MS = 5; //Randomly chosen, a small value should be sufficient as we want to batch back-to-back writes only
-
+public class ItemTimer {
 	private final AtomicLong mState; //State of the timer, which can be DISABLED, EXPIRED, ALREADY_EXPIRED, or last timestamp
-	private final static Clock clock = Clock.instance();
 	
-	public final static int DISABLED = 0; // Must be zero
-	public final static int EXPIRED  = -1; // Must be a negative value
-	public final static int ALREADY_EXPIRED = -2; //Must be a negative value. This is never set in mState variable.
+	protected final static int DISABLED = 0; // Must be zero
+	protected final static int EXPIRED  = -1; // Must be a negative value
+	protected final static int ALREADY_EXPIRED = -2; //Must be a negative value. This is never set in mState variable.
 	
-	public SegmentTimer() {
+	public ItemTimer() {
 		mState = new AtomicLong(DISABLED);
 	}
 	
@@ -55,7 +51,7 @@ public class SegmentTimer {
 	 * Restarts the timer, which was newly created or previously disabled. The timer must be disabled before calling
 	 * this update(). The timer is disabled by calling the disableIfNotExpired() function.
 	 */
-	public void update() {
+	public void update(long futureTime) {
 		// The state is DISABLED at this point in all the cases. This is because this timer is either new or is disabled
 		// before it is expired. If it is new, the worker thread does not have access to the timer. If it is disabled,
 		// the worker thread does not update the state. The worker changes the state only if the read state is not
@@ -63,7 +59,7 @@ public class SegmentTimer {
 		
 		// We don't need to check the previous state because the append thread has previously set the state
 		// to disabled. Moreover, the worker thread will not concurrently update the state variable.
-		long prev = mState.getAndSet(clock.currentTime());
+		long prev = mState.getAndSet(futureTime);
 		
 		//assert prev == DISABLED; // FIXME: Is it necessary???
 		assert prev != EXPIRED; // FIXME: Is it necessary???
@@ -112,12 +108,9 @@ public class SegmentTimer {
 			if (state == DISABLED)	// If the state is disabled, return the caller. Note that the caller should not add 
 				return DISABLED;			// the timer again in the queue. Instead the writer thread has added again or will add again in the queue.
 			
-			long diff = timeNow - state;	// The valid state contains the timestamp. 
+			long diff = timeNow - state;	// The valid state contains the timestamp.
 			
-			if (diff <= 0) 			// The diff can be negative because the state may have been updated by the writer  
-				return TIMEOUT_MS;	// thread since the caller read the clock. Conservatively return the timeout value
-			
-			if (diff < TIMEOUT_MS)
+			if (diff < 0)
 				return diff;
 			
 		} while(!mState.compareAndSet(state, EXPIRED)); // We may be looping here multiple times, but that is fine because the thread is not on the critical path

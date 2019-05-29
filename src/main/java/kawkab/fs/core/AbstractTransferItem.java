@@ -1,5 +1,20 @@
 package kawkab.fs.core;
 
+/**
+ * This class works in conjunction with TransferQueue.
+ * TransferItems are used in the TransferQueue to share obejcts between a producer and a consumer. The only purpose
+ * of the TransferQueue is to allow repeated transfers of the same object from one thread to another through a queue
+ * while keeping the items in the queue unique.
+ *
+ * There is a race between the producer and the consumer when they concurrently call getAndSetInQueue and inTransferQueue.
+ * However, the race is safe due to the ordering of the functions. The only requirement is that the object is not lost.
+ * Either the object is already in the queue, or if it is not in the queue, the TransferQueue worker has the object.
+ *
+ *
+ * The TransferQueue (TQ) and the TransferItems (TI) are used in the following way:
+ * Producer has an object, which it updates. Then the producer calls the TQ.add(TI) function to transfer the object
+ * to the consumer ... TBD
+ */
 public abstract class AbstractTransferItem {
 	private volatile boolean inQueue = false;
 	
