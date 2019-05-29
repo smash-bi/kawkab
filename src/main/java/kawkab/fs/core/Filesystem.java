@@ -11,6 +11,7 @@ import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IbmapsFullException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.services.grpc.PrimaryNodeServiceServer;
+import kawkab.fs.core.timerqueue.TimerQueue;
 
 public final class Filesystem {
 	private static volatile boolean initialized;
@@ -58,6 +59,10 @@ public final class Filesystem {
 	public FileHandle open(String filename, FileMode mode, FileOptions opts) 
 			throws IbmapsFullException, IOException, FileAlreadyOpenedException, FileNotExistException, KawkabException, InterruptedException {
 		//TODO: Validate input
+		
+		assert opts.recordSize() > 0;
+		assert opts.recordSize() <= Configuration.instance().segmentSizeBytes;
+		
 		long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber);
 		FileHandle file = new FileHandle(inumber, mode);
@@ -112,7 +117,7 @@ public final class Filesystem {
 		namespace.shutdown();
 		Ibmap.shutdown();
 		InodesBlock.shutdown();
-		SegmentTimerQueue.instance().shutdown();
+		TimerQueue.instance().shutdown();
 		Cache.instance().shutdown();
 		Clock.instance().shutdown();
 		

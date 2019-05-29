@@ -76,6 +76,8 @@ public final class InodesBlock extends Block {
 	
 	@Override
 	public boolean shouldStoreGlobally() {
+		//FIXME: Potientially this block will never be stored globally. This may happen if the block is updated
+		// but not stored globally. After that the block is never updated.
 		long now = clock.currentTime();
 		if ((now - lastGlobalStoreTimeMs) < globalStoreTimeGapMs)
 			return false;
@@ -247,16 +249,6 @@ public final class InodesBlock extends Block {
 		}
 	}
 
-	@Override
-	public int appendOffsetInBlock() {
-		return 0;
-	}
-	
-	@Override
-	public int memorySizeBytes() {
-		return conf.inodesBlockSizeBytes + 8; //FIXME: Get the exact number
-	}
-	
 	@Override
 	public int sizeWhenSerialized() {
 		return conf.inodesBlockSizeBytes;

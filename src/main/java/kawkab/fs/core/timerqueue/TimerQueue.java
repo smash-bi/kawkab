@@ -1,5 +1,7 @@
-package kawkab.fs.core;
+package kawkab.fs.core.timerqueue;
 
+import kawkab.fs.core.Clock;
+import kawkab.fs.core.TransferQueue;
 import kawkab.fs.core.exceptions.KawkabException;
 
 /**
@@ -7,15 +9,15 @@ import kawkab.fs.core.exceptions.KawkabException;
  * to the cache much slower than required in some cases. As a result, the cache have some items that are eligible
  * for eviction but the cache cannot evict them as their reference count is greater than 0. .
  */
-public class SegmentTimerQueue {
-	private TransferQueue<SegmentTimer> buffer;
+public class TimerQueue {
 	private final Thread processorThr;
+	private TransferQueue<TimerQueueItem> buffer;
 	private final Clock clock;
 	private volatile boolean working = true;
 	
-	private static SegmentTimerQueue instance;
+	private static TimerQueue instance;
 	
-	private SegmentTimerQueue () {
+	private TimerQueue() {
 		buffer = new TransferQueue<>();
 		clock = Clock.instance();
 		processorThr = new Thread("SegmentTimerQueueThread") {
@@ -27,28 +29,28 @@ public class SegmentTimerQueue {
 		processorThr.start();
 	}
 	
-	public static synchronized SegmentTimerQueue instance() {
+	public static synchronized TimerQueue instance() {
 		if (instance == null)
-			instance = new SegmentTimerQueue();
+			instance = new TimerQueue();
 		
 		return instance;
 	}
 	
 	/**
-	 * Adds the timer object in the queue. The timer object is associated with a DataSegment.
-	 * @param timer
+	 * Handsover an item to the queue so that item.deferredWork() can be called after timeout
+	 * @param item
 	 */
-	public void add(SegmentTimer timer) {
+	public void add(TimerQueueItem item) {
 		assert working;
 		
-		buffer.add(timer);
+		buffer.add(item);
 	}
 	
 	/**
 	 * Takes items from the queue,
 	 */
 	private void processSegments() {
-		SegmentTimer next = null;
+		TimerQueueItem next = null;
 		
 		while(working) {
 			next = buffer.poll();
@@ -78,26 +80,19 @@ public class SegmentTimerQueue {
 		}
 	}
 	
-	/**
-	 * @param timer
-	 * @throws KawkabException
-	 */
-	private void process(SegmentTimer timer) throws KawkabException {
-		long timeNow = clock.currentTime();
-		long ret = timer.tryExpire(timeNow);
+	private void process(TimerQueueItem item) throws KawkabException {
+		long ret = item.tryExpire();
 		
-		while (ret > 0) { //While (!EXPIRED && !DISABLED)
+		while (ret > 0) { //While (!EXPIRED && !DISABLED), which implies VALID, which implies a positive value greater than zero
 			try {
 				Thread.sleep(ret);
 			} catch (InterruptedException e) {}
 			
-			timeNow = clock.currentTime();
-			ret = timer.tryExpire(timeNow);
+			ret = item.tryExpire();
 		}
 		
-		// if (ret == SegmentTimer.DISABLED || ret == SegmentTimer.ALREADY_EXPIRED)
-		//	return;
-		//assert ret == SegmentTimer.EXPIRED;
+		if (ret == ItemTimer.EXPIRED)
+			item.deferredWork();
 	}
 	
 	public void waitUntilEmpty() {
@@ -112,7 +107,7 @@ public class SegmentTimerQueue {
 	}
 	
 	public void shutdown() {
-		System.out.println("Closing SegmentTimerQueue");
+		System.out.println("Closing TimerQueue");
 		working = false;
 		
 		processorThr.interrupt();

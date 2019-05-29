@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.utils.GCMonitor;
+import kawkab.fs.utils.TimeLog;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -106,6 +107,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	 * @throws IOException The block is not cached if the exception is thrown 
 	 * @throws KawkabException The block is not cached if the exception is thrown
 	 */
+	
 	@Override
 	public Block acquireBlock(BlockID blockID) throws IOException, KawkabException {
 		// System.out.println("[C] acquire: " + blockID);
@@ -223,9 +225,6 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	public void flush() throws KawkabException {
 		int count = 0;
 		cacheLock.lock();
-		
-		int size = cache.size();
-		System.out.printf("Before flush: Current DSPool size is %d, cache size is %d.\n", dsp.size(), size);
 		
 		try {
 			Iterator<Map.Entry<BlockID, CachedItem>> itr = cache.entrySet().iterator();

@@ -7,7 +7,7 @@ import kawkab.fs.core.Cache;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
-import kawkab.fs.core.SegmentTimerQueue;
+import kawkab.fs.core.timerqueue.TimerQueue;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.utils.TimeLog;
 import org.junit.jupiter.api.AfterAll;
@@ -24,8 +24,7 @@ public class AppendTest {
 	@BeforeAll
 	public static void initialize() throws IOException, InterruptedException, KawkabException {
 		int nodeID = Configuration.getNodeID();
-		Properties props = Configuration.getProperties(Configuration.propsFileLocal);
-		
+		Properties props = Configuration.getProperties(Configuration.propsFileCluster);
 		Filesystem.bootstrap(nodeID, props);
 	}
 	
@@ -142,7 +141,7 @@ public class AppendTest {
 		
 		long durSec = (System.currentTimeMillis() - st)/1000;
 		
-		SegmentTimerQueue.instance().waitUntilEmpty();
+		TimerQueue.instance().waitUntilEmpty();
 		
 		Cache.instance().flush(); //Clear the cache for the actual append test.
 		

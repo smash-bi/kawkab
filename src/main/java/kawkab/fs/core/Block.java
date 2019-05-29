@@ -65,7 +65,6 @@ public abstract class Block extends AbstractTransferItem {
 		
 		isLocalDirty = false;
 		globalDirtyCnt = new AtomicInteger(0);
-		//inLocalQueue   = false;
 		inGlobalQueue  = new AtomicBoolean(false);
 		inLocalStore   = new AtomicBoolean(false);
 		inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and 
@@ -76,10 +75,10 @@ public abstract class Block extends AbstractTransferItem {
 		this.id = id;
 		isLocalDirty = false;
 		globalDirtyCnt.set(0);
-		//inLocalQueue = false;
 		inGlobalQueue.set(false);
 		inLocalStore.set(false);
 		inCache.set(false);
+		isLoaded = false;
 	}
 	
 	/**
@@ -156,21 +155,6 @@ public abstract class Block extends AbstractTransferItem {
 	 */
 	public abstract ByteString byteString();
 
-	/**
-	 * LocalStoreManger calls this function to set the position of the FileChannel before calling block.storeTo(channel)
-	 * function. This is not a good approach because it will cause problems if multiple workers from the LocalStoreManager
-	 * concurrently try to flush the same segment on disk.
-	 * 
-	 * @return Returns the byte offset in the segment starting from which the data will be appended.
-	 */
-	public abstract int appendOffsetInBlock();
-	
-	/**
-	 * Number of bytes this block is holding in memory. This is not accurate. 
-	 * @return
-	 */
-	public abstract int memorySizeBytes();
-	
 	/**
 	 * @return Size of the block in bytes when the complete block is serialized. 
 	 */
