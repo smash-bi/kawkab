@@ -36,6 +36,10 @@ public class TimerQueue {
 		return instance;
 	}
 	
+	/**
+	 * Handsover an item to the queue so that item.deferredWork() can be called after timeout
+	 * @param item
+	 */
 	public void add(TimerQueueItem item) {
 		assert working;
 		
@@ -77,15 +81,18 @@ public class TimerQueue {
 	}
 	
 	private void process(TimerQueueItem item) throws KawkabException {
-		long ret = item.tryWorkIfExpired();
+		long ret = item.tryExpire();
 		
 		while (ret > 0) { //While (!EXPIRED && !DISABLED), which implies VALID, which implies a positive value greater than zero
 			try {
 				Thread.sleep(ret);
 			} catch (InterruptedException e) {}
 			
-			ret = item.tryWorkIfExpired();
+			ret = item.tryExpire();
 		}
+		
+		if (ret == ItemTimer.EXPIRED)
+			item.deferredWork();
 	}
 	
 	public void waitUntilEmpty() {

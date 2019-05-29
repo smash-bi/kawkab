@@ -213,9 +213,9 @@ public final class Inode {
 		try {
 			int bytes = acquiredSeg.append(record.copyOutSrcBuffer(), fileSizeBuffered, recordSize);
 			
-			/*if (fileSizeBuffered%conf.segmentSizeBytes == 0) { // If the current record is the first record in the data segment
+			if (fileSizeBuffered%conf.segmentSizeBytes == 0) { // If the current record is the first record in the data segment
 				index.append(record.key(), fileSizeBuffered);
-			}*/
+			}
 			
 			fileSizeBuffered += bytes;
 		} catch (IOException e) {

@@ -98,13 +98,11 @@ public abstract class TimerQueueItem extends AbstractTransferItem {
 	}
 	
 	/**
-	 * This function should only be called from the TimerQueue internally.
-	 *
-	 * This function tries to call the deferredWork() function if the timer has expired. If the timer is not expired,
+	 * This function tries to change the state of the timer has expired. If the timer still has some remaining time,
 	 * the function returns a positive remaining time in mills. Otherwise, if the item was not expired previously,
-	 * this function expires the timer and calls the deferredWork() function of the item.
+	 * this function expires the timer and returns ItemTimer.EXPIRED.
 	 * If the item was already expired due to a previous function call the function doesn't call the deferredWork() function
-	 * and return TimerItem.ALREADY_DISABLED.
+	 * and return ItemTimer.ALREADY_DISABLED.
 	 *
 	 * @return the remaining time of the timer until the timer expires if the item is not already expired. Otherwise,
 	 * it returns 0 if the item is freezed and cannot be expired, or a negative value indicating that the item was expired
@@ -112,13 +110,8 @@ public abstract class TimerQueueItem extends AbstractTransferItem {
 	 *
 	 * @throws KawkabException
 	 */
-	protected final long tryWorkIfExpired() throws KawkabException {
-		long rem = timer.tryExpire(clock.currentTime());
-		
-		if (rem == ItemTimer.EXPIRED)
-			deferredWork();
-		
-		return rem;
+	protected final long tryExpire() throws KawkabException {
+		return timer.tryExpire(clock.currentTime());
 	}
 	
 	/**
