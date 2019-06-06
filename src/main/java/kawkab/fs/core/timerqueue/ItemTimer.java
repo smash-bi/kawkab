@@ -61,7 +61,6 @@ public class ItemTimer {
 		// to disabled. Moreover, the worker thread will not concurrently update the state variable.
 		long prev = mState.getAndSet(futureTime);
 		
-		//assert prev == DISABLED; // FIXME: Is it necessary???
 		assert prev != EXPIRED; // FIXME: Is it necessary???
 	}
 	
@@ -111,7 +110,7 @@ public class ItemTimer {
 			long diff = timeNow - state;	// The valid state contains the timestamp.
 			
 			if (diff < 0)
-				return diff;
+				return -diff;
 			
 		} while(!mState.compareAndSet(state, EXPIRED)); // We may be looping here multiple times, but that is fine because the thread is not on the critical path
 
@@ -124,9 +123,5 @@ public class ItemTimer {
 	
 	public boolean isExpired() {
 		return mState.get() == EXPIRED;
-	}
-	
-	public long state() {
-		return mState.get();
 	}
 }

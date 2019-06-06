@@ -52,13 +52,17 @@ import kawkab.fs.core.exceptions.KawkabException;
  * 		}
  */
 
-public abstract class TimerQueueItem extends AbstractTransferItem {
+public class TimerQueueItem<T> extends AbstractTransferItem {
 	private final ItemTimer timer;
-	private static final TimerQueue timerQ = TimerQueue.instance();
 	private static final Clock clock = Clock.instance();
 	
+	private T item;
+	private DeferredWorkReceiver<T> receiver;
 	
-	public TimerQueueItem() {
+	
+	public TimerQueueItem(T item, DeferredWorkReceiver<T> receiver) {
+		this.item = item;
+		this.receiver = receiver;
 		timer = new ItemTimer();
 	}
 	
@@ -75,7 +79,7 @@ public abstract class TimerQueueItem extends AbstractTransferItem {
 	 * in which case the caller should create a new item and throw away the existing item to ensure that deferredWork()
 	 * is called only once.
 	 */
-	public final boolean disableIfNotExpired() {
+	protected final boolean disableIfNotExpired() {
 		return timer.disableIfNotExpired();
 	}
 	
@@ -88,13 +92,8 @@ public abstract class TimerQueueItem extends AbstractTransferItem {
 	 *
 	 * @param futureTimeInMillis Time offset in millis after which the deferredWork() function can be called.
 	 */
-	public final void enable(final long futureTimeInMillis) {
+	protected final void enable(final long futureTimeInMillis) {
 		timer.update(futureTimeInMillis);
-		timerQ.add(this);
-	}
-	
-	public void verifyDisabled() {
-		assert timer.isDisabled() : "[TQI] Error: Illegal state: you must first call freezeIfNotExpired() before updating the object.";
 	}
 	
 	/**
@@ -119,5 +118,12 @@ public abstract class TimerQueueItem extends AbstractTransferItem {
 	 *
 	 * @throws KawkabException
 	 */
-	protected abstract void deferredWork() throws KawkabException;
+	protected void deferredWork() throws KawkabException {
+		receiver.deferredWork(item);
+		item = null;
+	}
+	
+	public T getItem() {
+		return item;
+	}
 }

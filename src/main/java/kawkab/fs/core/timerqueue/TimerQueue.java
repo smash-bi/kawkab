@@ -12,14 +12,12 @@ import kawkab.fs.core.exceptions.KawkabException;
 public class TimerQueue {
 	private final Thread processorThr;
 	private TransferQueue<TimerQueueItem> buffer;
-	private final Clock clock;
 	private volatile boolean working = true;
 	
 	private static TimerQueue instance;
 	
 	private TimerQueue() {
 		buffer = new TransferQueue<>();
-		clock = Clock.instance();
 		processorThr = new Thread("SegmentTimerQueueThread") {
 			public void run() {
 				processSegments();
@@ -37,13 +35,28 @@ public class TimerQueue {
 	}
 	
 	/**
-	 * Handsover an item to the queue so that item.deferredWork() can be called after timeout
+	 * Enable the timer associated with the TimeQueueItem. Moreover, add the item in the TimeQueue so that the TimerQUeue
+	 * can call item.deferredWork() some time after the timer expires.
+	 *
 	 * @param item
+	 * @param timeoutMs
 	 */
-	public void add(TimerQueueItem item) {
+	public void enableAndAdd (TimerQueueItem item, long timeoutMs) {
 		assert working;
 		
+		item.enable(timeoutMs);
 		buffer.add(item);
+	}
+	
+	/**
+	 * Try to disable the timer of the item if the timer has not expired. Note that the user should not update the item
+	 * if disable fails. Instead, the user should assume that item.deferredWork() is eventually called.
+	 *
+	 * @param item
+	 * @return true if the timer was not expired and now the timer is disabled successfully. Otherwise, returns false.
+	 */
+	public boolean tryDisable(TimerQueueItem item) {
+		return item.disableIfNotExpired();
 	}
 	
 	/**
