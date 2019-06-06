@@ -199,14 +199,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new MaxFileSizeExceededException();
 		}
 		
-		if (acquiredSeg == null) { //If null, no need to synchronize because the TimerQueue thread will never synchronize with this timer
+		if (acquiredSeg == null || (!timerQ.tryDisable(acquiredSeg))) {
 			acquiredSeg = acquireSegment(fileSizeBuffered, ((FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L));
-		} else if (!timerQ.tryDisable(acquiredSeg)) {
-			// Try to freeze the bufferedSegment so that the acquired segement cannot be returned back to the cache
-			// The previous  bufferedSegment cannot be reused because its has been expired and is potentially returned to the cache.
-			// So we have to acquire the segment again.
-			DataSegmentID segId = getSegmentID(fileSizeBuffered);
-			acquiredSeg = new TimerQueueItem<>((DataSegment) cache.acquireBlock(segId), this);
 		}
 		
 		DataSegment ds = acquiredSeg.getItem();
@@ -247,15 +241,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		
 		
 		while (remaining > 0) {
-			if (acquiredSeg == null) { //If null, no need to synchronize because the TimerQueue thread will never synchronize with this timer
+			if (acquiredSeg == null || (!timerQ.tryDisable(acquiredSeg))) { //If null, no need to synchronize because the TimerQueue thread will never synchronize with this timer
 				acquiredSeg = acquireSegment(fileSizeBuffered, (fileSizeBuffered % conf.dataBlockSizeBytes) == 0L);
-			} else if (!timerQ.tryDisable(acquiredSeg)) {
-				// Tries to freeze the bufferedSegment so that the acquired segment cannot be returned back to the cache.T
-				// he condition is true if the timer has expired before it is frozen.
-				// Acquire the segment again as the cache may have evicted the segment. //
-				// The previous timer cannot be reused because its state cannot be changed
-				DataSegmentID segId = getSegmentID(fileSizeBuffered);
-				acquiredSeg = new TimerQueueItem<>((DataSegment) cache.acquireBlock(segId), this);
 			}
 			
 			DataSegment ds = acquiredSeg.getItem();
