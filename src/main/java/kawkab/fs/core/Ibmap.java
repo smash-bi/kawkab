@@ -11,8 +11,8 @@ import javax.naming.OperationNotSupportedException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.WritableByteChannel;
 import java.nio.file.Files;
 import java.util.BitSet;
 
@@ -144,10 +144,12 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	public synchronized int storeTo(WritableByteChannel channel) throws IOException {
+	public synchronized int storeTo(FileChannel channel) throws IOException {
 		ByteBuffer buffer = ByteBuffer.allocate(ibmapBlockSizeBytes);
 		buffer.put(bitset.toByteArray());
 		buffer.rewind();
+		
+		channel.position(0);
 		
 		int bytesWritten = Commons.writeTo(channel, buffer);
 		if (bytesWritten < buffer.capacity()) {

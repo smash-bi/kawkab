@@ -1,20 +1,19 @@
 package kawkab.fs.core;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.ByteBuffer;
-import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.SeekableByteChannel;
-import java.nio.channels.WritableByteChannel;
-
 import com.google.protobuf.ByteString;
-
-import io.grpc.netty.shaded.io.netty.buffer.ByteBuf;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.file.StandardOpenOption;
 
 public final class InodesBlock extends Block {
 	private static boolean bootstraped; //Not saved persistently
@@ -129,15 +128,7 @@ public final class InodesBlock extends Block {
 	
 	@Override
 	public int storeToFile() throws IOException {
-		if (!opened) {
-			synchronized (this) {
-				if (!opened) {
-					rwFile = new RandomAccessFile(id.localPath(), "rw");
-					channel = rwFile.getChannel();
-					opened = true;
-				}
-			}
-		}
+		FileChannel channel = FileChannel.open(new File(id().localPath()).toPath(), StandardOpenOption.WRITE);
 		
 		channel.position(0);
 		//System.out.println("Store: "+id() + ": " + channel.position());
@@ -148,12 +139,16 @@ public final class InodesBlock extends Block {
 			buffer.rewind();
 			bytesWritten += Commons.writeTo(channel, buffer);
 		}
+		
+		channel.close();
+		
 		return bytesWritten;
 	}
 	
 	@Override
-	public int storeTo(WritableByteChannel channel) throws IOException {
+	public int storeTo(FileChannel channel) throws IOException {
 		int bytesWritten = 0;
+		channel.position(0);
 		for(Inode inode : inodes) {
 			bytesWritten += inode.storeTo(channel);
 		}
@@ -253,28 +248,6 @@ public final class InodesBlock extends Block {
 	public int sizeWhenSerialized() {
 		return conf.inodesBlockSizeBytes;
 	}
-	
-	
-	/*@Override
-	void fromBuffer(ByteBuffer buffer) throws InsufficientResourcesException{
-		lock();
-		try {
-			int blockSize = Constants.inodesBlockSizeBytes;
-			
-			//if the buffer does not have enough bytes remaining
-			if (buffer.remaining() < blockSize)
-				throw new InsufficientResourcesException(String.format("Buffer has less bytes remaining: "
-						+ "%d bytes are remaining, %d bytes are required.",buffer.remaining(),blockSize));
-			
-			//Read the individual inodes from the buffer
-			inodes = new Inode[Constants.inodesPerBlock];
-			for(int i=0; i<Constants.inodesPerBlock; i++){
-				inodes[i] = Inode.fromBuffer(buffer);
-			}
-		} finally {
-			unlock();
-		}
-	}*/
 	
 	/*
 	 * (non-Javadoc)

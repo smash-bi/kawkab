@@ -3,16 +3,19 @@ package kawkab.fs.core;
 import com.google.protobuf.ByteString;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
-import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
-import java.nio.channels.*;
+import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static kawkab.fs.commons.FixedLenRecordUtils.offsetInSegment;
@@ -42,7 +45,7 @@ public final class DataSegment extends Block {
 	private boolean opened = false;
 	private RandomAccessFile rwFile;
 	private SeekableByteChannel channel;
-	private ByteBuffer storeBuffer; //Used only by file the localStoreManager
+	private ByteBuffer storeBuffer; //Used only by the localStoreManager
 	
 	/**
 	 * The constructor should not create a new file in the local storage. This constructor
@@ -432,29 +435,23 @@ public final class DataSegment extends Block {
 	
 	@Override
 	public int storeToFile() throws IOException {
-		openFile();
-		
-		channel.position(appendOffsetInBlock());
+		FileChannel channel = FileChannel.open(new File(id().localPath()).toPath(), StandardOpenOption.WRITE);
 		//System.out.println("Store: "+id() + ": " + channel.position());
 		int count = storeTo(channel);
 		
-		try {
-			FileChannel c = (FileChannel) channel;
-			c.force(true);
-			rwFile.getFD().sync();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		channel.force(true);
+		channel.close();
 		
-		if (dirtyOffset == conf.segmentSizeBytes)
-			closeFile();
 		
 		return count;
 	}
 	
 	@Override
-	public int storeTo(WritableByteChannel channel) throws IOException {
+	public int storeTo(FileChannel channel) throws IOException {
 		int bytesWritten = 0;
+		
+		channel.position(appendOffsetInBlock());
+		
 		synchronized (storeBuffer) {
 			int limit = writePos.get();
 			

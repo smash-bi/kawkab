@@ -56,8 +56,8 @@ public final class S3Backend implements GlobalBackend{
 		BlockID id = dstBlock.id();
 		if (id.type() == BlockType.DATA_SEGMENT) { //If it's dataSegment, it can be any segment in the block. GlobalStore has complete blocks.
 			int segmentInBlock = ((DataSegmentID)id).segmentInBlock();
-			rangeStart = segmentInBlock * dstBlock.sizeWhenSerialized();
-			rangeEnd = rangeStart + dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
+			rangeStart = segmentInBlock * rangeEnd;
+			rangeEnd = rangeStart + rangeEnd - 1; //end range is inclusive
 		}
 		
 		//System.out.println("[S3] Loading block: " + id.localPath() + ": " + rangeStart + " to " + rangeEnd);

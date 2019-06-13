@@ -115,9 +115,9 @@ public final class Filesystem {
 		//fs.stopServer();
 		//ns.stopServer();
 		namespace.shutdown();
-		Ibmap.shutdown();
-		InodesBlock.shutdown();
-		TimerQueue.instance().shutdown();
+		//Ibmap.shutdown();
+		//	InodesBlock.shutdown();
+		Inode.shutdown(); //FIXME: There should not be any inode shutdown method.
 		Cache.instance().shutdown();
 		Clock.instance().shutdown();
 		

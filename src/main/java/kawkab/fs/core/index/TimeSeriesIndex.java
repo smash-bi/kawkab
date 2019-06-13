@@ -2,8 +2,8 @@ package kawkab.fs.core.index;
 
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Cache;
-import kawkab.fs.core.IndexBlock;
-import kawkab.fs.core.IndexBlockID;
+import kawkab.fs.core.IndexSegment;
+import kawkab.fs.core.IndexSegmentID;
 import kawkab.fs.core.exceptions.KawkabException;
 
 import java.io.IOException;
@@ -16,6 +16,7 @@ public class TimeSeriesIndex implements FileIndex {
 	private long lastTimestamp;
 	private long lastTSByteOffset;
 	private long indexLength; //Number of entries in the index
+	private long rootBlock;
 	
 	// Other fields
 	private final long inumber;
@@ -34,17 +35,17 @@ public class TimeSeriesIndex implements FileIndex {
 	@Override
 	public void append(long key, long byteOffsetInFile) throws IOException, KawkabException {
 		int blockIndex = blockIndexFromOffset(byteOffsetInFile, recordSize);
-		IndexBlockID indexBlockID = getID(inumber, blockIndex);
+		IndexSegmentID indexSegmentID = getID(inumber, blockIndex);
 		
-		IndexBlock block = null;
+		IndexSegment block = null;
 		try {
-			block = (IndexBlock) cache.acquireBlock(indexBlockID);
+			block = (IndexSegment) cache.acquireBlock(indexSegmentID);
 			block.append(key, byteOffsetInFile);
 			lastTimestamp = key;
 			lastTSByteOffset = byteOffsetInFile;
 		} finally {
 			if (block != null) {
-				cache.releaseBlock(indexBlockID);
+				cache.releaseBlock(indexSegmentID);
 			}
 		}
 	}
@@ -59,15 +60,15 @@ public class TimeSeriesIndex implements FileIndex {
 	@Override
 	public long offsetInFile(long key) throws IOException, KawkabException {
 		int blockIndex = blockIndexFromKey(key);
-		IndexBlockID indexBlockID = getID(inumber, blockIndex);
-		IndexBlock block = null;
+		IndexSegmentID indexSegmentID = getID(inumber, blockIndex);
+		IndexSegment block = null;
 		
 		try {
-			block = (IndexBlock) cache.acquireBlock(indexBlockID);
+			block = (IndexSegment) cache.acquireBlock(indexSegmentID);
 			return block.offsetInFile(key);
 		} finally {
 			if (block != null) {
-				cache.releaseBlock(indexBlockID);
+				cache.releaseBlock(indexSegmentID);
 			}
 		}
 	}
@@ -83,8 +84,8 @@ public class TimeSeriesIndex implements FileIndex {
 		return recordInFile / entriesPerBlock;
 	}
 	
-	private IndexBlockID getID(long inumber, int blockIndex) {
-		return new IndexBlockID(inumber, blockIndex);
+	private IndexSegmentID getID(long inumber, int blockIndex) {
+		return new IndexSegmentID(inumber, blockIndex);
 	}
 	
 	/**

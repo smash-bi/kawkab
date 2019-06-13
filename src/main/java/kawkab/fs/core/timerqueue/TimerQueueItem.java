@@ -20,7 +20,7 @@ import kawkab.fs.core.exceptions.KawkabException;
  * will be called after a fixed delay. Instead, either the user disables the timer and calls deferredWork itself, or
  * the TimerQueue eventually calls the deferredWork() function after an unknown delay passed the timer offset.
  *
- * After disableing the timer, the caller should either call the enable function so that deferredWork() can be called by
+ * After disabling the timer, the caller should either call the enable function so that deferredWork() can be called by
  * the TimerQueue, or the caller should itself call the deferredWork() function.
  * Once the object is disabled, the TimerQueue does not calls the deferredWork() function until the timer is enabled
  * again by calling the enable() function.
@@ -118,7 +118,7 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	 *
 	 * @throws KawkabException
 	 */
-	protected void deferredWork() throws KawkabException {
+	protected void deferredWork() {
 		receiver.deferredWork(item);
 		item = null;
 	}

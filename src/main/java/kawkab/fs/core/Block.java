@@ -1,19 +1,18 @@
 package kawkab.fs.core;
 
+import com.google.protobuf.ByteString;
+import kawkab.fs.core.exceptions.FileNotExistException;
+import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.services.grpc.PrimaryNodeServiceClient;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-
-import com.google.protobuf.ByteString;
-
-import kawkab.fs.core.exceptions.FileNotExistException;
-import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.services.grpc.PrimaryNodeServiceClient;
 
 /**
  * This is a parent class for Ibmap, InodeBlock, and DataSegment classes. It provides a common interface for the subclasses
@@ -123,7 +122,7 @@ public abstract class Block extends AbstractTransferItem {
 	 * @return Number of bytes written to the channel.
 	 * @throws IOException
 	 */
-	abstract int storeTo(WritableByteChannel channel)  throws IOException;
+	abstract int storeTo(FileChannel channel)  throws IOException;
 	
 	/**
 	 * Stores the block in a file.
@@ -156,7 +155,7 @@ public abstract class Block extends AbstractTransferItem {
 	public abstract ByteString byteString();
 
 	/**
-	 * @return Size of the block in bytes when the complete block is serialized. 
+	 * @return Size of the block in bytes when the complete block is serialized.
 	 */
 	public abstract int sizeWhenSerialized();
 	
@@ -199,7 +198,7 @@ public abstract class Block extends AbstractTransferItem {
 		return isDirty;
 	}
 	
-	public void notifySyncComplete() {
+	public void notifyLocalSyncComplete() {
 		synchronized (localStoreSyncLock) {
 			localStoreSyncLock.notifyAll(); // Wake up the threads if they are waiting to evict this block from the cache
 		}

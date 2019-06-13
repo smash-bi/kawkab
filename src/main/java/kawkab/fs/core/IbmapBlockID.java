@@ -43,8 +43,8 @@ public final class IbmapBlockID extends BlockID {
 	}
 	
 	@Override
-	public int perBlockKey() {
-		return mapNum;
+	public String fileID(){
+		return "B"+mapNum;
 	}
 	
 	@Override

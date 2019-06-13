@@ -48,12 +48,12 @@ public abstract class BlockID {
 	abstract public String localPath();
 	
 	/**
-	 * @return an integer that is unique across the block type. For example, the segments of the same block has the 
-	 * same perBlockKey.
-	 * 
+	 * @return an integer that is unique across the block type. For example, the segments of the same block has the
+	 * same perBlockTypeKey.
+	 *
 	 * Keys are not unique across block types.
 	 */
-	abstract public int perBlockKey();
+	public final int perBlockTypeKey() { return hashCode(); }
 	
 	/**
 	 * Determines whether the node running this code is the primary writer of this block. 
@@ -69,6 +69,13 @@ public abstract class BlockID {
 	public BlockType type() {
 		return type;
 	}
+	
+	/**
+	 * Returns a unique ID of the file associated with the block. Note that this ID is different than the actual file name
+	 * used in the local and global storage systems. Those modules use localPath() functions to store the files.
+	 * @return ID
+	 */
+	public abstract String fileID();
 
 	/* (non-Javadoc)
 	 * @see java.lang.Object#hashCode()

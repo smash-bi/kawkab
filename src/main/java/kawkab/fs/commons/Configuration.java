@@ -27,7 +27,7 @@ public final class Configuration {
 	public final int directBlocksPerInode = 0;
 	
 	public final long maxFileSizeBytes = Long.MAX_VALUE;
-	//public final int numPointersInIndexBlock = blockSegmentSizeBytes/IndexBlock.pointerSizeBytes;
+	//public final int numPointersInIndexBlock = blockSegmentSizeBytes/IndexSegment.pointerSizeBytes;
 	
 	//Ibmap blocks range for this machine
 	public final int ibmapBlockSizeBytes; // = 1*1024; //FIXME: using a small number for testing

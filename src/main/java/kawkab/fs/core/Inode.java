@@ -38,12 +38,15 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	private static final Clock clock = Clock.instance();
 	private static final LocalStoreManager localStore = LocalStoreManager.instance();
 	private static final Configuration conf = Configuration.instance();
-	private static final TimerQueue timerQ = TimerQueue.instance();
+	private static final TimerQueue timerQ;
 	
 	private static final int bufferTimeOffsetMillis = 5;
 	
 	public static final long MAXFILESIZE = conf.maxFileSizeBytes;
 	
+	static {
+		timerQ = new TimerQueue(); //FIXME: We should pass timerQ's object in the constructor and isntantiate TimerQueue once
+	}
 	
 	protected Inode(long inumber, int recordSize) {
 		this.inumber = inumber;
@@ -411,7 +414,16 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	}
 	
 	@Override
-	public void deferredWork(DataSegment ds) throws KawkabException {
-		cache.releaseBlock(ds.id());
+	public void deferredWork(DataSegment ds) {
+		try {
+			cache.releaseBlock(ds.id());
+		} catch (KawkabException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	//FIXME: This function should really not be here.
+	public static void shutdown() {
+		timerQ.shutdown();
 	}
 }

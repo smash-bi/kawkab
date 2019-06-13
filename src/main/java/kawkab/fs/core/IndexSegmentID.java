@@ -6,7 +6,7 @@ import kawkab.fs.commons.Configuration;
 import java.io.File;
 import java.util.Objects;
 
-public class IndexBlockID extends BlockID {
+public class IndexSegmentID extends BlockID {
 	private final long inumber;
 	private final int blockIndex;
 	private String localPath;
@@ -15,7 +15,7 @@ public class IndexBlockID extends BlockID {
 	private static final int indexBlocksPerDirectory = Configuration.instance().indexBlocksPerDirectory;
 	private static final String indexBlocksPath = Configuration.instance().indexBlocksPath + File.separator;
 	
-	public IndexBlockID(long inumber, int blockIndex) {
+	public IndexSegmentID(long inumber, int blockIndex) {
 		super(BlockType.INDEX_BLOCK);
 		this.inumber = inumber;
 		this.blockIndex = blockIndex;
@@ -23,7 +23,7 @@ public class IndexBlockID extends BlockID {
 	
 	@Override
 	public Block newBlock() {
-		return new IndexBlock(this);
+		return new IndexSegment(this);
 	}
 	
 	@Override
@@ -40,8 +40,8 @@ public class IndexBlockID extends BlockID {
 	}
 	
 	@Override
-	public int perBlockKey() {
-		return (int)inumber;
+	public String fileID() {
+		return "N"+inumber+blockIndex;
 	}
 	
 	@Override
@@ -55,7 +55,7 @@ public class IndexBlockID extends BlockID {
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
-		IndexBlockID that = (IndexBlockID) o;
+		IndexSegmentID that = (IndexSegmentID) o;
 		return inumber == that.inumber &&
 				blockIndex == that.blockIndex;
 	}

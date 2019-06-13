@@ -1,7 +1,7 @@
 package kawkab.fs.core;
 
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * A semi-blocking queue to transfer objects from one thread to another thread. The producer's add operations is non-blocking
@@ -17,13 +17,13 @@ import java.util.concurrent.BlockingQueue;
  * processed.
  */
 public class TransferQueue <T extends AbstractTransferItem> {
-	private BlockingQueue<T> unifiedQueue;
+	private Queue<T> unifiedQueue;
 	
 	private long inQCountAgg = 0; //For debugging only
 	private long inTriesAgg = 0; //For debugging only
 	
 	public TransferQueue() {
-		unifiedQueue = new ArrayBlockingQueue(50000);
+		unifiedQueue = new ConcurrentLinkedQueue<>();
 	}
 	
 	/**
@@ -47,7 +47,7 @@ public class TransferQueue <T extends AbstractTransferItem> {
 	 *
 	 * @return the head of this queue
 	 */
-	public T take() throws InterruptedException {
+	/*public T take() throws InterruptedException {
 		T item = unifiedQueue.take();
 		item.getAndSetInQueue(false);
 		
@@ -57,7 +57,7 @@ public class TransferQueue <T extends AbstractTransferItem> {
 		item.inQCount = 0;
 		
 		return item;
-	}
+	}*/
 	
 	/**
 	 * Retrieves and removes the head of this queue, or returns null if this queue is empty.

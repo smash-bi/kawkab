@@ -51,7 +51,7 @@ public final class DataSegmentID extends BlockID {
 		if (localPath != null)
 			return localPath;
 		
-		String uuid = Commons.uuidToBase64String(inumber, blockInFile); //highBits=inumber, lowBits=BlockNumber
+		String uuid = Commons.uuidToBase64String(inumber, blockInFile);
 		int uuidLen = uuid.length();
 		int wordSize = 3; //Number of characters of the Base64 encoding that make a directory
 		int levels = 6; //Number of directory levels //FIXME: we will have 64^3 files in a directory, 
@@ -63,10 +63,10 @@ public final class DataSegmentID extends BlockID {
 		path.append(blocksPath + File.separator);
 		
 		int rootLen = uuidLen - levels*wordSize; // The root folder can have more characters than wordSize
-		path.append(uuid.substring(0, rootLen));
+		path.append(uuid, 0, rootLen);
 		
 		for (int i=0; i<levels; i++){
-			path.append(File.separator).append(uuid.substring(rootLen+i*wordSize, rootLen+i*wordSize+wordSize));
+			path.append(File.separator).append(uuid, rootLen+i*wordSize, rootLen+i*wordSize+wordSize);
 		}
 		
 		localPath = path.toString(); //TODO: Should we intern() this string?
@@ -74,9 +74,8 @@ public final class DataSegmentID extends BlockID {
 		return localPath;
 	}
 	
-	@Override
-	public int perBlockKey() {
-		return (int)((inumber<<16) | blockInFile); //FIXME: Use a hash function such as Murmur3_32
+	public String fileID() {
+		return "D"+inumber+blockInFile;
 	}
 	
 	public long inumber() {

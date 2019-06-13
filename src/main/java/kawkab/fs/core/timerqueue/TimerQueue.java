@@ -1,6 +1,5 @@
 package kawkab.fs.core.timerqueue;
 
-import kawkab.fs.core.Clock;
 import kawkab.fs.core.TransferQueue;
 import kawkab.fs.core.exceptions.KawkabException;
 
@@ -14,9 +13,7 @@ public class TimerQueue {
 	private TransferQueue<TimerQueueItem> buffer;
 	private volatile boolean working = true;
 	
-	private static TimerQueue instance;
-	
-	private TimerQueue() {
+	public TimerQueue() {
 		buffer = new TransferQueue<>();
 		processorThr = new Thread("SegmentTimerQueueThread") {
 			public void run() {
@@ -25,13 +22,6 @@ public class TimerQueue {
 		};
 		
 		processorThr.start();
-	}
-	
-	public static synchronized TimerQueue instance() {
-		if (instance == null)
-			instance = new TimerQueue();
-		
-		return instance;
 	}
 	
 	/**
