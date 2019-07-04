@@ -21,8 +21,10 @@ public class TransferQueue <T extends AbstractTransferItem> {
 	
 	private long inQCountAgg = 0; //For debugging only
 	private long inTriesAgg = 0; //For debugging only
+	private final String name;
 	
-	public TransferQueue() {
+	public TransferQueue(String name) {
+		this.name = name;
 		unifiedQueue = new ConcurrentLinkedQueue<>();
 	}
 	
@@ -83,7 +85,7 @@ public class TransferQueue <T extends AbstractTransferItem> {
 	}
 	
 	public void shutdown() {
-		System.out.printf("\t[TQ] Total tries = %d, Total added in Q = %d, ratio = %.2f%%\n", inTriesAgg, inQCountAgg, 100.0*inQCountAgg/inTriesAgg);
+		System.out.printf("\t"+name+"] Total tries = %d, Total added in Q = %d, ratio = %.2f%%\n", inTriesAgg, inQCountAgg, 100.0*inQCountAgg/inTriesAgg);
 	}
 }
 

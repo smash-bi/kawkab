@@ -16,7 +16,7 @@ public class TimerQueueTest {
 	
 	public void interfaceTest() {
 		DeferredWorkReceiver<MutableObject> listener = item -> item.unset(); //Callback function
-		TimerQueue tq = TimerQueue.instance();
+		TimerQueue tq = new TimerQueue("InterfaceTestQueue");
 		TimerQueueItem<MutableObject> tqi = null;
 		MutableObject obj = null;
 		
@@ -31,6 +31,7 @@ public class TimerQueueTest {
 		}
 		
 		tq.waitUntilEmpty();
+		tq.shutdown();
 		
 		Assertions.assertFalse(obj.isSet());
 	}
@@ -45,7 +46,7 @@ public class TimerQueueTest {
 			buffer.release(item);
 		};
 		
-		TimerQueue tq = TimerQueue.instance();
+		TimerQueue tq = new TimerQueue("BufferedUseTestQueue");
 		TimerQueueItem<MutableObject> tqi = null;
 		MutableObject obj = null;
 		
@@ -64,6 +65,7 @@ public class TimerQueueTest {
 		}
 		
 		tq.waitUntilEmpty();
+		tq.shutdown();
 		
 		Assertions.assertTrue(buffer.isZero());
 		Assertions.assertFalse(obj.isSet());
@@ -103,10 +105,4 @@ public class TimerQueueTest {
 		
 		public synchronized boolean isZero() { return count == 0; }
 	}
-	
-	@AfterAll
-	static void shutdown() {
-		TimerQueue.instance().shutdown();
-	}
-	
 }

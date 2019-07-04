@@ -7,7 +7,7 @@ import kawkab.fs.core.Cache;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
-import kawkab.fs.core.timerqueue.TimerQueue;
+import kawkab.fs.core.Inode;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.utils.TimeLog;
 import org.junit.jupiter.api.AfterAll;
@@ -141,7 +141,7 @@ public class AppendTest {
 		
 		long durSec = (System.currentTimeMillis() - st)/1000;
 		
-		TimerQueue.instance().waitUntilEmpty();
+		Inode.waitUntilSynced();
 		
 		Cache.instance().flush(); //Clear the cache for the actual append test.
 		

@@ -106,6 +106,9 @@ public final class DataSegmentID extends BlockID {
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
+		
+		//>> if this.hasCode == that.hashCode, return true << // https://norvig.com/java-iaq.html
+		
 		DataSegmentID that = (DataSegmentID) o;
 		return inumber == that.inumber &&
 				blockInFile == that.blockInFile &&

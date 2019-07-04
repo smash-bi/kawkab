@@ -45,7 +45,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	public static final long MAXFILESIZE = conf.maxFileSizeBytes;
 	
 	static {
-		timerQ = new TimerQueue(); //FIXME: We should pass timerQ's object in the constructor and isntantiate TimerQueue once
+		timerQ = new TimerQueue("DSQueue"); //FIXME: We should pass timerQ's object in the constructor and isntantiate TimerQueue once
 	}
 	
 	protected Inode(long inumber, int recordSize) {
@@ -425,5 +425,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	//FIXME: This function should really not be here.
 	public static void shutdown() {
 		timerQ.shutdown();
+	}
+	
+	public static void waitUntilSynced() {
+		timerQ.waitUntilEmpty();
 	}
 }

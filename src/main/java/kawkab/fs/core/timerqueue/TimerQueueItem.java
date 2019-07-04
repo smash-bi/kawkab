@@ -126,4 +126,13 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	public T getItem() {
 		return item;
 	}
+	
+	@Override
+	public String toString() {
+		if (item == null) {
+			return "EXPIRED ITEM";
+		}
+		
+		return item.toString(); //FIXME: This is not thread safe. This should only be used for debuggin purposes.
+	}
 }

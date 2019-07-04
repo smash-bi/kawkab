@@ -10,12 +10,17 @@ import kawkab.fs.core.exceptions.KawkabException;
  */
 public class TimerQueue {
 	private final Thread processorThr;
-	private TransferQueue<TimerQueueItem> buffer;
+	private TransferQueue<TimerQueueItem> trnsfrQ;
 	private volatile boolean working = true;
+	private final String name;
 	
-	public TimerQueue() {
-		buffer = new TransferQueue<>();
-		processorThr = new Thread("SegmentTimerQueueThread") {
+	/**
+	 * @param name Name of the queue for debugging and tracing purposes.
+	 */
+	public TimerQueue(String name) {
+		this.name = name;
+		trnsfrQ = new TransferQueue<>(name+"-TrnsfrQ");
+		processorThr = new Thread(name+"Thread") {
 			public void run() {
 				processSegments();
 			}
@@ -35,7 +40,7 @@ public class TimerQueue {
 		assert working;
 		
 		item.enable(timeoutMs);
-		buffer.add(item);
+		trnsfrQ.add(item);
 	}
 	
 	/**
@@ -56,9 +61,9 @@ public class TimerQueue {
 		TimerQueueItem next = null;
 		
 		while(working) {
-			next = buffer.poll();
+			next = trnsfrQ.poll();
 			if (next == null) {
-				try { //Sleeping because the buffer is non-blocking
+				try { //Sleeping because the trnsfrQ is non-blocking
 					Thread.sleep(1); //1ms is chosen randomly. It doesn't impact the performance, but a large value may result in slower expiry of the segments
 				} catch (InterruptedException e) {}
 				continue;
@@ -74,7 +79,7 @@ public class TimerQueue {
 		
 		// Some items may have been left in the queue during closing. We have to retrieve those items and process
 		// them before exit.
-		while((next = buffer.poll()) != null) {
+		while((next = trnsfrQ.poll()) != null) {
 			try {
 				process(next);
 			} catch (KawkabException e) {
@@ -94,16 +99,16 @@ public class TimerQueue {
 			ret = item.tryExpire();
 		}
 		
-		if (ret == ItemTimer.EXPIRED)
+		if (ret == ItemTimer.EXPIRED) {
 			item.deferredWork();
+		}
 	}
 	
 	public void waitUntilEmpty() {
 		int size;
-		while((size = buffer.size()) > 0) {
-			System.out.println("Waiting until STQ becomes empty, current size = " + size);
+		while((size = trnsfrQ.size()) > 0) {
 			try {
-				Thread.sleep(1);
+				Thread.sleep(1000);
 			} catch (InterruptedException e) {
 			}
 		}
@@ -120,6 +125,6 @@ public class TimerQueue {
 			e.printStackTrace();
 		}
 		
-		buffer.shutdown();
+		trnsfrQ.shutdown();
 	}
 }

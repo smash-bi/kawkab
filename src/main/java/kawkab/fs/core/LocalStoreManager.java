@@ -64,12 +64,12 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private void startWorkers() {
 		storeQs = new TransferQueue[numWorkers];
 		for(int i=0; i<numWorkers; i++) {
-			storeQs[i] = new TransferQueue<>();
+			storeQs[i] = new TransferQueue<>("LSM-TrnsfrQ-"+i);
 		}
 		
 		fileChannels = new FileChannels[numWorkers];
 		for (int i=0; i<fileChannels.length; i++) {
-			fileChannels[i] = new FileChannels();
+			fileChannels[i] = new FileChannels("LSM-Chnls-"+i);
 		}
 		
 		workers = new Thread[numWorkers];

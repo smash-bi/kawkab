@@ -7,7 +7,6 @@ import kawkab.fs.core.timerqueue.TimerQueueItem;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
@@ -59,9 +58,11 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 	private final Clock clock = Clock.instance();
 	private long hitCount;
 	private long missCount;
+	private final String name; //For debugging and tracing
 	
-	public FileChannels() {
-		tq = new TimerQueue();
+	public FileChannels(String name) {
+		this.name = name;
+		tq = new TimerQueue(name+"-TimerQ");
 		timerItemsMap = new HashMap<>();
 	}
 	
@@ -127,14 +128,27 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 		tq.enableAndAdd(item, timeoutMillis+clock.currentTime());
 	}
 	
-	public synchronized void shutdown() {
-		System.out.printf("File Channel: Hits: %d, Miss: %d, Total: %d, Hit ratio: %.2f\n",
+	public void shutdown() {
+		System.out.printf("["+name+"]File Channel: Hits: %d, Miss: %d, Total: %d, Hit ratio: %.2f\n",
 				hitCount, missCount, hitCount+missCount, (hitCount*1.0/(hitCount+missCount)));
 		
-		assert timerItemsMap.size() == 0 : "TimeItemsMap size is not zero";
+		synchronized (this) {
+			if (timerItemsMap.size() > 0) {
+				for (String key : timerItemsMap.keySet()) {
+					System.out.println("\t\t\t[" + name + "] >> File not closed yet: " + key);
+				}
+			}
+		}
 		
 		tq.waitUntilEmpty();
 		tq.shutdown();
+		
+		assert timerItemsMap.size() == 0 : "TimeItemsMap size is not zero";
+	}
+	
+	@Override
+	public String toString() {
+		return name;
 	}
 	
 	public class FileChannelWrap {
@@ -148,6 +162,14 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 		
 		private String filePath() { return filePath; }
 		private FileChannel channel() { return channel; }
-		private void closeChannel() throws IOException { channel.close(); channel = null;}
+		private void closeChannel() throws IOException {
+			channel.close();
+			channel = null;
+		}
+		
+		@Override
+		public  String toString() {
+			return filePath;
+		}
 	}
 }

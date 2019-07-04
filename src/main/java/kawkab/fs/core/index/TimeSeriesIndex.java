@@ -34,7 +34,11 @@ public class TimeSeriesIndex implements FileIndex {
 	
 	@Override
 	public void append(long key, long byteOffsetInFile) throws IOException, KawkabException {
-		int blockIndex = blockIndexFromOffset(byteOffsetInFile, recordSize);
+		System.err.println("WARNING!!! Indexing is not finished yet...");
+		
+		return;
+		
+		/*int blockIndex = blockIndexFromOffset(byteOffsetInFile, recordSize);
 		IndexSegmentID indexSegmentID = getID(inumber, blockIndex);
 		
 		IndexSegment block = null;
@@ -47,7 +51,7 @@ public class TimeSeriesIndex implements FileIndex {
 			if (block != null) {
 				cache.releaseBlock(indexSegmentID);
 			}
-		}
+		}*/
 	}
 	
 	/**
@@ -59,7 +63,11 @@ public class TimeSeriesIndex implements FileIndex {
 	 */
 	@Override
 	public long offsetInFile(long key) throws IOException, KawkabException {
-		int blockIndex = blockIndexFromKey(key);
+		System.err.println("WARNING!!! Indexing is not finished yet...");
+		
+		return 0;
+		
+		/*int blockIndex = blockIndexFromKey(key);
 		IndexSegmentID indexSegmentID = getID(inumber, blockIndex);
 		IndexSegment block = null;
 		
@@ -70,7 +78,7 @@ public class TimeSeriesIndex implements FileIndex {
 			if (block != null) {
 				cache.releaseBlock(indexSegmentID);
 			}
-		}
+		}*/
 	}
 	
 	private int blockIndexFromKey(long key) {
