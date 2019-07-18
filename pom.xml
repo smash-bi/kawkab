@@ -261,6 +261,12 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>28.0-jre</version>
+		</dependency>
+
+		<dependency>
 		  <!-- Chronicle Queue for batching -->
 		  <groupId>net.openhft</groupId>
 		  <artifactId>chronicle-queue</artifactId>

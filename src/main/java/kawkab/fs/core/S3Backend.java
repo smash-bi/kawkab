@@ -1,14 +1,14 @@
 package kawkab.fs.core;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.RandomAccessFile;
+import java.io.*;
+import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.channels.ReadableByteChannel;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.locks.Lock;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.ClientConfiguration;
@@ -35,6 +35,7 @@ public final class S3Backend implements GlobalBackend{
 	private AmazonS3 client;
 	private static final String rootBucket = "kawkab-blocks"; //Cannot contain uppercase letters.
 	private byte[] buffer;
+	private ByteBuffer bufferWrap;
 	private FileLocks fileLocks;
 	private static final String contentType = "application/octet-stream";
 	
@@ -46,6 +47,7 @@ public final class S3Backend implements GlobalBackend{
 		
 		Configuration conf = Configuration.instance();
 		buffer = new byte[(Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes))];
+		bufferWrap = ByteBuffer.wrap(buffer);
 	}
 	
 	@Override
@@ -112,15 +114,15 @@ public final class S3Backend implements GlobalBackend{
             ) {
 			
 			length = (int)raf.length(); //Block size in Kawkab is an integer
-			
+
+			Lock lock = fileLocks.grabFileLock(srcBlock.id());
 			try {
-				fileLocks.lockFile(srcBlock.id());
-				raf.readFully(buffer, 0, length);		
-			} catch (InterruptedException e) {
-				throw new KawkabException(e);
+				lock.lock();
+				raf.readFully(buffer, 0, length);
 			} finally {
-				fileLocks.unlockFile(srcBlock.id());
+				lock.unlock();
 			}
+
 		} catch (IOException e) {
 			e.printStackTrace();
 			throw new KawkabException(e);

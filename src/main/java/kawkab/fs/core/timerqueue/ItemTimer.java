@@ -61,7 +61,7 @@ public class ItemTimer {
 		// to disabled. Moreover, the worker thread will not concurrently update the state variable.
 		long prev = mState.getAndSet(futureTime);
 		
-		assert prev != EXPIRED; // FIXME: Is it necessary???
+		assert prev == DISABLED; // FIXME: Is it necessary???
 	}
 	
 	/**

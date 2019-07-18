@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.Lock;
 
 public final class LocalStoreManager implements SyncCompleteListener {
 	private GlobalStoreManager globalProc;
@@ -137,42 +138,43 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		// is always assigned to the same worker thread.
 		
 		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
-		
+
+		// We must clear the dirty bit before syncing the block to the local store. Otherwise, the race with the
+		// block writer will not be safe.
 		if (!block.getAndClearLocalDirty()) {
 			block.notifyLocalSyncComplete();
 			return 0;
 		}
-		
+
+		//System.out.println("[LS] Locking file: " + block.id());
+
+		BlockID bid = block.id();
+		Lock lock = fileLocks.grabFileLock(bid); // To prevent concurrent read from the GlobalStoreManager
+		FileChannel channel = null;
 		try {
-			fileLocks.lockFile(block.id()); // To prevent concurrent read from the GlobalStoreManager
-		} catch (InterruptedException e1) {
-			throw new KawkabException(e1);
-		}
-		
-		try {
-			//syncedCnt += block.storeToFile();
-			
-			FileChannel channel = null;
-			try {
-				channel = channels.acquireChannel(block.id());
-				
-				assert channel.isOpen();
-				
-				syncedCnt += block.storeTo(channel);
-			} finally {
-				if (channel != null) {
-					channels.releaseFileChannel(block.id());
-				}
-			}
-			
+			lock.lock();
+			channel = channels.acquireChannel(bid);
+
+			assert channel.isOpen();
+
+			syncedCnt += block.storeTo(channel);
+
 			block.markGlobalDirty();
+
 		} catch (IOException e) {
-			System.out.println("Unbale to store data for ID: " + block.id());
+			System.out.println("Unbale to store data for ID: " + bid);
 			//FIXME: What should we do here? Should we return?
 			throw new KawkabException(e);
 		} finally {
-			fileLocks.unlockFile(block.id());
+			if (channel != null) {
+				channels.releaseFileChannel(bid);
+			}
+
+			lock.unlock();
 		}
+			
+
+
 		
 		//System.out.println("dirtyCount=0, skipping submittingToGlobal: " + block.id());
 		//updateLocalDirty(block, dirtyCount);
@@ -184,6 +186,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		//if (block.subtractAndGetLocalDirty(0) > 0) {
 		if (block.isLocalDirty()) {
+			if (bid.type() != BlockID.BlockType.INODES_BLOCK)
 			store(block);
 		} else {
 			block.notifyLocalSyncComplete();
@@ -240,16 +243,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	public void notifyGlobalStoreComplete(Block block, boolean successful) throws KawkabException {
 		// Called by the global store manager when it is done with storing the block in the global store
 		
-		/* if not successful, add in some queue to retry later
-		 * 
-		 * atomically increment dirty count
-		 * if dirty count after increment is 2 (dirty count's initial value is 0), this means
-		 * the block is not in cache and the block is persisted globally. Therefore, the block can be
-		 * deleted from the local store.
-		 * 
-		*/
+		/* if not successful, add in some queue to retry later  */
 		
-		if (block.isLocalDirty()) {// We have to check the count again. We cannot simply call localDirtyCount()
+		/*if (block.isLocalDirty()) {// We have to check the count again. We cannot simply call localDirtyCount()
 							// because we need to notify any thread waiting for the block to be removed 
 							// from the local queue.
 							// Otherwise, a block can be evicted from the cache while the block is still being synced to the local store.
@@ -259,6 +255,12 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		} else {
 			// System.out.println("[LSM] Local NOT dirty. Skipping: " + block.id() + ", cnt="+dirtyCount);
 			block.notifyLocalSyncComplete();
+		}*/
+
+		if (!successful) {
+			System.out.println("[LS] Store to global failed for: " + block.id());
+			globalProc.store(block, this); //FIXME: This doesn't seem to be the right approach
+			return;
 		}
 		
 		//System.out.println("[LSM] Finished storing to global: " + block.id());

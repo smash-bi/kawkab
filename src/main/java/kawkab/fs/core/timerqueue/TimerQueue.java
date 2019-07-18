@@ -105,8 +105,7 @@ public class TimerQueue {
 	}
 	
 	public void waitUntilEmpty() {
-		int size;
-		while((size = trnsfrQ.size()) > 0) {
+		while(trnsfrQ.size() > 0) {
 			try {
 				Thread.sleep(1000);
 			} catch (InterruptedException e) {

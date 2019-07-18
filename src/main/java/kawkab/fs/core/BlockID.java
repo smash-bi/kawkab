@@ -53,7 +53,7 @@ public abstract class BlockID {
 	 *
 	 * Keys are not unique across block types.
 	 */
-	public final int perBlockTypeKey() { return hashCode(); }
+	abstract public int perBlockTypeKey();
 	
 	/**
 	 * Determines whether the node running this code is the primary writer of this block. 

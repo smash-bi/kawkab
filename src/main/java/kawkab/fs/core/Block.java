@@ -184,14 +184,14 @@ public abstract class Block extends AbstractTransferItem {
 	public boolean isLocalDirty(){
 		return isLocalDirty;
 	}
-	
+
 	/**
 	 * @return Returns the current value of the local dirty count
 	 */
 	/*public long localDirtyCount() {
 		return isLocalDirty.get();
 	}*/
-	
+
 	public boolean getAndClearLocalDirty() {
 		boolean isDirty = isLocalDirty;
 		isLocalDirty = false;
@@ -285,8 +285,8 @@ public abstract class Block extends AbstractTransferItem {
 		if (isLocalDirty || inTransferQueue()) {
 			synchronized(localStoreSyncLock) {
 				while (isLocalDirty || inTransferQueue()) { // It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
-					System.out.println("[B] Waiting until this block is synced to the local store and then evicted from the cache: " + id + ", isLocalDirty: " +
-								isLocalDirty + ", inLocalQueue="+inTransferQueue());
+					System.out.println("[B] swait: " + id + ", dty: " +
+								isLocalDirty + ", inLQ="+inTransferQueue());
 					localStoreSyncLock.wait();
 				}
 				//System.out.println("[B] Block synced, now evicting: " + id);

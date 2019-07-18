@@ -43,7 +43,7 @@ public final class InodesBlock extends Block {
 		int blockIndex = id.blockIndex();
 		for (int j=0; j<conf.inodesPerBlock; j++) {
 			long inumber = blockIndex*conf.inodesPerBlock + j;
-			initInode(inumber, 0);
+			initInode(inumber, 0); //Initially set to zero to catch any errors. The recordSize must be at least 1 in the working system
 		}
 	}
 	

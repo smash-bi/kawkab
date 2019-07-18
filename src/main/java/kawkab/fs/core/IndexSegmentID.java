@@ -38,6 +38,11 @@ public class IndexSegmentID extends BlockID {
 		
 		return localPath;
 	}
+
+	@Override
+	public int perBlockTypeKey() {
+		return Objects.hash(inumber, blockIndex);
+	}
 	
 	@Override
 	public String fileID() {

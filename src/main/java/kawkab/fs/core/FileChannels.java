@@ -22,7 +22,7 @@ import java.util.Map;
  * However, each block gets its own FileChannel. In this way, for N blocks in the same file, we open the file once, and
  * create N FileChannels.
  *
- * In addition to preventing redundantl yopening the same file multiple times, the opened files are closed after a
+ * In addition to preventing redundantly opening the same file multiple times, the opened files are closed after a
  * predefined timeout. In this way, we keep closing the opened files, even though the blocks can still be in the cache.
  * This is further explained below.
  *
@@ -38,9 +38,10 @@ import java.util.Map;
  *
  * Note 1: This class is supposed to be used by either a single thread or the threads use unique BlockIDs for the channels.
  * The reason is that the openFileChannel function looks into a map where the key is blockID. So if two different
- * threads open the FileChannel for the same block, this class gives the same channel to both threads.
+ * threads open the FileChannel for the same block, this class gives the same channel to both threads. However, the
+ * releaseChannel will erroneously release the channel for both of the threads.
  *
- * Note 2: The caller should not close the FIleChannel by itself. Instead, the caller should return the FileChannel
+ * Note 2: The caller should not close the FileChannel by itself. Instead, the caller should return the FileChannel
  * using the returnFileChannel() function. This class will close the FileChannel after a timeout if the caller doesn't
  * borrow the same channel before the timeout.
  *
@@ -101,7 +102,7 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 		try {
 			String filePath = wrap.filePath();
 			TimerQueueItem<FileChannelWrap> item = timerItemsMap.get(filePath);
-			
+
 			// Here we should remove the saved wrapper from the timerItemsMap. However, we have to check if the
 			// mapped FileChannelWrap is the same as the one that is passed in this function. If they are not the same,
 			// it means that another thread has created a new wrapper after the wrap was expired. We must not remove
@@ -110,8 +111,6 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 			if (item.getItem() == wrap) { // If the saved wrapper and the warp are the same, it is safe to remove the wrap because the channel cannot be reused
 				timerItemsMap.remove(filePath);
 			}
-			
-			assert item != null;
 			
 			// Close the file channel and release the channel object
 			item.getItem().closeChannel();
@@ -123,7 +122,7 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 	public synchronized void releaseFileChannel(BlockID id) {
 		TimerQueueItem<FileChannelWrap> item = timerItemsMap.get(id.localPath());
 		
-		assert item != null;
+		assert item != null : id + " is null";
 		
 		tq.enableAndAdd(item, timeoutMillis+clock.currentTime());
 	}

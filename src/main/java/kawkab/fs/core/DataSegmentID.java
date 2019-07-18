@@ -73,7 +73,13 @@ public final class DataSegmentID extends BlockID {
 		
 		return localPath;
 	}
-	
+
+	@Override
+	public int perBlockTypeKey() {
+		return Objects.hash(inumber, blockInFile);
+	}
+
+	@Override
 	public String fileID() {
 		return "D"+inumber+blockInFile;
 	}
