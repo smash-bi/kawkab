@@ -6,14 +6,12 @@ import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.index.FileIndex;
-import kawkab.fs.core.exceptions.InsufficientResourcesException;
-import kawkab.fs.core.exceptions.InvalidFileOffsetException;
-import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.index.TimeSeriesIndex;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueue;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
+import kawkab.fs.core.tq.TimerTransferQueue;
+import kawkab.fs.core.tq.TimerTransferableWrapper;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -32,13 +30,16 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	private int recordSize; //Temporarily set to 1 until we implement reading/writing records
 	private FileIndex index;
 
-	private volatile TimerQueueItem<DataSegment> acquiredSeg;
-
 	private static final Cache cache = Cache.instance();
 	private static final Clock clock = Clock.instance();
 	private static final LocalStoreManager localStore = LocalStoreManager.instance();
 	private static final Configuration conf = Configuration.instance();
+
+	private volatile TimerQueueItem<DataSegment> acquiredSeg;
 	private static final TimerQueue timerQ;
+
+	private static final TimerTransferQueue<DataSegment> timerPriorityQ;
+	private TimerTransferableWrapper<DataSegment> timerQWrapper;
 
 	private static final int bufferTimeOffsetMillis = 5;
 
@@ -46,6 +47,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	static {
 		timerQ = new TimerQueue("DSQueue"); //FIXME: We should pass timerQ's object in the constructor and isntantiate TimerQueue once
+		timerPriorityQ = new TimerTransferQueue<>();
+		runWorkerThread();
 	}
 
 	protected Inode(long inumber, int recordSize) {
@@ -274,6 +277,57 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		return length;
 	}
 
+	public synchronized int appendBufferedWithLocks(final byte[] data, int offset, final int length) //Syncrhonized with close() due to acquiredSeg
+			throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
+		int remaining = length; //Reaming size of data to append
+		long fileSizeBuffered = this.fileSize.get(); // Current file size
+
+		if (fileSizeBuffered + length > MAXFILESIZE) {
+			throw new MaxFileSizeExceededException();
+		}
+
+
+		while (remaining > 0) {
+			if (timerQWrapper == null || (!timerPriorityQ.disable(timerQWrapper))) {
+				DataSegmentID segId;
+				if ((FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L) { // if the last block is full
+					segId = createNewBlock(fileSizeBuffered);
+				} else { // Otherwise the last segment was full or we are just starting without any segment at hand
+					segId = getSegmentID(fileSizeBuffered);
+				}
+				DataSegment ds = (DataSegment) cache.acquireBlock(segId);
+				ds.initForAppend(fileSizeBuffered, recordSize);
+
+				timerQWrapper = new TimerTransferableWrapper<>(ds);
+			}
+
+			DataSegment ds = timerQWrapper.getItem();
+
+			try {
+				int bytes = ds.append(data, offset, remaining, fileSizeBuffered);
+
+				remaining -= bytes;
+				offset += bytes;
+				fileSizeBuffered += bytes;
+			} catch (IOException e) {
+				throw new KawkabException(e);
+			}
+
+			//tlog1.start();
+			if (ds.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
+				//timerQWrapper = null;		// is now immutable. The segment will be eventually returned to the cache.
+				timerPriorityQ.complete(timerQWrapper);
+				timerQWrapper = null;
+			} else {
+				timerPriorityQ.enableOrAdd(timerQWrapper, clock.currentTime()+bufferTimeOffsetMillis);
+			}
+		}
+
+		fileSize.set(fileSizeBuffered);
+
+		return length;
+	}
+
 	/**
 	 * A helper function to acquire segment from the cache, and optionally create a new Data Block.
 	 * @param fileSize Current file size
@@ -411,6 +465,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			deferredWork(acquiredSeg.getItem());
 			acquiredSeg = null;
 		}
+
+		waitUntilEmpty();
 	}
 
 	@Override
@@ -420,14 +476,54 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		} catch (KawkabException e) {
 			e.printStackTrace();
 		}
+
+		waitUntilEmpty();
 	}
 
 	//FIXME: This function should really not be here.
 	public static void shutdown() {
 		timerQ.shutdown();
+		waitUntilEmpty();
 	}
 
 	public static void waitUntilSynced() {
 		timerQ.waitUntilEmpty();
+	}
+
+	private static void waitUntilEmpty() {
+		while(timerPriorityQ.size() > 0) {
+			try {
+				Thread.sleep(1000);
+				System.out.println("Waiting for the TimerTransferQueue to become empty, size is " + timerPriorityQ.size());
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+	private static Thread wt;
+	private static void runWorkerThread() {
+		final TimerTransferQueue<DataSegment> tq = timerPriorityQ;
+		wt = new Thread(() -> {
+			while(true) {
+				DataSegment ds = null;
+				try {
+					ds = tq.take();
+
+				} catch (InterruptedException e) {
+					break;
+				}
+
+				if (ds != null) {
+					try {
+						cache.releaseBlock(ds.id());
+					} catch (KawkabException e) {
+						e.printStackTrace();
+						break;
+					}
+				}
+			}
+		});
+		wt.start();
 	}
 }

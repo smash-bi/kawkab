@@ -1,26 +1,27 @@
 package kawkab.fs.core.tq;
 
+import org.junit.jupiter.api.Test;
+
 public class TimerTransferQueueTest {
 	public static void main(String args[]) {
 		new TimerTransferQueueTest().interfaceTest();
 	}
-	
-	private void interfaceTest() {
+
+	@Test
+	public void interfaceTest() {
 		TimerTransferQueue<MutableObject> t = new TimerTransferQueue<MutableObject>();
 		for (int i = 0; i < 10; ++i) {
 			TimerTransferableWrapper<MutableObject> w = new TimerTransferableWrapper<MutableObject>(new MutableObject(i));
-			t.add(w, System.currentTimeMillis() + (i+1) * 1000);
+			t.add(w, System.currentTimeMillis() + (i + 1) * 1000);
 			// Must disable first before changing.
 			if (t.disable(w)) {
-				w.getItem().update(i);
-				t.enableOrAdd(w, System.currentTimeMillis()+ (i+1) * 1000); // Re-enable, add if necessary
+				w.getItem().update(i * 10);
+				t.enableOrAdd(w, System.currentTimeMillis() + 1000); // Re-enable, add if necessary
 				if (i == 7) {
 					t.complete(w);
 				}
 			}
-			
 		}
-		
 		while (true) {
 			try {
 				MutableObject item = t.take();
@@ -40,11 +41,11 @@ public class TimerTransferQueueTest {
 		public MutableObject(int i) {
 			this.i = i;
 		}
-		
+
 		public void update(int i) {
 			this.i = i;
 		}
-		
+
 		public int get() {
 			return i;
 		}

@@ -1,7 +1,7 @@
 package kawkab.fs.core.tq;
 
 /**
- * Unbounded queue that checks if item already exists
+ * Unbounded queue that checks if an item already exists
  */
 public class TransferQueue<T> {
 	private ResizeableCircularQueue<FifoTransferableWrapper<T>> backingQueue;
@@ -26,8 +26,8 @@ public class TransferQueue<T> {
 	 * 
 	 * @param wrap The wrapper object that we want to add to the queue.
 	 */
-	public synchronized void add(FifoTransferableWrapper<T> wrap) {
-		wrap.addToTransferQueue(this);
+	public synchronized boolean add(FifoTransferableWrapper<T> wrap) {
+		return wrap.addToTransferQueue(this);
 	}
 	
 	/**
@@ -47,10 +47,9 @@ public class TransferQueue<T> {
 	 * 
 	 * @param wrap The wrapper object that we want to enable/add.
 	 */
-	public void enableOrAdd(FifoTransferableWrapper<T> wrap) {
-		if (!enable(wrap)) {
-			add(wrap);
-		}
+	public boolean enableOrAdd(FifoTransferableWrapper<T> wrap) {
+		if (enable(wrap)) return true;
+		return add(wrap);
 	}
 	
 	public boolean disable(FifoTransferableWrapper<T> wrap) {
@@ -68,16 +67,6 @@ public class TransferQueue<T> {
 		}
 		return removeFromFront(index);
 	}
-	
-	/*
-	public synchronized T poll() {
-		int index = backingQueue.frontIndex();
-		if (index == -1) {
-			return null;
-		}
-		return removeFromFront(index);
-	}
-	*/
 	
 	private T removeFromFront(int frontIndex) {
 		FifoTransferableWrapper<T> wrap = backingQueue.getAtIndex(frontIndex);

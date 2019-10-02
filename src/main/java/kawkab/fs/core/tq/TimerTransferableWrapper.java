@@ -12,36 +12,33 @@ public class TimerTransferableWrapper<T> extends TransferableWrapper<T> implemen
 		super(newItem);
 		resetTimeouts();
 	}
-	
-	private void resetTimeouts() {
-		timeoutTS     = -1;
-		nextTimeoutTS = -1;
-	}
-	
+		
 	public synchronized void reset(T newItem) throws InterruptedException {
 		super.reset(newItem);
 		resetTimeouts();
 	}
 
-	protected synchronized void addToTransferQueue(TimerTransferQueue<T> q, long timestamp) {
-		if (status == Status.DISABLE || status == Status.INQ) {
-			status = Status.INQ;
-			nextTimeoutTS = timestamp;
+	protected synchronized boolean addToTransferQueue(TimerTransferQueue<T> q, long timestamp) {
+		if (expiredOrDisabled()) {
+			return false; // Called while the wrapper is in an unexpected state
+		} else if (status == Status.INQ){
+			nextTimeoutTS = timestamp; // Just update the next timestamp
 		} else {
-			// Outside of the queue
+			assert (status == Status.OUTQ);
 			status = Status.INQ;
 			timeoutTS = timestamp;
 			nextTimeoutTS = -1;
 			q.addFinish(this); // Callback to finish the add while holding this lock
 		}
+		return true;
 	}
 	
 	protected synchronized long getTimeout() {
 		return timeoutTS;
 	}
 	
-	private T resetAndRemoveFromQ() {
-		status = Status.OUTQ;
+	private T expireWrapper() {
+		status = Status.EXPIRED;
 		resetTimeouts();
 		T ret = item;
 		item = null;
@@ -49,34 +46,43 @@ public class TimerTransferableWrapper<T> extends TransferableWrapper<T> implemen
 		return ret;
 	}
 
-	// Need to check if there is a pending timeout
 	protected synchronized T removeFromTransferQueue(TimerTransferQueue<T> q) {
 		if (status == Status.INQ) {
 			if (nextTimeoutTS == -1) {
-				return resetAndRemoveFromQ();
+				return expireWrapper();
 			} else {
 				timeoutTS = nextTimeoutTS;
 				nextTimeoutTS = -1;
 				q.addFinish(this);
 			}
-		} else if (status == Status.DISABLE) {
-			resetAndRemoveFromQ();
+		} else if (status == Status.DISABLED) {
+			status = Status.OUTQ;
+		} else if (status == Status.EXPIRED) {
+			// This can happen if complete was called, and the item has already
+			// been processed. Just clean up the wrapper and do nothing. We don't
+			// even need to notify since that occurred at the earlier expire call.
 		} else if (status == Status.OUTQ) {
 			assert(false);
-		}		
+		}
 		return null;
 	}
 	
-	protected synchronized boolean enable(long timestamp) {
-		// TODO: Implement this
-		if (status == Status.OUTQ) {
-			return false; // Has already been removed
+	protected synchronized T expire() {
+		T item = super.expire();
+		if (item != null) {
+			resetTimeouts();
 		}
-		status = Status.INQ;
-		nextTimeoutTS = timestamp;
-		return true;
-	}	
+		return item;
+	}
 	
+	protected synchronized boolean enable(long timestamp) {
+		if (super.enable()) {
+			nextTimeoutTS = timestamp;
+			return true;
+		}
+		return false;
+	}	
+
 	public int compareTo(TimerTransferableWrapper<T> other) {
 		if (timeoutTS < other.timeoutTS) {
 			return -1;
@@ -86,53 +92,10 @@ public class TimerTransferableWrapper<T> extends TransferableWrapper<T> implemen
 		}
 		return 0;
 	}
+	
+	private void resetTimeouts() {
+		timeoutTS     = -1;
+		nextTimeoutTS = -1;
+	}
+
 }
-
-/*
-public class TimerTransferableWrapper implements TransferableItem, Comparable<TimerTransferableWrapper> {
-	private long timeoutTimestamp;
-	private boolean updatePending;
-	private long pendingTimeoutTimestamp;
-	
-	// This field is managed by the transfer queue. Should only be accessed while
-	// holding the transfer queue's lock.
-	private boolean inTransferQueue;
-	
-	public TimerTransferableWrapper(long timestamp) {
-		this.timeoutTimestamp = timestamp;
-		// Use the default values for the other fields
-	}
-	
-	public synchronized boolean applyUpdate() {
-		if (updatePending) {
-			timeoutTimestamp = pendingTimeoutTimestamp;
-			updatePending = false;
-			return true;
-		}
-		return false;
-	}
-	
-	public synchronized void addPendingTimestamp(long timestamp) {
-		updatePending = true;
-		pendingTimeoutTimestamp = timestamp;
-	}
-			
-	public void setTransferStatus(boolean status) {
-		inTransferQueue = status;
-	}
-
-	public boolean getTransferStatus() {
-		return inTransferQueue;
-	}
-
-	public int compareTo(TimerTransferableItem other) {
-		if (timeoutTimestamp < other.timeoutTimestamp) {
-			return -1;
-		} 
-		if (timeoutTimestamp > other.timeoutTimestamp) {
-			return 1;
-		}
-		return 0;
-	}
-}
-*/

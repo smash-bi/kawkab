@@ -27,7 +27,7 @@ class ResizeableCircularQueue <T>{
 	}
 	
 	public int frontIndex() {
-		//assert(size > 0);
+		// assert(size > 0) : "size is "+size;
 		return size > 0 ? start : -1;
 	}
 	
