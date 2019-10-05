@@ -8,7 +8,7 @@ class POHPointer extends TimeRange {
 		this.number = number;
 	}
 
-	int nodeNum () {
+	int nodeNumber() {
 		return number;
 	}
 }
