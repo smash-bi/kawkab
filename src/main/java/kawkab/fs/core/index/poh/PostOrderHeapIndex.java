@@ -1,8 +1,10 @@
 package kawkab.fs.core.index.poh;
 
 import kawkab.fs.core.exceptions.IndexBlockFullException;
+import kawkab.fs.core.index.FileIndex;
 
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Nodes in a post-order heap are created in the post-order, i.e., the parent node is created after the children. It is
@@ -11,13 +13,14 @@ import java.util.ArrayList;
  * The class supports only one modifier thread. The concurrent modifiers should synchronized externally.
  */
 
-public class PostOrderHeapIndex {
+public class PostOrderHeapIndex implements FileIndex {
 	private final double logBase;
 	private ArrayList<POHNode> nodes;	//This is an append-only list. The readers should read but not modify the list. The sole writer can a[[emd new nodes.
 
 	// Configuration parameters
 	private final int childrenPerNode; //Branching factor of the tree
 	private final int entriesPerNode; //Number of index entries in each node
+	private final int nodeSizeBytes;
 	private POHNode currentNode;
 
 	//TODO: This table should final and static
@@ -25,14 +28,38 @@ public class PostOrderHeapIndex {
 
 	/**
 	 *
-	 * @param childrenPerNode Number of children per node, which is equivalent to the number of pointers in each node
-	 * @param entriesPerNode Number of index entries per node
+	 * @param indexNodeSizeBytes
+	 * @param percentEntriesPerNode
 	 */
-	public PostOrderHeapIndex(final int entriesPerNode, final int childrenPerNode) {
-		this.entriesPerNode = entriesPerNode;
-		this.childrenPerNode = childrenPerNode;
+	public PostOrderHeapIndex(int indexNodeSizeBytes, int percentEntriesPerNode) {
+		int entrySize = POHEntry.sizeBytes();
+		int pointerSize = POHNode.pointerSizeBytes();
+
+		entriesPerNode = (int) (indexNodeSizeBytes/100.0*percentEntriesPerNode / entrySize);
+		childrenPerNode = (int) ((indexNodeSizeBytes-(entriesPerNode*entrySize))*1.0 / pointerSize);
+
+		nodeSizeBytes = indexNodeSizeBytes;
 
 		logBase = Math.log(childrenPerNode);
+
+		init();
+	}
+
+	// FIXME: Duplicate code in the constructors
+	public PostOrderHeapIndex(int entriesPerNode, int childrenPerNode, int nodeSizeBytes) {
+		this.entriesPerNode = entriesPerNode;
+		this.childrenPerNode = childrenPerNode;
+		this.nodeSizeBytes = nodeSizeBytes;
+
+		logBase = Math.log(childrenPerNode);
+
+		init();
+
+	}
+
+	private void init() {
+		//System.out.printf("Index entries per node:  %d\n", entriesPerNode);
+		//System.out.printf("Index pointers per node: %d\n", childrenPerNode);
 
 		nodes = new ArrayList<>();
 		currentNode = new POHNode(1, 0, entriesPerNode, childrenPerNode);
@@ -51,11 +78,11 @@ public class PostOrderHeapIndex {
 	 *
 	 * This function must be called by a single thread.
 	 *
-	 * @param minTS minimum timestamp in the data segment
-	 * @param maxTS maximum timestamp in the data segment
-	 * @param segInFile Segment number in the file that has minTS and maxTS
+	 * @param timestamp timestamp in the data segment
+	 * @param segmentInFile Segment number in the file that has the record with the timestamp
 	 */
-	public void insert(long minTS, long maxTS, long segInFile) {
+	@Override
+	public void append(long timestamp, long segmentInFile) {
 		//TODO: check the arguments
 
 		// Current node should not be null.
@@ -88,7 +115,7 @@ public class PostOrderHeapIndex {
 		}
 
 		try {
-			currentNode.appendEntry(minTS, maxTS, segInFile);
+			currentNode.appendEntry(timestamp, segmentInFile);
 		} catch (IndexBlockFullException e) {
 			e.printStackTrace();
 		}
@@ -98,139 +125,18 @@ public class PostOrderHeapIndex {
 	 * Searches the timestamp in the index.
 	 *
 	 * @param ts timestamp to find
-	 * @param findLargest Whether to find the largest segment or the smallest segment that has ts
 	 *
-	 * @return the segment number in file that contains ts
+	 * @return the segment number in file that contains ts, or -1 if no entry found
 	 */
-	public long find(long ts, boolean findLargest) {
-		//TODO: check the arguments
+	@Override
+	public long findHighest(long ts) {
+		int curNode = findNode(ts, true);
 
-		// Start from the last node and find the left-most node that has the range. FIXME: We are doing linear search here. Can we do binary search?
-
-		POHNode targetNode = null;
-		int curNode = currentNode.nodeNumber(); // Begin with the last node
-
-		if (currentNode.maxTS() < ts || nodes.get(1).minTS() > ts)
+		if (curNode == -1)
 			return -1;
 
-		// First find the target root node
-		while(curNode > 0) { // Node 0 is null; if we have explored all the root nodes
-			POHNode node = nodes.get(curNode);
-
-			int res = node.compare(ts); // Check if the current node has ts
-			if (res == 0) { //This node has the target timestamp
-				targetNode = node;
-				if (findLargest) // If we are finding the largest index entry that has the timestamp, we should stop at the first node that has ts
-					break;
-			} else if (res < 0) { //If the current node's maxTS is smaller than ts
-				break; // No need to further search in the left as all the left nodes have smaller timestamps than the given ts
-			}
-
-			// Move to the right-most tree on the left
-			curNode = curNode - nodesCountTable[node.height()];
-		}
-
-		if (targetNode == null) // If no node is found
-			return -1; // The ts is not found
-
-		// Now traverse the tree down until we reach the target node or the leaf node
-		while (targetNode.height() > 0) {
-			// Now ts is either in the index entries of the targetNode or its children.
-			// If ts is larger than the maxTS of the right-most child, the ts is in the targetNode's index entries.
-			// Otherwise ts is among the children.
-
-			// if the children have smaller timestamps than ts
-			if (targetNode.nthChild(childrenPerNode).maxTS() < ts)
-				break; // stop here because all the nodes left to this node have smaller timestamps
-
-			int childNodeNum = -1;
-			if (findLargest) {
-				// Find the right-most child that has ts
-				childNodeNum = targetNode.findLastChild(ts);
-			} else {
-				// Find the left-most child that has ts
-				childNodeNum = targetNode.findFirstChild(ts);
-			}
-
-			// Visit and explore the child that has ts
-			targetNode = nodes.get(childNodeNum);
-		}
-
-		if (findLargest)
-			return targetNode.findLastEntry(ts);
-		else
-			return targetNode.findFirstEntry(ts);
+		return nodes.get(curNode).findLastEntry(ts);
 	}
-
-	/**
-	 * @param ts
-	 * @return null if ts is not found, otherwise returns the lists of the list of segment numbers in the descending order
-	 */
-	/*public long[][] findAll(long ts) {
-		// We return array list because we don't know how many index nodes have the target ts.
-
-		int curNode = currentNode.nodeNumber(); // Begin with the last node
-
-		if (currentNode.maxTS() < ts || nodes.get(1).minTS() > ts)
-			return null;
-
-		POHNode leftMostNode = null;
-		int rightIdx = -1; //Node number/index of the right-most node that has ts
-
-		// Traverse all the root nodes that have the ts
-		while(curNode > 0) { // Node 0 is null; if we have explored all the root nodes
-			POHNode node = nodes.get(curNode);
-			int nodeNum = node.nodeNumber();
-
-			int res = node.compare(ts); // Check if the current node has ts
-
-			if (res < 0) { //If the current node's maxTS is smaller than ts
-				break; // No need to further search in the left as all the left nodes have smaller timestamps than the given ts
-			}
-
-			if (res == 0) { //This node's children or the index entries has the target timestamp
-				leftMostNode = node;
-
-				if (rightIdx < nodeNum && node.entryMinTS() <= ts) { // if the ts is greater than the first index entry's minTS
-					rightIdx = nodeNum; //This is the right-most node that has ts
-				}
-			}
-
-			// Move to the right-most tree on the left
-			curNode = curNode - nodesCountTable[node.height()];
-		}
-
-		if (leftMostNode == null) //If no node is found
-			return null;
-
-		// Now traverse the tree down until we reach the target node or the leaf node
-		while (leftMostNode.height() > 0) {
-			// Now ts is either in the index entries of the targetNode or its children.
-			// If ts is larger than the maxTS of the right-most child, ts is in the targetNode's index entries.
-			// Otherwise ts is among the children.
-
-			// if the children have smaller timestamps than ts
-			if (leftMostNode.nthChild(childrenPerNode).maxTS() < ts)
-				break; // stop here because all the nodes left to this node have smaller timestamps
-
-			// Find the left-most child that has ts
-			int childNodeNum = leftMostNode.findFirstChild(ts);
-
-			// Visit and explore the child that has ts
-			leftMostNode = nodes.get(childNodeNum);
-		}
-
-		int leftIdx = leftMostNode.nodeNumber();
-		if (rightIdx == -1) //If ts was not in any other node
-			rightIdx = leftIdx;
-
-		long[][] results = new long[rightIdx-leftIdx+1][];
-		for(int i=0; i<results.length; i++) {
-			results[i] = nodes.get(rightIdx-i).findAllEntries(ts);
-		}
-
-		return results;
-	}*/
 
 	/**
 	 * Find all data segments that have timestamps between minTS and maxTS inclusively
@@ -238,95 +144,76 @@ public class PostOrderHeapIndex {
 	 * @param maxTS
 	 * @return null if no such segment is found
 	 */
-	public long[][] findAll(final long minTS, final long maxTS) {
+	@Override
+	public List<long[]> findAll(final long minTS, final long maxTS) {
 		// Find the right most node that has maxTS
-		// Find the left most node that has the minTS
+		// Traverse from that node to the left until the first value smaller than minTS is reached
 
 		assert minTS <= maxTS;
 
-		POHNode firstNode = nodes.get(1); // Nodes start from index 1
-		POHNode lastNode = nodes.get(nodes.size()-1);
+		int curNode = findNode(maxTS, true);
 
-		if (lastNode.maxTS() < minTS || firstNode.minTS() > maxTS)
+		if (curNode == -1)
 			return null;
 
-		int curNode = lastNode.nodeNumber(); // Begin with the last node
+		List<long[]> results = new ArrayList<>();
 
-		int leftIdx = curNode+1;
-		int rightIdx = -1; //Node number/index of the right-most node that has ts
-		POHNode leftMostNode = null;
-		POHNode rightMostNode = null;
-
-		if (minTS < firstNode.minTS()) { //If the minTS is lower than the first entry
-			leftMostNode = firstNode;
-			leftIdx = firstNode.nodeNumber();
-		}
-
-		if (maxTS > lastNode.maxTS()) { //If the maxTS is higher than the last entry
-			rightMostNode = lastNode;
-			rightIdx = rightMostNode.nodeNumber();
-		}
-
-		// First traverse the root nodes up to the left-most tree
-		while(curNode > 0) { // Node 0 is null; if we have explored all the root nodes
+		// Traver each node from the rightMostNode until the node.entryMinTS()
+		while(curNode > 0) {
 			POHNode node = nodes.get(curNode);
 
-			if (node.maxTS() < minTS) //if the node has lower timestamps, all other nodes have lower timestamps. So stop search here.
+			long[] res = node.findAllEntries(minTS, maxTS);
+
+			if (res == null)
+				assert false;
+
+			results.add(res);
+
+			if (node.entryMinTS() < minTS)
 				break;
 
-			if (rightMostNode == null && node.entryMinTS() <= maxTS) { // if the maxTS is withing the range of entries
-				rightIdx = curNode;
-				rightMostNode = node;
-			}
-
-			if (leftIdx > curNode && node.compare(minTS) >= 0) {
-				leftIdx = curNode;
-				leftMostNode = node;
-			}
-
-			// Move to the right-most tree on the left
-			curNode = curNode - nodesCountTable[node.height()];
-		}
-
-		// If we haven't found the right-most node yet, check if should traverse any other branch than the left-most
-		if (rightMostNode == null) { // if the maxTS is within the range of the current node's entries
-			rightMostNode = leftMostNode; //We are at the root of the left-most sub-tree that has ts
-
-			while(rightMostNode.height() > 0) {
-				curNode = rightMostNode.nodeNumber();
-				if (rightIdx < curNode && rightMostNode.entryMinTS() <= maxTS) {
-					rightIdx = curNode;
-					break;
-				}
-
-				rightMostNode = nodes.get(rightMostNode.findLastChild(maxTS));
-			}
-		}
-
-		while(leftMostNode.height() > 0) {
-			// Now ts is either in the index entries of the targetNode or its children.
-			// If ts is larger than the maxTS of the right-most child, ts is in the targetNode's index entries.
-			// Otherwise ts is among the children.
-
-			// if the children have smaller timestamps than ts
-			if (leftMostNode.nthChild(childrenPerNode).maxTS() < minTS)
-				break; // stop here because all the nodes left to this node have smaller timestamps
-
-			// Find the left-most child that has ts
-			leftMostNode = nodes.get(leftMostNode.findFirstChild(minTS));
-		}
-
-		leftIdx = leftMostNode.nodeNumber();
-		rightIdx = rightMostNode.nodeNumber();
-
-		long[][] results = new long[rightIdx-leftIdx+1][];
-		for(int i=0; i<results.length; i++) {
-			results[i] = nodes.get(rightIdx-i).findAllEntries(minTS, maxTS);
-			if (results[i] == null) //We conclude this because the index entries cannot overlap after a gap. So following is not possible entries: <1,5>, <7,9>, problem <8, 11>.
-				return null;
+			curNode--;
 		}
 
 		return results;
+	}
+
+	private int findNode(long maxTS, boolean findLast) {
+		if (maxTS < nodes.get(1).minTS()) //if the first index entry is larger than the maxTS, i.e., the given range is lower than data
+			return -1;
+
+		int curNode = nodes.size()-1; // Begin with the last node
+		POHNode node = nodes.get(curNode);
+
+		System.out.printf("maxTS=%d, lastMin=%d, lastMax=%d\n", maxTS, node.minTS(), node.maxTS());
+
+		// First traverse the root nodes up to the left-most tree
+		while(curNode > 0) { // until we have explored all the root nodes; nodes[0] is null.
+			// Move to the root of the tree on the left
+
+			if (node.minTS() <= maxTS)
+				break;
+
+			curNode = curNode - nodesCountTable[node.height()];
+			node = nodes.get(curNode);
+		}
+
+		if (curNode == 0) //No results found
+			return -1;
+
+		while(node.height() > 0) {
+			if (node.entryMinTS() <= maxTS)
+				break;
+
+			if (findLast)
+				curNode = node.findLastChild(maxTS);
+			else
+				curNode = node.findFirstChild(maxTS);
+
+			node = nodes.get(curNode);
+		}
+
+		return curNode;
 	}
 
 	/**

@@ -1,19 +1,18 @@
 package kawkab.fs.core.index.poh;
 
-import kawkab.fs.core.exceptions.IndexBlockFullException;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 
 public class PostOrderHeapIndexTest {
 	@Test
 	public void rootHeightFuncTest() throws IllegalAccessException, NoSuchMethodException, InvocationTargetException {
 		System.out.println("Test: rootHeightFuncTest");
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3);
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3, 200);
 
 		Assertions.assertEquals(0, heightOfRoot(poh, 3));
 		Assertions.assertEquals(1, heightOfRoot(poh, 4));
@@ -29,17 +28,17 @@ public class PostOrderHeapIndexTest {
 	@Test
 	public void totalNodesCountTest() throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
 		System.out.println("Test: rootHeightFuncTest");
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3);
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3, 200);
 		Assertions.assertEquals(4, totalNodesKAryTree(poh, 1));
 		Assertions.assertEquals(13, totalNodesKAryTree(poh, 2));
 		Assertions.assertEquals(40, totalNodesKAryTree(poh, 3));
 
-		poh = new PostOrderHeapIndex(1, 2);
+		poh = new PostOrderHeapIndex(1, 2, 200);
 		Assertions.assertEquals(3, totalNodesKAryTree(poh, 1));
 		Assertions.assertEquals(7, totalNodesKAryTree(poh, 2));
 		Assertions.assertEquals(15, totalNodesKAryTree(poh, 3));
 
-		poh = new PostOrderHeapIndex(1, 4);
+		poh = new PostOrderHeapIndex(1, 4, 200);
 		Assertions.assertEquals(5, totalNodesKAryTree(poh, 1));
 		Assertions.assertEquals(21, totalNodesKAryTree(poh, 2));
 		Assertions.assertEquals(85, totalNodesKAryTree(poh, 3));
@@ -54,10 +53,10 @@ public class PostOrderHeapIndexTest {
 	@Test
 	public void pohStructureTest() throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
 		System.out.println("Test: pohStructureTest");
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3);
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3, 200);
 
 		for (int i=1; i<30; i++) {
-			poh.insert(i, i, i);
+			poh.append(i, i);
 		}
 
 		Assertions.assertEquals(0, heightOfNode(poh, 1));
@@ -78,149 +77,192 @@ public class PostOrderHeapIndexTest {
 	public void searchSmokeTest() {
 		System.out.println("Test: searchFirstTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3);
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3, 200);
 		for (int i=1; i<30; i++) {
-			poh.insert(i, i, i);
+			poh.append(i, i);
 		}
-		Assertions.assertEquals(25, poh.find(25, false));
-		Assertions.assertEquals(19, poh.find(19, false));
-		Assertions.assertEquals(1, poh.find(1, false));
+		Assertions.assertEquals(25, poh.findHighest(25));
+		Assertions.assertEquals(19, poh.findHighest(19));
+		Assertions.assertEquals(1, poh.findHighest(1));
 
-		Assertions.assertEquals(25, poh.find(25, true));
-		Assertions.assertEquals(19, poh.find(19, true));
-		Assertions.assertEquals(1, poh.find(1, true));
-
-		Assertions.assertEquals(-1, poh.find(30, false));
-		Assertions.assertEquals(-1, poh.find(0, false));
-		Assertions.assertEquals(-1, poh.find(30, true));
-		Assertions.assertEquals(-1, poh.find(0, true));
+		Assertions.assertEquals(29, poh.findHighest(30));
+		Assertions.assertEquals(-1, poh.findHighest(0));
 	}
 
 	@Test
 	public void searchOverlappingTest() {
 		System.out.println("Test: searchOverlappingTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(5, 3);
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(5, 3, 200);
 		for (int i=1; i<=100; i++) {
-			poh.insert(i, i+1, i);
+			poh.append(i, i);
 		}
 
-		Assertions.assertEquals(1, poh.find(1, false));
-		Assertions.assertEquals(1, poh.find(2, false));
+		Assertions.assertEquals(2, poh.findHighest(2));
+		Assertions.assertEquals(3, poh.findHighest(3));
 
-		Assertions.assertEquals(2, poh.find(2, true));
-		Assertions.assertEquals(3, poh.find(3, true));
-
-		Assertions.assertEquals(-1, poh.find(102, false));
-		Assertions.assertEquals(-1, poh.find(0, false));
-
-		Assertions.assertEquals(-1, poh.find(102, true));
-		Assertions.assertEquals(-1, poh.find(0, true));
+		Assertions.assertEquals(100, poh.findHighest(102));
+		Assertions.assertEquals(-1, poh.findHighest(0));
 	}
 
 	@Test
 	public void findAllRangeTest() {
 		System.out.println("Test: findAllRangeTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3);
-		poh.insert(3, 5, 1);
-		poh.insert(5, 10, 2);
-		poh.insert(11, 15, 3);
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3, 200);
+		poh.append(3, 1);
+		poh.append(5, 2);
+		poh.append(11, 3);
 
-		poh.insert(18, 20, 4);
-		poh.insert(20, 20, 5);
-		poh.insert(25, 30, 6);
+		poh.append(18, 4);
+		poh.append(20, 5);
+		poh.append(25, 6);
 
-		poh.insert(30, 30, 7);
-		poh.insert(30, 30, 8);
-		poh.insert(30, 30, 9);
+		poh.append(30, 7);
+		poh.append(30, 8);
+		poh.append(30, 9);
 
-		poh.insert(35, 40, 10);
-		poh.insert(45, 50, 11);
-		poh.insert(50, 55, 12);
+		poh.append(35, 10);
+		poh.append(45, 11);
+		poh.append(50, 12);
 
-		poh.insert(55, 60, 13);
-		poh.insert(65, 70, 14);
-		poh.insert(75, 80, 15);
+		poh.append(55, 13);
+		poh.append(65, 14);
+		poh.append(75, 15);
 
-		poh.insert(85, 90, 16);
-		poh.insert(93, 96, 17);
-		poh.insert(99, 102, 18);
+		poh.append(85, 16);
+		poh.append(93, 17);
+		poh.append(99, 18);
 
-		poh.insert(105, 110, 19);
+		poh.append(105, 19);
 
-		Assertions.assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9, 8, 7}, {6, 5, 4}, {3, 2, 1}}, poh.findAll(3, 77));
-		Assertions.assertArrayEquals(new long[][]{{6, 5, 4}}, poh.findAll(20, 25));
+		long[][] resType = new long[][]{{}};
 
-		Assertions.assertArrayEquals(new long[][]{{9, 8, 7}, {6, 5, 4}}, poh.findAll(20, 30));
+		Assertions.assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9, 8, 7}, {6, 5, 4}, {3, 2, 1}}, poh.findAll(3, 77).toArray(resType));
+		Assertions.assertArrayEquals(new long[][]{{6, 5, 4}}, poh.findAll(20, 25).toArray(resType));
 
-		Assertions.assertArrayEquals(null, poh.findAll(1, 2)); //Out of lower limit
-		Assertions.assertArrayEquals(null, poh.findAll(111, 112)); //Out of upper limit
-		Assertions.assertArrayEquals(null, poh.findAll(61, 63)); //Out of range but b/w entries
+		Assertions.assertArrayEquals(new long[][]{{9, 8, 7}, {6, 5, 4}}, poh.findAll(20, 30).toArray(resType));
 
-		Assertions.assertArrayEquals(new long[][]{{2, 1}}, poh.findAll(1, 8)); // partially cover lower limit
-		Assertions.assertArrayEquals(new long[][]{{19}, {18}}, poh.findAll(100, 111)); // partially cover upper limit
+		Assertions.assertEquals(null, poh.findAll(1, 2)); //Out of lower limit
+		Assertions.assertArrayEquals(new long[][]{{19}}, poh.findAll(111, 112).toArray(resType)); //Out of upper limit
+		Assertions.assertArrayEquals(new long[][]{{13}}, poh.findAll(61, 63).toArray(resType)); //Out of range but b/w entries
 
-		Assertions.assertArrayEquals(new long[][]{{10}, {9, 8, 7}, {6}}, poh.findAll(22, 42)); // cover entries but fall across entries' ranges
-		Assertions.assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}}, poh.findAll(32, 81)); // cover entries but fall across entries' ranges and nodes
-		Assertions.assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11}}, poh.findAll(47, 82)); // cover entries from lower part
-		Assertions.assertArrayEquals(new long[][]{{17, 16}}, poh.findAll(82, 98)); // cover entries from upper part
+		Assertions.assertArrayEquals(new long[][]{{2, 1}}, poh.findAll(1, 8).toArray(resType)); // partially cover lower limit
+		Assertions.assertArrayEquals(new long[][]{{19}, {18, 17}}, poh.findAll(95, 111).toArray(resType)); // partially cover upper limit
 
-		Assertions.assertArrayEquals(new long[][]{{9, 8, 7}, {6}}, poh.findAll(30, 30)); // find all with same ts
+		Assertions.assertArrayEquals(new long[][]{{10}, {9, 8, 7}, {6, 5}}, poh.findAll(22, 42).toArray(resType)); // cover entries but fall across entries' ranges
+		Assertions.assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9}}, poh.findAll(32, 81).toArray(resType)); // cover entries but fall across entries' ranges and nodes
+		Assertions.assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11}}, poh.findAll(47, 82).toArray(resType)); // cover entries from lower part
+		Assertions.assertArrayEquals(new long[][]{{17, 16}, {15}}, poh.findAll(82, 98).toArray(resType)); // cover entries from upper part
+
+		Assertions.assertArrayEquals(new long[][]{{9, 8, 7}, {6}}, poh.findAll(30, 30).toArray(resType)); // find all with same ts
 	}
 
 	@Test
 	public void singleEntryTest() {
 		System.out.println("Test: singleEntryTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3);
-		poh.insert(3, 5, 1);
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3, 200);
+		poh.append(3, 1);
 
-		Assertions.assertArrayEquals(new long[][]{{1}}, poh.findAll(1, 6));
-		Assertions.assertArrayEquals(new long[][]{{1}}, poh.findAll(1, 4));
-		Assertions.assertArrayEquals(new long[][]{{1}}, poh.findAll(4, 6));
-		Assertions.assertArrayEquals(null, poh.findAll(1, 2));
-		Assertions.assertArrayEquals(null, poh.findAll(6, 7));
+		long[][] resType = new long[][]{{}};
+
+		Assertions.assertArrayEquals(new long[][]{{1}}, poh.findAll(1, 6).toArray(resType));
+ 		Assertions.assertArrayEquals(new long[][]{{1}}, poh.findAll(1, 3).toArray(resType));
+		Assertions.assertArrayEquals(new long[][]{{1}}, poh.findAll(3, 3).toArray(resType));
+		Assertions.assertArrayEquals(new long[][]{{1}}, poh.findAll(3, 5).toArray(resType));
+		Assertions.assertEquals(null, poh.findAll(1, 2));
+		Assertions.assertArrayEquals(new long[][]{{1}}, poh.findAll(6, 7).toArray(resType));
 	}
 
 	@Test
 	public void exactMatchTest() {
 		System.out.println("Test: exactMatchTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3);
-		poh.insert(3, 5, 1);
-		poh.insert(5, 10, 2);
-		poh.insert(11, 15, 3);
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3, 200);
+		poh.append(3, 1);
+		poh.append(5, 2);
+		poh.append(11, 3);
 
-		poh.insert(18, 20, 4);
-		poh.insert(20, 20, 5);
-		poh.insert(25, 30, 6);
+		poh.append(18, 4);
+		poh.append(20, 5);
+		poh.append(25, 6);
 
-		poh.insert(30, 30, 7);
-		poh.insert(30, 30, 8);
-		poh.insert(30, 30, 9);
+		poh.append(30, 7);
+		poh.append(30, 8);
+		poh.append(30, 9);
 
-		poh.insert(35, 40, 10);
-		poh.insert(45, 50, 11);
-		poh.insert(50, 55, 12);
+		poh.append(35, 10);
+		poh.append(45, 11);
+		poh.append(50, 12);
 
-		poh.insert(55, 60, 13);
-		poh.insert(65, 70, 14);
-		poh.insert(75, 80, 15);
+		poh.append(55, 13);
+		poh.append(65, 14);
+		poh.append(75, 15);
 
-		poh.insert(85, 90, 16);
-		poh.insert(93, 96, 17);
-		poh.insert(99, 102, 18);
+		poh.append(85, 16);
+		poh.append(93, 17);
+		poh.append(99, 18);
 
-		poh.insert(105, 110, 19);
+		poh.append(105, 19);
 
-		Assertions.assertEquals(-1, poh.find(1, false)); //Out of lower limit
-		Assertions.assertEquals(-1, poh.find(1, true)); //Out of lower limit
+		Assertions.assertEquals(-1, poh.findHighest(1)); //Out of lower limit
 
-		Assertions.assertEquals(6, poh.find(30, false));
-		Assertions.assertEquals(9, poh.find(30, true));
+		Assertions.assertEquals(9, poh.findHighest(30));
 
-		Assertions.assertEquals(11, poh.find(50, false)); //Finding in an internal node
-		Assertions.assertEquals(12, poh.find(50, true)); //Finding in an internal node
+		Assertions.assertEquals(12, poh.findHighest(50)); //Finding in an internal node
+	}
+
+	@Test
+	public void sameMinMaxTest() {
+		System.out.println("Test: sameMinMaxTest");
+
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3, 200);
+		poh.append(3, 1);
+		poh.append(5, 2);
+		poh.append(15, 3);
+
+		poh.append(18, 4);
+		poh.append(20, 5);
+		poh.append(25, 6);
+
+		poh.append(30, 7);
+		poh.append(30, 8);
+		poh.append(30, 9);
+
+		poh.append(35, 10);
+		poh.append(45, 11);
+		poh.append(50, 12);
+
+		poh.append(55, 13);
+		poh.append(65, 14);
+		poh.append(75, 15);
+
+		poh.append(85, 16);
+		poh.append(93, 17);
+		poh.append(99, 18);
+
+		poh.append(105, 19);
+
+		long[][] resType = new long[][]{{}};
+
+		Assertions.assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9, 8, 7}, {6, 5, 4}, {3, 2, 1}}, poh.findAll(3, 77).toArray(resType));
+		Assertions.assertArrayEquals(new long[][]{{6, 5, 4}}, poh.findAll(20, 25).toArray(resType));
+
+		Assertions.assertArrayEquals(new long[][]{{9, 8, 7}, {6, 5, 4}}, poh.findAll(20, 30).toArray(resType));
+
+		Assertions.assertEquals(null, poh.findAll(1, 2)); //Out of lower limit
+		Assertions.assertArrayEquals(new long[][]{{19}}, poh.findAll(111, 112).toArray(resType)); //Out of upper limit
+		Assertions.assertArrayEquals(new long[][]{{13}}, poh.findAll(61, 63).toArray(resType)); //Out of range but b/w entries
+
+		Assertions.assertArrayEquals(new long[][]{{2, 1}}, poh.findAll(1, 8).toArray(resType)); // partially cover lower limit
+		Assertions.assertArrayEquals(new long[][]{{19}, {18, 17}}, poh.findAll(95, 111).toArray(resType)); // partially cover upper limit
+
+		Assertions.assertArrayEquals(new long[][]{{10}, {9, 8, 7}, {6, 5}}, poh.findAll(22, 42).toArray(resType)); // cover entries but fall across entries' ranges
+		Assertions.assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9}}, poh.findAll(32, 81).toArray(resType)); // cover entries but fall across entries' ranges and nodes
+		Assertions.assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11}}, poh.findAll(47, 82).toArray(resType)); // cover entries from lower part
+		Assertions.assertArrayEquals(new long[][]{{17, 16}, {15}}, poh.findAll(82, 98).toArray(resType)); // cover entries from upper part
+
+		Assertions.assertArrayEquals(new long[][]{{9, 8, 7}, {6}}, poh.findAll(30, 30).toArray(resType)); // find all with same ts
 	}
 }

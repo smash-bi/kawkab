@@ -6,7 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 public class SampleRecord implements Record {
-	private final ByteBuffer buffer; //The buffer that holds the record's fields in sequence
+	private ByteBuffer buffer; //The buffer that holds the record's fields in sequence
 	
 	//The following variables denote the byte start position of the corresponding field in the buffer
 	private static final int TIMESTAMP;
@@ -26,11 +26,11 @@ public class SampleRecord implements Record {
 	static {
 		TIMESTAMP 		= 0;
 		BID_PRICE 		= TIMESTAMP + Long.BYTES;
-		BID_QUANTITY 	= BID_PRICE + Float.BYTES;
-		BID_EXECUTABLE	= BID_QUANTITY + Float.BYTES;
+		BID_QUANTITY 	= BID_PRICE + Double.BYTES;
+		BID_EXECUTABLE	= BID_QUANTITY + Double.BYTES;
 		ASK_PRICE		= BID_EXECUTABLE + Byte.BYTES;
-		ASK_QUANTITY	= ASK_PRICE + Float.BYTES;
-		ASK_EXECUTABLE	= ASK_QUANTITY + Float.BYTES;
+		ASK_QUANTITY	= ASK_PRICE + Double.BYTES;
+		ASK_EXECUTABLE	= ASK_QUANTITY + Double.BYTES;
 		
 		SIZE = ASK_EXECUTABLE + Byte.BYTES;
 	}
@@ -38,16 +38,16 @@ public class SampleRecord implements Record {
 	public SampleRecord () {
 		buffer = ByteBuffer.allocate(SIZE);
 	}
-	
-	public SampleRecord(long timestamp, float bidPrice, float bidQuantity, boolean bidExecutable, float askPrice, float askQuantity, boolean askExecutable) {
+
+	public SampleRecord(long timestamp, double bidPrice, double bidQuantity, boolean bidExecutable, double askPrice, double askQuantity, boolean askExecutable) {
 		buffer = ByteBuffer.allocate(SIZE);
 		
 		buffer.putLong(timestamp);
-		buffer.putFloat(bidPrice);
-		buffer.putFloat(bidQuantity);
+		buffer.putDouble(bidPrice);
+		buffer.putDouble(bidQuantity);
 		buffer.put(bidExecutable?TRUE:FALSE);
-		buffer.putFloat(askPrice);
-		buffer.putFloat(askQuantity);
+		buffer.putDouble(askPrice);
+		buffer.putDouble(askQuantity);
 		buffer.put(askExecutable?TRUE:FALSE);
 		
 		assert buffer.remaining() == 0;
@@ -75,29 +75,33 @@ public class SampleRecord implements Record {
 	public int size() {
 		return SIZE;
 	}
+
+	public static int length() {
+		return SIZE;
+	}
 	
 	public long timestamp() {
 		return buffer.getLong(TIMESTAMP);
 	}
 	
-	public float bidPrice() {
-		return buffer.getFloat(BID_PRICE);
+	public double bidPrice() {
+		return buffer.getDouble(BID_PRICE);
 	}
 	
-	public float bidQuantity() {
-		return buffer.getFloat(BID_QUANTITY);
+	public double bidQuantity() {
+		return buffer.getDouble(BID_QUANTITY);
 	}
 	
 	public boolean bidExecutable() {
 		return buffer.get(BID_EXECUTABLE) == TRUE;
 	}
 	
-	public float askPrice() {
-		return buffer.getFloat(ASK_PRICE);
+	public double askPrice() {
+		return buffer.getDouble(ASK_PRICE);
 	}
 	
-	public float askQuantity() {
-		return buffer.getFloat(ASK_QUANTITY);
+	public double askQuantity() {
+		return buffer.getDouble(ASK_QUANTITY);
 	}
 	
 	public boolean askExecutable() {
@@ -106,7 +110,7 @@ public class SampleRecord implements Record {
 	
 	@Override
 	public String toString() {
-		return String.format("ts=%d,bp=%.2f,bq=%.2f,be=%s,ap=%.2f,aq=%.2f,ae=%s\n",
+		return String.format("ts=%d,bp=%.2f,bq=%.2f,be=%s,ap=%.2f,aq=%.2f,ae=%s",
 				timestamp(), bidPrice(), bidQuantity(), bidExecutable(), askPrice(), askQuantity(), askExecutable());
 	}
 	
@@ -128,5 +132,16 @@ public class SampleRecord implements Record {
 	@Override
 	public int hashCode() {
 		return Objects.hash(buffer);
+	}
+
+	@Override
+	public Record newRecord() {
+		return new SampleRecord();
+	}
+
+	@Override
+	public void acquire(ByteBuffer inputBuffer) {
+		buffer = inputBuffer;
+		buffer.clear();
 	}
 }

@@ -1,6 +1,7 @@
 package kawkab.fs.core;
 
 import com.google.protobuf.ByteString;
+import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
@@ -16,7 +17,10 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.prefs.PreferencesFactory;
 
 import static kawkab.fs.commons.FixedLenRecordUtils.offsetInSegment;
 
@@ -154,6 +158,7 @@ public final class DataSegment extends Block {
 		assert remaining() >= length;
 		
 		dataBuf.put(srcBuffer);
+		srcBuffer.rewind();
 		
 		int pos = writePos.addAndGet(length);
 		
@@ -211,8 +216,79 @@ public final class DataSegment extends Block {
 		buf.position(offsetInSegment);
 		buf.limit(offsetInSegment+recordSize);
 		dstBuffer.put(buf);
-		
-		return recordSize;
+
+		return buf.position() - offsetInSegment;
+	}
+
+	/**
+	 * Add all the records in the results list that have the timestamp within the given minTS and maxTS inclusively
+	 *
+	 * @param minTS
+	 * @param maxTS
+	 * @param recordFactory Factory object
+	 * @param results
+	 * @param recordSize
+	 * @return the number of records added in the list
+	 */
+	public int readAll(long minTS, long maxTS, Record recordFactory, List<Record> results, int recordSize) {
+		ByteBuffer buf = dataBuf.duplicate();
+
+		int limit = writePos.get();
+		buf.limit(limit);
+
+		assert limit >= recordSize; // at least have one record
+
+		buf.rewind(); //To read the first record
+		if (maxTS < buf.getLong(0)) { // if the records in this segment are all greater than the given range
+			return 0;
+		}
+
+		if (buf.getLong(limit-recordSize) < minTS) { // All the records in this segment are smaller than the given range
+			return 0;
+		}
+
+		int lowRecNum=0;
+		int numRecords = limit/recordSize;
+		int highRecNum = (numRecords-1)*2; // Doubling the total records because we want to start search from the last record
+		int recIndex = -1; //Record number in this segment that has the matching timestamp
+
+		//System.out.printf("numRecs=%d, recSize=%d, lim=%d, highRecNum=%d\n", numRecords, recordSize, buf.limit(), highRecNum);
+
+		//Find the first entry from the right that falls within the range
+		while (lowRecNum <= highRecNum) {
+			int midRecNum = lowRecNum + (highRecNum - lowRecNum + 1)/2; //Taking the ceiling value to find the right most value
+
+			long bufTS = buf.getLong(midRecNum*recordSize);
+			//System.out.printf("l=%d, m=%d, r=%d, buf.pos=%d, bufTS=%d\n", lowRecNum, midRecNum, highRecNum, buf.position(), bufTS);
+
+			if (maxTS < bufTS) { // Target is in the left half,
+				highRecNum = midRecNum - 1;
+			} else {
+				recIndex = midRecNum;
+				break;
+			}
+		}
+
+		if (recIndex == -1)
+			return 0;
+
+		int cnt = 0;
+		int pos = recIndex*recordSize;
+		while (recIndex >= 0 && buf.getLong(pos) >= minTS) {
+			cnt++;
+
+			buf.position(pos);
+			buf.limit(pos+recordSize);
+
+			Record rec = recordFactory.newRecord();
+			rec.copyInDstBuffer().put(buf);
+			results.add(rec);
+
+			recIndex--;
+			pos = recIndex*recordSize;
+		}
+
+		return cnt;
 	}
 	
 	@Override

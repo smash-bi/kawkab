@@ -5,7 +5,7 @@ import kawkab.fs.core.exceptions.IndexBlockFullException;
 /**
  * The class is not thread safe for concurrent appends. However, the search and append can be concurrent.
  */
-class POHNode extends TimeRange {
+class POHNode implements TimeRange {
 	private final int nodeNumber; //node number
 	private final int height;
 	private final POHEntry[] entries; // Number of index entries
@@ -15,6 +15,8 @@ class POHNode extends TimeRange {
 	private int pointerIdx;
 
 	private long entryMinTS = Long.MAX_VALUE;
+	private long entryMaxTS;
+	private long childMinTS = Long.MAX_VALUE;
 	private long childMaxTS;
 
 	/**
@@ -23,8 +25,6 @@ class POHNode extends TimeRange {
 	 * @param pointersCount Number of pointers or children of each node, must be greater than one so that we have at least a binary tree
 	 */
 	POHNode(final int nodeNum, final int height, final int entriesCount, final int pointersCount) {
-		super(Long.MAX_VALUE, 0);
-
 		assert entriesCount > 0;
 		assert pointersCount > 1;
 
@@ -34,24 +34,27 @@ class POHNode extends TimeRange {
 		children = new POHNode[pointersCount];
 	}
 
+	static int pointerSizeBytes() {
+		return Long.BYTES + Integer.BYTES; //Two timestamps and a node number
+	}
+
 	/**
 	 * Appends an entry in the node
 	 *
 	 * minTS is required to be greater or equal to the last maxTS
 	 *
-	 * segInFile must be greater or equal to the last segInFile
+	 * offsetInFile must be greater than the last offsetInFile
 	 *
 	 * minTS must be smaller or equal to maxTS
 	 *
 	 * The caller must ensure that there are no concurrent appendEntry calls to the same POHNode
 	 *
-	 * @param minTS minimum timestamp in the segment
-	 * @param maxTS maximum timestamp in the segment
-	 * @param segInFile segment number in the file
+	 * @param timestamp timestamp in the record
+	 * @param offsetInFile Byte offset in file
 	 * @throws IllegalArgumentException if the preconditions are not met
 	 * @throws IndexBlockFullException if the block is already full with the index entries
 	 */
-	void appendEntry(final long minTS, final long maxTS, final long segInFile)
+	void appendEntry(final long timestamp, final long offsetInFile)
 			throws IllegalArgumentException, IndexBlockFullException {
 
 		assert pointerIdx == 0 || pointerIdx == children.length :
@@ -69,32 +72,31 @@ class POHNode extends TimeRange {
 
 		// Check the arguments
 		if (last != null) {
-			if (minTS > maxTS) {
-				throw new IllegalArgumentException("minTS should be <= maxTS; minTS=" + minTS + ", maxTS=" + maxTS);
-			}
+			if (timestamp < last.timestamp())
+				throw new IllegalArgumentException("Current minTS must be greater or equal to last entry's timestamp; timestamp="
+						+ timestamp + ", last maxTS=" + last.timestamp());
 
-			if (minTS < last.maxTS())
-				throw new IllegalArgumentException("Current minTS must be greater or equal to last maxTS; minTS="
-						+ minTS + ", last maxTS=" + last.maxTS());
-
-			if (segInFile < last.segInFile()) {
-				throw new IllegalArgumentException("Current segInFile must be equal or larger than the last segInFile; segInFile="
-						+ segInFile + ", last segInFile=" + last.segInFile());
+			if (offsetInFile <= last.segmentInFile()) {
+				throw new IllegalArgumentException("Current offsetInFile must be greater than the last offsetInFile; offsetInFile="
+						+ offsetInFile + ", last offsetInFile=" + last.segmentInFile());
 			}
 		}
 
 		// Append the entry
-		entries[entryIdx++] = new POHEntry(minTS, maxTS, segInFile);
+		entries[entryIdx++] = new POHEntry(timestamp, offsetInFile);
 
 		// Update the minTS and maxTS for this node. minTS will not change if this node is an internal node.
-		if (this.minTS > minTS) // This will change only for leaf nodes
-			this.minTS = minTS;
+		if (this.childMinTS > timestamp) // This will change only for leaf nodes
+			this.childMinTS = timestamp;
 
-		if (entryMinTS > minTS)
-			entryMinTS = minTS;
+		if (entryMinTS > timestamp)
+			entryMinTS = timestamp;
 
-		if (this.maxTS < maxTS)
-			this.maxTS = maxTS;
+		if (this.entryMaxTS < timestamp)
+			this.entryMaxTS = timestamp;
+
+		if (this.childMaxTS < timestamp)
+			this.childMaxTS = timestamp;
 	}
 
 	/**
@@ -124,46 +126,21 @@ class POHNode extends TimeRange {
 				throw new IllegalArgumentException("nodeNum of the child must be larger than the last child, child nodeNum="
 						+child.nodeNumber()+", last nodeNum="+ last.nodeNumber());
 
-			if (minTS > maxTS)
-				throw new IllegalArgumentException("minTS should be <= maxTS; minTS=" + minTS + ", maxTS=" + maxTS);
-
-			if (minTS >= last.maxTS())
+			if (child.childMinTS >= last.entryMaxTS)
 				throw new IllegalArgumentException("Current minTS must be greater or equal to the last pointer's maxTS; minTS="
-						+ minTS + ", last maxTS=" + last.maxTS());
+						+ child.childMinTS + ", last maxTS=" + last.entryMaxTS);
 		}
 
 		children[pointerIdx++] = child;
 
 		// As this function is called, this is an internal node. So we should update the minimum timestamp of this node from the children.
-		if (this.minTS > child.minTS())
-			this.minTS = child.minTS();
+		if (this.childMinTS > child.childMinTS)
+			this.childMinTS = child.childMinTS;
 
-		if (this.childMaxTS < child.maxTS()) {
-			this.childMaxTS = child.maxTS();
-			this.maxTS = child.maxTS(); // This will be updated when the first index entry is added
+		if (this.childMaxTS < child.childMaxTS) {
+			this.childMaxTS = child.childMaxTS;
+			this.entryMaxTS = this.childMaxTS; // This will be updated when the first index entry is added
 		}
-	}
-
-	/**
-	 * Returns the node numbers of all the children nodes that contain the given timestamp
-	 * @param ts ts to search
-	 * @return null if no entry found, otherwise returns the array that contains the node numbers that have the timestamp
-	 */
-	int[] findAllChildren(final long ts) {
-		int leftIdx = TimeRangeSearch.find(children, pointerIdx, true, ts);
-
-		if (leftIdx == -1) // no entry found
-			return null;
-
-		int rightIdx = TimeRangeSearch.find(children, pointerIdx, false, ts);
-
-		int[] nodeNums = new int[rightIdx - leftIdx + 1];
-		for (int i=0; i<nodeNums.length; i++) {
-			// nodeNums[i] = children[i+leftIdx].nodeNumber(); //Ascending order
-			nodeNums[i] = children[rightIdx-1].nodeNumber(); //Descending order
-		}
-
-		return nodeNums;
 	}
 
 	/**
@@ -206,46 +183,58 @@ class POHNode extends TimeRange {
 	long[] findAllEntries(final long minTS, final long maxTS) {
 		assert minTS <= maxTS;
 
+		if (entries.length == 0)
+			return null;
+
 		if (entries[0] == null)
+			return null;
+
+		if (maxTS < entries[0].timestamp()) // if the first entry is larger than the given range
 			return null;
 
 		int length = entryIdx;
 
-		if (entries[0].minTS() > maxTS || entries[length-1].maxTS() < minTS)
-			return null;
+		// Find the highest range that is equal or smaller than maxTS
+		int rightIdx = length - 1; // Assume that the last entry is smaller or equal than maxTS
+		if (maxTS < entries[rightIdx].timestamp())
+			rightIdx = TimeRangeSearch.findLastFloor(entries, length, maxTS);
 
-		int leftIdx = 0;
-		if (minTS > entries[0].maxTS())
-			leftIdx = TimeRangeSearch.findCeil(entries, length, minTS);
-
-		int rightIdx = length - 1;
-		if (maxTS < entries[rightIdx].minTS())
-			rightIdx = TimeRangeSearch.findFloor(entries, length, maxTS);
+		// Find the highest range that is smaller than minTS or the lowest range that equals ts
+		int leftIdx = 0; // Assume that the first entry is larger or equal to minTS
+		if (entries[0].timestamp() < minTS) { // if the first entry is smaller than minTS
+			leftIdx = TimeRangeSearch.findFirstFloor(entries, rightIdx-leftIdx+1, minTS);
+		}
 
 		if (leftIdx == -1 && rightIdx == -1 || leftIdx > rightIdx) // no entry found
 			return null;
 
 		if (leftIdx == -1)
-			leftIdx = 0;
+			//leftIdx = 0;
+			assert false;
 		else if (rightIdx == -1)
-			rightIdx = length - 1;
+			//rightIdx = length - 1;
+			assert false;
 
 		long[] segs = new long[rightIdx - leftIdx + 1];
 		for (int i=0; i<segs.length; i++) {
-			// segs[i] = entries[i+leftIdx].segInFile(); //Ascending order
-			segs[i] = entries[rightIdx-i].segInFile(); //Descending order
+			// segs[i] = entries[i+leftIdx].offsetInFile(); //Ascending order
+			segs[i] = entries[rightIdx-i].segmentInFile(); //Descending order
 		}
 
 		return segs;
 	}
 
 	/**
-	 * Returns the segment number of all the segments that contain the given timestamp
+	 * Returns the segment numbers of all the segments that may contain the given timestamp
 	 * @param ts ts to search
 	 * @return null if no entry found, otherwise returns the array that contains the segment numbers that have the timestamp
 	 */
 	long[] findAllEntries(final long ts) {
-		int length = entryIdx;
+		if (entries.length == 0)
+			return null;
+
+		return findAllEntries(ts, ts);
+		/*int length = entryIdx;
 
 		int leftIdx = TimeRangeSearch.find(entries, length, true, ts);
 
@@ -256,39 +245,47 @@ class POHNode extends TimeRange {
 
 		long[] segs = new long[rightIdx - leftIdx + 1];
 		for (int i=0; i<segs.length; i++) {
-			// segs[i] = entries[i+leftIdx].segInFile(); //Ascending order
-			segs[i] = entries[rightIdx-i].segInFile(); //Descending order
+			// segs[i] = entries[i+leftIdx].offsetInFile(); //Ascending order
+			segs[i] = entries[rightIdx-i].offsetInFile(); //Descending order
 		}
 
-		return segs;
+		return segs;*/
 	}
 
 	/**
-	 * Returns the segment number of the first segment that contain the given timestamp
+	 * Returns the highest index entry that has the range smaller than ts or the smallest index entry that
+	 * covers ts
 	 *
 	 * @param ts ts to search
 	 * @return -1 if no entry found, otherwise returns the first occurrence of the segment that has the timestamp
 	 */
 	long findFirstEntry(final long ts) {
-		int idx = TimeRangeSearch.find(entries, entryIdx, true, ts);
+		if (entries.length == 0)
+			return -1;
+
+		int idx = TimeRangeSearch.findFirstFloor(entries, entryIdx, ts);
 		if (idx < 0)
 			return -1;
 
-		return entries[idx].segInFile();
+		return entries[idx].segmentInFile();
 	}
 
 	/**
-	 * Returns the segment number of the last segment that contain the given timestamp
+	 * Returns the highest index entry that has the range smaller than ts or the highest index entry that
+	 * covers ts
 	 *
 	 * @param ts ts to search
 	 * @return -1 if no entry found, otherwise returns the last occurrence of the segment that has the timestamp
 	 */
 	long findLastEntry(final long ts) {
-		int idx = TimeRangeSearch.find(entries, entryIdx, false, ts);
+		if (entries.length == 0)
+			return -1;
+
+		int idx = TimeRangeSearch.findLastFloor(entries, entryIdx, ts);
 		if (idx < 0)
 			return -1;
 
-		return entries[idx].segInFile();
+		return entries[idx].segmentInFile();
 	}
 
 	int nodeNumber () {
@@ -301,10 +298,11 @@ class POHNode extends TimeRange {
 
 	/**
 	 * Returns the node number of the nthChild of the current node
+	 *
 	 * @param nthChild Child number, starting from 1
 	 * @return -1 if child does not exist, otherwise returns the node number of the nthChild
 	 */
-	int childNodeNumber(int nthChild) {
+	private int childNodeNumber(int nthChild) {
 		assert nthChild > 0;
 		assert nthChild <= children.length;
 
@@ -328,5 +326,26 @@ class POHNode extends TimeRange {
 
 	int height () {
 		return height;
+	}
+
+	@Override
+	public long minTS() {
+		return childMinTS;
+	}
+
+	@Override
+	public long maxTS() {
+		return entryMaxTS;
+	}
+
+	@Override
+	public int compare(long ts) {
+		if (childMinTS <= ts && ts <= entryMaxTS)
+			return 0;
+
+		if (entryMaxTS < ts)
+			return -1;
+
+		return 1;
 	}
 }

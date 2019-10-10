@@ -1,34 +1,17 @@
 package kawkab.fs.core.index.poh;
 
-public class TimeRange {
-	protected long minTS;
-	protected long maxTS;
-
-	public TimeRange(long minTS, long maxTS) {
-		this.minTS = minTS;
-		this.maxTS = maxTS;
-	}
-
-	public long minTS() {
-		return minTS;
-	}
-
-	public long maxTS() {
-		return maxTS;
-	}
-
+public interface TimeRange {
 	/**
 	 * Compare the given timestamp with the entry
+	 *
+	 * Follows the Java Comparator contract
+	 *
 	 * @param ts
 	 * @return 0 if ts is within the range of this entry, -1 if this entry is lower than ts, 1 if this entry is greater than ts
 	 */
-	public int compare(long ts) {
-		if (minTS <= ts && ts <= maxTS)
-			return 0;
+	int compare(long ts);
 
-		if (maxTS < ts)
-			return -1;
+	long minTS();
 
-		return 1;
-	}
+	long maxTS();
 }

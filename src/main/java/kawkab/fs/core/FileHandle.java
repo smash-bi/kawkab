@@ -7,7 +7,7 @@ import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.*;
 
 import java.io.IOException;
-import java.security.InvalidParameterException;
+import java.util.List;
 
 /**
  * TODO: Store InodeBlocks in a separate table than the cache.
@@ -105,9 +105,39 @@ public final class FileHandle {
 
 		return bytesRead;
 	}
+
+	public synchronized List<Record> readRecords(final long minTS, final long maxTS, final Record recFactory) throws KawkabException, IOException {
+		InodesBlock inb = null;
+		Inode inode;
+
+		try {
+			if (onPrimaryNode) {
+				if (inodesBlock == null) {
+					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+				}
+				inb = this.inodesBlock;
+				inode = this.inode;
+			} else {
+				int blockIndex = (int)(inumber / inodesPerBlock);
+				BlockID id = new InodesBlockID(blockIndex);
+				inb = (InodesBlock) cache.acquireBlock(id);
+				inb.loadBlock();
+				inode = inb.getInode(inumber);
+			}
+
+			return inode.readAll(minTS, maxTS, recFactory);
+		} finally {
+			if (!onPrimaryNode && inb != null) {
+				cache.releaseBlock(inb.id());
+			}
+		}
+	}
 	
 	/**
 	 * Loads the dstRecord from the key (timestamp) location in the file.
+	 *
+	 * @param dstRecord Output field
+	 * @param key Exact match timestamp
 	 *
 	 * @return Whether the record is found and loaded
 	 * @throws IOException
@@ -212,9 +242,8 @@ public final class FileHandle {
 			throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
 		}
 		
-		// int appendedBytes = inode.appendBuffered(data, offset, length);
-		int appendedBytes = inode.appendBufferedWithLocks(data, offset, length);
-		
+		int appendedBytes = inode.appendBuffered(data, offset, length);
+
 		inodesBlock.markLocalDirty();
 		localStore.store(inodesBlock);
 		

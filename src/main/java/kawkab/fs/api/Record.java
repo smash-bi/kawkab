@@ -21,7 +21,7 @@ public interface Record {
 	ByteBuffer copyInDstBuffer();
 	
 	/**
-	 * Returns a buffer to the Filesystem's writer, which is uses to copy the record to the virtual file.
+	 * Returns a buffer to the Filesystem's writer, which it uses to copy the record to the virtual file.
 	 *
 	 * The function must set the position and limit values of the buffer before returning. The caller only copies
 	 * size() bytes from the buffer. Therefore, the buffer must have at least size() bytes remaining.
@@ -37,4 +37,17 @@ public interface Record {
 	 * @return
 	 */
 	int size();
+
+	/**
+	 * @return a new object of a sub-class
+	 */
+	Record newRecord();
+
+	/**
+	 * Uses the inputBuffer to parse the record. The function does not copy the inputBuffer. Instead, it keeps the reference and uses that to parse the record.
+	 * Therefore, use the input buffer carefully.
+	 *
+	 * @param inputBuffer Buffer that has record's data
+	 */
+	void acquire(ByteBuffer inputBuffer);
 }

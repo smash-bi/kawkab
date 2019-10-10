@@ -1,19 +1,43 @@
 package kawkab.fs.core.index.poh;
 
-class POHEntry extends TimeRange{
-	private final long segInFile;
+class POHEntry implements TimeRange{
+	private final long offsetInFile;
+	private final long ts;
 
-	POHEntry(final long minTS, final long maxTS, final long segInFile) {
-		super(minTS, maxTS);
-		this.segInFile = segInFile;
+	POHEntry(final long timestamp, final long offsetInFile) {
+		this.offsetInFile = offsetInFile;
+		this.ts = timestamp;
 	}
 
-	long segInFile() {
-		return segInFile;
+	long segmentInFile() {
+		return offsetInFile;
+	}
+
+	long timestamp() {
+		return ts;
+	}
+
+	static int sizeBytes() {
+		return Long.BYTES * 3; // Two timestamps and file offset
 	}
 
 	@Override
 	public String toString() {
-		return String.format("minTS=%d, maxTS=%d, segInFile=%d", minTS, maxTS, segInFile);
+		return String.format("ts=%d, offsetInFile=%d", ts, offsetInFile);
+	}
+
+	@Override
+	public int compare(long timestamp) {
+		return ts == timestamp ? 0 : (ts < timestamp ? -1 : 1);
+	}
+
+	@Override
+	public long minTS() {
+		return ts;
+	}
+
+	@Override
+	public long maxTS() {
+		return ts;
 	}
 }

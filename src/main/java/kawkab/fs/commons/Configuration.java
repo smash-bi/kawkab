@@ -27,8 +27,7 @@ public final class Configuration {
 	public final int directBlocksPerInode = 0;
 	
 	public final long maxFileSizeBytes = Long.MAX_VALUE;
-	//public final int numPointersInIndexBlock = blockSegmentSizeBytes/IndexSegment.pointerSizeBytes;
-	
+
 	//Ibmap blocks range for this machine
 	public final int ibmapBlockSizeBytes; // = 1*1024; //FIXME: using a small number for testing
 	public final int ibmapsPerMachine; // = 1; //FIXME: Calculate this based on the maximum number of files supported per machine
@@ -44,7 +43,8 @@ public final class Configuration {
 	public final int inodeBlocksRangeStart; // = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
 																					 //Blocks start with ID 0.
 	
-	public final int indexBlockSizeBytes; // Size of the indexBlock.
+	public final int indexNodeSizeBytes; // Size of the indexBlock.
+	public final int percentIndexEntriesPerNode;
 	
 	public final int maxBlocksPerLocalDevice; // = 20510 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
 	//public final int maxBlocksInCache; //        = 20000; //Size of the cache in number of blocks. The blocks are ibmaps, inodeBlocks, and data segments (not data blocks)
@@ -128,7 +128,8 @@ public final class Configuration {
 		dataSegmentFetchExpiryTimeoutMs  = Integer.parseInt(props.getProperty("dataSegmentFetchExpiryTimeoutMs", "10000"));
 		inodesBlockFetchExpiryTimeoutMs  = Integer.parseInt(props.getProperty("inodesBlockFetchExpiryTimeoutMs", "2000"));
 		
-		indexBlockSizeBytes  = Integer.parseInt(props.getProperty("indexBlockSizeBytes", ""+segmentSizeBytes));
+		indexNodeSizeBytes = segmentSizeBytes; //Integer.parseInt(props.getProperty("indexBlockSizeBytes", ""+segmentSizeBytes));
+		percentIndexEntriesPerNode = Integer.parseInt(props.getProperty("percentIndexEntriesPerNode", "70"));
 
 		syncThreadsPerDevice	= Integer.parseInt(props.getProperty("syncThreadsPerDevice", "1"));
 		numWorkersStoreToGlobal	= Integer.parseInt(props.getProperty("numWorkersStoreToGlobal", "4"));
@@ -171,7 +172,7 @@ public final class Configuration {
 		
 		ibmapsPath = basePath+File.separator+"ibmaps";
 		inodeBlocksPath = basePath+File.separator+"inodes";
-		indexBlocksPath = basePath+File.separator+"indices";
+		indexBlocksPath = basePath+File.separator+"index";
 		blocksPath = basePath+File.separator+"blocks";
 		namespacePath = basePath+File.separator+"namespace";
 		
@@ -208,6 +209,8 @@ public final class Configuration {
 		System.out.println(String.format("Inode blocks range start . = %d", inodeBlocksRangeStart));
 		System.out.println(String.format("Max blocks per local device= %d", maxBlocksPerLocalDevice));
 		System.out.println();
+		System.out.println(String.format("Index node size bytes= %d", indexNodeSizeBytes));
+		System.out.println(String.format("Index entries per block %% = %d", indexNodeSizeBytes));
 		System.out.println(String.format("Cache size (MiB) ......... = %d", cacheSizeMiB));
 	}
 	
@@ -227,12 +230,12 @@ public final class Configuration {
 		
 		assert cacheSizeMiB > (segmentSizeBytes/1048576.0);
 		
-		assert indexBlockSizeBytes % 16 == 0; //For the time being, an index entry is 16 bytes, timestamp + byteOffset
+		//assert indexBlockSizeBytes % 24 == 0; //For the time being, an index entry is 16 bytes, two timestamp, segInFile or indexNodeNumber
 		
 		assert powerOfTwo(segmentSizeBytes) : "segmentSizeBytes should be power of 2, currently it is: "+segmentSizeBytes;
 		assert powerOfTwo(dataBlockSizeBytes) : "dataBlockSizeBytesshould be power of 2, currently it is: "+dataBlockSizeBytes;
 		assert powerOfTwo(inodesBlockSizeBytes) : "inodesBlockSizeBytes should be power of 2, currently it is: "+inodesBlockSizeBytes;
-		assert powerOfTwo(indexBlockSizeBytes) : "indexBlockSizeBytes should be power of 2, currently it is: "+indexBlockSizeBytes;
+		assert powerOfTwo(indexNodeSizeBytes) : "indexBlockSizeBytes should be power of 2, currently it is: "+ indexNodeSizeBytes;
 	}
 	
 	private boolean powerOfTwo(long val){
