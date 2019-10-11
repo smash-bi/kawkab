@@ -139,7 +139,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	}
 
 	public List<Record> readAll(long minTS, long maxTS, Record recFactory) throws IOException, KawkabException {
-		List<long[]> offsets = index.findAll(minTS, maxTS);
+		List<long[]> offsets = index.findAll(minTS, maxTS); //Get the offsets
 
 		if (offsets == null)
 			return null;
@@ -154,10 +154,12 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 				long segInFile = segNums[j];
 				BlockID curSegId = idBySegInFile(segInFile);
 				DataSegment curSegment = null;
+
 				try {
 					curSegment = (DataSegment)cache.acquireBlock(curSegId);
 					curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
-					curSegment.readAll(minTS, maxTS, recFactory, results, recordSize);
+					int cnt = curSegment.readAll(minTS, maxTS, recFactory, results, recordSize);
+					System.out.printf("  seg=%d, cnt=%d\n", segInFile, cnt);
 				} finally {
 					if (curSegment != null) {
 						cache.releaseBlock(curSegment.id()); //We can potentially improve the performance here
@@ -231,8 +233,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		return bufferOffset;
 	}
 
-	public int appendBuffered(final Record record)
-			throws IOException, InterruptedException, KawkabException {
+	public int appendBuffered(final Record record) throws IOException, InterruptedException, KawkabException {
 		int length = record.size();
 
 		long fileSizeBuffered = this.fileSize.get(); // Current file size
@@ -246,12 +247,12 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		}
 
 		DataSegment ds = acquiredSeg.getItem();
-
 		try {
 			int bytes = ds.append(record.copyOutSrcBuffer(), fileSizeBuffered, recordSize);
 
-			if (fileSizeBuffered%conf.segmentSizeBytes == 0) { // If the current record is the first record in the data segment
-				index.append(record.key(), FixedLenRecordUtils.segmentInFile(fileSizeBuffered, recordSize));
+			if (FixedLenRecordUtils.recordInSegment(fileSizeBuffered, recordSize) == 0) { // If the current record is the first record in the data segment
+				long segmentInFile = FixedLenRecordUtils.segmentInFile(fileSizeBuffered, recordSize);
+				index.appendMinTS(record.key(), segmentInFile);
 			}
 
 			fileSizeBuffered += bytes;
@@ -264,6 +265,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		//tlog1.start();
 		if (ds.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
 			acquiredSeg = null;		// is now immutable. The segment will be eventually returned to the cache.
+
+			long segmentInFile = FixedLenRecordUtils.segmentInFile(fileSizeBuffered-recordSize, recordSize);
+			index.appendMaxTS(record.key(), segmentInFile);
 		}
 
 		fileSize.set(fileSizeBuffered);

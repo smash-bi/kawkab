@@ -87,4 +87,40 @@ public class TimeRangeSearchTest {
 		t[7] = new POHEntry(7, 8); //Matching last values
 		Assertions.assertEquals(7,  TimeRangeSearch.findFirstFloor(t, t.length, 8));
 	}
+
+	@Test
+	public void findCeilTest() {
+		TimeRange[] t = new TimeRange[8];
+
+		t[0] = new POHEntry(3, 5, 1);
+		t[1] = new POHEntry(7, 9, 2);
+		t[2] = new POHEntry(9, 9, 3);
+		t[3] = new POHEntry(9, 9, 4);
+		t[4] = new POHEntry(9, 11, 5);
+		t[5] = new POHEntry(15, 17, 6);
+
+		Assertions.assertEquals(1, TimeRangeSearch.findCeil(t, 6, 8));
+		Assertions.assertEquals(1, TimeRangeSearch.findCeil(t, 6, 6));
+		Assertions.assertEquals(1, TimeRangeSearch.findCeil(t, 6, 9));
+		Assertions.assertEquals(-1, TimeRangeSearch.findCeil(t, 6, 18));
+		Assertions.assertEquals(0, TimeRangeSearch.findCeil(t, 6, 1));
+	}
+
+	@Test
+	public void findFloorTest() {
+		TimeRange[] t = new TimeRange[8];
+
+		t[0] = new POHEntry(3, 5, 1);
+		t[1] = new POHEntry(7, 9, 2);
+		t[2] = new POHEntry(9, 9, 3);
+		t[3] = new POHEntry(9, 9, 4);
+		t[4] = new POHEntry(9, 11, 5);
+		t[5] = new POHEntry(15, 17, 6);
+
+		Assertions.assertEquals(1, TimeRangeSearch.findFloor(t, 6, 8));
+		Assertions.assertEquals(0, TimeRangeSearch.findFloor(t, 6, 6));
+		Assertions.assertEquals(4, TimeRangeSearch.findFloor(t, 6, 9));
+		Assertions.assertEquals(5, TimeRangeSearch.findFloor(t, 6, 18));
+		Assertions.assertEquals(-1, TimeRangeSearch.findFloor(t, 6, 1));
+	}
 }

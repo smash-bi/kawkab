@@ -249,30 +249,32 @@ public final class DataSegment extends Block {
 
 		int lowRecNum=0;
 		int numRecords = limit/recordSize;
-		int highRecNum = (numRecords-1)*2; // Doubling the total records because we want to start search from the last record
-		int recIndex = -1; //Record number in this segment that has the matching timestamp
+		int highRecNum = numRecords-1; // Doubling the total records because we want to start search from the last record
 
-		//System.out.printf("numRecs=%d, recSize=%d, lim=%d, highRecNum=%d\n", numRecords, recordSize, buf.limit(), highRecNum);
+		System.out.printf("numRecs=%d, recSize=%d, lim=%d, highRecNum=%d\n", numRecords, recordSize, buf.limit(), highRecNum);
 
 		//Find the first entry from the right that falls within the range
-		while (lowRecNum <= highRecNum) {
-			int midRecNum = lowRecNum + (highRecNum - lowRecNum + 1)/2; //Taking the ceiling value to find the right most value
-
+		int midRecNum = highRecNum; //We want to start with the right extreme
+		while (lowRecNum < highRecNum) {
 			long bufTS = buf.getLong(midRecNum*recordSize);
-			//System.out.printf("l=%d, m=%d, r=%d, buf.pos=%d, bufTS=%d\n", lowRecNum, midRecNum, highRecNum, buf.position(), bufTS);
+			System.out.printf("l=%d, m=%d, r=%d, buf.pos=%d, bufTS=%d\n", lowRecNum, midRecNum, highRecNum, buf.position(), bufTS);
 
-			if (maxTS < bufTS) { // Target is in the left half,
-				highRecNum = midRecNum - 1;
+			if (bufTS <= maxTS) { // Target is in the right half
+				lowRecNum = midRecNum;
 			} else {
-				recIndex = midRecNum;
-				break;
+				highRecNum = midRecNum - 1;
 			}
+
+			midRecNum = (lowRecNum + highRecNum + 1) >>> 1; //Taking the ceiling value to find the right most value
 		}
 
-		if (recIndex == -1)
+		System.out.printf("  => Index=%d, ts=%d, minTS=%d, maxTS=%d\n", lowRecNum, buf.getLong(lowRecNum*recordSize), minTS, maxTS);
+
+		if (maxTS < buf.getLong(lowRecNum*recordSize))
 			return 0;
 
 		int cnt = 0;
+		int recIndex = lowRecNum; //Record number in this segment that has the matching timestamp
 		int pos = recIndex*recordSize;
 		while (recIndex >= 0 && buf.getLong(pos) >= minTS) {
 			cnt++;

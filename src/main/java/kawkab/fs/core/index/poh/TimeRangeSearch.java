@@ -141,7 +141,7 @@ class TimeRangeSearch {
 	}
 
 	/**
-	 * Find the smallest entry that has either ts in its range or the minTS of the entry is larger and closest to ts
+	 * Find the smallest entry number that has either ts in its range or the minTS of the entry is larger than ts
 	 * @param ranges
 	 * @param length
 	 * @param ts
@@ -227,7 +227,7 @@ class TimeRangeSearch {
 	}
 
 	/**
-	 * Find the highest range that covers ts or smaller than ts
+	 * Find the highest range that has minTS less than or equal to ts
 	 *
 	 * @param ranges
 	 * @param length

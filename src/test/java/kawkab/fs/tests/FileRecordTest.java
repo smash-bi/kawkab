@@ -8,15 +8,14 @@ import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.SampleRecord;
 import kawkab.fs.core.exceptions.KawkabException;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-import java.util.Random;
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 public class FileRecordTest {
 	@BeforeAll
@@ -61,7 +60,7 @@ public class FileRecordTest {
 		
 		fs.close(file);
 		
-		Assertions.assertEquals(rec, recordOut);
+		assertEquals(rec, recordOut);
 	}
 	
 	@Test
@@ -81,7 +80,7 @@ public class FileRecordTest {
 		int nextIndex = (int) (file.size() / recSize) + 1; //The first record number from where we will read
 		
 		for (int i=0; i<toAppend; i++) {
-			Record rec = new SampleRecord(System.currentTimeMillis(),
+			Record rec = new SampleRecord(i+1,
 					rand.nextFloat(), rand.nextFloat(), rand.nextBoolean(),
 					rand.nextFloat(), rand.nextFloat(), rand.nextBoolean());
 			
@@ -92,7 +91,7 @@ public class FileRecordTest {
 		Record actual = new SampleRecord();
 		for (Record expected : recs) {
 			file.recordNum(actual, nextIndex++);
-			Assertions.assertEquals(expected, actual);
+			assertEquals(expected, actual);
 		}
 		
 		fs.close(file);
@@ -122,8 +121,8 @@ public class FileRecordTest {
 		
 		fs.close(file);
 		
-		Assertions.assertEquals(rec, recordOutNum);
-		Assertions.assertEquals(rec, recordOutAt);
+		assertEquals(rec, recordOutNum);
+		assertEquals(rec, recordOutAt);
 	}
 
 	@Test
@@ -149,31 +148,93 @@ public class FileRecordTest {
 
 		List<Record> results = null;
 		results = file.readRecords(1, 13, new SampleRecord()); //Lower limit
-		Assertions.assertEquals(records[0], results.get(0));
+		assertEquals(records[0], results.get(0));
 
 		System.out.println();
 
 		results = file.readRecords(95, 105, new SampleRecord()); //Upper limit
-		Assertions.assertEquals(records[9], results.get(0));
+		assertEquals(records[9], results.get(0));
 
 		results = file.readRecords(1, 115, new SampleRecord()); //All range covered
 		for(int i=0; i<numRecs; i++) {
-			Assertions.assertEquals(records[i], results.get(numRecs-i-1));
+			assertEquals(records[i], results.get(numRecs-i-1));
 		}
 
 		results = file.readRecords(1, 9, new SampleRecord()); //lower out of range
-		Assertions.assertEquals(null, results);
+		assertEquals(null, results);
 
 		results = file.readRecords(115, 120, new SampleRecord()); //upper out of range
-		Assertions.assertEquals(null, results);
+		assertEquals(null, results);
 
 		results = file.readRecords(11, 19, new SampleRecord()); //middle out of range
-		Assertions.assertEquals(null, results);
+		assertEquals(null, results);
 
 		results = file.readRecords(15, 35, new SampleRecord()); //middle covered
-		Assertions.assertEquals(2, results.size());
-		Assertions.assertEquals(records[2], results.get(0));
-		Assertions.assertEquals(records[1], results.get(1));
+		assertEquals(2, results.size());
+		assertEquals(records[2], results.get(0));
+		assertEquals(records[1], results.get(1));
+
+		fs.close(file);
+	}
+
+	@Test
+	public void rangeReadTestLarge() throws IOException, KawkabException, InterruptedException {
+		System.out.println("--------------------------------");
+		System.out.println("- Record Range Read Test Large -");
+		System.out.println("--------------------------------");
+		Random rand = new Random();
+
+		Filesystem fs = Filesystem.instance();
+		FileHandle file = fs.open("rangeReadTestLarge", Filesystem.FileMode.APPEND, new FileOptions(SampleRecord.length()));
+
+		int numRecs = 10000;
+		int tsOffset = 5;
+		Record[] records = new Record[numRecs];
+
+		for (int i = 0; i < numRecs; i++) {
+			long ts = i * tsOffset + tsOffset;
+			Record rec = new SampleRecord(ts, rand.nextDouble(), rand.nextDouble(), rand.nextBoolean(), rand.nextDouble(), rand.nextDouble(), rand.nextBoolean());
+			records[i] = rec;
+			file.append(rec);
+		}
+
+		// Reading the records from the start
+		List<Record> results = file.readRecords(1, 1000, new SampleRecord());
+		int expectedLen = 1000/tsOffset;
+		for (int i=0; i<expectedLen; i++) {
+			assertEquals(records[i], results.get(expectedLen-i-1));
+		}
+
+		// Reading the records from the end
+		int minRecIdx = 9000;
+		int lowerTS = minRecIdx*tsOffset+tsOffset;
+		int largeMaxTS = numRecs*tsOffset+2*tsOffset; //Should be larger than the ts of the last record
+		results = file.readRecords(lowerTS, largeMaxTS, new SampleRecord()); //keeping maxTS larger than the last rec's ts
+		expectedLen = numRecs-minRecIdx;
+		for (int i=0; i<expectedLen; i++) {
+			assertEquals(records[minRecIdx+i], results.get(expectedLen-i-1));
+		}
+
+		// Reading the last record
+		lowerTS = (numRecs-1)*tsOffset+tsOffset - 1;
+		results = file.readRecords(lowerTS, largeMaxTS, new SampleRecord());
+		assertEquals(1, results.size());
+		assertEquals(records[numRecs-1], results.get(0));
+
+		// Reading out of range in the middle
+		results = file.readRecords(1*tsOffset+tsOffset+1, 2*tsOffset+tsOffset-1, new SampleRecord());
+		assertNull(results);
+
+		// Reading records from a middle range
+		minRecIdx = 5;
+		int maxRecIdx = numRecs-5;
+		lowerTS = minRecIdx*tsOffset+tsOffset - 1;
+		int higherTS = maxRecIdx*tsOffset+tsOffset + 1;
+		results = file.readRecords(lowerTS, higherTS, new SampleRecord()); //keeping maxTS larger than the last rec's ts
+		expectedLen = maxRecIdx-minRecIdx + 1;
+		for (int i=0; i<expectedLen; i++) {
+			assertEquals(records[minRecIdx+i], results.get(expectedLen-i-1));
+		}
 
 		fs.close(file);
 	}
