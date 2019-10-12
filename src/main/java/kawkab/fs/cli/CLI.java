@@ -187,7 +187,7 @@ public final class CLI {
 						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
 						
-						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Main append");
+						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Main append", 5);
 						long startTime = System.currentTimeMillis();
 						int toWrite = bufSize;
 						long ops = 0;

@@ -19,20 +19,29 @@ public class TimeLog {
 		}
 		
 	};
-	private Random rand;
-	
 	private TimeLogUnit unit;
 	private long lastTS;
 	private Accumulator stats;
 	private boolean started;
 	private int count;
 	private String tag;
+	private int[] rand;
+	private int randIdx;
+	private int samplePercent;
 	
-	public TimeLog(TimeLogUnit unit, String tag) {
+	public TimeLog(TimeLogUnit unit, String tag, int samplePercent) {
+		assert 0 <= samplePercent && samplePercent <= 100 : "Sample percent must be between 0 and 100";
 		this.unit = unit;
 		this.tag = tag;
+		this.samplePercent = samplePercent;
 		stats = new Accumulator(); //Ignore initial 1000 readings
-		rand = new Random();
+
+		int count = 100000;
+		rand = new int[count];
+		Random r = new Random();
+		for(int i=0; i<count; i++) {
+			rand[i] = r.nextInt(100);
+		}
 	}
 	
 	
@@ -40,11 +49,11 @@ public class TimeLog {
 	 * start() and end() must be called in a combination, surrounding the code that is being timed
 	 */
 	public void start() {
-		assert started == false;
+		assert !started;
 		
 		count++;
-		
-		if (rand.nextInt(100) > 3)
+		randIdx = ++randIdx % rand.length;
+		if (rand[randIdx] > samplePercent)
 			return;
 		
 		started = true;

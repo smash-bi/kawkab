@@ -1,12 +1,13 @@
 package kawkab.fs.api;
 
 import java.nio.ByteBuffer;
+import java.util.Random;
 
 public interface Record {
 	/**
 	 * @return Returns the globally unique key of the record.
 	 */
-	long key();
+	long timestamp();
 	
 	/**
 	 * Returns a buffer to load data from the file.
@@ -43,11 +44,5 @@ public interface Record {
 	 */
 	Record newRecord();
 
-	/**
-	 * Uses the inputBuffer to parse the record. The function does not copy the inputBuffer. Instead, it keeps the reference and uses that to parse the record.
-	 * Therefore, use the input buffer carefully.
-	 *
-	 * @param inputBuffer Buffer that has record's data
-	 */
-	void acquire(ByteBuffer inputBuffer);
+	Record newRandomRecord(final Random rand, final long timestamp);
 }

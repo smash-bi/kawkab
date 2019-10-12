@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.records.SampleRecord;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

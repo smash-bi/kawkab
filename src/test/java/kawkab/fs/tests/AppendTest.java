@@ -1,6 +1,7 @@
 package kawkab.fs.tests;
 
 import kawkab.fs.api.FileOptions;
+import kawkab.fs.api.Record;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
 import kawkab.fs.core.Cache;
@@ -9,9 +10,11 @@ import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.Inode;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.records.SampleRecord;
 import kawkab.fs.utils.TimeLog;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -32,11 +35,63 @@ public class AppendTest {
 	public static void terminate() throws KawkabException, InterruptedException, IOException {
 		Filesystem.instance().shutdown();
 	}
-	
+
 	@Test
-	public void appendPerformanceConcurrentFilesTest() throws IOException, KawkabException {
+	public void appendRecordsSingleFileTest() throws IOException, KawkabException, InterruptedException {
 		System.out.println("----------------------------------------------------------------");
-		System.out.println("            Append Perofrmance Test - Concurrent Files");
+		System.out.println("       Append Performance Test (records, single Files)");
+		System.out.println("----------------------------------------------------------------");
+
+		final Filesystem fs = Filesystem.instance();
+		String filename = "/home/smash/arsft-"+ Configuration.instance().thisNodeID;
+		Record recFactory = new SampleRecord();
+		Random rand = new Random();
+		int numRecords = 10000000;
+		int tsOffset = 10;
+		Stats writeStats = new Stats();
+		Stats opStats = new Stats();
+
+		appendRecords(fs, filename, recFactory, rand, numRecords, tsOffset, writeStats, opStats);
+
+		System.out.printf("\n\nWriters stats: sum=%.0f, %s, record size=%d\nOps stats: %s\n\n", writeStats.sum(), writeStats, recFactory.size(), opStats);
+	}
+
+	private void appendRecords(Filesystem fs, String filename, Record recFactory, Random rand, int numRecords, int tsOffset, Stats writeStats, Stats opStats)
+			throws KawkabException, IOException, InterruptedException {
+		int recSize = recFactory.size();
+		System.out.println("Opening file: " + filename);
+		FileHandle file = fs.open(filename, FileMode.APPEND, new FileOptions(recSize));
+
+		Record[] recs = new Record[numRecords];
+		for (int i=0; i<numRecords; i++) {
+			long ts = (i+1)*tsOffset;
+			recs[i] = recFactory.newRandomRecord(rand, ts);
+		}
+
+		long startTime = System.currentTimeMillis();
+		TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Record append", 5);
+		for (int i=0; i<numRecords; i++) {
+			tlog.start();
+			file.append(recs[i]);
+			tlog.end();
+		}
+		double durSec = (System.currentTimeMillis() - startTime) / 1000.0;
+
+		double sizeMB = numRecords * recSize / (1024.0 * 1024.0);
+		double thr = sizeMB / durSec;
+		double opThr = numRecords / durSec;
+		writeStats.putValue(thr);
+		opStats.putValue(opThr);
+
+		System.out.printf("Record write results NumRecords = %d, Data size = %.0fMB, Write tput = %,.0f MB/s, Ops tput = %,.0f OPS, tlog %s\n", numRecords, sizeMB, thr, opThr, tlog.getStats());
+
+		fs.close(file);
+	}
+	
+	@Test @Disabled
+	public void appendBytesTest() throws IOException, KawkabException {
+		System.out.println("----------------------------------------------------------------");
+		System.out.println("       Append Performance Test (bytes, concurrent Files)");
 		System.out.println("----------------------------------------------------------------");
 		
 		//warmup();
@@ -69,7 +124,7 @@ public class AppendTest {
 						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
 						
-						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Main append");
+						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Main append", 5);
 						long startTime = System.currentTimeMillis();
 						int toWrite = bufSize;
 						long ops = 0;
@@ -80,7 +135,7 @@ public class AppendTest {
 							tlog.start();
 							appended += file.append(writeBuf, 0, toWrite);
 							tlog.end();
-							
+
 							ops++;
 						}
 						
@@ -162,7 +217,7 @@ public class AppendTest {
 	public static void main(String args[]) throws InterruptedException, KawkabException, IOException {
 		AppendTest test = new AppendTest();
 		test.initialize();
-		test.appendPerformanceConcurrentFilesTest();
+		test.appendBytesTest();
 		test.terminate();
 	}
 }

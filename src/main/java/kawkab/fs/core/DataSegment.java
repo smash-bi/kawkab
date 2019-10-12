@@ -251,13 +251,13 @@ public final class DataSegment extends Block {
 		int numRecords = limit/recordSize;
 		int highRecNum = numRecords-1; // Doubling the total records because we want to start search from the last record
 
-		System.out.printf("numRecs=%d, recSize=%d, lim=%d, highRecNum=%d\n", numRecords, recordSize, buf.limit(), highRecNum);
+		// System.out.printf("numRecs=%d, recSize=%d, lim=%d, highRecNum=%d\n", numRecords, recordSize, buf.limit(), highRecNum);
 
 		//Find the first entry from the right that falls within the range
 		int midRecNum = highRecNum; //We want to start with the right extreme
 		while (lowRecNum < highRecNum) {
 			long bufTS = buf.getLong(midRecNum*recordSize);
-			System.out.printf("l=%d, m=%d, r=%d, buf.pos=%d, bufTS=%d\n", lowRecNum, midRecNum, highRecNum, buf.position(), bufTS);
+			// System.out.printf("l=%d, m=%d, r=%d, buf.pos=%d, bufTS=%d\n", lowRecNum, midRecNum, highRecNum, buf.position(), bufTS);
 
 			if (bufTS <= maxTS) { // Target is in the right half
 				lowRecNum = midRecNum;
@@ -268,7 +268,7 @@ public final class DataSegment extends Block {
 			midRecNum = (lowRecNum + highRecNum + 1) >>> 1; //Taking the ceiling value to find the right most value
 		}
 
-		System.out.printf("  => Index=%d, ts=%d, minTS=%d, maxTS=%d\n", lowRecNum, buf.getLong(lowRecNum*recordSize), minTS, maxTS);
+		//System.out.printf("  => Index=%d, ts=%d, minTS=%d, maxTS=%d\n", lowRecNum, buf.getLong(lowRecNum*recordSize), minTS, maxTS);
 
 		if (maxTS < buf.getLong(lowRecNum*recordSize))
 			return 0;

@@ -372,7 +372,7 @@ public class PostOrderHeapIndex implements FileIndex {
 
 		int curNode = lastNodeIdx; // Begin with the last node
 
-		System.out.printf("ts=%d, lastMin=%d, lastMax=%d\n", ts, nodes.get(curNode).minTS(), nodes.get(curNode).maxTS());
+		// System.out.printf("ts=%d, lastMin=%d, lastMax=%d\n", ts, nodes.get(curNode).minTS(), nodes.get(curNode).maxTS());
 
 		// First traverse the root nodes up to the left-most tree
 		while(curNode > 0) { // until we have explored all the root nodes; nodes[0] is null.

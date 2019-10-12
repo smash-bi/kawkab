@@ -5,11 +5,10 @@ import kawkab.fs.api.Record;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
-import kawkab.fs.core.SampleRecord;
+import kawkab.fs.core.records.SampleRecord;
 import kawkab.fs.core.exceptions.KawkabException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -117,7 +116,7 @@ public class FileRecordTest {
 		Record recordOutAt = new SampleRecord();
 		
 		file.recordNum(recordOutNum, file.size()/rec.size());
-		file.recordAt(recordOutAt, rec.key());
+		file.recordAt(recordOutAt, rec.timestamp());
 		
 		fs.close(file);
 		
@@ -230,11 +229,20 @@ public class FileRecordTest {
 		int maxRecIdx = numRecs-5;
 		lowerTS = minRecIdx*tsOffset+tsOffset - 1;
 		int higherTS = maxRecIdx*tsOffset+tsOffset + 1;
+
+		long t = System.currentTimeMillis();
 		results = file.readRecords(lowerTS, higherTS, new SampleRecord()); //keeping maxTS larger than the last rec's ts
+
+		long diff = System.currentTimeMillis() - t;
+
 		expectedLen = maxRecIdx-minRecIdx + 1;
 		for (int i=0; i<expectedLen; i++) {
 			assertEquals(records[minRecIdx+i], results.get(expectedLen-i-1));
 		}
+
+		double lat = diff*1.0 / expectedLen;
+
+		System.out.println("Lat = " + lat + ", numRecs " + expectedLen);
 
 		fs.close(file);
 	}

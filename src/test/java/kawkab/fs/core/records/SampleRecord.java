@@ -1,9 +1,10 @@
-package kawkab.fs.core;
+package kawkab.fs.core.records;
 
 import kawkab.fs.api.Record;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
+import java.util.Random;
 
 public class SampleRecord implements Record {
 	private ByteBuffer buffer; //The buffer that holds the record's fields in sequence
@@ -40,7 +41,7 @@ public class SampleRecord implements Record {
 	}
 
 	public SampleRecord(long timestamp, double bidPrice, double bidQuantity, boolean bidExecutable, double askPrice, double askQuantity, boolean askExecutable) {
-		buffer = ByteBuffer.allocate(SIZE);
+		this();
 		
 		buffer.putLong(timestamp);
 		buffer.putDouble(bidPrice);
@@ -55,7 +56,7 @@ public class SampleRecord implements Record {
 	}
 	
 	@Override
-	public long key() {
+	public long timestamp() {
 		return buffer.getLong(TIMESTAMP);
 	}
 	
@@ -78,10 +79,6 @@ public class SampleRecord implements Record {
 
 	public static int length() {
 		return SIZE;
-	}
-	
-	public long timestamp() {
-		return buffer.getLong(TIMESTAMP);
 	}
 	
 	public double bidPrice() {
@@ -140,8 +137,11 @@ public class SampleRecord implements Record {
 	}
 
 	@Override
-	public void acquire(ByteBuffer inputBuffer) {
-		buffer = inputBuffer;
-		buffer.clear();
+	public Record newRandomRecord(final Random rand, final long timestamp) {
+		assert rand != null;
+		assert timestamp >= 0;
+
+		return new SampleRecord(timestamp, rand.nextDouble(), rand.nextDouble(), rand.nextBoolean(),
+				rand.nextDouble(), rand.nextDouble(), rand.nextBoolean());
 	}
 }
