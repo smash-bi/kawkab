@@ -233,5 +233,5 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	void onMemoryEviction() {}
+	protected void onMemoryEviction() {}
 }

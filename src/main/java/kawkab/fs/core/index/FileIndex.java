@@ -3,6 +3,9 @@ package kawkab.fs.core.index;
 import kawkab.fs.core.exceptions.KawkabException;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.util.List;
 
 public interface FileIndex {
@@ -68,5 +71,18 @@ public interface FileIndex {
 	 */
 	void appendMaxTS(long maxTS, long segmentInFile);
 
-	void appendIndexEntry(final long minTS, final long maxTS, final long segmentInFile);
+	void appendIndexEntry(final long minTS, final long maxTS, final long segmentInFile) ;
+
+	/**
+	 * Load the index from the local or the global store
+	 *
+	 * The length of the index must already be set.
+	 */
+	void loadAndInit() throws IOException, KawkabException;
+
+	void shutdown() throws KawkabException;
+
+	int storeTo(final ByteBuffer buffer);
+
+	int loadFrom(final ByteBuffer buffer) throws IOException;
 }

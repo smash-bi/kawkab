@@ -1,8 +1,14 @@
 package kawkab.fs.core.index.poh;
 
+import kawkab.fs.core.Cache;
+import kawkab.fs.core.IndexNodeID;
+import kawkab.fs.core.LocalStoreManager;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
+import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.index.FileIndex;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -15,60 +21,79 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 
 public class PostOrderHeapIndex implements FileIndex {
+	// Persistent variables, persisted in the inode
+	private long inumber;
+	private final LocalStoreManager localStore = LocalStoreManager.instance();
+
 	private final double logBase;
-	private ArrayList<POHNode> nodes;	//This is an append-only list. The readers should read but not modify the list. The sole writer can a[[emd new nodes.
+	private ArrayList<POHNode> nodes;	//This is an append-only list. The readers should read but not modify the list. Only a single writer should append new nodes.
 
 	// Configuration parameters
-	private final int childrenPerNode; //Branching factor of the tree
-	private final int entriesPerNode; //Number of index entries in each node
-	private final int nodeSizeBytes;
+	private int childrenPerNode; //Branching factor of the tree
+	private int entriesPerNode; //Number of index entries in each node
+	private int nodesPerBlock;
 	private POHNode currentNode;
 
-	// Number of timestamps in the index. The length divided by 2 shows the number of index entries in the index. Moreover, if the length is an odd number, the last index entry is half complete.
+	// Number of timestamps in the index. The length divided by 2 shows the number of index entries in the index.
+	// Moreover, if the length is an odd number, the last index entry is half complete.
 	private AtomicLong length = new AtomicLong(0);
 
-	//TODO: This table should final and static
-	private int[] nodesCountTable; // Number of nodes in the perfect k-ary tree of height i, i>=0. We use this table to avoid the complex math functions
+	// nodesCountTable: A lookup table that contains the number of nodes in the perfect k-ary tree of height i, i>=0.
+	// We use this table to avoid the complex math functions. Array index is the key, which is the node number.
+	private int[] nodesCountTable; //TODO: This table should be final and static
+
+	private final Cache cache;
+
+	private int nodeSizeBytes;
 
 	/**
 	 *
 	 * @param indexNodeSizeBytes
 	 * @param percentEntriesPerNode
 	 */
-	public PostOrderHeapIndex(int indexNodeSizeBytes, int percentEntriesPerNode) {
-		int entrySize = POHEntry.sizeBytes();
-		int pointerSize = POHNode.pointerSizeBytes();
-
-		entriesPerNode = (int) (indexNodeSizeBytes/100.0*percentEntriesPerNode / entrySize);
-		childrenPerNode = (int) ((indexNodeSizeBytes-(entriesPerNode*entrySize))*1.0 / pointerSize);
+	public PostOrderHeapIndex(long inumber, int indexNodeSizeBytes, int nodesPerBlock, int percentEntriesPerNode, Cache cache) {
+		int entrySize = POHNode.entrySizeBytes();
+		int childSize = POHNode.childSizeBytes();
+		int headerBytes = POHNode.headerSizeBytes();
 
 		nodeSizeBytes = indexNodeSizeBytes;
+		entriesPerNode = (int) Math.ceil((indexNodeSizeBytes-headerBytes)*1.0*percentEntriesPerNode/100 / entrySize); //FIXME: We should get these values from POHONode
+		childrenPerNode = (int) ((indexNodeSizeBytes-headerBytes-(entriesPerNode*entrySize))*1.0 / childSize);
 
-		logBase = Math.log(childrenPerNode);
+		//System.out.printf("inumber: %d, indexNodeSize=%d, entriesPerNode=%d, childrenPerNode=%d, headerSize=%d, entrySize=%d, childSize=%d, %%entries=%d, nodesPerBlock=%d\n",
+		//		inumber, indexNodeSizeBytes, entriesPerNode, childrenPerNode, headerBytes, entrySize, childSize, percentEntriesPerNode, nodesPerBlock);
+
+		assert entriesPerNode > 0;
+		assert childrenPerNode > 1;
+		assert indexNodeSizeBytes >= entrySize*entriesPerNode + childSize*childrenPerNode;
+
+		this.inumber = inumber;
+		this.nodesPerBlock = nodesPerBlock;
+		this.logBase = Math.log(childrenPerNode);
+		this.cache = cache;
 
 		init();
 	}
 
 	// FIXME: Duplicate code in the constructors
-	public PostOrderHeapIndex(int entriesPerNode, int childrenPerNode, int nodeSizeBytes) {
+	/*public PostOrderHeapIndex(int entriesPerNode, int childrenPerNode, int nodesPerBlock) {
 		this.entriesPerNode = entriesPerNode;
 		this.childrenPerNode = childrenPerNode;
-		this.nodeSizeBytes = nodeSizeBytes;
-
+		this.nodesPerBlock = nodesPerBlock;
 		logBase = Math.log(childrenPerNode);
-
 		init();
 
-	}
+	}*/
 
 	private void init() {
 		//System.out.printf("Index entries per node:  %d\n", entriesPerNode);
 		//System.out.printf("Index pointers per node: %d\n", childrenPerNode);
 
 		nodes = new ArrayList<>();
-		currentNode = new POHNode(1, 0, entriesPerNode, childrenPerNode);
 		nodes.add(null); // Add a dummy value to match the node number with the array index. We do this to simplify the calculation of the index of the children of a node
-		nodes.add(currentNode);
+
+		//currentNode = createNewNode(1);
+		//nodes.add(currentNode);
 
 		//TODO: Use a systematic way to get a good table size
 		nodesCountTable = new int[51]; // We don't expect the height to grow large because of the large branching factor
@@ -77,21 +102,80 @@ public class PostOrderHeapIndex implements FileIndex {
 		}
 	}
 
-	private POHNode createNewNode(final int nodeNumber) {
+	@Override
+	public void loadAndInit() throws IOException, KawkabException {
+		long len = length.get();
+		int nodesCount = (int)Math.ceil((len + 1) / 2 / ((double)entriesPerNode)); // Ceil value of ( Total number of entries / entries per node )
+
+		//System.out.printf("[POHI] Loading %d nodes, index length %d\n",nodesCount, len);
+
+		for (int i=1; i<=nodesCount; i++) {
+			POHNode node = loadIndexNode(i);
+			setChildren(node);
+			nodes.add(node);
+		}
+
+		currentNode = nodes.get(nodesCount);
+	}
+
+	/**
+	 * Create a file locally for the new block
+	 *
+	 * @param nodeID ID of the first node in the index block
+	 * @return
+	 */
+	private void createNewBlock(IndexNodeID nodeID) throws IOException, InterruptedException {
+		// System.out.println("Creating new block: " + nodeID.localPath());
+
+		localStore.createBlock(nodeID);
+	}
+
+	private POHNode loadIndexNode(final int nodeNumber) throws IOException, KawkabException {
+		IndexNodeID id = new IndexNodeID(inumber, nodeNumber);
+
+		POHNode node = (POHNode) cache.acquireBlock(id);
+		node.init(nodeNumber, heightOfNode(nodeNumber), entriesPerNode, childrenPerNode, nodeSizeBytes);
+		node.loadBlock();
+		return node;
+	}
+
+	private POHNode createNewNodeCached(final int nodeNumber) throws IOException, KawkabException, InterruptedException {
 		int height = heightOfNode(nodeNumber);
-		POHNode node = new POHNode(nodeNumber, height, entriesPerNode, childrenPerNode);
-		if (height > 0) {
+		IndexNodeID nodeID = new IndexNodeID(inumber, nodeNumber);
+
+		// System.out.println("  Creating new node: " + nodeID);
+
+		POHNode node = (POHNode) cache.acquireBlock(nodeID);
+		node.init(nodeNumber, height, entriesPerNode, childrenPerNode, nodeSizeBytes);
+		setChildren(node);
+
+		if (nodeNumber % nodesPerBlock == 0 || nodeNumber == 1)
+			createNewBlock(nodeID);
+
+		return node;
+	}
+
+	private POHNode createNewNodeInMemory(final int nodeNumber) {
+		int height = heightOfNode(nodeNumber);
+		IndexNodeID nodeID = new IndexNodeID(inumber, nodeNumber);
+		POHNode node = new POHNode(nodeID);
+		node.init(nodeNumber, height, entriesPerNode, childrenPerNode, nodeSizeBytes);
+		setChildren(node);
+		return node;
+	}
+
+	private void setChildren(final POHNode node) {
+		if (node.height() > 0) {
 			for (int i = 1; i <= childrenPerNode; i++) {
-				POHNode child = nodes.get(nthChild(nodeNumber, height, i));
+				POHNode child = nodes.get(nthChild(node.nodeNumber(), node.height(), i));
 				try {
 					node.appendChild(child);
 				} catch (IndexBlockFullException e) {
 					e.printStackTrace();
-					return null;
+					return;
 				}
 			}
 		}
-		return node;
 	}
 
 	/**
@@ -116,12 +200,15 @@ public class PostOrderHeapIndex implements FileIndex {
 
 		long curLength = length.get();
 
-		if (currentNode.isFull()) {
+		if (currentNode == null || currentNode.isFull()) {
 			assert (curLength % 2) == 0;
 
-			currentNode = createNewNode(currentNode.nodeNumber()+1);
-			if (currentNode == null)
+			try {
+				currentNode = createNewNodeCached((int)(curLength/2/entriesPerNode) +1);
+			} catch (IOException | KawkabException | InterruptedException e) {
+				e.printStackTrace();
 				return;
+			}
 
 			nodes.add(currentNode);
 		}
@@ -157,12 +244,15 @@ public class PostOrderHeapIndex implements FileIndex {
 
 		long curLength = length.get();
 
-		if (currentNode.isFull()) {
+		if (currentNode == null || currentNode.isFull()) {
 			assert (curLength % 2) == 0;
 
-			currentNode = createNewNode(currentNode.nodeNumber()+1);
-			if (currentNode == null)
+			try {
+				currentNode = createNewNodeCached((int)(curLength/2/entriesPerNode) +1);
+			} catch (IOException | KawkabException | InterruptedException e) {
+				e.printStackTrace();
 				return;
+			}
 
 			nodes.add(currentNode);
 		}
@@ -396,7 +486,7 @@ public class PostOrderHeapIndex implements FileIndex {
 	 * @return
 	 */
 	private int nthChild(int parentNodeNum, int parentHeight, int childNumber) {
-		assert parentHeight > 0 : "parentHieght must be greater than 0; parentHeight="+parentHeight;
+		assert parentHeight > 0 : "parentHeight must be greater than 0; parentHeight="+parentHeight;
 		assert childNumber > 0;
 
 		if (childNumber == childrenPerNode)
@@ -456,5 +546,37 @@ public class PostOrderHeapIndex implements FileIndex {
 			if (nodes != null)
 				System.out.printf("%d,%d\n",node.nodeNumber(), node.height());
 		}
+	}
+
+	@Override
+	public void shutdown() throws KawkabException {
+		for(POHNode node : nodes) {
+			if (node != null)
+				cache.releaseBlock(node.id());
+		}
+	}
+
+	@Override
+	public int storeTo(ByteBuffer buffer) {
+		buffer.putLong(length.get());
+		buffer.putInt(entriesPerNode);
+		buffer.putInt(childrenPerNode);
+		buffer.putInt(nodeSizeBytes);
+
+		// System.out.println("\t\t[POHI] Stored index length: " + length.get());
+
+		return Long.BYTES;
+	}
+
+	@Override
+	public int loadFrom(ByteBuffer buffer) throws IOException {
+		length.set(buffer.getLong());
+		entriesPerNode = buffer.getInt();
+		childrenPerNode = buffer.getInt();
+		nodeSizeBytes = buffer.getInt();
+
+		// System.out.println("\t\t[POHI] Loaded index length: " + length.get());
+
+		return Long.BYTES;
 	}
 }

@@ -83,7 +83,7 @@ public class AppendTest {
 		writeStats.putValue(thr);
 		opStats.putValue(opThr);
 
-		System.out.printf("Record write results NumRecords = %d, Data size = %.0fMB, Write tput = %,.0f MB/s, Ops tput = %,.0f OPS, tlog %s\n", numRecords, sizeMB, thr, opThr, tlog.getStats());
+		System.out.printf("Record write results: Rec. size=%d, count=%d, Data size=%.0fMB, W tput=%,.0f MB/s, Ops tput=%,.0fOPS, tlog: %s\n", recSize, numRecords, sizeMB, thr, opThr, tlog.getStats());
 
 		fs.close(file);
 	}

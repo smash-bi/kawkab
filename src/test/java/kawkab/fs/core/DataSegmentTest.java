@@ -17,7 +17,7 @@ public class DataSegmentTest {
 	@BeforeAll
 	public static void initialize() throws IOException, InterruptedException, KawkabException {
 		System.out.println("-------------------------------");
-		System.out.println("- Initializing the filesystem -");
+		System.out.println("- Initializing -");
 		System.out.println("-------------------------------");
 
 		int nodeID = Configuration.getNodeID();

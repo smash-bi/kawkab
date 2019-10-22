@@ -379,13 +379,12 @@ public final class DataSegment extends Block {
 		buffer.clear();
 		buffer.put(srcBuffer);
 		
-		int bytesRead = buffer.position();
+		bytesLoaded = buffer.position();
 		
-		bytesLoaded = bytesRead;
-		
+
 		System.out.println("[DS] Bytes loaded: " + bytesLoaded);
 		
-		return bytesRead;
+		return bytesLoaded;
 	}
 	
 	@Override
@@ -394,11 +393,17 @@ public final class DataSegment extends Block {
 		if (initedForAppends) {
 			limit = writePos.get();
 		}
-		
-		ByteBuffer buf  = dataBuf.duplicate();
-		buf.rewind();
-		
-		return ByteString.copyFrom(buf, limit);
+
+		ByteString bytes = null;
+		synchronized (storeBuffer) {
+			storeBuffer.clear();
+			storeBuffer.limit(limit);
+			storeBuffer.rewind();
+
+			bytes = ByteString.copyFrom(storeBuffer, limit);
+		}
+
+		return bytes;
 	}
 	
 	@Override
@@ -407,12 +412,12 @@ public final class DataSegment extends Block {
 	}
 	
 	@Override
-	void onMemoryEviction() {
-		closeFile();
+	protected void onMemoryEviction() {
+		//closeFile();
 	}
 	
 	@Override
-	protected synchronized void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
+	protected synchronized void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException {
 		/* If never fetched or the last global-fetch has timed out, fetch from the global store.
 		 * Otherwise, if the last primary-fetch has timed out, fetch from the primary node.
 		 * Otherwise, don't fetch, data is still fresh.
@@ -473,44 +478,6 @@ public final class DataSegment extends Block {
 		}
 	}
 	
-	private void openFile() throws FileNotFoundException {
-		if (!opened) {
-			synchronized (this) {
-				if (!opened) {
-					//System.out.println("Opening file: " + id.localPath());
-					rwFile = new RandomAccessFile(id.localPath(), "rw");
-					channel = rwFile.getChannel();
-					opened = true;
-				}
-			}
-		}
-	}
-	
-	private void closeFile() {
-		if (opened) {
-			synchronized (this) {
-				if (opened) {
-					//System.out.println("Closing file: " + id.localPath());
-					try {
-						channel.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-					
-					try {
-						rwFile.close(); //This closes the channel as well
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-					
-					opened = false;
-					channel = null;
-					rwFile = null;
-				}
-			}
-		}
-	}
-	
 	@Override
 	public int storeToFile() throws IOException {
 		FileChannel channel = FileChannel.open(new File(id().localPath()).toPath(), StandardOpenOption.WRITE);
@@ -528,8 +495,9 @@ public final class DataSegment extends Block {
 	public int storeTo(FileChannel channel) throws IOException {
 		int bytesWritten = 0;
 		
-		channel.position(appendOffsetInBlock());
-		
+		//channel.position(appendOffsetInBlock());
+		channel.position(channel.size());
+
 		synchronized (storeBuffer) {
 			int limit = writePos.get();
 			

@@ -1,18 +1,39 @@
 package kawkab.fs.core.index.poh;
 
-import org.junit.jupiter.api.Assertions;
+import kawkab.fs.commons.Configuration;
+import kawkab.fs.core.NullCache;
+import kawkab.fs.core.exceptions.KawkabException;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class PostOrderHeapIndexTest {
+	@BeforeAll
+	public static void initialize() throws IOException, InterruptedException, KawkabException {
+		System.out.println("-------------------------------");
+		System.out.println("- Initializing -");
+		System.out.println("-------------------------------");
+
+		int nodeID = Configuration.getNodeID();
+		Properties props = Configuration.getProperties(Configuration.propsFileCluster);
+		Configuration.configure(nodeID, props);
+	}
+
 	@Test
 	public void rootHeightFuncTest() throws IllegalAccessException, NoSuchMethodException, InvocationTargetException {
 		System.out.println("Test: rootHeightFuncTest");
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3, 200);
+
+		int epn = 1; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes()  + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, nodeSize, nodesPerBlock, 25, new NullCache());
 
 		assertEquals(0, heightOfRoot(poh, 3));
 		assertEquals(1, heightOfRoot(poh, 4));
@@ -28,17 +49,29 @@ public class PostOrderHeapIndexTest {
 	@Test
 	public void totalNodesCountTest() throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
 		System.out.println("Test: rootHeightFuncTest");
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3, 200);
+		int epn = 1; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes()  + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(2, nodeSize, nodesPerBlock, 25, new NullCache());
 		assertEquals(4, totalNodesKAryTree(poh, 1));
 		assertEquals(13, totalNodesKAryTree(poh, 2));
 		assertEquals(40, totalNodesKAryTree(poh, 3));
 
-		poh = new PostOrderHeapIndex(1, 2, 200);
+		epn = 1; // entries per node
+		cpn = 2; // children per node
+		nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		poh = new PostOrderHeapIndex(3, nodeSize, nodesPerBlock, 33, new NullCache());
 		assertEquals(3, totalNodesKAryTree(poh, 1));
 		assertEquals(7, totalNodesKAryTree(poh, 2));
 		assertEquals(15, totalNodesKAryTree(poh, 3));
 
-		poh = new PostOrderHeapIndex(1, 4, 200);
+		epn = 1; // entries per node
+		cpn = 4; // children per node
+		nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		poh = new PostOrderHeapIndex(4, nodeSize, nodesPerBlock, 20, new NullCache());
 		assertEquals(5, totalNodesKAryTree(poh, 1));
 		assertEquals(21, totalNodesKAryTree(poh, 2));
 		assertEquals(85, totalNodesKAryTree(poh, 3));
@@ -53,7 +86,12 @@ public class PostOrderHeapIndexTest {
 	@Test
 	public void pohStructureTest() throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
 		System.out.println("Test: pohStructureTest");
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3, 200);
+
+		int epn = 1; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(5, nodeSize, nodesPerBlock, 25, new NullCache());
 
 		for (int i=1; i<30; i++) {
 			poh.appendIndexEntry(i, i, i);
@@ -77,7 +115,11 @@ public class PostOrderHeapIndexTest {
 	public void searchSmokeTest() {
 		System.out.println("Test: searchFirstTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(1, 3, 200);
+		int epn = 1; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(6, nodeSize, nodesPerBlock, 25, new NullCache());
 		for (int i=1; i<30; i++) {
 			poh.appendIndexEntry(i, i, i);
 		}
@@ -93,7 +135,11 @@ public class PostOrderHeapIndexTest {
 	public void searchOverlappingTest() {
 		System.out.println("Test: searchOverlappingTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(5, 3, 200);
+		int epn = 5; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(7, nodeSize, nodesPerBlock, 62, new NullCache());
 		for (int i=1; i<=100; i++) {
 			poh.appendIndexEntry(i, i, i);
 		}
@@ -109,7 +155,11 @@ public class PostOrderHeapIndexTest {
 	public void findAllRangeTest() {
 		System.out.println("Test: findAllRangeTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3, 200);
+		int epn = 3; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(8, nodeSize, nodesPerBlock, 50, new NullCache());
 		poh.appendMinTS(3, 1);
 		poh.appendMaxTS(3, 1);
 		poh.appendMinTS(5, 2);
@@ -181,7 +231,11 @@ public class PostOrderHeapIndexTest {
 	public void singleEntryTest() {
 		System.out.println("Test: singleEntryTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3, 200);
+		int epn = 3; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(9, nodeSize, nodesPerBlock, 50, new NullCache());
 		poh.appendMinTS(3, 1);
 
 		long[][] resType = new long[][]{{}};
@@ -198,7 +252,11 @@ public class PostOrderHeapIndexTest {
 	public void exactMatchTest() {
 		System.out.println("Test: exactMatchTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3, 200);
+		int epn = 3; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(10, nodeSize, nodesPerBlock, 50, new NullCache());
 		poh.appendMinTS(3, 1);
 		poh.appendMaxTS(3, 1);
 		poh.appendMinTS(5, 2);
@@ -255,7 +313,11 @@ public class PostOrderHeapIndexTest {
 	public void sameMinMaxTest() {
 		System.out.println("Test: sameMinMaxTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3, 200);
+		int epn = 3; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(11, nodeSize, nodesPerBlock, 50, new NullCache());
 		poh.appendMinTS(3, 1);
 		poh.appendMaxTS(3, 1);
 		poh.appendMinTS(5, 2);
@@ -327,7 +389,12 @@ public class PostOrderHeapIndexTest {
 	public void findAllTest() {
 		System.out.println("Test: findAllTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3, 200);
+		int epn = 3; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(12, nodeSize, nodesPerBlock, 50, new NullCache());
+
 		poh.appendMinTS(3, 1); poh.appendMaxTS(5, 1);
 		poh.appendMinTS(8, 2); poh.appendMaxTS(12, 2);
 		poh.appendMinTS(15, 3); poh.appendMaxTS(18, 3);
@@ -366,10 +433,30 @@ public class PostOrderHeapIndexTest {
 	public void lastNodeIndexTest() {
 		System.out.println("Test: lastNodeIndexTest");
 
-		PostOrderHeapIndex poh = new PostOrderHeapIndex(3, 3, 200);
+		int epn = 3; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(13, nodeSize, nodesPerBlock, 50, new NullCache());
 
 		assertEquals(1, poh.lastNodeIndex(1, 3));
 		assertEquals(1, poh.lastNodeIndex(6, 3));
 		assertEquals(2, poh.lastNodeIndex(7, 3));
+	}
+
+	@Test
+	public void blocksCreationTest() {
+		System.out.println("Test: blocksCreationTest");
+
+		int epn = 1; // entries per node
+		int cpn = 3; // children per node
+		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
+		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
+		PostOrderHeapIndex poh = new PostOrderHeapIndex(14, nodeSize, nodesPerBlock, 25, new NullCache());
+
+		int count = nodesPerBlock * 5;
+		for (int i=1; i<=count; i++) {
+			poh.appendIndexEntry(i, i, i);
+		}
 	}
 }

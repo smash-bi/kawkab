@@ -85,7 +85,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			workers[i].start();
 		}
 	}
-	
+
 	/**
 	 * The workers poll the same queue
 	 */
@@ -100,14 +100,14 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				} catch (InterruptedException e1) {}
 				continue;
 			}
-		
+
 			try {
 				processStoreRequest(block, channels);
 			} catch (KawkabException e) {
 				e.printStackTrace();
 			}
 		}
-		
+
 		// Perform the remaining tasks in the queue
 		Block block = null;
 		while( (block = reqs.poll()) != null) {
@@ -117,10 +117,44 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				e.printStackTrace();
 			}
 		}
-		
+
 		System.out.println("Closing thread: " + Thread.currentThread().getName());
 	}
-	
+
+	/**
+	 * This a non-blocking function. The block is added in a queue to be stored locally. Only the dirty bytes
+	 * are copied to the local store. If the block is needed to be stored globally, the block is added in the globalStore's
+	 * queue after local storage is completed.
+	 *
+	 * Repeated calls for the same block are coalesced by the block itself. See block.appendOffsetInBlock() function.
+	 * If the block is already in the queue, it is not added again. This works because (1) the worker checks that if
+	 * the dirty count is non-zero, it tries to add the block again in the queue, (2) the thread that has updated
+	 * the block first increments the dirty count and then tries to add in the queue. So the race between the worker
+	 * thread and the block-writer thread always result in adding at least one more job in the queue.
+	 *
+	 * It may happen that the block is added in the queue by the block-writer, but the competing worker has finished
+	 * syncing all the dirty bytes. In this case, there will be an extra job in the queue. However, the block will not
+	 * by updated redundantly because the worker checks the dirty count before performing the store operation. If the
+	 * dirty count is zero, it ignores the job.
+	 *
+	 * @param block The block to store locally, and potentially globally
+	 * @throws KawkabException if the localStore has already received the stop signal for shutting down.
+	 * @throws NullPointerException
+	 */
+	public void store(Block block) throws KawkabException {
+		// WARNING! This functions works correctly in combination with the processStoreRequest(block) function only if the
+		// same block is assigned always to the same worker thread.
+
+		/*if (!working) {
+			throw new KawkabException("LocalProcessor has already received stop signal.");
+		}*/
+
+		//Load balance between workers, but assign same worker to the same block.
+		int queueNum = Math.abs(block.id().perBlockTypeKey()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
+
+		storeQs[queueNum].add(block);
+	}
+
 	/**
 	 * This function in combination with the store(block) function works correctly for concurrent (a) single worker per block
 	 * that syncs the block, and (b) multiple writers that modify/append the block (inodeBlocks are modified concurrently
@@ -133,10 +167,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 */
 	private int processStoreRequest(Block block, FileChannels channels) throws KawkabException {
 		int syncedCnt = 0;
-		
+
 		// WARNING! This functions works correctly in combination with the store(block) function only if the same block
 		// is always assigned to the same worker thread.
-		
+
 		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
 
 		// We must clear the dirty bit before syncing the block to the local store. Otherwise, the race with the
@@ -172,67 +206,33 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 			lock.unlock();
 		}
-			
 
 
-		
+
+
 		//System.out.println("dirtyCount=0, skipping submittingToGlobal: " + block.id());
 		//updateLocalDirty(block, dirtyCount);
 		//block.subtractAndGetLocalDirty(dirtyCount);
-		
+
 		// We clear the inLocalQueue flag when the global store has finished uploading. This is to mutually exclude updating
 		// the local file while concurrently uploading to the global store. If this happens, S3 API throws an exception
 		// that the MD5 hash of the file has changed. Now we update this flag in notifyStoreComplete() function.
-		
+
 		//if (block.subtractAndGetLocalDirty(0) > 0) {
 		if (block.isLocalDirty()) {
 			if (bid.type() != BlockID.BlockType.INODES_BLOCK)
 			store(block);
 		} else {
 			block.notifyLocalSyncComplete();
-			
+
 			if (block.shouldStoreGlobally()) { // If this block is the last data segment or an ibmap or an inodesBlock
 				globalProc.store(block, this); // Add the block in the queue to be transferred to the globalStore
 			}
 		}
-		
+
 		return syncedCnt;
 	}
-	
-	/**
-	 * This a non-blocking function. The block is added in a queue to be stored locally. Only the dirty bytes
-	 * are copied to the local store. If the block is needed to be stored globally, the block is added in the globalStore's
-	 * queue after local storage is completed.
-	 *
-	 * Repeated calls for the same block are coalesced by the block itself. See block.appendOffsetInBlock() function.
-	 * If the block is already in the queue, it is not added again. This works because (1) the worker checks that if
-	 * the dirty count is non-zero, it tries to add the block again in the queue, (2) the thread that has updated
-	 * the block first increments the dirty count and then tries to add in the queue. So the race between the worker
-	 * thread and the block-writer thread always result in adding at least one more job in the queue.
-	 *
-	 * It may happen that the block is added in the queue by the block-writer, but the competing worker has finished
-	 * syncing all the dirty bytes. In this case, there will be an extra job in the queue. However, the block will not
-	 * by updated redundantly because the worker checks the dirty count before performing the store operation. If the
-	 * dirty count is zero, it ignores the job.
-	 *
-	 * @param block The block to store locally, and potentially globally
-	 * @throws KawkabException if the localStore has already received the stop signal for shutting down.
-	 * @throws NullPointerException
-	 */
-	public void store(Block block) throws KawkabException {
-		// WARNING! This functions works correctly in combination with the processStoreRequest(block) function only if the
-		// same block is assigned always to the same worker thread.
-		
-		/*if (!working) {
-			throw new KawkabException("LocalProcessor has already received stop signal.");
-		}*/
-		
-		//Load balance between workers, but assign same worker to the same block.
-		int queueNum = Math.abs(block.id().perBlockTypeKey()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
-		
-		storeQs[queueNum].add(block);
-	}
-	
+
 	/*private long updateLocalDirty(Block block, long dirtyCount) {
 		block.clearInLocalQueue();	// We have to do it so that either the current executing 
 									// thread or the appender can add the block in the local queue
@@ -366,7 +366,29 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		} catch (IOException e) {
 			throw new KawkabException(e);
 		}
-		
+
+
+		/*Lock lock = fileLocks.grabFileLock(id); // To prevent concurrent read from the GlobalStoreManager
+		FileChannel channel = null;
+		try {
+			lock.lock();
+			channel = channels.acquireChannel(id);
+
+			assert channel.isOpen();
+
+			block.loadFrom(channel);
+		} catch (IOException e) {
+			System.out.println("Unable to load data for ID: " + id);
+			//FIXME: What should we do here? Should we return?
+			throw new KawkabException(e);
+		} finally {
+			if (channel != null) {
+				channels.releaseFileChannel(id);
+			}
+
+			lock.unlock();
+		}*/
+
 		return true;
 	}
 	

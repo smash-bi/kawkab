@@ -41,11 +41,15 @@ public final class Configuration {
 	//FIXME: Calculate this based on the maximum number of files supported by a machine
 	public final int inodeBlocksPerMachine; // = (int)((8.0d*ibmapBlockSizeBytes*ibmapsPerMachine)/inodesPerBlock);//inodesPerMachine/inodesPerBlock 
 	public final int inodeBlocksRangeStart; // = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
-																					 //Blocks start with ID 0.
-	
-	public final int indexNodeSizeBytes; // Size of the indexBlock.
+																					 //Blocks start with ID 0.public final int indexNodeSizeBytes; // Size of the indexBlock.
+
+	// Constants related to PostOrderHeapIndex
 	public final int percentIndexEntriesPerNode;
-	
+	public final int indexBlockSizeBytes; // Size of the indexBlock. Each block is a file in the local filesystem. A block is a collection of index nodes (POHNode).
+	public final int indexNodeSizeBytes; // Size of the POHNode. Each node have index entries and index pointers.
+	public final int nodesPerBlockPOH; // Number of POHNodes in each index block
+
+
 	public final int maxBlocksPerLocalDevice; // = 20510 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
 	//public final int maxBlocksInCache; //        = 20000; //Size of the cache in number of blocks. The blocks are ibmaps, inodeBlocks, and data segments (not data blocks)
 	public final int cacheSizeMiB;	// Size of the cache in MB
@@ -105,7 +109,7 @@ public final class Configuration {
 	}
 	
 	private Configuration(int nodeID, Properties props) {
-		thisNodeID 				= nodeID;
+		thisNodeID = nodeID;
 		
 		for(Object keyObj : props.keySet()) {
 			String key = (String)keyObj;
@@ -127,9 +131,11 @@ public final class Configuration {
 			
 		dataSegmentFetchExpiryTimeoutMs  = Integer.parseInt(props.getProperty("dataSegmentFetchExpiryTimeoutMs", "10000"));
 		inodesBlockFetchExpiryTimeoutMs  = Integer.parseInt(props.getProperty("inodesBlockFetchExpiryTimeoutMs", "2000"));
-		
+
+		indexBlockSizeBytes = dataBlockSizeBytes;
 		indexNodeSizeBytes = segmentSizeBytes; //Integer.parseInt(props.getProperty("indexBlockSizeBytes", ""+segmentSizeBytes));
 		percentIndexEntriesPerNode = Integer.parseInt(props.getProperty("percentIndexEntriesPerNode", "70"));
+		nodesPerBlockPOH = indexBlockSizeBytes/indexNodeSizeBytes;
 
 		syncThreadsPerDevice	= Integer.parseInt(props.getProperty("syncThreadsPerDevice", "1"));
 		numWorkersStoreToGlobal	= Integer.parseInt(props.getProperty("numWorkersStoreToGlobal", "4"));
@@ -236,6 +242,8 @@ public final class Configuration {
 		assert powerOfTwo(dataBlockSizeBytes) : "dataBlockSizeBytesshould be power of 2, currently it is: "+dataBlockSizeBytes;
 		assert powerOfTwo(inodesBlockSizeBytes) : "inodesBlockSizeBytes should be power of 2, currently it is: "+inodesBlockSizeBytes;
 		assert powerOfTwo(indexNodeSizeBytes) : "indexBlockSizeBytes should be power of 2, currently it is: "+ indexNodeSizeBytes;
+
+		assert nodesPerBlockPOH > 0 : "nodesPerBlockPOH should be greater than zero, currently it is " + nodesPerBlockPOH;
 	}
 	
 	private boolean powerOfTwo(long val){

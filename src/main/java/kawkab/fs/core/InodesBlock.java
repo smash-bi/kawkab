@@ -174,7 +174,7 @@ public final class InodesBlock extends Block {
 	}
 	
 	@Override
-	void onMemoryEviction() {
+	protected void onMemoryEviction() {
 		if (opened) {
 			synchronized (this) {
 				if (opened) {

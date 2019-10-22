@@ -14,9 +14,9 @@ import java.util.Map;
 
 
 /**
- * This class track the opened files in the underlying storage. The purpose of this class is (1) to avoid opening a luarge
- * number of files at the same time, and (2) to avoid frequint opening and closing of files and file channels for the
- * same blocks.
+ * This class track the opened files in the underlying storage. The purpose of this class is (1) to avoid opening a large
+ * number of files at the same time, and (2) to avoid frequent opening/closing of the files and the corresponding file channels for the
+ * same segments and blocks.
  *
  * The first objective is achieved by opening the file once for the all the blocks that reside in the same file.
  * However, each block gets its own FileChannel. In this way, for N blocks in the same file, we open the file once, and
@@ -27,17 +27,17 @@ import java.util.Map;
  * This is further explained below.
  *
  * The second objective is achieved by adding a small delay in closing the file. The usage of this class requires that
- * the user open a the required FileChannel for the block using the openFileChannel function and then immediately
- * close the FileChannel by calling the closeFileChannel function after reading/writing from/to the FileChannel.
- * When the user returns the FileChannel, this class doesn't close the channel immediately. Instead, it adds the
+ * the user open a the required FileChannel for the block using the acquireChannel function and then immediately
+ * release the FileChannel by calling the releaseFileChannel function after reading/writing from/to the FileChannel.
+ * When the user releases the FileChannel, this class doesn't close the channel immediately. Instead, it adds the
  * channel in a TimerQueue to be closed after a predefined timeout. If the user opens the same FileChannel before
  * the timeout, this channel is removed from the TimerQueue and the same chanel is returned to the user. This prevents
- * frequently opening and closing the same FileChannel, and subsequently, the same file in the undelrying filesystem.
+ * frequently opening and closing the same FileChannel, and subsequently, the same file in the underlying filesystem.
  * After the timeout for a FileChannel, the channel is closed, and if associated file has no opened channels,
- * the file is closed as well5
+ * the file is closed as well
  *
  * Note 1: This class is supposed to be used by either a single thread or the threads use unique BlockIDs for the channels.
- * The reason is that the openFileChannel function looks into a map where the key is blockID. So if two different
+ * The reason is that the acquireChannel function looks into a map where the key is blockID. So if two different
  * threads open the FileChannel for the same block, this class gives the same channel to both threads. However, the
  * releaseChannel will erroneously release the channel for both of the threads.
  *
@@ -80,6 +80,7 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 		// If the channel is already opened and not in the process of closing, return the existing channel
 		if (itemWrap != null && tq.tryDisable(itemWrap)) {
 			hitCount++;
+			//itemWrap.incrementAndGet();
 			return itemWrap.getItem().channel();
 		}
 		
@@ -90,8 +91,9 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 		
 		FileChannelWrap channelWrap = new FileChannelWrap(filePath);
 		itemWrap = new TimerQueueItem<>(channelWrap, this);
+		//itemWrap.incrementAndGet();
 		timerItemsMap.put(filePath, itemWrap);
-		
+
 		missCount++;
 		
 		return channelWrap.channel();
@@ -108,7 +110,8 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 			// it means that another thread has created a new wrapper after the wrap was expired. We must not remove
 			// the new item.
 			
-			if (item.getItem() == wrap) { // If the saved wrapper and the warp are the same, it is safe to remove the wrap because the channel cannot be reused
+			if (item.getItem() == wrap) { // If the saved wrapper and wrap are the same, it is safe to remove wrap because the channel cannot be reused
+				//assert item.count() == 0 : "The counter of the TimerItemQueue must be 0 before it can be removed from the map. The current value is " + item.count();
 				timerItemsMap.remove(filePath);
 			}
 			
@@ -123,7 +126,8 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 		TimerQueueItem<FileChannelWrap> item = timerItemsMap.get(id.localPath());
 		
 		assert item != null : id + " is null";
-		
+
+		//if (item.decrementAndGet() == 0)
 		tq.enableAndAdd(item, timeoutMillis+clock.currentTime());
 	}
 	

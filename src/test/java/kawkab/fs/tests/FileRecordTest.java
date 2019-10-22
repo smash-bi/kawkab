@@ -9,6 +9,7 @@ import kawkab.fs.core.records.SampleRecord;
 import kawkab.fs.core.exceptions.KawkabException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -77,9 +78,11 @@ public class FileRecordTest {
 		FileHandle file = fs.open("RecordsMultiBlockTest", Filesystem.FileMode.APPEND, new FileOptions(recSize));
 		
 		int nextIndex = (int) (file.size() / recSize) + 1; //The first record number from where we will read
-		
+
+		int offset = (int)file.size()/recSize;
+
 		for (int i=0; i<toAppend; i++) {
-			Record rec = new SampleRecord(i+1,
+			Record rec = new SampleRecord(i+1+offset,
 					rand.nextFloat(), rand.nextFloat(), rand.nextBoolean(),
 					rand.nextFloat(), rand.nextFloat(), rand.nextBoolean());
 			

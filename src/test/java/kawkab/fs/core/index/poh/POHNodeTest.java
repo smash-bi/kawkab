@@ -1,15 +1,33 @@
 package kawkab.fs.core.index.poh;
 
+import kawkab.fs.commons.Configuration;
+import kawkab.fs.core.IndexNodeID;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
+import kawkab.fs.core.exceptions.KawkabException;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.util.Properties;
+
 public class POHNodeTest {
+	private static Configuration conf;
+	@BeforeAll
+	public static void initialize() throws IOException, InterruptedException, KawkabException {
+		int nodeID = Configuration.getNodeID();
+		Properties props = Configuration.getProperties(Configuration.propsFileCluster);
+		Configuration.configure(nodeID, props);
+		conf = Configuration.instance();
+	}
+
 	@Test
 	public void searchSmokeTest() throws IndexBlockFullException {
 		System.out.println("Test: entrySearchSmokeTest");
 
-		POHNode node = new POHNode(1, 0, 10, 4);
+		IndexNodeID id = new IndexNodeID(1, 1);
+		POHNode node = new POHNode(id);
+		node.init(1, 0, 10, 4, conf.indexNodeSizeBytes);
 
 		node.appendEntryMinTS(1, 1);
 		node.appendEntryMinTS(3, 2);
@@ -28,7 +46,9 @@ public class POHNodeTest {
 	public void singleEntryTest() throws IndexBlockFullException {
 		System.out.println("Test: singleEntryTest");
 
-		POHNode node = new POHNode(1, 0, 10, 2);
+		IndexNodeID id = new IndexNodeID(1, 1);
+		POHNode node = new POHNode(id);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
 
 		node.appendEntryMinTS(5, 7);
 
@@ -41,7 +61,9 @@ public class POHNodeTest {
 	public void noEntriesTest() {
 		System.out.println("Test: noEntriesTest");
 
-		POHNode node = new POHNode(1, 0, 10, 10);
+		IndexNodeID id = new IndexNodeID(1, 1);
+		POHNode node = new POHNode(id);
+		node.init(1, 0, 10, 10, conf.indexNodeSizeBytes);
 
 		Assertions.assertTrue(node.findFirstEntry(4) < 0);
 		Assertions.assertTrue(node.findLastEntry(4) < 0);
@@ -52,7 +74,9 @@ public class POHNodeTest {
 	public void overlappingEntriesTest() throws IndexBlockFullException {
 		System.out.println("Test: overlappingEntriesTest");
 
-		POHNode node = new POHNode(1, 0, 10, 8);
+		IndexNodeID id = new IndexNodeID(1, 1);
+		POHNode node = new POHNode(id);
+		node.init(1, 0, 10, 8, conf.indexNodeSizeBytes);
 
 		node.appendEntryMinTS(1, 1);
 		node.appendEntryMinTS(2, 2);
@@ -71,7 +95,9 @@ public class POHNodeTest {
 	public void notFoundTest() throws IndexBlockFullException {
 		System.out.println("Test: notFoundTest");
 
-		POHNode node = new POHNode(1, 0, 10, 2);
+		IndexNodeID id = new IndexNodeID(1, 1);
+		POHNode node = new POHNode(id);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
 
 		node.appendEntryMinTS(2, 1);
 		node.appendEntryMinTS(4, 2);
@@ -91,7 +117,9 @@ public class POHNodeTest {
 	public void occurrenceTest() throws IndexBlockFullException {
 		System.out.println("Test: occurrenceTest");
 
-		POHNode node = new POHNode(1, 0, 10, 2);
+		IndexNodeID id = new IndexNodeID(1, 1);
+		POHNode node = new POHNode(id);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
 
 		node.appendEntryMinTS(1, 1);
 		node.appendEntryMinTS(5, 2);
@@ -112,7 +140,9 @@ public class POHNodeTest {
 	public void outOfRangeTest() throws IndexBlockFullException {
 		System.out.println("Test: outOfRangeTest");
 
-		POHNode node = new POHNode(1, 0, 10, 2);
+		IndexNodeID id = new IndexNodeID(1, 1);
+		POHNode node = new POHNode(id);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
 
 		node.appendEntryMinTS(5, 1);
 		node.appendEntryMinTS(7, 2);
@@ -132,7 +162,9 @@ public class POHNodeTest {
 	public void rangeSearchTest() throws IndexBlockFullException {
 		System.out.println("Test: rangeSearchTest");
 
-		POHNode node = new POHNode(1, 0, 10, 2);
+		IndexNodeID id = new IndexNodeID(1, 1);
+		POHNode node = new POHNode(id);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
 
 		node.appendEntryMinTS(5, 1);
 		node.appendEntryMinTS(8, 2);
@@ -160,7 +192,9 @@ public class POHNodeTest {
 	public void findAllEntriesTest() throws IndexBlockFullException {
 		System.out.println("Test: findAllEntriesTest");
 
-		POHNode node = new POHNode(1, 0, 10, 2);
+		IndexNodeID id = new IndexNodeID(1, 1);
+		POHNode node = new POHNode(id);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
 
 		node.appendEntry(5, 7, 1);
 		node.appendEntry(9, 12, 2);
@@ -184,7 +218,9 @@ public class POHNodeTest {
 	public void findAllEntriesHalfOpenTest() throws IndexBlockFullException {
 		System.out.println("Test: findAllEntriesTest");
 
-		POHNode node = new POHNode(1, 0, 10, 2);
+		IndexNodeID id = new IndexNodeID(1, 1);
+		POHNode node = new POHNode(id);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
 
 		node.appendEntry(20, 20, 5);
 		node.appendEntry(20, 25, 6);

@@ -116,19 +116,19 @@ public abstract class Block extends AbstractTransferItem {
 	
 	/**
 	 * Store contents of the block to channel. This function stores only the
-	 * updated bytes in the channel.
+	 * dirty bytes in the channel.
 	 * 
 	 * @param channel
 	 * @return Number of bytes written to the channel.
 	 * @throws IOException
 	 */
-	abstract int storeTo(FileChannel channel)  throws IOException;
+	protected abstract int storeTo(FileChannel channel)  throws IOException;
 	
 	/**
 	 * Stores the block in a file.
 	 * @return Number of bytes written in the file.
 	 */
-	abstract int storeToFile() throws IOException;
+	protected abstract int storeToFile() throws IOException;
 	
 	/**
 	 * Stores the complete block in the channel.
@@ -396,7 +396,7 @@ public abstract class Block extends AbstractTransferItem {
 		return inCache.get();
 	}
 	
-	abstract void onMemoryEviction();
+	protected abstract void onMemoryEviction();
 }
 
 /**

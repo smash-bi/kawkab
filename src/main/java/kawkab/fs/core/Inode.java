@@ -49,7 +49,21 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	protected Inode(long inumber, int recordSize) {
 		this.inumber = inumber;
 		this.recordSize = recordSize;
-		index = new PostOrderHeapIndex(conf.indexNodeSizeBytes, conf.percentIndexEntriesPerNode);
+
+		if (recordSize > 1) {
+			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache);
+			initIndex();
+		}
+	}
+
+	private void initIndex() {
+		System.out.println("Initializing index for inode: " + inumber);
+
+		try {
+			index.loadAndInit();
+		} catch (IOException | KawkabException e) {
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -73,6 +87,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	/**
 	 * Performs the read operation. Single writer and multiple readers are allowed to write and read concurrently.
+	 *
 	 * @return
 	 * @throws IllegalArgumentException
 	 * @throws InvalidFileOffsetException
@@ -81,6 +96,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 */
 	public boolean read(final Record dstRecord, final long key) throws
 			RecordNotFoundException, IOException, KawkabException {
+
+		assert dstRecord.size() == recordSize;
 
 		long offsetInFile = index.findHighest(key);
 
@@ -114,12 +131,14 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 */
 	public boolean readRecordN(final Record dstRecord, final long recNum) throws IOException, KawkabException {
 		assert recNum >= 0;
+		assert dstRecord.size() == recordSize;
 
 		long offsetInFile = (recNum-1L) * recordSize;
 		long fileSize = this.fileSize.get();
 
-		if (offsetInFile+recordSize >= fileSize)
-			throw new KawkabException("Record number is larger than the file.");
+		if (offsetInFile+recordSize > fileSize)
+			throw new KawkabException(String.format("Record number is out of range of the file. OffsetInFile=%d, recordSize=%d, fileSize=%d",
+					offsetInFile, recordSize, fileSize));
 
 		if (dstRecord.size() != recordSize)
 			throw new KawkabException(String.format("The record size (%d bytes) does not match with the file's record size (%d bytes)",
@@ -147,6 +166,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	}
 
 	public List<Record> readAll(long minTS, long maxTS, Record recFactory) throws IOException, KawkabException {
+		assert recFactory.size() == recordSize;
+
 		List<long[]> offsets = index.findAll(minTS, maxTS); //Get the offsets
 
 		if (offsets == null)
@@ -242,6 +263,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	}
 
 	public int appendBuffered(final Record record) throws IOException, InterruptedException, KawkabException {
+		assert record.size() == recordSize : String.format("record sizes do not match, given rec size=%d, recSize in inode=%d",record.size(), recordSize);
+
 		int length = record.size();
 
 		if (length != recordSize)
@@ -289,6 +312,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	//public static TimeLog tlog1 = new TimeLog(TimeLog.TimeLogUnit.NANOS, "ab all");
 	public synchronized int appendBuffered(final byte[] data, int offset, final int length) //Syncrhonized with close() due to acquiredSeg
 			throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
+
+		assert recordSize > 1;
+
 		int remaining = length; //Reaming size of data to append
 		long fileSizeBuffered = this.fileSize.get(); // Current file size
 
@@ -390,6 +416,13 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		fileSize.set(buffer.getLong());
 		recordSize = buffer.getInt();
 
+		int hasIndex = buffer.getInt();
+		if (hasIndex > 0) {
+			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache);
+			index.loadFrom(buffer);
+			initIndex();
+		}
+
 		System.out.printf("Loaded inode %d: fs=%d\n",inumber, fileSize.get());
 
 		return Long.BYTES + Long.BYTES + Integer.BYTES; //FIXME: Define constant size or get value from the position in the buffer
@@ -416,6 +449,13 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		inumber = buffer.getLong();
 		fileSize.set(buffer.getLong());
 		recordSize = buffer.getInt();
+
+		int hasIndex = buffer.getInt();
+		if (hasIndex > 0) {
+			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache);
+			index.loadFrom(buffer);
+			initIndex();
+		}
 
 		//System.out.printf("\tLoaded inode: %d -> %d\n", inumber, fileSize.get());
 
@@ -450,6 +490,13 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		buffer.putLong(fileSize.get());
 		buffer.putInt(recordSize);
 
+		if (index == null) {
+			buffer.putInt(0);
+		} else {
+			buffer.putInt(1);
+			index.storeTo(buffer);
+		}
+
 		int written = buffer.position() - start;
 		return written;
 	}
@@ -458,13 +505,15 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * This function must not be concurrent to the append function. So this should be called from the same thread as
 	 * the append function. Otherwise, we should synchronize the caller and the appender in append and close functions.
 	 */
-	synchronized void releaseBuffer() throws KawkabException { //Synchronized with appendBuffered() due to acquiredSeg
+	synchronized void cleanup() throws KawkabException { //Synchronized with appendBuffered() due to acquiredSeg
 		//tlog.printStats("DS.append,ls.store");
 
 		if (acquiredSeg != null && timerQ.tryDisable(acquiredSeg)) {
 			deferredWork(acquiredSeg.getItem());
 			acquiredSeg = null;
 		}
+
+		index.shutdown();
 	}
 
 	@Override

@@ -326,7 +326,7 @@ public final class FileHandle {
 	
 	synchronized void close() throws KawkabException {
 		if (inodesBlock != null) {
-			inode.releaseBuffer();
+			inode.cleanup();
 			cache.releaseBlock(inodesBlock.id());
 		}
 

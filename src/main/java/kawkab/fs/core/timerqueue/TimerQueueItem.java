@@ -58,8 +58,9 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	
 	private T item;
 	private DeferredWorkReceiver<T> receiver;
-	
-	
+
+	private int acquireCount;
+
 	public TimerQueueItem(T item, DeferredWorkReceiver<T> receiver) {
 		this.item = item;
 		this.receiver = receiver;
@@ -134,5 +135,17 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 		}
 		
 		return item.toString(); //FIXME: This is not thread safe. This should only be used for debuggin purposes.
+	}
+
+	public int incrementAndGet() {
+		return ++acquireCount;
+	}
+
+	public int decrementAndGet() {
+		return --acquireCount;
+	}
+
+	public int count() {
+		return acquireCount;
 	}
 }
