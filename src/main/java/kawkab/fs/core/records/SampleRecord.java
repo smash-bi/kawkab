@@ -40,6 +40,21 @@ public class SampleRecord implements Record {
 		buffer = ByteBuffer.allocate(SIZE);
 	}
 
+	public SampleRecord(long timestamp, Random rand) {
+		this();
+
+		buffer.putLong(timestamp);
+		buffer.putDouble(rand.nextDouble() % 100);
+		buffer.putDouble(rand.nextDouble() % 100);
+		buffer.put(rand.nextBoolean()?TRUE:FALSE);
+		buffer.putDouble(rand.nextDouble() % 100);
+		buffer.putDouble(rand.nextDouble() % 100);
+		buffer.put(rand.nextBoolean()?TRUE:FALSE);
+
+		assert buffer.remaining() == 0;
+		buffer.rewind();
+	}
+
 	public SampleRecord(long timestamp, double bidPrice, double bidQuantity, boolean bidExecutable, double askPrice, double askQuantity, boolean askExecutable) {
 		this();
 		

@@ -168,11 +168,6 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	protected void loadBlockFromPrimary()  throws KawkabException {
-		throw new KawkabException(new OperationNotSupportedException());
-	}
-
-	@Override
 	public int sizeWhenSerialized() {
 		//FIXME: This creates a copy in memory. Get size without memory copy.
 		//return bitset.toByteArray().length;

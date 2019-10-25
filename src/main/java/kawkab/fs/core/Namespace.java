@@ -107,7 +107,7 @@ public class Namespace {
 			// TODO: update openFilesTable
 
 			// if the file is opened in append mode and this node is not the primary file writer
-			if (appendMode && Commons.primaryWriterID(inumber) != thisNodeID) {
+			if (appendMode && !Commons.onPrimaryNode(inumber)) {
 				throw new InvalidFileModeException(
 						String.format("Cannot open file in the append mode. Inumber of the file is out of range of this node's range. NodeID=%d, PrimaryWriter=%d",
 								thisNodeID,
@@ -127,7 +127,7 @@ public class Namespace {
 	/**
 	 * FIXME: This function is not finalized. This need to be updated to implement
 	 * proper openFilesTable.
-	 * 
+	 *
 	 * @param inumber
 	 * @throws FileAlreadyOpenedException
 	 */

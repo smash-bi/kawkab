@@ -120,7 +120,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	@Override
 	public Block acquireBlock(BlockID blockID) throws IOException, KawkabException {
 		// System.out.println("[C] acquire: " + blockID);
-		
+
 		CachedItem cachedItem = null;
 
 		cacheLock.lock();	// Lock the whole cache. This is necessary to prevent from creating multiple references to the
@@ -281,7 +281,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 					System.err.println("  ==> Ref count is not 0: id: " + block.id() + ", count: " + cachedItem.refCount());
 				}
 				
-				assert cachedItem.refCount() == 0;
+				assert cachedItem.refCount() == 0 : String.format("refCount is %d for node %s while flushing", cachedItem.refCount(), block.id());
 				
 				if (block.id().onPrimaryNode() && block.isLocalDirty()) {
 					localStore.store(block);

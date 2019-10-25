@@ -14,9 +14,10 @@ import java.util.Properties;
 public final class Commons {
 	private static final int ibmapBlockSizeBytes;
 	private static final int ibmapsPerMachine;
+	private static final Configuration conf;
 	
 	static {
-		Configuration conf = Configuration.instance();
+		conf = Configuration.instance();
 		ibmapBlockSizeBytes = conf.ibmapBlockSizeBytes;
 		ibmapsPerMachine = conf.ibmapsPerMachine;
 	}
@@ -108,6 +109,10 @@ public final class Commons {
         
         return result;
     }
+
+    public static boolean onPrimaryNode(long inumber) {
+    	return conf.thisNodeID == primaryWriterID(inumber);
+	}
     
     public static int primaryWriterID(long inumber) {
 		long inodeBlocksPerIbmap = ibmapBlockSizeBytes * Byte.SIZE;

@@ -1,17 +1,12 @@
 package kawkab.fs.core;
 
-import java.io.IOException;
-import java.util.Properties;
-
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
-import kawkab.fs.core.exceptions.AlreadyConfiguredException;
-import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
-import kawkab.fs.core.exceptions.FileNotExistException;
-import kawkab.fs.core.exceptions.IbmapsFullException;
-import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.services.grpc.PrimaryNodeServiceServer;
-import kawkab.fs.core.timerqueue.TimerQueue;
+
+import java.io.IOException;
+import java.util.Properties;
 
 public final class Filesystem {
 	private static volatile boolean initialized;
@@ -22,13 +17,14 @@ public final class Filesystem {
 	private static Filesystem instance;
 	private static Namespace namespace;
 	private static PrimaryNodeServiceServer ns;
+	private static Configuration conf;
 	//private static FFilesystemServiceServer fs;
-	
+
 	private Filesystem() throws KawkabException, IOException {
 		namespace = Namespace.instance();
-		//ns = new PrimaryNodeServiceServer();
+		ns = new PrimaryNodeServiceServer();
 		//fs = new FFilesystemServiceServer(this);
-		//ns.startServer();
+		ns.startServer();
 		//fs.startServer();
 	}
 	
@@ -95,6 +91,7 @@ public final class Filesystem {
 		Configuration.configure(nodeID, confProps);
 		
 		instance = new Filesystem();
+
 		
 		InodesBlock.bootstrap();
 		Ibmap.bootstrap();

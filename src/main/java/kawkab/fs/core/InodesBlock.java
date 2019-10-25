@@ -27,11 +27,7 @@ public final class InodesBlock extends Block {
 	//private int version; //Inodes-block's current version number.
 	
 	private static Configuration conf = Configuration.instance();
-	
-	private boolean opened = false;
-	RandomAccessFile rwFile;
-	SeekableByteChannel channel;
-	
+
 	/*
 	 * The access modifier of the constructor is "default" so that it can be packaged as a library. Clients
 	 * are not supposed to extend or instantiate this class.
@@ -95,7 +91,7 @@ public final class InodesBlock extends Block {
 	public int loadFrom(ByteBuffer buffer) throws IOException {
 		int bytesRead = 0;
 
-		for(int i=0; i<conf.inodesPerBlock; i++){
+		for(int i=0; i<conf.inodesPerBlock; i++) {
 			bytesRead += inodes[i].loadFrom(buffer);
 		}
 
@@ -124,25 +120,10 @@ public final class InodesBlock extends Block {
 		return bytesRead;
 	}
 	
-	private ByteBuffer buffer = ByteBuffer.allocate(conf.inodeSizeBytes);
-	
 	@Override
 	public int storeToFile() throws IOException {
 		FileChannel channel = FileChannel.open(new File(id().localPath()).toPath(), StandardOpenOption.WRITE);
-		
-		channel.position(0);
-		//System.out.println("Store: "+id() + ": " + channel.position());
-		int bytesWritten = 0;
-		for(Inode inode : inodes) {
-			buffer.clear();
-			inode.storeTo(buffer);
-			buffer.rewind();
-			bytesWritten += Commons.writeTo(channel, buffer);
-		}
-		
-		channel.close();
-		
-		return bytesWritten;
+		return storeTo(channel);
 	}
 	
 	@Override
@@ -168,31 +149,13 @@ public final class InodesBlock extends Block {
 		return ByteString.copyFrom(buffer.array());
 	}
 	
-	@Override
-	protected void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException {
+	private void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException {
 		primaryNodeService.getInodesBlock((InodesBlockID)id(), this);
 	}
 	
 	@Override
 	protected void onMemoryEviction() {
-		if (opened) {
-			synchronized (this) {
-				if (opened) {
-					opened = false;
-					try {
-						rwFile.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-					
-					try {
-						channel.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-				}
-			}
-		}
+		// Do nothing
 	}
 	
 	@Override
@@ -204,42 +167,37 @@ public final class InodesBlock extends Block {
 		
 		long now = System.currentTimeMillis();
 		
-		if (lastFetchTimeMs < now - conf.inodesBlockFetchExpiryTimeoutMs) { // If the last data-fetch-time exceeds the time limit
-				
-			now = System.currentTimeMillis();
-			
-			if (lastFetchTimeMs < now - conf.inodesBlockFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
-				try {
-					// System.out.println("[IB] Load from the global: " + id());
-					
-					loadFromGlobal(); // First try loading data from the global store
-					return;
-					
-					//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
-				} catch (FileNotExistException e) { //If the block is not in the global store yet
-					System.out.println("[B] Not found in the global: " + id());
-					lastFetchTimeMs = 0; // Failed to fetch from the global store
-				}
-			
-				System.out.println("[B] Primary fetch expired or not found from the global: " + id());
-				
-				try {
-					System.out.println("[B] Loading from the primary: " + id());
-					loadBlockFromPrimary(); // Fetch data from the primary node
-					//lastPrimaryFetchTimeMs = now;
-					if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed
-						lastFetchTimeMs = now;
-				} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
-					// Check again from the global store because the primary may have deleted the 
-					// block after copying to the global store
-					System.out.println("[B] Not found on the primary, trying again from the global: " + id());
-					loadFromGlobal(); 
+		if (lastFetchTimeMs < now - conf.inodesBlockFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
+			try {
+				// System.out.println("[IB] Load from the global: " + id());
+
+				loadFromGlobal(); // First try loading data from the global store
+				return;
+
+				//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
+			} catch (FileNotExistException e) { //If the block is not in the global store yet
+				System.out.println("[B] Not found in the global: " + id());
+				lastFetchTimeMs = 0; // Failed to fetch from the global store
+			}
+
+			System.out.println("[B] Primary fetch expired or not found from the global: " + id());
+
+			try {
+				System.out.println("[B] Loading from the primary: " + id());
+				loadBlockFromPrimary(); // Fetch data from the primary node
+				//lastPrimaryFetchTimeMs = now;
+				if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed
 					lastFetchTimeMs = now;
-					//lastPrimaryFetchTimeMs = 0;
-				} catch (IOException ioe) {
-					System.out.println("[B] Not found in the global and the primary: " + id());
-					throw new KawkabException(ioe);
-				}
+			} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
+				// Check again from the global store because the primary may have deleted the
+				// block after copying to the global store
+				System.out.println("[B] Not found on the primary, trying again from the global: " + id());
+				loadFromGlobal();
+				lastFetchTimeMs = now;
+				//lastPrimaryFetchTimeMs = 0;
+			} catch (IOException ioe) {
+				System.out.println("[B] Not found in the global and the primary: " + id());
+				throw new KawkabException(ioe);
 			}
 		}
 	}

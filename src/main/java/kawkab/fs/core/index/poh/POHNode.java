@@ -16,7 +16,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.StandardOpenOption;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The class is not thread safe for concurrent appends. However, the search and append can be concurrent.
@@ -28,7 +27,7 @@ public class POHNode extends Block {
 	private POHEntry[] entries; // Number of index entries
 	private POHChild[] children;
 
-	private int entryIdx; //Number of entries added in the node.
+	private int entryIdx; //Index of the next entry that will be added. In other words, the number of valid entries.
 	private int pointerIdx;
 
 	private final IndexNodeID id;
@@ -39,16 +38,14 @@ public class POHNode extends Block {
 	private long nodeMinTS = Long.MAX_VALUE;
 
 	private ByteBuffer storeBuffer; // For writing to FileChannel in storeTo(FileChannel) function
-	private AtomicInteger lastWriteIdx; // Next byte write position in the storeBuffer
+	//private AtomicInteger lastUpdatedEntryIdx; // Next byte write position in the storeBuffer
 
 	// The offset where the dirty bytes start, the bytes that are not persisted yet.
-	// Initialized to -1 to indicate that the node header is not persisted yet.
-	// dirtyOffset doesn't need to be thread-safe because only the localStore thread reads and updates its value.
-	// The value is initially set when the block is loaded, at which point the block cannot be accessed by the localStore.
-	private int dirtyIdx = -1;
+	private int dirtyOffsetStart = 0;
+	private int tsCount = 0; //Number of dirty timestamps
 
-
-	private int nodeSizeBytes; // nodeNumber, height, number of pointers, number of entries
+	private int nodeSizeBytes; // The size includes nodeNumber, height, children pointer entries, and index entries
+	private boolean inited;
 
 	/**
 	 * @param id Node ID
@@ -64,7 +61,11 @@ public class POHNode extends Block {
 	 * @param entriesCount Number of index entries in the node, must be greater than zero so that we have at least one index entry
 	 * @param childrenCount Number of pointers or children of each node, must be greater than one so that we have at least a binary tree
 	 */
-	void init(final int nodeNum, final int height, final int entriesCount, final int childrenCount, final int nodeSizeBytes) {
+	synchronized void init(final int nodeNum, final int height, final int entriesCount, final int childrenCount, final int nodeSizeBytes) {
+		if (inited)
+			return;
+		inited = true;
+
 		assert entriesCount > 0;
 		assert childrenCount > 1;
 		assert nodeNumber == nodeNum;
@@ -73,13 +74,19 @@ public class POHNode extends Block {
 
 		entries = new POHEntry[entriesCount];
 		children = new POHChild[childrenCount];
-
-		lastWriteIdx = new AtomicInteger(-1);
-		storeBuffer = ByteBuffer.allocate(nodeSizeBytes); // Integer for numEntries
-
 		this.nodeSizeBytes = nodeSizeBytes;
+
+		storeBuffer = ByteBuffer.allocate(nodeSizeBytes); // Integer for numEntries
 	}
 
+	void initForAppend() {
+		setIsLoaded();
+	}
+
+	/**
+	 * Size of the header in the node without padding.
+	 * @return
+	 */
 	static int headerSizeBytes() {
 		return Integer.BYTES + Integer.BYTES; //NodeNumber and height
 	}
@@ -154,9 +161,8 @@ public class POHNode extends Block {
 		assert nodeMaxTS <= minTS;
 		nodeMaxTS = minTS; // Using minTS as the max value until appendEntryMaxTS is called
 
-		lastWriteIdx.incrementAndGet();
-
 		entryIdx++;
+		tsCount++;
 		markLocalDirty();
 	}
 
@@ -172,12 +178,13 @@ public class POHNode extends Block {
 
 		POHEntry entry = entries[entryIdx-1];
 
-		assert entry.segmentInFile() == segmentInFile;
+		assert entry.segmentInFile() == segmentInFile : String.format("SegInFile should match: expected %d, have %d", entry.segmentInFile(), segmentInFile);
 
 		entry.setMaxTS(maxTS);
 
 		nodeMaxTS = maxTS; // We add the entries in sequence. Therefore, each entries maxTS is greater or equal than the last etnry's maxTS
 
+		tsCount++;
 		markLocalDirty();
 	}
 
@@ -229,9 +236,8 @@ public class POHNode extends Block {
 
 		nodeMaxTS = minTS; // We add the entries in sequence. Therefore, each entries maxTS is greater or equal than the last etnry's maxTS
 
-		lastWriteIdx.incrementAndGet();
-
 		entryIdx++;
+		tsCount += 2;
 		markLocalDirty();
 	}
 
@@ -281,7 +287,7 @@ public class POHNode extends Block {
 	}
 
 	long getSegmentInFile(final int entryIndex) {
-		assert entryIndex < entryIdx;
+		assert entryIndex < entryIdx : String.format("given idx should be less than the node's entryIdx. Given %d, expected < %d", entryIndex, entryIdx);
 
 		return entries[entryIndex].segmentInFile();
 	}
@@ -485,120 +491,212 @@ public class POHNode extends Block {
 				SeekableByteChannel channel = file.getChannel()
 		) {
 			channel.position(id.numNodeInIndexBlock() * nodeSizeBytes);
-			//System.out.printf("[POHN] Current channel position: %d, reading node %d, node in block %d\n", channel.position(), nodeNumber, id.numNodeInIndexBlock());
+			//System.out.printf("[PN] Current channel position: %d, reading node %d, node in block %d\n", channel.position(), nodeNumber, id.numNodeInIndexBlock());
 			int count = loadFrom(channel);
-			//System.out.printf("[POHN] Current channel position after loading data: %d\n", channel.position());
+			//System.out.printf("[PN] Current channel position after loading data: %d\n", channel.position());
 			return count;
-		}
-	}
-
-	@Override
-	public int loadFrom(ReadableByteChannel channel) throws IOException {
-		synchronized (storeBuffer) {
-			storeBuffer.clear();
-			int bytesRead = Commons.readFrom(channel, storeBuffer); //If the node is not the last node, the storeBuffer is always read fully
-			assert bytesRead > 0;
-
-			//System.out.printf("[POHN] Bytes read from channel: %d\n", bytesRead);
-
-			storeBuffer.flip();
-			return loadFrom(storeBuffer);
 		}
 	}
 
 	/**
 	 * This funciton is not thread-safe due to storeBuffer. However, this funciton is not concurrent
-	 * @param srcBuffer
 	 * @return
 	 * @throws IOException
 	 */
 	@Override
-	public int loadFrom(ByteBuffer srcBuffer) throws IOException {
-		// System.out.println("\t[POHN] Bytes to load from the buffer = " + srcBuffer.remaining() + ", storeBuffer pos = " + srcBuffer.position());
+	public int loadFrom(ReadableByteChannel channel) throws IOException {
+		System.out.printf("[PN] Loading %s from channel\n",id);
 
-		int initPos = srcBuffer.position();
+		assert isOnPrimary;
+		// System.out.println("\t[PN] Bytes to load from the buffer = " + srcBuffer.remaining() + ", storeBuffer pos = " + srcBuffer.position());
 
-		synchronized (srcBuffer) {
+		int count = 0;
+		synchronized (storeBuffer) {
+			storeBuffer.clear();
+			int bytesRead = Commons.readFrom(channel, storeBuffer); //If the node is not the last node, the storeBuffer is always read fully
+			assert bytesRead > 0;
+
+			//System.out.printf("[PN] Bytes read from channel: %d\n", bytesRead);
+
+			storeBuffer.flip();
+
 			// Assuming that the loadFrom is called only when the node is read into-memory. Moreover, the whole node
 			// is read when the file is opened. Therefore, we do not worry about loading the node partially from the file
 			// in order to support appends without loading data from the file.
 
 			//WARNING: This function will fail if a node is loaded from the middle instead of the start byte
 
-			int padding = nodeSizeBytes - entries.length*POHEntry.sizeBytes() - children.length*POHChild.sizeBytes() - headerSizeBytes();
-			srcBuffer.position(srcBuffer.position() + padding);
+			count += loadHeaderFrom(storeBuffer, nodeSizeBytes, entries.length, children.length);
 
-			//System.out.printf("\t     >> [POHN] pos=%d, rem=%d, padding=%d\n", storeBuffer.position(), storeBuffer.remaining(), padding);
-
-			int nodeNum = srcBuffer.getInt();
-			int ht = srcBuffer.getInt();
-
-			assert nodeNum == nodeNumber : String.format("Node number mismatch: loaded %d, should be %d",nodeNum, nodeNumber);
-			assert ht == height : String.format("Node height mismatch: loaded %d, should be %d",ht, height);
-
-			if (height > 0) { //This is not a leaf node. Therefore, this node must have min/max value of the children
-				for (int i=0; i<children.length; i++) {
-					nodeNum = srcBuffer.getInt();
-					long minTS = srcBuffer.getLong();
-					long maxTS = srcBuffer.getLong();
-					children[i] = new POHChild(nodeNum, minTS, maxTS);
-				}
-			} else {
-				srcBuffer.position(srcBuffer.position()+POHChild.sizeBytes()*children.length); // Skip loading the children
-				/*for (int i=0; i<children.length; i++) {
-					srcBuffer.getInt();
-					srcBuffer.getLong();
-					srcBuffer.getLong();
-				}*/
-			}
+			count += loadChildrenFrom(storeBuffer, true);
 
 			pointerIdx = children.length;
 
-			int entriesCount = (int)Math.ceil(srcBuffer.remaining()*1.0/POHEntry.sizeBytes());
+			int pos = storeBuffer.position();
+			int numTSLoaded = loadEntriesFrom(storeBuffer, 0);
+			count += storeBuffer.position() - pos;
 
-			//System.out.printf("\t  [POHN] pos=%d, rem=%d, entriesCount=%d\n", srcBuffer.position(), srcBuffer.remaining(), entriesCount);
+			entryIdx = (numTSLoaded+1)/2;
+			dirtyOffsetStart = numTSLoaded;
+			tsCount = dirtyOffsetStart;
 
-			dirtyIdx = 0;
-			for (int i=0; i<entriesCount; i++) {
-				POHEntry entry = new POHEntry();
-				entries[entryIdx++] = entry;
-				lastWriteIdx.incrementAndGet();
+			//if (loadedLastMax) { // Last entry's maxTS is not loaded
+				// System.out.printf("[PN] maxTS is not set in %s when loaded, bytesLoaded=%d, shouldBe=%d, entries=%d\n",
+				// 		id, bytesLoaded, numEntries*POHEntry.sizeBytes(), numEntries);
+				//dirtyOffsetStart--;
+			//}
 
-				boolean isMaxSet = entry.loadFrom(srcBuffer);
+			entryMinTS = entries[0].minTS();
+			nodeMaxTS = entries[entryIdx-1].maxTS();
+			nodeMinTS = height == 0 ? entryMinTS : children[0].minTS();
+		}
 
-				//System.out.printf("\t  [POHN] pos=%d, rem=%d\n", srcBuffer.position(), srcBuffer.remaining());
+		// System.out.printf("\t[PN] node=%d, entryIdx=%d, dirtyIdx=%d, lastWriteIdx=%d, entryMinTS=%d, nodeMinTS=%d, nodeMaxTS=%d\n",
+		//		nodeNumber, entryIdx, dirtyIdx, lastWriteIdx.get(), entryMinTS, nodeMinTS, nodeMaxTS);
 
-				nodeMaxTS = entry.maxTS();
+		//System.out.println("\t[PN] Bytes read from the buffer: " + bytesRead);
 
-				if (!isMaxSet) { // If the max value is not loaded, this must be the last index entry that is partially stored
-					System.out.println("\t>>> [POHN] Max is not set in the last entry when loaded");
-					break;
-				}
+		return  count;
+	}
 
-				dirtyIdx++;
+	private int loadHeaderFrom(ByteBuffer buffer, int nodeSizeBytes, int numEntries, int numChildren) {
+		int padding = nodeSizeBytes -numEntries*POHEntry.sizeBytes() - numChildren*POHChild.sizeBytes() - headerSizeBytes();
+		buffer.position(buffer.position() + padding);
+
+		//System.out.printf("\t     >> [PN] pos=%d, rem=%d, padding=%d\n", storeBuffer.position(), storeBuffer.remaining(), padding);
+
+		int nodeNum = buffer.getInt();
+		int ht = buffer.getInt();
+
+		assert nodeNum == nodeNumber : String.format("Node number mismatch: loaded %d, should be %d",nodeNum, nodeNumber);
+		assert ht == height : String.format("Node height mismatch: loaded %d, should be %d",ht, height);
+
+		System.out.printf(" Loaded header: nodenum=%d, height=%d, padding=%d\n", nodeNum, ht, padding);
+
+		return padding + Integer.BYTES*2;
+	}
+
+	private int loadChildrenFrom(ByteBuffer buffer, boolean withPadding) {
+		System.out.printf("Before load children: rem=%d\n", buffer.remaining());
+
+		int count = 0;
+		if (height > 0) { //This is not a leaf node. Therefore, this node must have min/max value of the children
+			for (int i=0; i<children.length; i++) {
+				POHChild child = new POHChild();
+				count += child.loadFrom(buffer);
+				children[i] = child;
+			}
+		} else if (withPadding) {
+			int bytesToSkip = POHChild.sizeBytes()*children.length;
+			buffer.position(buffer.position()+bytesToSkip); // Skip loading the children
+			count += bytesToSkip;
+		}
+
+		System.out.printf("After load children: rem=%d\n", buffer.remaining());
+
+		return count;
+	}
+
+	/**
+	 * The first and the last entry can be partial. The first entry may not have the minTS, and the last entry may not have maxTS.
+	 *
+	 * @param buffer
+	 * @param atTSOffset TSCount offset.
+	 * @return
+	 */
+	private int loadEntriesFrom(ByteBuffer buffer, int atTSOffset) {
+
+
+		boolean loadedLastMax = false; //The last entry in the buffer has the max value or not
+
+		int idxOffset = atTSOffset/2;
+		boolean hasFirstMin = atTSOffset % 2 == 0;
+		int count = hasFirstMin ? 0 : -1;
+
+		System.out.printf(" Load entries from: rem=%d, fromIdx=%d, atTSOffset=%d\n", buffer.remaining(), idxOffset, atTSOffset);
+
+		while (buffer.hasRemaining()) {
+			POHEntry entry = new POHEntry();
+			entries[idxOffset++] = entry;
+
+			loadedLastMax = entry.loadFrom(buffer, hasFirstMin);
+			// System.out.printf("\t  [PN] pos=%d, rem=%d\n", buffer.position(), buffer.remaining());
+
+			count += 2;
+
+			if (!loadedLastMax) {
+				count--;
+				break;
 			}
 		}
 
-		entryMinTS = entries[0].minTS();
-		nodeMinTS = entryMinTS;
+		return count;
+	}
 
-		if (height > 0) {
-			nodeMinTS = children[0].minTS();
+	private int storeHeaderTo(ByteBuffer buffer, int nodeSizeBytes, int numEntries, int numChildren) {
+		int padding = nodeSizeBytes - numEntries*POHEntry.sizeBytes() - numChildren*POHChild.sizeBytes() - headerSizeBytes();
+		buffer.position(buffer.position() + padding);
+
+		//System.out.printf("     >> [PN] pos=%d, rem=%d, padding=%d\n", storeBuffer.position(), storeBuffer.remaining(), padding);
+
+		buffer.putInt(nodeNumber);
+		buffer.putInt(height);
+
+		return padding + Integer.BYTES*2;
+	}
+
+	/**
+	 *
+	 * @param buffer
+	 * @param withPadding If the height of the node is zero, the buffer is padded if the withPadding is true, otherwise
+	 *                    the buffer is not modified
+	 * @return
+	 */
+	private int storeChildrenTo(ByteBuffer buffer, boolean withPadding) {
+		int count = 0;
+		if (height > 0) { // The leaf nodes have no children. Therefore, we don't need to save the min/max timestamps
+			for (int i = 0; i < children.length; i++) {
+				POHChild child = children[i];
+				count += child.storeTo(buffer);
+				// System.out.printf("      [PN] pos=%d, rem=%d\n", buffer.position(), buffer.remaining());
+			}
+		} else if (withPadding){
+			int bytesToSkip = POHChild.sizeBytes()*children.length;
+			buffer.position(buffer.position()+bytesToSkip); // Fill the children bytes with zeros
+			count = bytesToSkip;
 		}
 
-		int bytesRead = srcBuffer.position() - initPos;
+		return count;
+	}
 
-		//System.out.printf("\t[POHN] node=%d, entryIdx=%d, dirtyIdx=%d, lastWriteIdx=%d, entryMinTS=%d, nodeMinTS=%d, nodeMaxTS=%d\n",
-		//		nodeNumber, entryIdx, dirtyIdx, lastWriteIdx.get(), entryMinTS, nodeMinTS, nodeMaxTS);
+	/**
+	 *
+	 * @param buffer
+	 * @return Number of timestamps stored in the buffer.
+	 */
+	private int storeEntriesTo(ByteBuffer buffer, int tsIdxOffset) {
+		//System.out.printf("\t  [PN] pos=%d, rem=%d, entriesCount=%d, lastIdx=%d, dirtyIdx=%d\n", storeBuffer.position(), storeBuffer.remaining(), numEntries, lastIdx, dirtyIdx);
 
-		//System.out.println("\t[POHN] Bytes read from the buffer: " + bytesRead);
+		int numTS = tsCount;
+		int entryIdx = (numTS+1)/2;
+		int idxOffset = tsIdxOffset/2;
+		boolean withFirstMin = tsIdxOffset % 2 == 0;
 
-		return  bytesRead;
+		for (;idxOffset < entryIdx; idxOffset++) {
+			POHEntry entry = entries[idxOffset];
+			entry.storeTo(buffer, withFirstMin);
+			withFirstMin = true;
+		}
+
+		return numTS - tsIdxOffset;
 	}
 
 	@Override
 	protected int storeTo(FileChannel channel) throws IOException {
-		//System.out.printf("  >> [POHN] Storing node %d at channel pos %d, channel size %d\n", nodeNumber, channel.position(), channel.size());
+		System.out.printf("[PN] Storing %s in channel\n",id);
+
+		assert isOnPrimary;
+		//System.out.printf("  >> [PN] Storing node %d at channel pos %d, channel size %d\n", nodeNumber, channel.position(), channel.size());
 
 		synchronized (storeBuffer) {
 			storeBuffer.clear();
@@ -609,64 +707,41 @@ public class POHNode extends Block {
 			// at least a partial first index entry. Therefore, the dirtyIdx will be initially -1 and will be at least
 			// zero after the first writeToChannel.
 
-			if (dirtyIdx == -1) { // If we have not stored the node yet
+			if (dirtyOffsetStart == 0) { // If we have not stored the node yet
 				if (nodeNumber == 1) {
 					channel.position(nodeSizeBytes); // Because we don't have node number zero. If we skip the first node in the file, all math goes wrong.
 				}
 
-				int padding = nodeSizeBytes - entries.length*POHEntry.sizeBytes() - children.length*POHChild.sizeBytes() - headerSizeBytes();
-				storeBuffer.position(storeBuffer.position() + padding);
+				storeHeaderTo(storeBuffer, nodeSizeBytes, entries.length, children.length);
 
-				//System.out.printf("     >> [POHN] pos=%d, rem=%d, padding=%d\n", storeBuffer.position(), storeBuffer.remaining(), padding);
+				//System.out.printf("     >> [PN] pos=%d, rem=%d\n", storeBuffer.position(), storeBuffer.remaining());
 
-				storeBuffer.putInt(nodeNumber);
-				storeBuffer.putInt(height);
-
-				//System.out.printf("     >> [POHN] pos=%d, rem=%d\n", storeBuffer.position(), storeBuffer.remaining());
-
-				if (height > 0) { // The leaf nodes have no children. Therefore, we don't need to save the min/max timestamps
-					for (int i = 0; i < children.length; i++) {
-						POHChild child = children[i];
-						storeBuffer.putInt(child.nodeNumber());
-						storeBuffer.putLong(child.minTS());
-						storeBuffer.putLong(child.maxTS());
-						//System.out.printf("      [POHN] pos=%d, rem=%d\n", storeBuffer.position(), storeBuffer.remaining());
-					}
-				} else {
-					storeBuffer.position(storeBuffer.position()+POHChild.sizeBytes()*children.length); // Fill the children bytes with zeros
-					/*for (int i = 0; i < children.length; i++) {
-						storeBuffer.putInt(-1);
-						storeBuffer.putLong(-1);
-						storeBuffer.putLong(-1);
-						//System.out.printf("      [POHN] pos=%d, rem=%d\n", storeBuffer.position(), storeBuffer.remaining());
-					}*/
-				}
-
-				dirtyIdx = 0; //Indicate that the current index entry is zero that is dirty
+				storeChildrenTo(storeBuffer, true);
 			}
 
-			int lastIdx = lastWriteIdx.get();
-			int numEntries = (lastIdx - dirtyIdx)+1; //Take the floor value because the last entry may not be fully written yet
+			int numDirtyTS = tsCount - dirtyOffsetStart; //Take the floor value because the last entry may not be fully written yet
 
-			//System.out.printf("\t  [POHN] pos=%d, rem=%d, entriesCount=%d, lastIdx=%d, dirtyIdx=%d\n", storeBuffer.position(), storeBuffer.remaining(), numEntries, lastIdx, dirtyIdx);
+			int numTSStored = storeEntriesTo(storeBuffer, dirtyOffsetStart);
 
-			for (int i = 0; i<numEntries; i++) {
-				if (entries[dirtyIdx].storeTo(storeBuffer)) { //If the max value is not set, we do not update the dirty index
-					dirtyIdx++;
-				} else {
-					//System.out.println("  >>> [POHN] Max is not set in the last entry");
-					break; // This must be the last index entry as the max value is not set
-				}
-			}
+			assert numTSStored == numDirtyTS;
 
-			//System.out.printf("\t  [POHN] node=%d, entryIdx=%d, dirtyIdx=%d, lastWriteIdx=%d, entryMinTS=%d, nodeMinTS=%d, nodeMaxTS=%d\n",
+			dirtyOffsetStart += numTSStored;
+
+
+			//if (!hasLastMax) { //Last entry has not maxTS set
+				//dirtyOffsetStart--;
+				// System.out.printf("  >>> [PN] Max is not set in the last entry when storing, id=%s, numEntries=%d, bytesStored=%d, shouldBe=%d, entriesStored=%d\n",
+				//		id, numEntries, bytesStored, numEntries*POHEntry.sizeBytes(), (int)Math.ceil(1.0*bytesStored/POHEntry.sizeBytes()));
+			//}
+
+			// System.out.printf("\t  [PN] node=%d, entryIdx=%d, dirtyIdx=%d, lastWriteIdx=%d, entryMinTS=%d, nodeMinTS=%d, nodeMaxTS=%d\n",
 			//		nodeNumber, entryIdx, dirtyIdx, lastWriteIdx.get(), entryMinTS, nodeMinTS, nodeMaxTS);
 
 			storeBuffer.flip(); //Flip the buffer; not rewinding because we have not set the limit manually.
 
-			int count = Commons.writeTo(channel, storeBuffer);
-			//System.out.printf("\t  [POHN] Stored %d bytes in the channel, current pos %d\n",count, channel.position());
-			return count;
+			//System.out.printf("\t  [PN] Stored %d bytes in the channel, current pos %d\n",count, channel.position());
+
+			return Commons.writeTo(channel, storeBuffer);
 		}
 	}
 
@@ -677,7 +752,7 @@ public class POHNode extends Block {
 
 		int count = storeTo(channel);
 
-		//System.out.printf("[POHN] Stored %d bytes in the file\n", count);
+		//System.out.printf("[PN] Stored %d bytes in the file\n", count);
 
 		channel.force(true);
 		channel.close();
@@ -687,18 +762,108 @@ public class POHNode extends Block {
 
 	@Override
 	public ByteString byteString() {
-		int limit = lastWriteIdx.get();
+		assert false;
 
-		ByteString bytes = null;
-		/*synchronized (storeBuffer) {
-			storeBuffer.clear();
-			storeBuffer.limit(limit);
-			storeBuffer.rewind();
+		return null;
+	}
 
-			bytes = ByteString.copyFrom(storeBuffer, limit);
-		}*/
+	public ByteString byteString(int fromTSIdx) throws IOException {
+		if (fromTSIdx == tsCount) { //If no new entry is present
+			return ByteString.EMPTY;
+		}
 
-		return bytes;
+		synchronized (storeBuffer) {
+			try {
+				storeBuffer.clear();
+				storeTo(storeBuffer, fromTSIdx);
+				storeBuffer.flip();
+			} catch (IOException e) {
+				e.printStackTrace();
+				return null;
+			}
+
+			return ByteString.copyFrom(storeBuffer);
+		}
+	}
+
+	/**
+	 *
+	 * @param buffer
+	 * @param fromTSIdx
+	 * @return Number of TS stored in the buffer
+	 * @throws IOException
+	 */
+	protected int storeTo(ByteBuffer buffer, int fromTSIdx) throws IOException {
+		System.out.printf("[PN] Storing %s in buffer\n",id);
+
+		boolean withHeader = fromTSIdx % 2 == 0;
+		if (withHeader) {
+			storeHeaderTo(buffer, nodeSizeBytes, entries.length, children.length);
+			storeChildrenTo(buffer, false);
+		}
+
+		return storeEntriesTo(buffer, fromTSIdx);
+	}
+
+	@Override
+	public int loadFrom(ByteBuffer buffer) {
+		assert false;
+
+		return 0;
+	}
+
+	public int loadFrom(ByteBuffer buffer, int atTSOffset) throws IOException {
+		System.out.printf("[PN] Loading %s from buffer\n",id);
+
+		assert !isOnPrimary;
+
+		if (atTSOffset % 2 == 0) {
+			loadHeaderFrom(buffer, nodeSizeBytes, entries.length, children.length);
+			loadChildrenFrom(buffer, false);
+		}
+
+		System.out.println(" Now loading children");
+		return loadEntriesFrom(buffer, atTSOffset);
+	}
+
+	private void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
+		boolean withHeader = dirtyOffsetStart == 0;
+		boolean withFirstMin = dirtyOffsetStart % 2 == 0;
+
+		ByteBuffer buffer = primaryNodeService.getIndexNode(id, dirtyOffsetStart);
+
+		if (buffer.remaining() == 0) {
+			System.out.println("No new entries retrieved.");
+			return;
+		}
+
+		System.out.printf("Before loading the node: pos=%d, rem=%d, dirtyOffset=%d, entryIdx=%d, txCount=%d\n",
+				buffer.position(), buffer.remaining(), dirtyOffsetStart, entryIdx, tsCount);
+
+		int numTSLoaded = loadFrom(buffer, dirtyOffsetStart);
+
+		if (dirtyOffsetStart == 0)
+			pointerIdx = children.length;
+
+		assert dirtyOffsetStart+numTSLoaded >= entryIdx;
+
+		dirtyOffsetStart += numTSLoaded;
+		tsCount = dirtyOffsetStart;
+		entryIdx = (tsCount+1)/2;
+
+		System.out.printf("After loading the node: pos=%d, rem=%d, dirtyOffset=%d, entryIdx=%d, txCount=%d\n",
+				buffer.position(), buffer.remaining(), dirtyOffsetStart, entryIdx, tsCount);
+
+
+		//if (loadedLastMax) { // Last entry's maxTS is not loaded
+		// System.out.printf("[PN] maxTS is not set in %s when loaded, bytesLoaded=%d, shouldBe=%d, entries=%d\n",
+		// 		id, bytesLoaded, numEntries*POHEntry.sizeBytes(), numEntries);
+		//dirtyOffsetStart--;
+		//}
+
+		entryMinTS = entries[0].minTS();
+		nodeMaxTS = entries[entryIdx-1].maxTS();
+		nodeMinTS = height == 0 ? entryMinTS : children[0].minTS();
 	}
 
 	@Override
@@ -712,18 +877,25 @@ public class POHNode extends Block {
 	}
 
 	@Override
-	protected void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
+	protected synchronized void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
+		// If the node is full, try fetching from the global store. If fails, load from the primary node.
+		// Otherwise, the node is most likely not in the global store. Therefore, fetch from the primary node.
 
-	}
+		if (entryIdx != entries.length) {
+			loadBlockFromPrimary();
+			return;
+		}
 
-	@Override
-	protected void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
-
+		try {
+			loadFromGlobal();
+		} catch (FileNotExistException e) {
+			System.out.println("[PN] Node not found in the global: " + id());
+			loadBlockFromPrimary();
+		}
 	}
 
 	@Override
 	protected void onMemoryEviction() {
-
+		// Do nothing
 	}
-
 }

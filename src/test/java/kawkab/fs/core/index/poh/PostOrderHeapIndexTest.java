@@ -84,7 +84,7 @@ public class PostOrderHeapIndexTest {
 	}
 
 	@Test
-	public void pohStructureTest() throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+	public void pohStructureTest() throws NoSuchMethodException, IllegalAccessException, InvocationTargetException, IOException, KawkabException {
 		System.out.println("Test: pohStructureTest");
 
 		int epn = 1; // entries per node
@@ -93,8 +93,9 @@ public class PostOrderHeapIndexTest {
 		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(5, nodeSize, nodesPerBlock, 25, new NullCache());
 
+		int len = 0;
 		for (int i=1; i<30; i++) {
-			poh.appendIndexEntry(i, i, i);
+			poh.appendIndexEntry(i, i, i, len++);
 		}
 
 		assertEquals(0, heightOfNode(poh, 1));
@@ -112,7 +113,7 @@ public class PostOrderHeapIndexTest {
 	}
 
 	@Test
-	public void searchSmokeTest() {
+	public void searchSmokeTest() throws IOException, KawkabException {
 		System.out.println("Test: searchFirstTest");
 
 		int epn = 1; // entries per node
@@ -120,19 +121,20 @@ public class PostOrderHeapIndexTest {
 		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
 		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(6, nodeSize, nodesPerBlock, 25, new NullCache());
+		int indexLen = 0;
 		for (int i=1; i<30; i++) {
-			poh.appendIndexEntry(i, i, i);
+			poh.appendIndexEntry(i, i, i, indexLen++);
 		}
-		assertEquals(25, poh.findHighest(25));
-		assertEquals(19, poh.findHighest(19));
-		assertEquals(1, poh.findHighest(1));
+		assertEquals(25, poh.findHighest(25, indexLen));
+		assertEquals(19, poh.findHighest(19, indexLen));
+		assertEquals(1, poh.findHighest(1, indexLen));
 
-		assertEquals(29, poh.findHighest(30));
-		assertEquals(-1, poh.findHighest(0));
+		assertEquals(29, poh.findHighest(30, indexLen));
+		assertEquals(-1, poh.findHighest(0, indexLen));
 	}
 
 	@Test
-	public void searchOverlappingTest() {
+	public void searchOverlappingTest() throws IOException, KawkabException {
 		System.out.println("Test: searchOverlappingTest");
 
 		int epn = 5; // entries per node
@@ -140,19 +142,20 @@ public class PostOrderHeapIndexTest {
 		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
 		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(7, nodeSize, nodesPerBlock, 62, new NullCache());
+		int len = 0;
 		for (int i=1; i<=100; i++) {
-			poh.appendIndexEntry(i, i, i);
+			poh.appendIndexEntry(i, i, i, len++);
 		}
 
-		assertEquals(2, poh.findHighest(2));
-		assertEquals(3, poh.findHighest(3));
+		assertEquals(2, poh.findHighest(2, len));
+		assertEquals(3, poh.findHighest(3, len));
 
-		assertEquals(100, poh.findHighest(102));
-		assertEquals(-1, poh.findHighest(0));
+		assertEquals(100, poh.findHighest(102, len));
+		assertEquals(-1, poh.findHighest(0, len));
 	}
 
 	@Test
-	public void findAllRangeTest() {
+	public void findAllRangeTest() throws IOException, KawkabException, InterruptedException {
 		System.out.println("Test: findAllRangeTest");
 
 		int epn = 3; // entries per node
@@ -160,75 +163,76 @@ public class PostOrderHeapIndexTest {
 		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
 		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(8, nodeSize, nodesPerBlock, 50, new NullCache());
-		poh.appendMinTS(3, 1);
-		poh.appendMaxTS(3, 1);
-		poh.appendMinTS(5, 2);
-		poh.appendMaxTS(5, 2);
-		poh.appendMinTS(11, 3);
-		poh.appendMaxTS(11, 3);
+		int len = 0;
+		poh.appendMinTS(3, 1, len++);
+		poh.appendMaxTS(3, 1, len++);
+		poh.appendMinTS(5, 2, len++);
+		poh.appendMaxTS(5, 2, len++);
+		poh.appendMinTS(11, 3, len++);
+		poh.appendMaxTS(11, 3, len++);
 
-		poh.appendMinTS(18, 4);
-		poh.appendMaxTS(18, 4);
-		poh.appendMinTS(20, 5);
-		poh.appendMaxTS(20, 5);
-		poh.appendMinTS(25, 6);
-		poh.appendMaxTS(25, 6);
+		poh.appendMinTS(18, 4, len++);
+		poh.appendMaxTS(18, 4, len++);
+		poh.appendMinTS(20, 5, len++);
+		poh.appendMaxTS(20, 5, len++);
+		poh.appendMinTS(25, 6, len++);
+		poh.appendMaxTS(25, 6, len++);
 
-		poh.appendMinTS(30, 7);
-		poh.appendMaxTS(30, 7);
-		poh.appendMinTS(30, 8);
-		poh.appendMaxTS(30, 8);
-		poh.appendMinTS(30, 9);
-		poh.appendMaxTS(30, 9);
+		poh.appendMinTS(30, 7, len++);
+		poh.appendMaxTS(30, 7, len++);
+		poh.appendMinTS(30, 8, len++);
+		poh.appendMaxTS(30, 8, len++);
+		poh.appendMinTS(30, 9, len++);
+		poh.appendMaxTS(30, 9, len++);
 
-		poh.appendMinTS(35, 10);
-		poh.appendMaxTS(35, 10);
-		poh.appendMinTS(45, 11);
-		poh.appendMaxTS(45, 11);
-		poh.appendMinTS(50, 12);
-		poh.appendMaxTS(50, 12);
+		poh.appendMinTS(35, 10, len++);
+		poh.appendMaxTS(35, 10, len++);
+		poh.appendMinTS(45, 11, len++);
+		poh.appendMaxTS(45, 11, len++);
+		poh.appendMinTS(50, 12, len++);
+		poh.appendMaxTS(50, 12, len++);
 
-		poh.appendMinTS(55, 13);
-		poh.appendMaxTS(55, 13);
-		poh.appendMinTS(65, 14);
-		poh.appendMaxTS(65, 14);
-		poh.appendMinTS(75, 15);
-		poh.appendMaxTS(75, 15);
+		poh.appendMinTS(55, 13, len++);
+		poh.appendMaxTS(55, 13, len++);
+		poh.appendMinTS(65, 14, len++);
+		poh.appendMaxTS(65, 14, len++);
+		poh.appendMinTS(75, 15, len++);
+		poh.appendMaxTS(75, 15, len++);
 
-		poh.appendMinTS(85, 16);
-		poh.appendMaxTS(85, 16);
-		poh.appendMinTS(93, 17);
-		poh.appendMaxTS(93, 17);
-		poh.appendMinTS(99, 18);
-		poh.appendMaxTS(99, 18);
+		poh.appendMinTS(85, 16, len++);
+		poh.appendMaxTS(85, 16, len++);
+		poh.appendMinTS(93, 17, len++);
+		poh.appendMaxTS(93, 17, len++);
+		poh.appendMinTS(99, 18, len++);
+		poh.appendMaxTS(99, 18, len++);
 
-		poh.appendMinTS(105, 19);
-		poh.appendMaxTS(105, 19);
+		poh.appendMinTS(105, 19, len++);
+		poh.appendMaxTS(105, 19, len++);
 
 		long[][] resType = new long[][]{{}};
 
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9, 8, 7}, {6, 5, 4}, {3, 2, 1}}, poh.findAllMinBased(3, 77).toArray(resType));
-		assertArrayEquals(new long[][]{{6, 5, 4}}, poh.findAllMinBased(20, 25).toArray(resType));
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9, 8, 7}, {6, 5, 4}, {3, 2, 1}}, poh.findAllMinBased(3, 77, len).toArray(resType));
+		assertArrayEquals(new long[][]{{6, 5, 4}}, poh.findAllMinBased(20, 25, len).toArray(resType));
 
-		assertArrayEquals(new long[][]{{9, 8, 7}, {6, 5, 4}}, poh.findAllMinBased(20, 30).toArray(resType));
+		assertArrayEquals(new long[][]{{9, 8, 7}, {6, 5, 4}}, poh.findAllMinBased(20, 30, len).toArray(resType));
 
-		assertEquals(null, poh.findAllMinBased(1, 2)); //Out of lower limit
-		assertArrayEquals(new long[][]{{19}}, poh.findAllMinBased(111, 112).toArray(resType)); //Out of upper limit
-		assertArrayEquals(new long[][]{{13}}, poh.findAllMinBased(61, 63).toArray(resType)); //Out of range but b/w entries
+		assertEquals(null, poh.findAllMinBased(1, 2, len)); //Out of lower limit
+		assertArrayEquals(new long[][]{{19}}, poh.findAllMinBased(111, 112, len).toArray(resType)); //Out of upper limit
+		assertArrayEquals(new long[][]{{13}}, poh.findAllMinBased(61, 63, len).toArray(resType)); //Out of range but b/w entries
 
-		assertArrayEquals(new long[][]{{2, 1}}, poh.findAllMinBased(1, 8).toArray(resType)); // partially cover lower limit
-		assertArrayEquals(new long[][]{{19}, {18, 17}}, poh.findAllMinBased(95, 111).toArray(resType)); // partially cover upper limit
+		assertArrayEquals(new long[][]{{2, 1}}, poh.findAllMinBased(1, 8, len).toArray(resType)); // partially cover lower limit
+		assertArrayEquals(new long[][]{{19}, {18, 17}}, poh.findAllMinBased(95, 111, len).toArray(resType)); // partially cover upper limit
 
-		assertArrayEquals(new long[][]{{10}, {9, 8, 7}, {6, 5}}, poh.findAllMinBased(22, 42).toArray(resType)); // cover entries but fall across entries' ranges
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9}}, poh.findAllMinBased(32, 81).toArray(resType)); // cover entries but fall across entries' ranges and nodes
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11}}, poh.findAllMinBased(47, 82).toArray(resType)); // cover entries from lower part
-		assertArrayEquals(new long[][]{{17, 16}, {15}}, poh.findAllMinBased(82, 98).toArray(resType)); // cover entries from upper part
+		assertArrayEquals(new long[][]{{10}, {9, 8, 7}, {6, 5}}, poh.findAllMinBased(22, 42, len).toArray(resType)); // cover entries but fall across entries' ranges
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9}}, poh.findAllMinBased(32, 81, len).toArray(resType)); // cover entries but fall across entries' ranges and nodes
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11}}, poh.findAllMinBased(47, 82, len).toArray(resType)); // cover entries from lower part
+		assertArrayEquals(new long[][]{{17, 16}, {15}}, poh.findAllMinBased(82, 98, len).toArray(resType)); // cover entries from upper part
 
-		assertArrayEquals(new long[][]{{9, 8, 7}, {6}}, poh.findAllMinBased(30, 30).toArray(resType)); // find all with same ts
+		assertArrayEquals(new long[][]{{9, 8, 7}, {6}}, poh.findAllMinBased(30, 30, len).toArray(resType)); // find all with same ts
 	}
 
 	@Test
-	public void singleEntryTest() {
+	public void singleEntryTest() throws IOException, KawkabException, InterruptedException {
 		System.out.println("Test: singleEntryTest");
 
 		int epn = 3; // entries per node
@@ -236,20 +240,21 @@ public class PostOrderHeapIndexTest {
 		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
 		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(9, nodeSize, nodesPerBlock, 50, new NullCache());
-		poh.appendMinTS(3, 1);
+		int len = 0;
+		poh.appendMinTS(3, 1, len++);
 
 		long[][] resType = new long[][]{{}};
 
-		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(1, 6).toArray(resType));
- 		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(1, 3).toArray(resType));
-		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(3, 3).toArray(resType));
-		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(3, 5).toArray(resType));
-		assertNull(poh.findAllMinBased(1, 2));
-		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(6, 7).toArray(resType));
+		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(1, 6, len).toArray(resType));
+ 		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(1, 3, len).toArray(resType));
+		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(3, 3, len).toArray(resType));
+		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(3, 5, len).toArray(resType));
+		assertNull(poh.findAllMinBased(1, 2, len));
+		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(6, 7, len).toArray(resType));
 	}
 
 	@Test
-	public void exactMatchTest() {
+	public void exactMatchTest() throws IOException, KawkabException {
 		System.out.println("Test: exactMatchTest");
 
 		int epn = 3; // entries per node
@@ -257,60 +262,42 @@ public class PostOrderHeapIndexTest {
 		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
 		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(10, nodeSize, nodesPerBlock, 50, new NullCache());
-		poh.appendMinTS(3, 1);
-		poh.appendMaxTS(3, 1);
-		poh.appendMinTS(5, 2);
-		poh.appendMaxTS(5, 2);
-		poh.appendMinTS(11, 3);
-		poh.appendMaxTS(11, 3);
+		int len = 0;
+		poh.appendIndexEntry(3, 3, 1, len++);
+		poh.appendIndexEntry(5, 5, 2, len++);
+		poh.appendIndexEntry(11, 11, 3, len++);
 
-		poh.appendMinTS(18, 4);
-		poh.appendMaxTS(18, 4);
-		poh.appendMinTS(20, 5);
-		poh.appendMaxTS(20, 5);
-		poh.appendMinTS(25, 6);
-		poh.appendMaxTS(25, 6);
+		poh.appendIndexEntry(18, 18, 4, len++);
+		poh.appendIndexEntry(20, 20, 5, len++);
+		poh.appendIndexEntry(25, 25, 6, len++);
 
-		poh.appendMinTS(30, 7);
-		poh.appendMaxTS(30, 7);
-		poh.appendMinTS(30, 8);
-		poh.appendMaxTS(30, 8);
-		poh.appendMinTS(30, 9);
-		poh.appendMaxTS(30, 9);
+		poh.appendIndexEntry(30, 30, 7, len++);
+		poh.appendIndexEntry(30, 30, 8, len++);
+		poh.appendIndexEntry(30, 30, 9, len++);
 
-		poh.appendMinTS(35, 10);
-		poh.appendMaxTS(35, 10);
-		poh.appendMinTS(45, 11);
-		poh.appendMaxTS(45, 11);
-		poh.appendMinTS(50, 12);
-		poh.appendMaxTS(50, 12);
+		poh.appendIndexEntry(35, 35, 10, len++);
+		poh.appendIndexEntry(45, 45, 11, len++);
+		poh.appendIndexEntry(50, 50, 12, len++);
 
-		poh.appendMinTS(55, 13);
-		poh.appendMaxTS(55, 13);
-		poh.appendMinTS(65, 14);
-		poh.appendMaxTS(65, 14);
-		poh.appendMinTS(75, 15);
-		poh.appendMaxTS(75, 15);
+		poh.appendIndexEntry(55, 55, 13, len++);
+		poh.appendIndexEntry(65, 65, 14, len++);
+		poh.appendIndexEntry(75, 75, 15, len++);
 
-		poh.appendMinTS(85, 16);
-		poh.appendMaxTS(85, 16);
-		poh.appendMinTS(93, 17);
-		poh.appendMaxTS(93, 17);
-		poh.appendMinTS(99, 18);
-		poh.appendMaxTS(99, 18);
+		poh.appendIndexEntry(85, 85, 16, len++);
+		poh.appendIndexEntry(93, 93, 17, len++);
+		poh.appendIndexEntry(99, 99, 18, len++);
 
-		poh.appendMinTS(105, 19);
-		poh.appendMaxTS(105, 19);
+		poh.appendIndexEntry(105, 105, 19, len++);
 
-		assertEquals(-1, poh.findHighest(1)); //Out of lower limit
+		assertEquals(-1, poh.findHighest(1, len)); //Out of lower limit
 
-		assertEquals(9, poh.findHighest(30));
+		assertEquals(9, poh.findHighest(30, len));
 
-		assertEquals(12, poh.findHighest(50)); //Finding in an internal node
+		assertEquals(12, poh.findHighest(50, len)); //Finding in an internal node
 	}
 
 	@Test
-	public void sameMinMaxTest() {
+	public void sameMinMaxTest() throws IOException, KawkabException, InterruptedException {
 		System.out.println("Test: sameMinMaxTest");
 
 		int epn = 3; // entries per node
@@ -318,75 +305,60 @@ public class PostOrderHeapIndexTest {
 		int nodeSize = epn*POHEntry.sizeBytes() + cpn*POHNode.childSizeBytes() + POHNode.headerSizeBytes();
 		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(11, nodeSize, nodesPerBlock, 50, new NullCache());
-		poh.appendMinTS(3, 1);
-		poh.appendMaxTS(3, 1);
-		poh.appendMinTS(5, 2);
-		poh.appendMaxTS(5, 2);
-		poh.appendMinTS(11, 3);
-		poh.appendMaxTS(11, 3);
+		int len = 0;
+		poh.appendMinTS(3, 1, len++);
+		poh.appendMaxTS(3, 1, len++);
+		poh.appendMinTS(5, 2, len++);
+		poh.appendMaxTS(5, 2, len++);
+		poh.appendMinTS(11, 3, len++);
+		poh.appendMaxTS(11, 3, len++);
 
-		poh.appendMinTS(18, 4);
-		poh.appendMaxTS(18, 4);
-		poh.appendMinTS(20, 5);
-		poh.appendMaxTS(20, 5);
-		poh.appendMinTS(25, 6);
-		poh.appendMaxTS(25, 6);
+		poh.appendIndexEntry(18, 18, 4, len++);
+		poh.appendIndexEntry(20, 20, 5, len++);
+		poh.appendIndexEntry(25, 25, 6, len++);
 
-		poh.appendMinTS(30, 7);
-		poh.appendMaxTS(30, 7);
-		poh.appendMinTS(30, 8);
-		poh.appendMaxTS(30, 8);
-		poh.appendMinTS(30, 9);
-		poh.appendMaxTS(30, 9);
+		poh.appendIndexEntry(30, 30, 7, len++);
+		poh.appendIndexEntry(30, 30, 8, len++);
+		poh.appendIndexEntry(30, 30, 9, len++);
 
-		poh.appendMinTS(35, 10);
-		poh.appendMaxTS(35, 10);
-		poh.appendMinTS(45, 11);
-		poh.appendMaxTS(45, 11);
-		poh.appendMinTS(50, 12);
-		poh.appendMaxTS(50, 12);
+		poh.appendIndexEntry(35, 35, 10, len++);
+		poh.appendIndexEntry(45, 45, 11, len++);
+		poh.appendIndexEntry(50, 50, 12, len++);
 
-		poh.appendMinTS(55, 13);
-		poh.appendMaxTS(55, 13);
-		poh.appendMinTS(65, 14);
-		poh.appendMaxTS(65, 14);
-		poh.appendMinTS(75, 15);
-		poh.appendMaxTS(75, 15);
+		poh.appendIndexEntry(55, 55, 13, len++);
+		poh.appendIndexEntry(65, 65, 14, len++);
+		poh.appendIndexEntry(75, 75, 15, len++);
 
-		poh.appendMinTS(85, 16);
-		poh.appendMaxTS(85, 16);
-		poh.appendMinTS(93, 17);
-		poh.appendMaxTS(93, 17);
-		poh.appendMinTS(99, 18);
-		poh.appendMaxTS(99, 18);
+		poh.appendIndexEntry(85, 85, 16, len++);
+		poh.appendIndexEntry(93, 93, 17, len++);
+		poh.appendIndexEntry(99, 99, 18, len++);
 
-		poh.appendMinTS(105, 19);
-		poh.appendMaxTS(105, 19);
+		poh.appendIndexEntry(105, 105, 19, len++);
 
 		long[][] resType = new long[][]{{}};
 
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9, 8, 7}, {6, 5, 4}, {3, 2, 1}}, poh.findAllMinBased(3, 77).toArray(resType));
-		assertArrayEquals(new long[][]{{6, 5, 4}}, poh.findAllMinBased(20, 25).toArray(resType));
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9, 8, 7}, {6, 5, 4}, {3, 2, 1}}, poh.findAllMinBased(3, 77, len).toArray(resType));
+		assertArrayEquals(new long[][]{{6, 5, 4}}, poh.findAllMinBased(20, 25, len).toArray(resType));
 
-		assertArrayEquals(new long[][]{{9, 8, 7}, {6, 5, 4}}, poh.findAllMinBased(20, 30).toArray(resType));
+		assertArrayEquals(new long[][]{{9, 8, 7}, {6, 5, 4}}, poh.findAllMinBased(20, 30, len).toArray(resType));
 
-		assertNull(poh.findAllMinBased(1, 2)); //Out of lower limit
-		assertArrayEquals(new long[][]{{19}}, poh.findAllMinBased(111, 112).toArray(resType)); //Out of upper limit
-		assertArrayEquals(new long[][]{{13}}, poh.findAllMinBased(61, 63).toArray(resType)); //Out of range but b/w entries
+		assertNull(poh.findAllMinBased(1, 2, len)); //Out of lower limit
+		assertArrayEquals(new long[][]{{19}}, poh.findAllMinBased(111, 112, len).toArray(resType)); //Out of upper limit
+		assertArrayEquals(new long[][]{{13}}, poh.findAllMinBased(61, 63, len).toArray(resType)); //Out of range but b/w entries
 
-		assertArrayEquals(new long[][]{{2, 1}}, poh.findAllMinBased(1, 8).toArray(resType)); // partially cover lower limit
-		assertArrayEquals(new long[][]{{19}, {18, 17}}, poh.findAllMinBased(95, 111).toArray(resType)); // partially cover upper limit
+		assertArrayEquals(new long[][]{{2, 1}}, poh.findAllMinBased(1, 8, len).toArray(resType)); // partially cover lower limit
+		assertArrayEquals(new long[][]{{19}, {18, 17}}, poh.findAllMinBased(95, 111, len).toArray(resType)); // partially cover upper limit
 
-		assertArrayEquals(new long[][]{{10}, {9, 8, 7}, {6, 5}}, poh.findAllMinBased(22, 42).toArray(resType)); // cover entries but fall across entries' ranges
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9}}, poh.findAllMinBased(32, 81).toArray(resType)); // cover entries but fall across entries' ranges and nodes
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11}}, poh.findAllMinBased(47, 82).toArray(resType)); // cover entries from lower part
-		assertArrayEquals(new long[][]{{17, 16}, {15}}, poh.findAllMinBased(82, 98).toArray(resType)); // cover entries from upper part
+		assertArrayEquals(new long[][]{{10}, {9, 8, 7}, {6, 5}}, poh.findAllMinBased(22, 42, len).toArray(resType)); // cover entries but fall across entries' ranges
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9}}, poh.findAllMinBased(32, 81, len).toArray(resType)); // cover entries but fall across entries' ranges and nodes
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11}}, poh.findAllMinBased(47, 82, len).toArray(resType)); // cover entries from lower part
+		assertArrayEquals(new long[][]{{17, 16}, {15}}, poh.findAllMinBased(82, 98, len).toArray(resType)); // cover entries from upper part
 
-		assertArrayEquals(new long[][]{{9, 8, 7}, {6}}, poh.findAllMinBased(30, 30).toArray(resType)); // find all with same ts
+		assertArrayEquals(new long[][]{{9, 8, 7}, {6}}, poh.findAllMinBased(30, 30, len).toArray(resType)); // find all with same ts
 	}
 
 	@Test
-	public void findAllTest() {
+	public void findAllTest() throws IOException, KawkabException, InterruptedException {
 		System.out.println("Test: findAllTest");
 
 		int epn = 3; // entries per node
@@ -395,38 +367,39 @@ public class PostOrderHeapIndexTest {
 		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(12, nodeSize, nodesPerBlock, 50, new NullCache());
 
-		poh.appendMinTS(3, 1); poh.appendMaxTS(5, 1);
-		poh.appendMinTS(8, 2); poh.appendMaxTS(12, 2);
-		poh.appendMinTS(15, 3); poh.appendMaxTS(18, 3);
+		int len = 0;
+		poh.appendMinTS(3, 1, len++); poh.appendMaxTS(5, 1, len++);
+		poh.appendMinTS(8, 2, len++); poh.appendMaxTS(12, 2, len++);
+		poh.appendMinTS(15, 3, len++); poh.appendMaxTS(18, 3, len++);
 
-		poh.appendMinTS(18, 4); poh.appendMaxTS(18, 4);
-		poh.appendMinTS(20, 5); poh.appendMaxTS(23, 5);
-		poh.appendMinTS(25, 6); poh.appendMaxTS(30, 6);
+		poh.appendMinTS(18, 4, len++); poh.appendMaxTS(18, 4, len++);
+		poh.appendMinTS(20, 5, len++); poh.appendMaxTS(23, 5, len++);
+		poh.appendMinTS(25, 6, len++); poh.appendMaxTS(30, 6, len++);
 
-		poh.appendMinTS(30, 7); poh.appendMaxTS(30, 7);
-		poh.appendMinTS(30, 8); poh.appendMaxTS(30, 8);
-		poh.appendMinTS(30, 9); poh.appendMaxTS(30, 9);
+		poh.appendMinTS(30, 7, len++); poh.appendMaxTS(30, 7, len++);
+		poh.appendMinTS(30, 8, len++); poh.appendMaxTS(30, 8, len++);
+		poh.appendMinTS(30, 9, len++); poh.appendMaxTS(30, 9, len++);
 
-		poh.appendMinTS(35, 10); poh.appendMaxTS(45, 10);
-		poh.appendMinTS(45, 11); poh.appendMaxTS(48, 11);
-		poh.appendMinTS(50, 12); poh.appendMaxTS(52, 12);
+		poh.appendMinTS(35, 10, len++); poh.appendMaxTS(45, 10, len++);
+		poh.appendMinTS(45, 11, len++); poh.appendMaxTS(48, 11, len++);
+		poh.appendMinTS(50, 12, len++); poh.appendMaxTS(52, 12, len++);
 
-		poh.appendMinTS(55, 13); poh.appendMaxTS(55, 13);
-		poh.appendMinTS(65, 14); poh.appendMaxTS(67, 14);
-		poh.appendMinTS(75, 15); poh.appendMaxTS(77, 15);
+		poh.appendMinTS(55, 13, len++); poh.appendMaxTS(55, 13, len++);
+		poh.appendMinTS(65, 14, len++); poh.appendMaxTS(67, 14, len++);
+		poh.appendMinTS(75, 15, len++); poh.appendMaxTS(77, 15, len++);
 
-		poh.appendMinTS(85, 16); poh.appendMaxTS(88, 16);
-		poh.appendMinTS(93, 17); poh.appendMaxTS(95, 17);
-		poh.appendMinTS(99, 18); poh.appendMaxTS(101, 18);
+		poh.appendMinTS(85, 16, len++); poh.appendMaxTS(88, 16, len++);
+		poh.appendMinTS(93, 17, len++); poh.appendMaxTS(95, 17, len++);
+		poh.appendMinTS(99, 18, len++); poh.appendMaxTS(101, 18, len++);
 
-		poh.appendMinTS(105, 19);
+		poh.appendMinTS(105, 19, len++);
 
 		long[][] resType = new long[][]{{}};
 
-		assertNull(poh.findAll(1, 2));
-		assertNull(poh.findAll(102, 103));
-		assertNull(poh.findAll(56, 58));
-		assertArrayEquals(new long[][]{{19}}, poh.findAll(111, 112).toArray(resType));
+		assertNull(poh.findAll(1, 2, len));
+		assertNull(poh.findAll(102, 103, len));
+		assertNull(poh.findAll(56, 58, len));
+		assertArrayEquals(new long[][]{{19}}, poh.findAll(111, 112, len).toArray(resType));
 	}
 
 	@Test
@@ -445,7 +418,7 @@ public class PostOrderHeapIndexTest {
 	}
 
 	@Test
-	public void blocksCreationTest() {
+	public void blocksCreationTest() throws IOException, KawkabException {
 		System.out.println("Test: blocksCreationTest");
 
 		int epn = 1; // entries per node
@@ -455,8 +428,9 @@ public class PostOrderHeapIndexTest {
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(14, nodeSize, nodesPerBlock, 25, new NullCache());
 
 		int count = nodesPerBlock * 5;
+		int len = 0;
 		for (int i=1; i<=count; i++) {
-			poh.appendIndexEntry(i, i, i);
+			poh.appendIndexEntry(i, i, i, len++);
 		}
 	}
 }

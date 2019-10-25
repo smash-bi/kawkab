@@ -29,13 +29,13 @@ public class POHNodeTest {
 		POHNode node = new POHNode(id);
 		node.init(1, 0, 10, 4, conf.indexNodeSizeBytes);
 
-		node.appendEntryMinTS(1, 1);
-		node.appendEntryMinTS(3, 2);
-		node.appendEntryMinTS(5, 3);
-		node.appendEntryMinTS(7, 4);
-		node.appendEntryMinTS(9, 5);
-		node.appendEntryMinTS(11, 6);
-		node.appendEntryMinTS(13, 7);
+		node.appendEntry(1, 1, 1);
+		node.appendEntry(3, 3, 2);
+		node.appendEntry(5, 5, 3);
+		node.appendEntry(7, 7, 4);
+		node.appendEntry(9, 9, 5);
+		node.appendEntry(11, 11, 6);
+		node.appendEntry(13, 13, 7);
 
 		Assertions.assertEquals(2, node.findFirstEntry(5));
 		Assertions.assertEquals(5, node.findLastEntry(9));
@@ -78,13 +78,13 @@ public class POHNodeTest {
 		POHNode node = new POHNode(id);
 		node.init(1, 0, 10, 8, conf.indexNodeSizeBytes);
 
-		node.appendEntryMinTS(1, 1);
-		node.appendEntryMinTS(2, 2);
-		node.appendEntryMinTS(4, 3);
-		node.appendEntryMinTS(12, 4);
-		node.appendEntryMinTS(12, 5);
-		node.appendEntryMinTS(12, 6);
-		node.appendEntryMinTS(15, 7);
+		node.appendEntry(1, 1, 1);
+		node.appendEntry(2, 2, 2);
+		node.appendEntry(4, 4, 3);
+		node.appendEntry(12, 12, 4);
+		node.appendEntry(12, 12, 5);
+		node.appendEntry(12, 12, 6);
+		node.appendEntry(15, 15, 7);
 
 		Assertions.assertEquals(3, node.findFirstEntry(12));
 		Assertions.assertEquals(6, node.findLastEntry(12));
@@ -99,11 +99,11 @@ public class POHNodeTest {
 		POHNode node = new POHNode(id);
 		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
 
-		node.appendEntryMinTS(2, 1);
-		node.appendEntryMinTS(4, 2);
-		node.appendEntryMinTS(5, 3);
-		node.appendEntryMinTS(7, 4);
-		node.appendEntryMinTS(8, 5);
+		node.appendEntry(2, 2, 1);
+		node.appendEntry(4, 4, 2);
+		node.appendEntry(5, 5, 3);
+		node.appendEntry(7, 7, 4);
+		node.appendEntry(8, 8, 5);
 
 		Assertions.assertTrue(node.findFirstEntry(1) < 0);
 		Assertions.assertTrue(node.findLastEntry(1) < 0);
@@ -121,14 +121,14 @@ public class POHNodeTest {
 		POHNode node = new POHNode(id);
 		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
 
-		node.appendEntryMinTS(1, 1);
-		node.appendEntryMinTS(5, 2);
-		node.appendEntryMinTS(10, 3);
-		node.appendEntryMinTS(10, 4);
-		node.appendEntryMinTS(10, 5);
-		node.appendEntryMinTS(11, 6);
-		node.appendEntryMinTS(32, 7);
-		node.appendEntryMinTS(36, 8);
+		node.appendEntry(1, 1, 1);
+		node.appendEntry(5, 5, 2);
+		node.appendEntry(10, 10, 3);
+		node.appendEntry(10, 10, 4);
+		node.appendEntry(10, 10, 5);
+		node.appendEntry(11, 11, 6);
+		node.appendEntry(32, 32, 7);
+		node.appendEntry(36, 36, 8);
 
 		Assertions.assertEquals(2, node.findFirstEntry(7));
 		Assertions.assertEquals(2, node.findFirstEntry(10));
@@ -144,11 +144,11 @@ public class POHNodeTest {
 		POHNode node = new POHNode(id);
 		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
 
-		node.appendEntryMinTS(5, 1);
-		node.appendEntryMinTS(7, 2);
-		node.appendEntryMinTS(8, 3);
-		node.appendEntryMinTS(17, 4);
-		node.appendEntryMinTS(27, 5);
+		node.appendEntry(5, 5, 1);
+		node.appendEntry(7, 7, 2);
+		node.appendEntry(8, 8, 3);
+		node.appendEntry(17, 17, 4);
+		node.appendEntry(27, 27, 5);
 
 		Assertions.assertTrue(node.findFirstEntry(3) < 0);
 		Assertions.assertTrue(node.findFirstEntry(30) >= 0);
@@ -166,13 +166,13 @@ public class POHNodeTest {
 		POHNode node = new POHNode(id);
 		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
 
-		node.appendEntryMinTS(5, 1);
-		node.appendEntryMinTS(8, 2);
-		node.appendEntryMinTS(15, 3);
-		node.appendEntryMinTS(20, 4);
-		node.appendEntryMinTS(25, 5);
-		node.appendEntryMinTS(33, 6);
-		node.appendEntryMinTS(40, 7);
+		node.appendEntry(5, 5, 1);
+		node.appendEntry(8, 8, 2);
+		node.appendEntry(15, 15, 3);
+		node.appendEntry(20, 20, 4);
+		node.appendEntry(25, 25, 5);
+		node.appendEntry(33, 33, 6);
+		node.appendEntry(40, 40, 7);
 
 		Assertions.assertArrayEquals(new long[]{4, 3, 2}, node.findAllEntriesMinBased(12, 20)); //Lower limit out of range
 		Assertions.assertArrayEquals(new long[]{5, 4, 3}, node.findAllEntriesMinBased(20, 32)); //Upper limit out of range

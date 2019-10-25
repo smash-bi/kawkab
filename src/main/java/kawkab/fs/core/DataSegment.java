@@ -46,9 +46,7 @@ public final class DataSegment extends Block {
 	private int initialAppendPos; // Index from which data will be appended the first time. This position is not modified with the appends
 	private int bytesLoaded; // Number of bytes loaded in this block from the local or remote storage
 	
-	private boolean opened = false;
-	private RandomAccessFile rwFile;
-	private SeekableByteChannel channel;
+	//private RandomAccessFile rwFile;
 	private ByteBuffer storeBuffer; //Used only by the localStoreManager
 	
 	/**
@@ -79,9 +77,6 @@ public final class DataSegment extends Block {
 		initialAppendPos = 0;
 		initedForAppends = false;
 		bytesLoaded = 0;
-		opened = false;
-		rwFile = null;
-		channel = null;
 	}
 	
 	synchronized void initForAppend(long offsetInFile, int recordSize) {
@@ -94,6 +89,8 @@ public final class DataSegment extends Block {
 		dirtyOffset = initialAppendPos;
 		
 		initedForAppends = true;
+		if (initialAppendPos == 0)
+			setIsLoaded();
 	}
 	
 	boolean isFull() {
@@ -232,13 +229,14 @@ public final class DataSegment extends Block {
 	 */
 	public int readAll(long minTS, long maxTS, Record recordFactory, List<Record> results, int recordSize) {
 		ByteBuffer buf = dataBuf.duplicate();
+		buf.rewind(); //To read the first record
 
 		int limit = writePos.get();
 		buf.limit(limit);
 
-		assert limit >= recordSize; // at least have one record
+		//FIXME: The offset of timestamps in the records should based on the recordFactory. Currently it is done without any knowledge about the records.
 
-		buf.rewind(); //To read the first record
+		assert buf.remaining() >= recordSize; // at least have one record
 		if (maxTS < buf.getLong(0)) { // if the records in this segment are all greater than the given range
 			return 0;
 		}
@@ -346,7 +344,14 @@ public final class DataSegment extends Block {
 		int bytesRead = Commons.readFrom(channel, buffer);
 		
 		bytesLoaded = bytesRead;
-		
+
+		if (!initedForAppends) {
+			dirtyOffset = bytesLoaded;
+			writePos.set(bytesLoaded);
+			segmentIsFull = bytesLoaded == conf.segmentSizeBytes;
+			initialAppendPos = bytesLoaded;
+		}
+
 		System.out.printf("[DS] Loaded bytes from channel: %d, length=%d, bufPosition=%d\n", bytesRead, length, dataBuf.position());
 		
 		return bytesRead;
@@ -380,7 +385,13 @@ public final class DataSegment extends Block {
 		buffer.put(srcBuffer);
 		
 		bytesLoaded = buffer.position();
-		
+
+		if (!initedForAppends) {
+			dirtyOffset = bytesLoaded;
+			writePos.set(bytesLoaded);
+			segmentIsFull = bytesLoaded == conf.segmentSizeBytes;
+			initialAppendPos = bytesLoaded;
+		}
 
 		System.out.println("[DS] Bytes loaded: " + bytesLoaded);
 		
@@ -389,8 +400,8 @@ public final class DataSegment extends Block {
 	
 	@Override
 	public ByteString byteString() {
-		int limit = bytesLoaded;
-		if (initedForAppends) {
+		int limit = bytesLoaded; //The bytes loaded for reading
+		if (initedForAppends) { //If the segment was initialized for appends, the limit should be the write position
 			limit = writePos.get();
 		}
 
@@ -398,7 +409,6 @@ public final class DataSegment extends Block {
 		synchronized (storeBuffer) {
 			storeBuffer.clear();
 			storeBuffer.limit(limit);
-			storeBuffer.rewind();
 
 			bytes = ByteString.copyFrom(storeBuffer, limit);
 		}
@@ -406,8 +416,7 @@ public final class DataSegment extends Block {
 		return bytes;
 	}
 	
-	@Override
-	protected synchronized void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
+	private synchronized void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
 		primaryNodeService.getSegment((DataSegmentID)id, this);
 	}
 	
@@ -437,43 +446,38 @@ public final class DataSegment extends Block {
 		
 		long now = System.currentTimeMillis();
 		
-		if (lastFetchTimeMs < now - conf.dataSegmentFetchExpiryTimeoutMs) { // If the last data-fetch-time exceeds the time limit
-			
-			now = System.currentTimeMillis();
-			
-			if (lastFetchTimeMs < now - conf.dataSegmentFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
-				try {
-					System.out.println("[DS] Load from the global: " + id());
-					
-					loadFromGlobal(); // First try loading data from the global store
-					lastFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store.
-					return;
-					
-					//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
-				} catch (FileNotExistException e) { //If the block is not in the global store yet
-					System.out.println("[B] Not found in the global: " + id());
-					lastFetchTimeMs = 0; // Failed to fetch from the global store
-				}
-				
-				System.out.println("[B] Primary fetch expired or not found from the global: " + id());
-				
-				try {
-					System.out.println("[B] Loading from the primary: " + id());
-					loadBlockFromPrimary(); // Fetch data from the primary node
-					//lastPrimaryFetchTimeMs = now;
-					if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed
-						lastFetchTimeMs = now;
-				} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
-					// Check again from the global store because the primary may have deleted the
-					// block after copying to the global store
-					System.out.println("[B] Not found on the primary, trying again from the global: " + id());
-					loadFromGlobal();
+		if (lastFetchTimeMs < now - conf.dataSegmentFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
+			try {
+				System.out.println("[DS] Load from the global: " + id());
+
+				loadFromGlobal(); // First try loading data from the global store
+				lastFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store.
+				return;
+
+				//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
+			} catch (FileNotExistException e) { //If the block is not in the global store yet
+				System.out.println("[B] Not found in the global: " + id());
+				lastFetchTimeMs = 0; // Failed to fetch from the global store
+			}
+
+			System.out.println("[B] Primary fetch expired or not found from the global: " + id());
+
+			try {
+				System.out.println("[B] Loading from the primary: " + id());
+				loadBlockFromPrimary(); // Fetch data from the primary node
+				//lastPrimaryFetchTimeMs = now;
+				if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed
 					lastFetchTimeMs = now;
-					//lastPrimaryFetchTimeMs = 0;
-				} catch (IOException ioe) {
-					System.out.println("[B] Not found in the global and the primary: " + id());
-					throw new KawkabException(ioe);
-				}
+			} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
+				// Check again from the global store because the primary may have deleted the
+				// block after copying to the global store
+				System.out.println("[B] Not found on the primary, trying again from the global: " + id());
+				loadFromGlobal();
+				lastFetchTimeMs = now;
+				//lastPrimaryFetchTimeMs = 0;
+			} catch (IOException ioe) {
+				System.out.println("[B] Not found in the global and the primary: " + id());
+				throw new KawkabException(ioe);
 			}
 		}
 	}
@@ -523,10 +527,6 @@ public final class DataSegment extends Block {
 	 * Returns the append offset with respect to the start of the block instead of the segment
 	 */
 	private int appendOffsetInBlock() {
-		//dirtyBytesLock.lock();
-		//int offsetInSegment = dirtyBytesLength > 0 ? dirtyBytesStart : 0;
-		//dirtyBytesLock.unlock();
-		
 		//Offset in block is equal to the start offset of the current segment + the start of the dirty bytes
 		int offset = segmentInBlock * segmentSizeBytes + dirtyOffset;
 		

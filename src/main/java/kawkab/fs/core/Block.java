@@ -49,9 +49,11 @@ public abstract class Block extends AbstractTransferItem {
 	//private volatile boolean inLocalQueue;  // The block is in a queue for local persistence
 	private AtomicBoolean inGlobalQueue; // The block is in a queue for global persistence
 	private AtomicBoolean inLocalStore; // The blocks is currently in the local store (can be in more places as well)
-	private AtomicBoolean inCache;      // The block is in cache 
+	private AtomicBoolean inCache;      // The block is in cache
 	
 	private boolean isLoaded; //If the block bytes are already loaded; used only on the primary node
+
+	protected boolean isOnPrimary;
 	
 	public long inQCount = 0; //For debug purposes
 	public long inTries = 0; //For debug purposes
@@ -61,8 +63,9 @@ public abstract class Block extends AbstractTransferItem {
 		
 		localStoreSyncLock = new Object();
 		dataLoadLock = new ReentrantLock();
-		
-		isLocalDirty = false;
+
+		isOnPrimary    = id.onPrimaryNode();
+		isLocalDirty   = false;
 		globalDirtyCnt = new AtomicInteger(0);
 		inGlobalQueue  = new AtomicBoolean(false);
 		inLocalStore   = new AtomicBoolean(false);
@@ -78,6 +81,7 @@ public abstract class Block extends AbstractTransferItem {
 		inLocalStore.set(false);
 		inCache.set(false);
 		isLoaded = false;
+		isOnPrimary = id.onPrimaryNode();
 	}
 	
 	/**
@@ -313,7 +317,7 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws IOException
 	 */
 	public void loadBlock() throws FileNotExistException, KawkabException, IOException {
-		if (id.onPrimaryNode()) { // If this node is the primary writer of the file
+		if (isOnPrimary) { // If this node is the primary writer of the file
 			loadBlockOnPrimary();
 			return;
 		}
@@ -339,13 +343,14 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws IOException
 	 */
 	private void loadBlockOnPrimary() throws FileNotExistException, KawkabException, IOException {
-		if (!id.onPrimaryNode()) { //FIXME: Do we need to check again? First time this is checked in the loadBlock().
+		if (!isOnPrimary) { //FIXME: Do we need to check again? First time this is checked in the loadBlock().
 			throw new KawkabException("Unexpected execution path. This node is not the primary node of this block: " + 
 																		id() + ", primary node: " + id.primaryNodeID());
 		}
-		
+
 		//Load only if the block is not already loaded
 		if (!isLoaded) {
+			System.out.println(" **** LOAD BLOCK ON PRIMARY: " + id);
 			try {
 				dataLoadLock.lock(); // Disable loading from concurrent threads
 				//Load only if it is not already loaded
@@ -366,16 +371,7 @@ public abstract class Block extends AbstractTransferItem {
 			}
 		}
 	}
-	
-	/**
-	 * Helper function to load the content of the block from the primary node.
-	 * 
-	 * @throws FileNotExistException
-	 * @throws KawkabException
-	 * @throws IOException
-	 */
-	protected abstract void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException;
-	
+
 	void setInLocalStore() {
 		inLocalStore.set(true);
 	}
@@ -397,6 +393,11 @@ public abstract class Block extends AbstractTransferItem {
 	}
 	
 	protected abstract void onMemoryEviction();
+
+	protected void setIsLoaded() {
+		// System.out.println("Setting is loaded: " + id);
+		isLoaded = true;
+	}
 }
 
 /**

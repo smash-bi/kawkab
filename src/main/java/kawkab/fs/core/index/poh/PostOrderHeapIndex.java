@@ -5,13 +5,11 @@ import kawkab.fs.core.IndexNodeID;
 import kawkab.fs.core.LocalStoreManager;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.index.FileIndex;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Nodes in a post-order heap are created in the post-order, i.e., the parent node is created after the children. It is
@@ -20,23 +18,24 @@ import java.util.concurrent.atomic.AtomicLong;
  * The class supports only one modifier thread. The concurrent modifiers should synchronized externally.
  */
 
-public class PostOrderHeapIndex implements FileIndex {
+public class PostOrderHeapIndex {
 	// Persistent variables, persisted in the inode
 	private long inumber;
 	private final LocalStoreManager localStore = LocalStoreManager.instance();
 
 	private final double logBase;
-	private ArrayList<POHNode> nodes;	//This is an append-only list. The readers should read but not modify the list. Only a single writer should append new nodes.
+	private ConcurrentHashMap<Integer, POHNode> nodes;	//This is an append-only list. The readers should read but not modify the list. Only a single writer should append new nodes.
 
 	// Configuration parameters
-	private int childrenPerNode; //Branching factor of the tree
-	private int entriesPerNode; //Number of index entries in each node
-	private int nodesPerBlock;
-	private POHNode currentNode;
+	private final int childrenPerNode; //Branching factor of the tree
+	private final int entriesPerNode; //Number of index entries in each node
+	private final int nodesPerBlock;
 
 	// Number of timestamps in the index. The length divided by 2 shows the number of index entries in the index.
 	// Moreover, if the length is an odd number, the last index entry is half complete.
-	private AtomicLong length = new AtomicLong(0);
+	//TODO: We don't need this variable. We should calculate the length of index from the fileSize to avoid atomically
+	// updating the fileSize and index length in the inode
+	//private AtomicLong length = new AtomicLong(0);
 
 	// nodesCountTable: A lookup table that contains the number of nodes in the perfect k-ary tree of height i, i>=0.
 	// We use this table to avoid the complex math functions. Array index is the key, which is the node number.
@@ -89,8 +88,8 @@ public class PostOrderHeapIndex implements FileIndex {
 		//System.out.printf("Index entries per node:  %d\n", entriesPerNode);
 		//System.out.printf("Index pointers per node: %d\n", childrenPerNode);
 
-		nodes = new ArrayList<>();
-		nodes.add(null); // Add a dummy value to match the node number with the array index. We do this to simplify the calculation of the index of the children of a node
+		nodes = new ConcurrentHashMap<>();
+		//nodes.add(null); // Add a dummy value to match the node number with the array index. We do this to simplify the calculation of the index of the children of a node
 
 		//currentNode = createNewNode(1);
 		//nodes.add(currentNode);
@@ -102,20 +101,42 @@ public class PostOrderHeapIndex implements FileIndex {
 		}
 	}
 
-	@Override
-	public void loadAndInit() throws IOException, KawkabException {
-		long len = length.get();
-		int nodesCount = (int)Math.ceil((len + 1) / 2 / ((double)entriesPerNode)); // Ceil value of ( Total number of entries / entries per node )
+	/**
+	 * Load the index from the local or the global store
+	 *
+	 * The length of the index must already be set.
+	 */
+	public void loadAndInit(final long indexLength) throws IOException, KawkabException {
+		//long len = length.get();
+		int nodesCount = (int)Math.ceil((indexLength + 1) / 2 / ((double)entriesPerNode)); // Ceil value of ( Total number of entries / entries per node )
 
 		//System.out.printf("[POHI] Loading %d nodes, index length %d\n",nodesCount, len);
 
 		for (int i=1; i<=nodesCount; i++) {
-			POHNode node = loadIndexNode(i);
-			setChildren(node);
-			nodes.add(node);
+			acquireNode(i);
+			//POHNode node = loadIndexNode(i);
+			//nodes.put(i, node);
 		}
+	}
 
-		currentNode = nodes.get(nodesCount);
+	private POHNode acquireNode(int nodeNum) throws IOException, KawkabException {
+		System.out.printf("[POH] Acquire node %d\n", nodeNum);
+		POHNode node = nodes.get(nodeNum);
+		if (node == null) {
+			synchronized (nodes) {
+				node = nodes.get(nodeNum);
+				if (node == null) {
+					System.out.printf("[POH] Acquiring from cache node %d\n", nodeNum);
+					IndexNodeID id = new IndexNodeID(inumber, nodeNum);
+					node = (POHNode) cache.acquireBlock(id);
+					node.init(nodeNum, heightOfNode(nodeNum), entriesPerNode, childrenPerNode, nodeSizeBytes);
+					node.loadBlock();
+					POHNode prev = nodes.put(nodeNum, node);
+					assert prev == null;
+				}
+			}
+		}
+		return node;
 	}
 
 	/**
@@ -125,29 +146,23 @@ public class PostOrderHeapIndex implements FileIndex {
 	 * @return
 	 */
 	private void createNewBlock(IndexNodeID nodeID) throws IOException, InterruptedException {
-		// System.out.println("Creating new block: " + nodeID.localPath());
+		  System.out.println("[POH] Creating new block: " + nodeID.localPath());
 
 		localStore.createBlock(nodeID);
 	}
 
-	private POHNode loadIndexNode(final int nodeNumber) throws IOException, KawkabException {
-		IndexNodeID id = new IndexNodeID(inumber, nodeNumber);
-
-		POHNode node = (POHNode) cache.acquireBlock(id);
-		node.init(nodeNumber, heightOfNode(nodeNumber), entriesPerNode, childrenPerNode, nodeSizeBytes);
-		node.loadBlock();
-		return node;
-	}
-
 	private POHNode createNewNodeCached(final int nodeNumber) throws IOException, KawkabException, InterruptedException {
-		int height = heightOfNode(nodeNumber);
 		IndexNodeID nodeID = new IndexNodeID(inumber, nodeNumber);
 
-		// System.out.println("  Creating new node: " + nodeID);
+		System.out.println("[POH] Creating new node: " + nodeID);
 
 		POHNode node = (POHNode) cache.acquireBlock(nodeID);
-		node.init(nodeNumber, height, entriesPerNode, childrenPerNode, nodeSizeBytes);
+		node.init(nodeNumber, heightOfNode(nodeNumber), entriesPerNode, childrenPerNode, nodeSizeBytes);
+		node.initForAppend();
 		setChildren(node);
+		POHNode prev = nodes.put(nodeNumber, node); //No other thread (readers) can concurrently access this node because the filesize is not updated yet
+
+		assert prev == null;
 
 		if (nodeNumber % nodesPerBlock == 0 || nodeNumber == 1)
 			createNewBlock(nodeID);
@@ -155,7 +170,7 @@ public class PostOrderHeapIndex implements FileIndex {
 		return node;
 	}
 
-	private POHNode createNewNodeInMemory(final int nodeNumber) {
+	private POHNode createNewNodeInMemory(final int nodeNumber) throws IOException, KawkabException {
 		int height = heightOfNode(nodeNumber);
 		IndexNodeID nodeID = new IndexNodeID(inumber, nodeNumber);
 		POHNode node = new POHNode(nodeID);
@@ -164,10 +179,10 @@ public class PostOrderHeapIndex implements FileIndex {
 		return node;
 	}
 
-	private void setChildren(final POHNode node) {
+	private void setChildren(final POHNode node) throws IOException, KawkabException {
 		if (node.height() > 0) {
 			for (int i = 1; i <= childrenPerNode; i++) {
-				POHNode child = nodes.get(nthChild(node.nodeNumber(), node.height(), i));
+				POHNode child = acquireNode(nthChild(node.nodeNumber(), node.height(), i));
 				try {
 					node.appendChild(child);
 				} catch (IndexBlockFullException e) {
@@ -179,15 +194,19 @@ public class PostOrderHeapIndex implements FileIndex {
 	}
 
 	/**
-	 * Appends the segment number and the timestamp of the first entry in the segment
+	 * Appends the timestamp of the first record in the segment number segmentInFile
 	 *
-	 * This function is not thread safe.
+	 * The function call to this function must precede the call to appendMaxTS.
 	 *
-	 * @param minTS timestamp in the data segment
-	 * @param segmentInFile Segment number in the file that has the record with the timestamp
+	 * This function is not thread-safe.
+	 *
+	 * @param minTS timestamp
+	 * @param segmentInFile segment number in the file
+	 *
+	 * @throws IOException
+	 * @throws KawkabException
 	 */
-	@Override
-	public void appendMinTS(final long minTS, final long segmentInFile) {
+	public void appendMinTS(final long minTS, final long segmentInFile, final long curIndexLen) throws IOException, KawkabException, InterruptedException {
 		//TODO: check the arguments
 
 		// Current node should not be null.
@@ -198,19 +217,24 @@ public class PostOrderHeapIndex implements FileIndex {
 		//		insert the new index value
 		// Add the new node in the nodes array
 
-		long curLength = length.get();
+		//long curLength = length.get();
 
-		if (currentNode == null || currentNode.isFull()) {
-			assert (curLength % 2) == 0;
+		System.out.printf("[POH] appendMinTS: segInFile=%d, indexLen=%d\n", segmentInFile, curIndexLen);
 
+		assert (curIndexLen % 2) == 0;
+
+		POHNode currentNode = null;
+		if ((curIndexLen % (entriesPerNode*2)) == 0) { //If last node is full
 			try {
-				currentNode = createNewNodeCached((int)(curLength/2/entriesPerNode) +1);
+				int nodeNum = (int)(curIndexLen/2/entriesPerNode) +1;
+				currentNode = createNewNodeCached(nodeNum);
 			} catch (IOException | KawkabException | InterruptedException e) {
 				e.printStackTrace();
 				return;
 			}
-
-			nodes.add(currentNode);
+		} else {
+			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
+			currentNode = acquireNode(lastNode);
 		}
 
 		try {
@@ -219,42 +243,61 @@ public class PostOrderHeapIndex implements FileIndex {
 			e.printStackTrace();
 		}
 
-		length.incrementAndGet();
+		// length.incrementAndGet();
 
 		//System.out.println("Min: " + minTS + ", seg: " + segmentInFile);
 	}
 
-	@Override
-	public void appendMaxTS(final long maxTS, final long segmentInFile) {
-		long curLength = length.get();
+	/**
+	 * Appends the timestamp of the last record in the segment number segmentInFile. This function must be called
+	 * after the corresponding appendMinTS
+	 *
+	 * segmentInFile must match with the last index entry's segmentInFile that was provided through appendMinTS function call.
+	 *
+	 * @param maxTS timestamp
+	 * @param segmentInFile segment number in the file
+	 *
+	 * @throws IOException
+	 * @throws KawkabException
+	 */
+	public void appendMaxTS(final long maxTS, final long segmentInFile, final long curIndexLen) throws IOException, KawkabException {
+		//long curLength = length.get();
 
-		assert curLength % 2 == 1;
-		assert currentNode != null;
+		System.out.printf("[POH] appendMaxTS: segInFile=%d, indexLen=%d\n", segmentInFile, curIndexLen);
+
+		assert curIndexLen % 2 == 1;
+
+		int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
+		POHNode currentNode = acquireNode(lastNode);
 
 		currentNode.appendEntryMaxTS(maxTS, segmentInFile);
 
-		length.incrementAndGet();
+		// length.incrementAndGet();
 
 		//System.out.println("\tMax: " + maxTS + ", seg: " + segmentInFile);
 	}
 
-	@Override
-	public void appendIndexEntry(final long minTS, final long maxTS, final long segmentInFile) {
+	public void appendIndexEntry(final long minTS, final long maxTS, final long segmentInFile, final long curIndexLen) throws IOException, KawkabException {
 		assert minTS <= maxTS;
 
-		long curLength = length.get();
+		assert (curIndexLen % 2) == 0;
 
-		if (currentNode == null || currentNode.isFull()) {
-			assert (curLength % 2) == 0;
+		//long curLength = length.get();
 
+		System.out.printf("[POH] appendIndexEntry: segInFile=%d, indexLen=%d\n", segmentInFile, curIndexLen);
+
+		POHNode currentNode = null;
+		if ((curIndexLen % (entriesPerNode*2)) == 0) { //If last node is full
 			try {
-				currentNode = createNewNodeCached((int)(curLength/2/entriesPerNode) +1);
+				int nodeNum = (int)(curIndexLen/2/entriesPerNode) +1;
+				currentNode = createNewNodeCached(nodeNum);
 			} catch (IOException | KawkabException | InterruptedException e) {
 				e.printStackTrace();
 				return;
 			}
-
-			nodes.add(currentNode);
+		} else {
+			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
+			currentNode = acquireNode(lastNode);
 		}
 
 		try {
@@ -263,46 +306,54 @@ public class PostOrderHeapIndex implements FileIndex {
 			e.printStackTrace();
 		}
 
-		length.addAndGet(2);
+		//length.addAndGet(2);
 	}
 
 	/**
-	 * Searches the timestamp in the index.
+	 * Searches the most recent segment that has the timestamp.
 	 *
 	 * @param ts timestamp to find
 	 *
 	 * @return the segment number in file that contains ts, or -1 if no entry found
 	 */
-	@Override
-	public long findHighest(long ts) {
-		long curLen = length.get();
-		int lastNodeIdx = lastNodeIndex(curLen, entriesPerNode);
+	public long findHighest(final long ts, final long indexLength) throws IOException, KawkabException {
+		System.out.printf("[POH] findHighest %d, index len %d, num nodes %d\n", ts, indexLength, nodes.size());
+		//long curLen = length.get();
+		int lastNodeIdx = lastNodeIndex(indexLength, entriesPerNode);
+
+		System.out.println();
+
 		int curNode = findNode(ts, true, lastNodeIdx);
 
 		if (curNode == -1)
 			return -1;
 
-		return nodes.get(curNode).findLastEntry(ts);
+		return acquireNode(curNode).findLastEntry(ts);
 	}
 
 	/**
-	 * Find all the data segments that can have the timestamps minTS and maxTS. The segment numbers returned have the first record's
-	 * timestamp smaller than or equal to minTS. This indicates that the lowest segment number may or may not have the minTS record.
+	 * Find all entries between the given timestamps inclusively based on the minTS of the index entries.
+	 * The lowest segment may or may not have the minTS.
 	 *
-	 * The returned list is in descending order of the segment numbers
+	 * If the index has minTS [1, 2, 3, 3, 3, 5}, searching for the range [3, 4] will return the
+	 * four segment numbers that has the timetamps 2 and 3 in the index. This is because this function does not
+	 * consider the maxTS to exclude the segment that has minTS 2. Therefore, the segment with minTS 2 may have the
+	 * timestamp 3 in one of its records.
 	 *
-	 * @param minTS
-	 * @return null if no such segment is found
+	 * @param minTS smallest timestamp
+	 * @param maxTS largest timestamp
+	 * @return null if no records are found, other returns the list of the lists of timestamps
 	 */
-	@Override
-	public List<long[]> findAllMinBased(final long minTS, final long maxTS) {
+	public List<long[]> findAllMinBased(final long minTS, final long maxTS, final long indexLen) throws IOException, KawkabException {
 		// Find the right most node that has maxTS
 		// Traverse from that node to the left until the first value smaller than minTS is reached
 
+		System.out.printf("[POH] findAllMinBased: indexLen=%d\n", indexLen);
+
 		assert minTS <= maxTS;
 
-		long curLen = length.get();
-		int lastNodeIdx = lastNodeIndex(curLen, entriesPerNode);
+		//long curLen = length.get();
+		int lastNodeIdx = lastNodeIndex(indexLen, entriesPerNode);
 		int curNode = findNode(maxTS, true, lastNodeIdx);
 
 		if (curNode == -1)
@@ -311,7 +362,7 @@ public class PostOrderHeapIndex implements FileIndex {
 		List<long[]> results = new ArrayList<>();
 
 		while(curNode > 0) {
-			POHNode node = nodes.get(curNode);
+			POHNode node = acquireNode(curNode);
 
 			long[] res = node.findAllEntriesMinBased(minTS, maxTS);
 
@@ -328,8 +379,14 @@ public class PostOrderHeapIndex implements FileIndex {
 		return results;
 	}
 
-	@Override
-	public List<long[]> findAll(final long minTS, final long maxTS) {
+	/**
+	 * This function returns the segment numbers of all the segments that have minTS and maxTS inclusively.
+	 *
+	 * @param minTS
+	 * @param maxTS
+	 * @return
+	 */
+	public List<long[]> findAll(final long minTS, final long maxTS, final long indexLength) throws IOException, KawkabException {
 		// Moving to the roots of the trees on the left, find the right-most root node N that has maxTS between minChildTS and maxEntryTS
 		// Traverse the tree rooted at N until the node K that has the maxTS between minEntryTS and maxEntryTS
 		// While traversing down the tree, select the right most child that has minChildTS less than or equal to maxTS
@@ -338,23 +395,25 @@ public class PostOrderHeapIndex implements FileIndex {
 
 		assert minTS <= maxTS;
 
-		long curLen = length.get();
-		int lastNodeIdx = lastNodeIndex(curLen, entriesPerNode);
+		System.out.printf("[POH] findAll b/w %d and %d, index len %d, num nodes %d\n", minTS, maxTS, indexLength, nodes.size());
+
+		//long curLen = length.get();
+		int lastNodeIdx = lastNodeIndex(indexLength, entriesPerNode);
 		int curNode = findNode(maxTS, true, lastNodeIdx);
 
 		if (curNode <= 0) {
-			return checkLastNode(nodes.get(lastNodeIdx), minTS, curLen);
+			return checkLastNode(acquireNode(lastNodeIdx), minTS, indexLength);
 		}
 
 		List<long[]> results = new ArrayList<>();
 		if (curNode == lastNodeIdx) {
-			long[] res = checkLastEntry(nodes.get(lastNodeIdx), minTS, curLen);
+			long[] res = checkLastEntry(acquireNode(lastNodeIdx), minTS, indexLength);
 			if (res != null)
 				results.add(res);
 		}
 
 		while(curNode > 0) {
-			POHNode node = nodes.get(curNode);
+			POHNode node = acquireNode(curNode);
 
 			long[] res = node.findAllEntries(minTS, maxTS);
 
@@ -426,8 +485,8 @@ public class PostOrderHeapIndex implements FileIndex {
 	 * @param findLast
 	 * @return
 	 */
-	private int findNode(long ts, boolean findLast, int lastNodeIdx) {
-		if (ts < nodes.get(1).minTS()) //if the first index entry is larger than the ts, i.e., the given range is lower than data
+	private int findNode(long ts, boolean findLast, int lastNodeIdx) throws IOException, KawkabException {
+		if (ts < acquireNode(1).minTS()) //if the first index entry is larger than the ts, i.e., the given range is lower than data
 			return -1;
 
 		int curNode = findRootNode(ts, lastNodeIdx);
@@ -435,7 +494,7 @@ public class PostOrderHeapIndex implements FileIndex {
 		if (curNode <= 0) //No results found
 			return -1;
 
-		POHNode node = nodes.get(curNode);
+		POHNode node = acquireNode(curNode);
 		while(node.height() > 0) {
 			if (node.entryMinTS() <= ts)
 				break;
@@ -445,7 +504,7 @@ public class PostOrderHeapIndex implements FileIndex {
 			else
 				curNode = node.findFirstChild(ts);
 
-			node = nodes.get(curNode);
+			node = acquireNode(curNode);
 		}
 
 		return curNode;
@@ -456,8 +515,8 @@ public class PostOrderHeapIndex implements FileIndex {
 	 * @param ts
 	 * @return
 	 */
-	private int findRootNode(final long ts, final int lastNodeIdx) {
-		if (ts < nodes.get(1).minTS()) //if the first index entry is larger than the ts, i.e., the given range is lower than data
+	private int findRootNode(final long ts, final int lastNodeIdx) throws IOException, KawkabException {
+		if (ts < acquireNode(1).minTS()) //if the first index entry is larger than the ts, i.e., the given range is lower than data
 			return -1;
 
 		int curNode = lastNodeIdx; // Begin with the last node
@@ -468,7 +527,7 @@ public class PostOrderHeapIndex implements FileIndex {
 		while(curNode > 0) { // until we have explored all the root nodes; nodes[0] is null.
 			// Move to the root of the tree on the left
 
-			POHNode node = nodes.get(curNode);
+			POHNode node = acquireNode(curNode);
 
 			if (node.minTS() <= ts)
 				break;
@@ -485,14 +544,14 @@ public class PostOrderHeapIndex implements FileIndex {
 	 * @param childNumber
 	 * @return
 	 */
-	private int nthChild(int parentNodeNum, int parentHeight, int childNumber) {
+	private int nthChild(int parentNodeNum, int parentHeight, int childNumber) throws IOException, KawkabException {
 		assert parentHeight > 0 : "parentHeight must be greater than 0; parentHeight="+parentHeight;
 		assert childNumber > 0;
 
 		if (childNumber == childrenPerNode)
 			return parentNodeNum - 1;
 
-		return parentNodeNum - 1 - (childrenPerNode - childNumber)*(nodesCountTable[nodes.get(parentNodeNum-1).height()]);
+		return parentNodeNum - 1 - (childrenPerNode - childNumber)*(nodesCountTable[acquireNode(parentNodeNum-1).height()]);
 	}
 
 	/**
@@ -500,14 +559,14 @@ public class PostOrderHeapIndex implements FileIndex {
 	 * @param nodeNumber
 	 * @return
 	 */
-	private int heightOfNode(int nodeNumber) {
+	private int heightOfNode(int nodeNumber) throws IOException, KawkabException {
 		int testHeight = heightOfRoot(nodeNumber);
 		int totalNodesSubTree = nodesCountTable[testHeight];
 
 		if (nodeNumber == totalNodesSubTree)
 			return testHeight;
 
-		return nodes.get(nodeNumber - totalNodesSubTree).height();
+		return acquireNode(nodeNumber - totalNodesSubTree).height();
 	}
 
 	/**
@@ -542,41 +601,19 @@ public class PostOrderHeapIndex implements FileIndex {
 	}
 
 	public void print() {
-		for (POHNode node: nodes) {
-			if (nodes != null)
-				System.out.printf("%d,%d\n",node.nodeNumber(), node.height());
+		int size = nodes.size();
+		for (int i=size; i>0; i--) {
+			POHNode node = nodes.get(i);
+			System.out.printf("%d,%d\n",node.nodeNumber(), node.height());
 		}
 	}
 
-	@Override
 	public void shutdown() throws KawkabException {
-		for(POHNode node : nodes) {
-			if (node != null)
-				cache.releaseBlock(node.id());
+		for (POHNode node : nodes.values()) {
+			cache.releaseBlock(node.id());
 		}
-	}
 
-	@Override
-	public int storeTo(ByteBuffer buffer) {
-		buffer.putLong(length.get());
-		buffer.putInt(entriesPerNode);
-		buffer.putInt(childrenPerNode);
-		buffer.putInt(nodeSizeBytes);
-
-		// System.out.println("\t\t[POHI] Stored index length: " + length.get());
-
-		return Long.BYTES;
-	}
-
-	@Override
-	public int loadFrom(ByteBuffer buffer) throws IOException {
-		length.set(buffer.getLong());
-		entriesPerNode = buffer.getInt();
-		childrenPerNode = buffer.getInt();
-		nodeSizeBytes = buffer.getInt();
-
-		// System.out.println("\t\t[POHI] Loaded index length: " + length.get());
-
-		return Long.BYTES;
+		nodes.clear();
+		nodes = null;
 	}
 }

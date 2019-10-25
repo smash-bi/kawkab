@@ -10,41 +10,38 @@ class POHEntry implements TimeRange{
 	private long minTS;
 	private long maxTS;
 	private boolean isMaxSet;
-	private boolean isMinStored;
-	private boolean isDirty;
 
 	POHEntry() {
 		segmentInFile = -1;
 		minTS = -1;
 		maxTS = -1;
 		isMaxSet = false;
-		isMinStored = false;
-		isDirty = false;
 	}
 
 	POHEntry(final long minTS, final long segmentInFile) {
 		this(minTS, minTS, segmentInFile);
 		isMaxSet = false;
-		isDirty = true;
 	}
 
 	POHEntry(final long minTS, final long maxTS, final long segmentInFile) {
 		assert minTS <= maxTS;
 
+		System.out.println("\t\t\tEntry: "  + segmentInFile + " - " + minTS);
+
 		this.segmentInFile = segmentInFile;
 		this.minTS = minTS;
 		this.maxTS = maxTS;
 		isMaxSet = true;
-		isDirty = true;
 	}
 
 	void setMaxTS(final long maxTS) {
 		assert !isMaxSet;
-		assert minTS <= maxTS : String.format("minsTS should less than or equal to the given maxTS, minTS=%d, maxTS=%d", minTS, maxTS);
+		assert minTS <= maxTS : String.format("minTS should less than or equal to the given maxTS, minTS=%d, maxTS=%d", minTS, maxTS);
 
 		this.maxTS = maxTS;
 		isMaxSet = true;
-		isDirty = true;
+
+		System.out.println("\t\t\tEntry with max: " + segmentInFile + " - " + minTS + " - " + maxTS);
 	}
 
 	static int sizeBytes() {
@@ -82,43 +79,64 @@ class POHEntry implements TimeRange{
 		return maxTS;
 	}
 
-	boolean storeTo(ByteBuffer dstBuf) {
-		assert isDirty;
-
-		if (!isMinStored) {
+	/**
+	 * This function changes the internal state. Therefore, it is only called when storing data to file for persistence.
+	 *
+	 * @param dstBuf
+	 * @return whehter the max value is stored in the buffer or not
+	 */
+	boolean storeTo(ByteBuffer dstBuf, boolean withMin) {
+		if (withMin) { //If the offset is an even number, the buffer starts with the minTS and segInFile
 			dstBuf.putLong(segmentInFile);
 			dstBuf.putLong(minTS);
-			isMinStored = true;
+			System.out.printf("\t\t\t\t\tStoring: sif=%d, min=%d", segmentInFile, minTS);
 		}
 
 		if (isMaxSet) {
 			dstBuf.putLong(maxTS);
+
+			System.out.printf("\t >, max=%d\n", maxTS);
+
+			return true;
 		}
 
-		isDirty = false;
-		return isMaxSet;
+		 System.out.println();
+
+		return false;
 	}
 
-	boolean loadFrom(ByteBuffer srcBuf) {
-		segmentInFile = srcBuf.getLong();
-		minTS = srcBuf.getLong();
-		isMinStored = true;
-		isDirty = false;
-		isMaxSet = false;
+	/**
+	 * This function changes the internal state. Therefore, it must be only called when loading data from a persistent file or block.
+	 * @param srcBuf
+	 * @return
+	 */
+	boolean loadFrom(ByteBuffer srcBuf, boolean hasMin) {
+		if (hasMin) {
+			assert !isMaxSet;
 
-		if (srcBuf.remaining() >= Long.BYTES) {
-			maxTS = srcBuf.getLong();
-
-			if (maxTS > 0) { //If maxTS is zero, this indicates that the this entry had no maxTS when the node was persisted.
-				isMaxSet = true;
-			}
-		}
-
-		if (!isMaxSet) {
+			segmentInFile = srcBuf.getLong();
+			minTS = srcBuf.getLong();
 			maxTS = minTS;
 		}
 
-		return isMaxSet;
+		if (srcBuf.remaining() >= Long.BYTES) {
+			long max = srcBuf.getLong();
+
+			if (max > 0) { //If maxTS is zero, this indicates that the this entry had no maxTS when the node was persisted.
+				maxTS = max;
+				isMaxSet = true;
+
+				  System.out.printf("\t\t\t\t\tLoading with max: sif=%d, min=%d, max=%d\n", segmentInFile, minTS, maxTS);
+
+				return true;
+			}
+
+			srcBuf.position(srcBuf.position() - Long.BYTES);
+		}
+
+		  System.out.printf("\t\t\t\t\tLoading: sif=%d, min=%d, max=%d\n", segmentInFile, minTS, maxTS);
+
+		return false;
 	}
 
 	boolean isMaxSet() {

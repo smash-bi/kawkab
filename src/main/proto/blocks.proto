@@ -17,6 +17,11 @@ message KInodesBlockID {
   int32 blockIndex   = 1;
 }
 
+message KIndexNodeID {
+  int64 inumber        = 1;
+  int32 nodeNumInIndex = 2;
+}
+
 message KSegmentResponse {
   bytes segmentBytes   = 1;
   KErrorCode errorCode = 2;
@@ -31,11 +36,24 @@ message KExistsResponse {
   bool exists = 1;
 }
 
+message KIndexNodeResponse {
+  bytes indexNodeBytes = 1;
+  KErrorCode errorCode = 2;
+}
+
+message KIndexNodeRequest {
+  int64 inumber         = 1;
+  int32 nodeNumInIndex  = 2;
+  int32 fromTsIdx       = 3;
+}
+
 service PrimaryNode {
-  rpc GetSegment(KSegmentID) returns (KSegmentResponse)   {}
   rpc SegmentExists(KSegmentID) returns (KExistsResponse) {}
-  
-  rpc GetInodesBlock(KInodesBlockID) returns (KInodesBlockResponse) {}
+  rpc GetSegment(KSegmentID) returns (KSegmentResponse)   {}
+
   rpc InodesBlockExists(KInodesBlockID) returns (KExistsResponse)   {}
+  rpc GetInodesBlock(KInodesBlockID) returns (KInodesBlockResponse) {}
+
+  rpc GetIndexNode(KIndexNodeRequest) returns (KIndexNodeResponse) {}
 }
 

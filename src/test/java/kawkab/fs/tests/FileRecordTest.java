@@ -38,16 +38,14 @@ public class FileRecordTest {
 		Filesystem.instance().shutdown();
 	}
 	
-	@Test
+	@Test @Disabled
 	public void smokeTest() throws IOException, KawkabException, InterruptedException {
 		System.out.println("------------------------");
 		System.out.println("- Records - Smoke Test -");
 		System.out.println("------------------------");
 		Random rand = new Random();
-		Record rec = new SampleRecord(System.currentTimeMillis(),
-				rand.nextFloat(), rand.nextFloat(), rand.nextBoolean(),
-				rand.nextFloat(), rand.nextFloat(), rand.nextBoolean());
-		
+		Record rec = new SampleRecord(System.currentTimeMillis(), rand);
+
 		Filesystem fs = Filesystem.instance();
 		
 		FileHandle file = fs.open("RecordsSmokeTest", Filesystem.FileMode.APPEND, new FileOptions(rec.size()));
@@ -82,10 +80,8 @@ public class FileRecordTest {
 		int offset = (int)file.size()/recSize;
 
 		for (int i=0; i<toAppend; i++) {
-			Record rec = new SampleRecord(i+1+offset,
-					rand.nextFloat(), rand.nextFloat(), rand.nextBoolean(),
-					rand.nextFloat(), rand.nextFloat(), rand.nextBoolean());
-			
+			Record rec = new SampleRecord(i+1+offset, rand);
+
 			recs.add(rec);
 			file.append(rec);
 		}
@@ -99,16 +95,14 @@ public class FileRecordTest {
 		fs.close(file);
 	}
 	
-	@Test
+	@Test @Disabled
 	public void simpleRecordReadTest() throws IOException, KawkabException, InterruptedException {
 		System.out.println("---------------------------");
 		System.out.println("- Simple Record Read Test -");
 		System.out.println("---------------------------");
 		Random rand = new Random();
-		Record rec = new SampleRecord(System.currentTimeMillis(),
-				rand.nextFloat(), rand.nextFloat(), rand.nextBoolean(),
-				rand.nextFloat(), rand.nextFloat(), rand.nextBoolean());
-		
+		Record rec = new SampleRecord(System.currentTimeMillis(), rand);
+
 		Filesystem fs = Filesystem.instance();
 		
 		FileHandle file = fs.open("SimpleRecordReadTest", Filesystem.FileMode.APPEND, new FileOptions(rec.size()));
@@ -127,7 +121,7 @@ public class FileRecordTest {
 		assertEquals(rec, recordOutAt);
 	}
 
-	@Test
+	@Test @Disabled
 	public void rangeReadTest() throws IOException, KawkabException, InterruptedException {
 		System.out.println("---------------------------");
 		System.out.println("- Record Range Read Test -");
@@ -143,7 +137,7 @@ public class FileRecordTest {
 
 		for (int i=0; i<numRecs; i++) {
 			long ts = i*offset+offset;
-			Record rec = new SampleRecord(ts, rand.nextDouble(), rand.nextDouble(), rand.nextBoolean(), rand.nextDouble(), rand.nextDouble(), rand.nextBoolean());
+			Record rec = new SampleRecord(ts, rand);
 			records[i] = rec;
 			file.append(rec);
 		}
@@ -179,7 +173,7 @@ public class FileRecordTest {
 		fs.close(file);
 	}
 
-	@Test
+	@Test @Disabled
 	public void rangeReadTestLarge() throws IOException, KawkabException, InterruptedException {
 		System.out.println("--------------------------------");
 		System.out.println("- Record Range Read Test Large -");

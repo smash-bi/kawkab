@@ -1,26 +1,20 @@
 package kawkab.fs.core.services.grpc;
 
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import kawkab.fs.commons.Configuration;
+import kawkab.fs.core.*;
+import kawkab.fs.core.exceptions.FileNotExistException;
+import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.services.grpc.PrimaryNodeGrpc.PrimaryNodeBlockingStub;
+import kawkab.fs.core.services.grpc.PrimaryNodeRPC.*;
+import kawkab.fs.core.services.proto.KawkabPrimaryNodeServiceEnums.KErrorCode;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
-
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
-import kawkab.fs.commons.Configuration;
-import kawkab.fs.core.Block;
-import kawkab.fs.core.DataSegmentID;
-import kawkab.fs.core.InodesBlockID;
-import kawkab.fs.core.NodesRegister;
-import kawkab.fs.core.exceptions.FileNotExistException;
-import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.services.grpc.PrimaryNodeGrpc.PrimaryNodeBlockingStub;
-import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KInodesBlockID;
-import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KInodesBlockResponse;
-import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KSegmentID;
-import kawkab.fs.core.services.grpc.PrimaryNodeRPC.KSegmentResponse;
-import kawkab.fs.core.services.proto.KawkabPrimaryNodeServiceEnums.KErrorCode;
 
 public final class PrimaryNodeServiceClient {
 	private static final Object initLock = new Object();
@@ -56,7 +50,7 @@ public final class PrimaryNodeServiceClient {
 		PrimaryNodeBlockingStub client = client(remoteID);
 		return client.segmentExists(sid).getExists();
 	}
-	
+
 	public void getSegment(DataSegmentID id, Block block) throws FileNotExistException, KawkabException, IOException {
 		System.out.println("[PC] getSegment: " + id);
 		
@@ -126,6 +120,43 @@ public final class PrimaryNodeServiceClient {
 		
 		throw new KawkabException("RPC failed.");
 	}
+
+	public ByteBuffer getIndexNode(IndexNodeID nodeID, int fromTsIdx) throws KawkabException, IOException {
+		System.out.println("[PC] getIndexNode: " + nodeID);
+
+		int retries = 10;
+		Random rand = new Random();
+
+		while (retries-- > 0) {
+			KIndexNodeRequest req = KIndexNodeRequest.newBuilder()
+					.setInumber(nodeID.inumber())
+					.setNodeNumInIndex(nodeID.nodeNumber())
+					.setFromTsIdx(fromTsIdx)
+					.build();
+
+			int remoteID = nodeID.primaryNodeID();
+			PrimaryNodeBlockingStub client = client(remoteID);
+			KIndexNodeResponse resp = client.getIndexNode(req);
+			KErrorCode ec = resp.getErrorCode();
+			if (ec == KErrorCode.BLOCK_NOT_EXIST) {
+				throw new FileNotExistException();
+			} else if (ec != KErrorCode.SUCCESS) {
+				try {
+					Thread.sleep(100+(rand.nextLong()%400));
+				} catch (InterruptedException e) {
+					throw new KawkabException(e);
+				}
+				continue;
+			}
+
+			return resp.getIndexNodeBytes().asReadOnlyByteBuffer();
+			//buf.rewind();
+			//dstBlock.loadFrom(buf);
+			//return buf;
+		}
+
+		throw new KawkabException("RPC failed.");
+	}
 	
 	private synchronized PrimaryNodeBlockingStub client(int nodeID) throws KawkabException {
 		PrimaryNodeBlockingStub client = clients.get(nodeID);
@@ -144,8 +175,9 @@ public final class PrimaryNodeServiceClient {
 		ManagedChannel channel = ManagedChannelBuilder
 									.forAddress(ip, Configuration.instance().primaryNodeServicePort)
 									.maxInboundMessageSize(Configuration.instance().grpcClientFrameSize)
-									.usePlaintext(true).build();
-		client = PrimaryNodeGrpc.newBlockingStub(channel);
+									.usePlaintext()
+									.build();
+		client = kawkab.fs.core.services.grpc.PrimaryNodeGrpc.newBlockingStub(channel);
 		clients.put(nodeID, client);
 		return client;
 	}
