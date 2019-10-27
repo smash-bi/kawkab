@@ -133,24 +133,7 @@ public abstract class Block extends AbstractTransferItem {
 	 * @return Number of bytes written in the file.
 	 */
 	protected abstract int storeToFile() throws IOException;
-	
-	/**
-	 * Stores the complete block in the channel.
-	 * 
-	 * @param channel
-	 * @return Number of bytes written to the channel.
-	 * @throws IOException
-	 */
-	//public abstract int storeFullTo(WritableByteChannel channel) throws IOException;
-	
-	/**
-	 * Loads contents of this block from InputStream in.
-	 * @param in
-	 * @return Number of bytes read from the input stream.
-	 * @throws IOException
-	 */
-	// abstract int fromInputStream(InputStream in) throws IOException;
-	
+
 	/**
 	 * Returns a ByteArrayInputStream that wraps around the byte[] containing the block in bytes. PrimaryNodeService
 	 * calls this function to transfer data to the remote readers.Note that no guarantees are made about the concurrent
@@ -189,13 +172,6 @@ public abstract class Block extends AbstractTransferItem {
 		return isLocalDirty;
 	}
 
-	/**
-	 * @return Returns the current value of the local dirty count
-	 */
-	/*public long localDirtyCount() {
-		return isLocalDirty.get();
-	}*/
-
 	public boolean getAndClearLocalDirty() {
 		boolean isDirty = isLocalDirty;
 		isLocalDirty = false;
@@ -223,38 +199,6 @@ public abstract class Block extends AbstractTransferItem {
 	public boolean inGlobalQueue() {
 		return inGlobalQueue.get();
 	}
-	
-	/**
-	 * Marks that the block is in a queue to be persisted in the local store.
-	 * 
-	 * @return Returns true if the block was already marked to be in the local queue
-	 */
-	/*public boolean markInLocalQueue() {
-		*//*if (inLocalQueue.get())
-			return true;
-		return inLocalQueue.getAndSet(true);*//*
-		
-		if (inLocalQueue)
-			return true;
-		inLocalQueue = true;
-		return false;
-	}*/
-	
-	/**
-	 * Clears the mark that the block is in a queue for persistence in the local store.
-	 * 
-	 * @return Returns false if the marker was already clear
-	 */
-	/*public void clearInLocalQueue() {
-		if (!inLocalQueue)
-			return;
-		
-		inLocalQueue = false;
-		
-		*//*if (!inLocalQueue.get())
-			return false;
-		return inLocalQueue.getAndSet(false);*//*
-	}*/
 	
 	/**
 	 * Marks that the block is in a queue to be persisted in the local store.
@@ -303,8 +247,10 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws FileNotExistException
 	 * @throws KawkabException
 	 */
-	protected void loadFromGlobal() throws FileNotExistException, KawkabException {
-		globalStoreManager.load(this);
+	protected void loadFromGlobal(int offset, int length) throws FileNotExistException, KawkabException {
+		System.out.printf("[PN] Loading %s from GS\n",id);
+
+		globalStoreManager.load(this, offset, length);
 	}
 	
 	/**
@@ -350,17 +296,16 @@ public abstract class Block extends AbstractTransferItem {
 
 		//Load only if the block is not already loaded
 		if (!isLoaded) {
-			System.out.println(" **** LOAD BLOCK ON PRIMARY: " + id);
 			try {
 				dataLoadLock.lock(); // Disable loading from concurrent threads
 				//Load only if it is not already loaded
 				if (!isLoaded) { // Prevent subsequent loads from other threads
-				
+					System.out.println(" [B] **** LOAD BLOCK ON PRIMARY: " + id);
 					//System.out.println("[B] On primary. Load from the LOCAL store: " + id);
 					
 					if (!localStoreManager.load(this)) { // Load data from the local store
 						System.out.println("[B] On primary: Loading from the GLOBAL STORE: " + id);
-						loadFromGlobal(); // Load from the global store if failed to load from the local store
+						loadFromGlobal(0, sizeWhenSerialized()); // Load from the global store if failed to load from the local store
 					}
 					
 					isLoaded = true; //Once data is loaded on the primary, it should not expired because
@@ -395,12 +340,12 @@ public abstract class Block extends AbstractTransferItem {
 	protected abstract void onMemoryEviction();
 
 	protected void setIsLoaded() {
-		// System.out.println("Setting is loaded: " + id);
+		//System.out.printf("[B] Setting %s is loaded\n",id);
 		isLoaded = true;
 	}
 }
 
-/**
+/*
  * (1)	It may happen that a block's dirty count is zero and the block is in the queue:
  * 		- Appender writes the block B and increments dirty count d
  * 		- Appender puts the block in queue after marking that the block is in the queue

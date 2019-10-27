@@ -119,8 +119,8 @@ public final class CLI {
 	}
 
 	private void parseReadRecord(String[] args) throws IOException, KawkabException {
-		String usage = "Usage: rr <filename> <n|t|r> <num|ts|ts1 ts2>";
-		if (args.length < 4) {
+		String usage = "Usage: rr <filename> [<n num> | <t ts> | <r ts1 ts2>]";
+		if (args.length < 2) {
 			System.out.println(usage);
 			return;
 		}
@@ -131,9 +131,28 @@ public final class CLI {
 			throw new IOException("File not opened: " + fname);
 		}
 
+		if (args.length == 2) {
+			List<Record> recs = file.readRecords(1, Long.MAX_VALUE-1, new SampleRecord());
+
+			if (recs == null) {
+				System.out.printf("Records not found b/w %d and %d\n", 1, Long.MAX_VALUE-1);
+				return;
+			}
+
+			for (Record rec : recs) {
+				System.out.println(rec);
+			}
+			return;
+		}
+
 		String type = args[2];
 		switch (type) {
 			case "n": {
+				if (args.length < 4) {
+					System.out.println("Insufficient args: " + usage);
+					break;
+				}
+
 				int recNum = Integer.parseInt(args[3]);
 				SampleRecord rec = new SampleRecord();
 				file.recordNum(rec, recNum);
@@ -141,6 +160,11 @@ public final class CLI {
 				break;
 			}
 			case "t": {
+				if (args.length < 4) {
+					System.out.println("Insufficient args: " + usage);
+					break;
+				}
+
 				long atTS = Long.parseLong(args[3]);
 				SampleRecord rec = new SampleRecord();
 				if (file.recordAt(rec, atTS))
@@ -194,7 +218,7 @@ public final class CLI {
 			file.append(new SampleRecord(i+tsOffset, rand));
 		}
 
-		System.out.printf("Appended %d records. New file size is %d records.\n",numRecs, file.size()/SampleRecord.length());
+		System.out.printf("Appended %d records of %d bytes. New file size is %d records.\n",numRecs, SampleRecord.length(), file.size()/SampleRecord.length());
 	}
 
 	private void flushCache() throws KawkabException {
@@ -215,9 +239,8 @@ public final class CLI {
 		}
 
 		long fs = file.size();
-
-		fs = fs / 2048576;
-		System.out.println("File size = " + fs + " MiB");
+		long fsMib = fs / 2048576;
+		System.out.printf("File size = %d MiB, %d B", fsMib, fs);
 	}
 	
 	private void parseAppendTest(String[] args) throws KawkabException, IOException {

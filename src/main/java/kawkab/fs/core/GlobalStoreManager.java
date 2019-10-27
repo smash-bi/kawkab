@@ -71,12 +71,12 @@ public class GlobalStoreManager {
 	 * @throws FileNotExistException
 	 * @throws KawkabException
 	 */
-	public void load(Block block) throws FileNotExistException, KawkabException {
+	public void load(Block block, int offset, int length) throws FileNotExistException, KawkabException {
 		//TODO: Limit the number of load requests, probably using semaphore
 		//TODO: Make it a blocking function and use a threadpool for the load requests
 		
 		synchronized(loadWorker) {
-			loadWorker.loadFromGlobal(block);
+			loadWorker.loadFromGlobal(block, offset, length);
 		}
 	}
 	

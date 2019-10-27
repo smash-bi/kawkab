@@ -1,5 +1,6 @@
 package kawkab.fs.core;
 
+import kawkab.fs.api.FileOptions;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
@@ -18,6 +19,7 @@ import java.util.List;
 public final class FileHandle {
 	private final long inumber;
 	private final FileMode fileMode;
+	private final FileOptions opts;
 	private final static Cache cache;
 	private final static int inodesPerBlock;	// Used in accessing the inode of this file when on the non-primary node
 	private Inode inode;	// Not final because we set it to null in the close() in order to free the memory
@@ -32,9 +34,10 @@ public final class FileHandle {
 		localStore = LocalStoreManager.instance();
 	}
 
-	public FileHandle(long inumber, FileMode mode) throws IOException, KawkabException{
+	public FileHandle(long inumber, FileMode mode, FileOptions opts) throws IOException, KawkabException{
 		this.inumber = inumber;
 		this.fileMode = mode;
+		this.opts = opts;
 		onPrimaryNode = Configuration.instance().thisNodeID == Commons.primaryWriterID(inumber); //Is this reader or writer on the primary node?
 
 		int inodesBlockIdx = (int) (inumber / inodesPerBlock);
@@ -44,7 +47,11 @@ public final class FileHandle {
 		try {
 			inb = (InodesBlock) cache.acquireBlock(id);
 			inb.loadBlock();
-			
+
+			Inode inode = inb.getInode(inumber);
+			inode.prepare();
+			if (mode == FileMode.APPEND) //Pre-fetch the last block for writes
+				inode.loadLastBlock();
 		} catch (IOException | KawkabException e) {
 			inode = null;
 			inodesBlock = null;

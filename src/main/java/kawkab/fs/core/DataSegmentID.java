@@ -14,6 +14,7 @@ public final class DataSegmentID extends BlockID {
 	private final long inumber;
 	private final long blockInFile;
 	private final int segmentInBlock; //Zero based segment index
+	private final int recordSize;
 	private String localPath;
 	private int hash;
 	
@@ -24,11 +25,18 @@ public final class DataSegmentID extends BlockID {
 	 * @param blockInFile block number in the file
 	 * @param segmentInBlock segment number in the block
 	 */
-	public DataSegmentID(long inumber, long blockInFile, int segmentInBlock) {
+	public DataSegmentID(long inumber, long blockInFile, int segmentInBlock, int recordSize) {
+		//TODO: Remove recordSize as that is not part of the ID
+
 		super(BlockType.DATA_SEGMENT);
 		this.inumber = inumber;
 		this.blockInFile = blockInFile;
 		this.segmentInBlock = segmentInBlock;
+		this.recordSize = recordSize;
+	}
+
+	public int recordSize() {
+		return recordSize;
 	}
 	
 	@Override

@@ -9,7 +9,6 @@ import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 import kawkab.fs.core.exceptions.KawkabException;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
@@ -17,10 +16,8 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.StandardOpenOption;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.prefs.PreferencesFactory;
 
 import static kawkab.fs.commons.FixedLenRecordUtils.offsetInSegment;
 
@@ -30,7 +27,7 @@ public final class DataSegment extends Block {
 	
 	private ByteBuffer dataBuf; // Buffer to hold actual segment data
 	private int segmentInBlock;
-	private volatile boolean segmentIsFull;  // Sets to true only when the block becomes full in an append operation.
+	private volatile boolean isSegFull;  // Sets to true only when the block becomes full in an append operation.
 	private long lastFetchTimeMs = 0; // Clock time in ms when the block was last loaded. This must be initialized
 	// to zero when the block is first created in memory.
 	
@@ -40,14 +37,16 @@ public final class DataSegment extends Block {
 	// dirtyOffset doesn't need to be thread-safe because only the localStore thread reads and updates its value.
 	// The value is initially set when the block is loaded, at which point the block cannot be accessed by the localStore.
 	
-	private boolean initedForAppends = false; 	// Indicates if the segment is initialized for append operations.
+	//private boolean initedForAppends = false; 	// Indicates if the segment is initialized for append operations.
 	// This variable is not atomic because only the writer modify the variable
 	// and the value is assigned atomically due to Java memory model.
-	private int initialAppendPos; // Index from which data will be appended the first time. This position is not modified with the appends
-	private int bytesLoaded; // Number of bytes loaded in this block from the local or remote storage
+	//private int initialAppendPos; // Index from which data will be appended the first time. This position is not modified with the appends
+	//private int bytesLoaded; // Number of bytes loaded in this block from the local or remote storage
 	
 	//private RandomAccessFile rwFile;
-	private ByteBuffer storeBuffer; //Used only by the localStoreManager
+	private ByteBuffer storeBuffer;
+
+	private int recordSize;
 	
 	/**
 	 * The constructor should not create a new file in the local storage. This constructor
@@ -61,10 +60,11 @@ public final class DataSegment extends Block {
 		
 		dataBuf = ByteBuffer.allocateDirect(segmentSizeBytes);
 		storeBuffer = dataBuf.duplicate();
+		recordSize = segmentID.recordSize();
 	}
-	
+
 	synchronized void reInit(DataSegmentID segmentID) {
-		reset(segmentID);
+		super.reset(segmentID);
 		segmentInBlock = segmentID.segmentInBlock();
 		
 		dataBuf.clear();
@@ -73,28 +73,12 @@ public final class DataSegment extends Block {
 		lastFetchTimeMs = 0;
 		dirtyOffset = 0;
 		writePos.set(0);
-		segmentIsFull = false;
-		initialAppendPos = 0;
-		initedForAppends = false;
-		bytesLoaded = 0;
-	}
-	
-	synchronized void initForAppend(long offsetInFile, int recordSize) {
-		if (initedForAppends)
-			return;
-		
-		initialAppendPos = offsetInSegment(offsetInFile, recordSize);
-		writePos.set(initialAppendPos);
-		dataBuf.position(initialAppendPos);
-		dirtyOffset = initialAppendPos;
-		
-		initedForAppends = true;
-		if (initialAppendPos == 0)
-			setIsLoaded();
+		isSegFull = false;
+		recordSize = segmentID.recordSize();
 	}
 	
 	boolean isFull() {
-		return segmentIsFull;
+		return isSegFull;
 	}
 	
 	int remaining() {
@@ -131,7 +115,7 @@ public final class DataSegment extends Block {
 		
 		//Mark block as full
 		if (pos == segmentSizeBytes) {
-			segmentIsFull = true;
+			isSegFull = true;
 		}
 		
 		markLocalDirty();
@@ -145,11 +129,12 @@ public final class DataSegment extends Block {
 	 * @return number of bytes appended starting from the offset
 	 * @throws IOException
 	 */
-	int append(final ByteBuffer srcBuffer, long offsetInFile, int recordSize) throws IOException {
+	int append(final ByteBuffer srcBuffer, long offsetInFile) throws IOException {
 		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
 		
 		assert writePos.get() == offsetInSegment;
-		assert dataBuf.position() == offsetInSegment;
+		assert dataBuf.position() == offsetInSegment :
+				String.format("dataBuf pos %d is incorrect, expected %d", dataBuf.position(), offsetInSegment);
 		
 		int length = srcBuffer.remaining();
 		assert remaining() >= length;
@@ -161,7 +146,7 @@ public final class DataSegment extends Block {
 		
 		//Mark block as full
 		if (pos+recordSize > segmentSizeBytes) { //Cannot add any more records
-			segmentIsFull = true;
+			isSegFull = true;
 		}
 		
 		markLocalDirty();
@@ -203,7 +188,7 @@ public final class DataSegment extends Block {
 	 * @return number of bytes read starting from the offsetInFile
 	 * @throws IOException
 	 */
-	int read(final ByteBuffer dstBuffer, long offsetInFile, int recordSize) {
+	int read(final ByteBuffer dstBuffer, long offsetInFile) {
 		assert dstBuffer.remaining() >= recordSize;
 		
 		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
@@ -224,10 +209,9 @@ public final class DataSegment extends Block {
 	 * @param maxTS
 	 * @param recordFactory Factory object
 	 * @param results
-	 * @param recordSize
 	 * @return the number of records added in the list
 	 */
-	public int readAll(long minTS, long maxTS, Record recordFactory, List<Record> results, int recordSize) {
+	public int readAll(long minTS, long maxTS, Record recordFactory, List<Record> results) {
 		ByteBuffer buf = dataBuf.duplicate();
 		buf.rewind(); //To read the first record
 
@@ -286,6 +270,8 @@ public final class DataSegment extends Block {
 
 			recIndex--;
 			pos = recIndex*recordSize;
+
+			System.out.printf("[DS] Rec found in %s; %s\n",id, rec);
 		}
 
 		return cnt;
@@ -295,7 +281,7 @@ public final class DataSegment extends Block {
 	public boolean shouldStoreGlobally() {
 		// Store in the global store only if this is the last segment of the block and this segment is full
 		if (segmentInBlock+1 == conf.segmentsPerBlock // If it is the last segment in the block
-				&& segmentIsFull) { // and the segment is full
+				&& isSegFull) { // and the segment is full
 			return true;
 		}
 		
@@ -309,9 +295,9 @@ public final class DataSegment extends Block {
 	
 	@Override
 	public synchronized int loadFromFile() throws IOException {
-		if (initedForAppends && initialAppendPos == 0) { // The DS is already loaded by the appender
+		/*if (initedForAppends && initialAppendPos == 0) { // The DS is already loaded by the appender
 			return 0;
-		}
+		}*/
 		
 		try (
 				RandomAccessFile file = new RandomAccessFile(id.localPath(), "r");
@@ -319,41 +305,24 @@ public final class DataSegment extends Block {
 		) {
 			
 			channel.position(segmentInBlock * segmentSizeBytes);
+			//assert bytesLoaded == 0;
 			return loadFrom(channel);
 		}
 	}
 	
 	@Override
 	public synchronized int loadFrom(ReadableByteChannel channel) throws IOException {
-		int length = segmentSizeBytes;
-		if (initedForAppends) {
-			length = initialAppendPos;
-		}
-		
-		if (length == 0)
-			return 0;
-		
-		ByteBuffer buffer = dataBuf;
-		if (initedForAppends) {
-			buffer = dataBuf.duplicate();
-		}
-		
-		buffer.clear();
-		buffer.limit(length);
-		
-		int bytesRead = Commons.readFrom(channel, buffer);
-		
-		bytesLoaded = bytesRead;
+		System.out.printf("[DS] Loading %s from channel: rem=%d, writePos=%d\n",
+				id, dataBuf.remaining(), dataBuf.position());
 
-		if (!initedForAppends) {
-			dirtyOffset = bytesLoaded;
-			writePos.set(bytesLoaded);
-			segmentIsFull = bytesLoaded == conf.segmentSizeBytes;
-			initialAppendPos = bytesLoaded;
-		}
+		int bytesRead = Commons.readFrom(channel, dataBuf);
+		int pos = writePos.addAndGet(bytesRead);
+		dirtyOffset += bytesRead;
+		isSegFull = pos+recordSize > segmentSizeBytes;
 
-		System.out.printf("[DS] Loaded bytes from channel: %d, length=%d, bufPosition=%d\n", bytesRead, length, dataBuf.position());
-		
+		System.out.printf("[DS] After loading %s from channel: bytesRead=%d, writePos=%d, datBufPos=%d\n",
+				id, bytesRead, pos, dataBuf.position());
+
 		return bytesRead;
 	}
 	
@@ -374,83 +343,151 @@ public final class DataSegment extends Block {
 					+ "Have %d, needed %d.",srcBuffer.remaining(), Constants.segmentSizeBytes));
 		}*/
 		
-		System.out.println("[DS] Bytes to load from the buffer = " + srcBuffer.remaining());
-		
-		ByteBuffer buffer = dataBuf;
-		if (initedForAppends) {
-			buffer = dataBuf.duplicate();
-		}
-		
-		buffer.clear();
-		buffer.put(srcBuffer);
-		
-		bytesLoaded = buffer.position();
+		int pos = dataBuf.position();
+		//storeBuffer.clear();
+		//storeBuffer.position(pos);
 
-		if (!initedForAppends) {
-			dirtyOffset = bytesLoaded;
-			writePos.set(bytesLoaded);
-			segmentIsFull = bytesLoaded == conf.segmentSizeBytes;
-			initialAppendPos = bytesLoaded;
-		}
+		System.out.printf("[DS] Loading %s from buffer: srcRem=%d, srcPos=%d, dstRem=%d, dstPos=%d, dirtyOffset=%d\n",
+				id, srcBuffer.remaining(), srcBuffer.position(), dataBuf.remaining(), pos, dirtyOffset);
 
-		System.out.println("[DS] Bytes loaded: " + bytesLoaded);
-		
-		return bytesLoaded;
+		dataBuf.put(srcBuffer);
+
+		int bytesRead = dataBuf.position() - pos;
+		pos = writePos.addAndGet(bytesRead);
+		dirtyOffset += bytesRead;
+		isSegFull = pos+recordSize > segmentSizeBytes;
+
+		System.out.printf("[DS] After loading %s from buffer: bytesRead=%d, writePos=%d, datBufPos=%d, dirtyOffset=%d\n",
+				id, bytesRead, writePos.get(), dataBuf.position(), dirtyOffset);
+
+		return bytesRead;
 	}
-	
+
+	/**
+	 * Returns a bytestring that contains all the valid bytes starting from the given offset.
+	 * @return
+	 */
 	@Override
 	public ByteString byteString() {
-		int limit = bytesLoaded; //The bytes loaded for reading
+		assert false;
+		return null;
+	}
+
+	public synchronized ByteString byteString(int offset) {
+		if (offset == writePos.get())
+			return ByteString.EMPTY;
+
+		/*int limit = bytesLoaded; //The bytes loaded for reading
 		if (initedForAppends) { //If the segment was initialized for appends, the limit should be the write position
 			limit = writePos.get();
-		}
+		}*/
+
+		int limit = isSegFull ? segmentSizeBytes : writePos.get();
 
 		ByteString bytes = null;
-		synchronized (storeBuffer) {
-			storeBuffer.clear();
-			storeBuffer.limit(limit);
+		storeBuffer.clear();
+		storeBuffer.position(offset);
+		storeBuffer.limit(limit);
 
-			bytes = ByteString.copyFrom(storeBuffer, limit);
-		}
+		System.out.printf("[DS] ByteString store %s: pos=%d, limit=%d, rem=%d, offset=%d\n", id, storeBuffer.position(), limit, storeBuffer.remaining(), offset);
+
+		bytes = ByteString.copyFrom(storeBuffer);
 
 		return bytes;
 	}
 	
 	private synchronized void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
-		primaryNodeService.getSegment((DataSegmentID)id, this);
+		System.out.printf("[DS] Fetch %s from primary. writePos=%d, dirtyOffset=%d, dataBufPost=%d\n", id, writePos.get(), dirtyOffset, dataBuf.position());
+		loadFrom(primaryNodeService.getSegment((DataSegmentID)id, writePos.get()));
 	}
 	
 	@Override
-	protected void onMemoryEviction() {
-		//closeFile();
+	public synchronized int storeToFile() throws IOException {
+		FileChannel channel = FileChannel.open(new File(id().localPath()).toPath(), StandardOpenOption.WRITE);
+		//System.out.println("Store: "+id() + ": " + channel.position());
+		int count = storeTo(channel);
+
+		channel.force(true);
+		channel.close();
+
+
+		return count;
 	}
-	
+
+	/**
+	 * Stores only dirty bytes at the end of the channel.
+	 * @param channel
+	 * @return
+	 * @throws IOException
+	 */
+	@Override
+	public synchronized int storeTo(FileChannel channel) throws IOException {
+		int bytesWritten = 0;
+
+		//channel.position(appendOffsetInBlock());
+		channel.position(channel.size());
+
+		synchronized (storeBuffer) {
+			int limit = isSegFull ? segmentSizeBytes : writePos.get();
+
+			storeBuffer.clear();
+			storeBuffer.position(dirtyOffset);
+			storeBuffer.limit(limit);
+
+			System.out.printf("[DS] Storing %s in channel: bufRem=%d, bufPos=%d, dirtyOffset=%d, limit=%d, toWrite=%d, chanPos=%d\n",
+					id, storeBuffer.remaining(), storeBuffer.position(), dirtyOffset, limit, limit-dirtyOffset, channel.position());
+
+			int size = limit-dirtyOffset;
+
+			assert channel.position() + size <= conf.dataBlockSizeBytes;
+
+			while (bytesWritten < size) {
+				bytesWritten += channel.write(storeBuffer);
+			}
+
+			dirtyOffset += bytesWritten;
+		}
+
+		System.out.printf("[DS] After storing %s in channel: written=%d, dirtyOffset=%d, writePos=%d, chanPos=%d\n",
+				id, bytesWritten, dirtyOffset, writePos.get(), channel.position());
+
+		return bytesWritten;
+	}
+
+	@Override
+	protected void onMemoryEviction() {
+		// Do nothing
+	}
+
 	@Override
 	protected synchronized void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException {
 		/* If never fetched or the last global-fetch has timed out, fetch from the global store.
 		 * Otherwise, if the last primary-fetch has timed out, fetch from the primary node.
 		 * Otherwise, don't fetch, data is still fresh.
 		 */
-		
+
 		/**
 		 * FIXME: The current implementation of this function is not ideal. Currently, an unfinished segment is reloaded
 		 * from a remote source after a timeout. However, a segment should only be reloaded from a remote node if the
 		 * read size exceeds the valid bytes in the loaded segment. In the current implementation, an unfinished
 		 * data segment may get loaded from the remote node unnecessarily.
 		 */
-		
-		if (bytesLoaded == segmentSizeBytes) { // Never load an already loaded block if the segment is full.
-			System.out.println("[DS] Segment is full. Not loading the segment again.");
+
+		if (isSegFull) { // Never load an already loaded block if the segment is full.
+			System.out.printf("[DS] Segment %s is full. Not loading the segment again.\n", id);
 			return;
 		}
-		
+
 		long now = System.currentTimeMillis();
-		
+
 		if (lastFetchTimeMs < now - conf.dataSegmentFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
+			int pos = writePos.get();
+			int offset = writePos.get() + segmentInBlock*segmentSizeBytes;
+			int length = segmentSizeBytes - pos;
 			try {
 				System.out.println("[DS] Load from the global: " + id());
 
-				loadFromGlobal(); // First try loading data from the global store
+				loadFromGlobal(offset, length); // First try loading data from the global store
 				lastFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store.
 				return;
 
@@ -472,7 +509,7 @@ public final class DataSegment extends Block {
 				// Check again from the global store because the primary may have deleted the
 				// block after copying to the global store
 				System.out.println("[B] Not found on the primary, trying again from the global: " + id());
-				loadFromGlobal();
+				loadFromGlobal(offset, length);
 				lastFetchTimeMs = now;
 				//lastPrimaryFetchTimeMs = 0;
 			} catch (IOException ioe) {
@@ -481,60 +518,7 @@ public final class DataSegment extends Block {
 			}
 		}
 	}
-	
-	@Override
-	public int storeToFile() throws IOException {
-		FileChannel channel = FileChannel.open(new File(id().localPath()).toPath(), StandardOpenOption.WRITE);
-		//System.out.println("Store: "+id() + ": " + channel.position());
-		int count = storeTo(channel);
-		
-		channel.force(true);
-		channel.close();
-		
-		
-		return count;
-	}
-	
-	@Override
-	public int storeTo(FileChannel channel) throws IOException {
-		int bytesWritten = 0;
-		
-		//channel.position(appendOffsetInBlock());
-		channel.position(channel.size());
 
-		synchronized (storeBuffer) {
-			int limit = writePos.get();
-			
-			storeBuffer.clear();
-			storeBuffer.position(dirtyOffset);
-			storeBuffer.limit(limit);
-			
-			int size = storeBuffer.remaining();
-			while (bytesWritten < size) {
-				bytesWritten += channel.write(storeBuffer);
-			}
-			
-			dirtyOffset += bytesWritten;
-		}
-		
-		//System.out.printf("[DS] Bytes written in channel = %d, dirtyOffset=%d, dirtyLength=%d\n", bytesWritten, dirtyOffset, size);
-		
-		return bytesWritten;
-	}
-	
-	
-	/**
-	 * Returns the append offset with respect to the start of the block instead of the segment
-	 */
-	private int appendOffsetInBlock() {
-		//Offset in block is equal to the start offset of the current segment + the start of the dirty bytes
-		int offset = segmentInBlock * segmentSizeBytes + dirtyOffset;
-		
-		assert offset <= conf.dataBlockSizeBytes;
-		
-		return offset;
-	}
-	
 	@Override
 	public int sizeWhenSerialized() {
 		return segmentSizeBytes;

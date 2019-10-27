@@ -37,8 +37,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	private static final Configuration conf = Configuration.instance();
 	private static final TimerQueue timerQ;
 
+	private boolean isInited;
 	private boolean isLoaded;
-	private final boolean isOnPrimaryNode = Commons.primaryWriterID(inumber) == conf.thisNodeID;
 	private int recsPerSeg;
 
 	private static final int bufferTimeOffsetMillis = 5;
@@ -53,27 +53,51 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		this.inumber = inumber;
 		this.recordSize = recordSize;
 
-		if (recordSize > 1) { // The indoesBlock has many inodes. We don't want to create an index structure for unused inodes.
-			initIndex();
+		if (recordSize >= 1) {
+			System.out.printf("[I] Initializing inode: %d, recSize=%d\n", inumber, recordSize);
 		}
 	}
 
-	private void initIndex() {
-		assert recordSize > 1;
-
-		if (index != null)
+	/**
+	 * Prepare after opening the file.
+	 * This function should be called after the inode has been loaded from the file or the remote node or the global store.
+	 */
+	synchronized void prepare() {
+		if (isInited)
 			return;
+		isInited = true;
 
-		System.out.println("Initializing index for inode: " + inumber);
+		System.out.printf("[I] Initializing index for inode: %d, recSize=%d\n", inumber, recordSize);
+
+		assert recordSize >= 1;
 
 		recsPerSeg = conf.segmentSizeBytes / recordSize;
-		index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache);
+
+		if (recordSize > 1)
+			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache);
 
 		/*try {
 			index.loadAndInit(indexLength(fileSize.get()));
 		} catch (IOException | KawkabException e) {
 			e.printStackTrace();
 		}*/
+	}
+
+	synchronized void loadLastBlock() throws KawkabException, IOException {
+		// Pre-fetching the last block to warm up for writes
+		long fs = fileSize.get();
+
+		System.out.printf("[I] Should load the last block? %b, fs=%d, recsPerSeg*recSize=%d\n",
+				fs%(recsPerSeg*recordSize)!=0, fs, recsPerSeg*recordSize);
+
+		if (fs % (recsPerSeg*recordSize) != 0) {
+			BlockID curSegId = getByFileOffset(fs);
+
+			System.out.printf("[I] Loading the last seg %s on file open\n", curSegId );
+
+			cache.acquireBlock(curSegId).loadBlock();
+			cache.releaseBlock(curSegId);
+		}
 	}
 
 	/**
@@ -85,14 +109,14 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		int segmentInBlock = FixedLenRecordUtils.segmentInBlock(segmentInFile);
 		long blockInFile = FixedLenRecordUtils.blockInFile(segmentInFile);
 
-		return new DataSegmentID(inumber, blockInFile, segmentInBlock);
+		return new DataSegmentID(inumber, blockInFile, segmentInBlock, recordSize);
 	}
 
 	private BlockID idBySegInFile(long segInFile) {
 		int segmentInBlock = FixedLenRecordUtils.segmentInBlock(segInFile);
 		long blockInFile = FixedLenRecordUtils.blockInFile(segInFile);
 
-		return new DataSegmentID(inumber, blockInFile, segmentInBlock);
+		return new DataSegmentID(inumber, blockInFile, segmentInBlock, recordSize);
 	}
 
 	/**
@@ -123,7 +147,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		try {
 			curSegment = (DataSegment)cache.acquireBlock(curSegId);
 			curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
-			int bytesRead = curSegment.read(dstRecord.copyInDstBuffer(), offsetInFile, recordSize);
+			int bytesRead = curSegment.read(dstRecord.copyInDstBuffer(), offsetInFile);
 
 			assert bytesRead == recordSize;
 		} finally {
@@ -168,7 +192,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		try {
 			curSegment = (DataSegment)cache.acquireBlock(curSegId);
 			curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
-			int bytesRead = curSegment.read(dstRecord.copyInDstBuffer(), offsetInFile, recordSize);
+			int bytesRead = curSegment.read(dstRecord.copyInDstBuffer(), offsetInFile);
 
 			assert bytesRead == recordSize;
 		} finally {
@@ -197,12 +221,14 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			for (int j=0; j<segNums.length; j++) {
 				long segInFile = segNums[j];
 				BlockID curSegId = idBySegInFile(segInFile);
-				DataSegment curSegment = null;
 
+				System.out.printf("[I] Searching recs in: %s\n", curSegId);
+
+				DataSegment curSegment = null;
 				try {
 					curSegment = (DataSegment)cache.acquireBlock(curSegId);
 					curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
-					int cnt = curSegment.readAll(minTS, maxTS, recFactory, results, recordSize);
+					int cnt = curSegment.readAll(minTS, maxTS, recFactory, results);
 					//System.out.printf("  seg=%d, cnt=%d\n", segInFile, cnt);
 				} finally {
 					if (curSegment != null) {
@@ -292,12 +318,14 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		}
 
 		if (acquiredSeg == null || (!timerQ.tryDisable(acquiredSeg))) {
-			acquiredSeg = acquireSegment(fileSizeBuffered, ((FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L));
+			boolean createNew = (FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L;
+			acquiredSeg = acquireSegment(fileSizeBuffered, createNew);
+			acquiredSeg.getItem().setIsLoaded();
 		}
 
 		DataSegment ds = acquiredSeg.getItem();
 		try {
-			int bytes = ds.append(record.copyOutSrcBuffer(), fileSizeBuffered, recordSize);
+			int bytes = ds.append(record.copyOutSrcBuffer(), fileSizeBuffered);
 
 			if (FixedLenRecordUtils.recordInSegment(fileSizeBuffered, recordSize) == 0) { // If the current record is the first record in the data segment
 				long segmentInFile = FixedLenRecordUtils.segmentInFile(fileSizeBuffered, recordSize);
@@ -340,7 +368,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 		while (remaining > 0) {
 			if (acquiredSeg == null || (!timerQ.tryDisable(acquiredSeg))) { //If null, no need to synchronize because the TimerQueue thread will never synchronize with this timer
-				acquiredSeg = acquireSegment(fileSizeBuffered, (fileSizeBuffered % conf.dataBlockSizeBytes) == 0L);
+				boolean createNew = (fileSizeBuffered % conf.dataBlockSizeBytes) == 0L;
+				acquiredSeg = acquireSegment(fileSizeBuffered, createNew);
+				acquiredSeg.getItem().setIsLoaded();
 			}
 
 			DataSegment ds = acquiredSeg.getItem();
@@ -385,7 +415,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			segId = getSegmentID(fileSize);
 		}
 		DataSegment ds = (DataSegment) cache.acquireBlock(segId);
-		ds.initForAppend(fileSize, recordSize);
+		//ds.initForAppend(fileSize, recordSize);
 		return new TimerQueueItem<>(ds, this);
 	}
 
@@ -394,7 +424,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		long blockInFile = FixedLenRecordUtils.blockInFile(segmentInFile);
 		int segmentInBlock = FixedLenRecordUtils.segmentInBlock(segmentInFile);
 
-		return new DataSegmentID(inumber, blockInFile, segmentInBlock);
+		return new DataSegmentID(inumber, blockInFile, segmentInBlock, recordSize);
 	}
 
 	/**
@@ -433,9 +463,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			inumber = inum;
 			recordSize = recSize;
 			isLoaded = true;
-			if (recordSize > 1)
-				initIndex();
 		}
+
+		System.out.printf("[I] Loading inode %d: fs=%d\n", inum, fs);
 
 		return Long.BYTES*2 + Integer.BYTES;
 	}

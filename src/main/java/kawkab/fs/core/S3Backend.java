@@ -3,8 +3,6 @@ package kawkab.fs.core;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.nio.channels.ReadableByteChannel;
 import java.util.List;
 import java.util.Random;
@@ -27,7 +25,6 @@ import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 
 import kawkab.fs.commons.Configuration;
-import kawkab.fs.core.BlockID.BlockType;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 
@@ -35,7 +32,7 @@ public final class S3Backend implements GlobalBackend{
 	private AmazonS3 client;
 	private static final String rootBucket = "kawkab-blocks"; //Cannot contain uppercase letters.
 	private byte[] buffer;
-	private ByteBuffer bufferWrap;
+	//private ByteBuffer bufferWrap;
 	private FileLocks fileLocks;
 	private static final String contentType = "application/octet-stream";
 	
@@ -47,22 +44,24 @@ public final class S3Backend implements GlobalBackend{
 		
 		Configuration conf = Configuration.instance();
 		buffer = new byte[(Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes))];
-		bufferWrap = ByteBuffer.wrap(buffer);
+		//bufferWrap = ByteBuffer.wrap(buffer);
 	}
 	
 	@Override
-	public void loadFromGlobal(final Block dstBlock) throws FileNotExistException, KawkabException {
-		long rangeStart = 0;
-		long rangeEnd = dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
+	public void loadFromGlobal(final Block dstBlock, final int offset, final int length) throws FileNotExistException, KawkabException {
+		//TODO: Take a ByteBuffer as an input argument. Load the fetched data in the given ByteBuffer instead of calling block.load().
+
+		long rangeStart = offset;
+		long rangeEnd = offset + length - 1; //end range is inclusive
 		
 		BlockID id = dstBlock.id();
-		if (id.type() == BlockType.DATA_SEGMENT) { //If it's dataSegment, it can be any segment in the block. GlobalStore has complete blocks.
+		/*if (id.type() == BlockType.DATA_SEGMENT) { //If it's dataSegment, it can be any segment in the block. GlobalStore has complete blocks.
 			int segmentInBlock = ((DataSegmentID)id).segmentInBlock();
-			rangeStart = segmentInBlock * rangeEnd;
-			rangeEnd = rangeStart + rangeEnd - 1; //end range is inclusive
-		}
+			rangeStart = segmentInBlock * dstBlock.sizeWhenSerialized();
+			rangeEnd = rangeStart + dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
+		}*/
 		
-		//System.out.println("[S3] Loading block: " + id.localPath() + ": " + rangeStart + " to " + rangeEnd);
+		System.out.printf("[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n", id, rangeStart, rangeEnd, length, id.localPath());
 		
 		String path = id.localPath();
 		GetObjectRequest getReq = new GetObjectRequest(rootBucket, path);
@@ -115,14 +114,16 @@ public final class S3Backend implements GlobalBackend{
 			
 			length = (int)raf.length(); //Block size in Kawkab is an integer
 
-			Lock lock = fileLocks.grabFileLock(srcBlock.id());
+			Lock lock = fileLocks.grabLock(srcBlock.id());
 			try {
 				lock.lock();
+
+				System.out.printf("[S3] Reading %d bytes from %s for storing in global: path=%s\n",length, srcBlock.id(), srcBlock.id().localPath());
+
 				raf.readFully(buffer, 0, length);
 			} finally {
 				lock.unlock();
 			}
-
 		} catch (IOException e) {
 			e.printStackTrace();
 			throw new KawkabException(e);

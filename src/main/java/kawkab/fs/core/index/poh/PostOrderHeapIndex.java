@@ -119,7 +119,7 @@ public class PostOrderHeapIndex {
 		}
 	}
 
-	private POHNode acquireNode(int nodeNum) throws IOException, KawkabException {
+	private POHNode acquireNode(final int nodeNum) throws IOException, KawkabException {
 		System.out.printf("[POH] Acquire node %d\n", nodeNum);
 		POHNode node = nodes.get(nodeNum);
 		if (node == null) {
@@ -130,12 +130,14 @@ public class PostOrderHeapIndex {
 					IndexNodeID id = new IndexNodeID(inumber, nodeNum);
 					node = (POHNode) cache.acquireBlock(id);
 					node.init(nodeNum, heightOfNode(nodeNum), entriesPerNode, childrenPerNode, nodeSizeBytes);
-					node.loadBlock();
 					POHNode prev = nodes.put(nodeNum, node);
 					assert prev == null;
 				}
 			}
 		}
+
+		node.loadBlock();
+
 		return node;
 	}
 

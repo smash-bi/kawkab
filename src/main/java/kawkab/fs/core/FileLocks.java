@@ -27,7 +27,7 @@ public class FileLocks {
 	 * @return
 	 * @throws InterruptedException 
 	 */
-	public Lock grabFileLock(BlockID blockID) { //FIXME: This is not a good approach. We should not give away the lock
+	public Lock grabLock(BlockID blockID) { //FIXME: This is not a good approach. We should not give away the lock
 		return locks.get(blockID.perBlockTypeKey());
 	}
 }

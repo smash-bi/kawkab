@@ -613,15 +613,22 @@ public class POHNode extends Block {
 		boolean hasFirstMin = atTSOffset % 2 == 0;
 		int count = hasFirstMin ? 0 : -1;
 
-		System.out.printf(" Load entries from: rem=%d, fromIdx=%d, atTSOffset=%d\n", buffer.remaining(), idxOffset, atTSOffset);
+		System.out.printf("\t[PN] Load entries from: rem=%d, fromIdx=%d, atTSOffset=%d, hasFirstMin=%b\n", buffer.remaining(), idxOffset, atTSOffset, hasFirstMin);
 
 		while (buffer.hasRemaining()) {
-			POHEntry entry = new POHEntry();
-			entries[idxOffset++] = entry;
+			POHEntry entry = entries[idxOffset];
+			if (entry == null) {
+				entry = new POHEntry();
+				entries[idxOffset] = entry;
+
+				assert hasFirstMin;
+			}
 
 			loadedLastMax = entry.loadFrom(buffer, hasFirstMin);
+			hasFirstMin = true;
 			// System.out.printf("\t  [PN] pos=%d, rem=%d\n", buffer.position(), buffer.remaining());
 
+			idxOffset++;
 			count += 2;
 
 			if (!loadedLastMax) {
@@ -813,7 +820,7 @@ public class POHNode extends Block {
 	}
 
 	public int loadFrom(ByteBuffer buffer, int atTSOffset) throws IOException {
-		System.out.printf("[PN] Loading %s from buffer\n",id);
+		System.out.printf("[PN] Loading %s from buffer at offset \n",id, atTSOffset);
 
 		assert !isOnPrimary;
 
@@ -822,13 +829,11 @@ public class POHNode extends Block {
 			loadChildrenFrom(buffer, false);
 		}
 
-		System.out.println(" Now loading children");
 		return loadEntriesFrom(buffer, atTSOffset);
 	}
 
 	private void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
-		boolean withHeader = dirtyOffsetStart == 0;
-		boolean withFirstMin = dirtyOffsetStart % 2 == 0;
+		System.out.printf("[PN] Loading %s from the primary at offset %d\n",id, dirtyOffsetStart);
 
 		ByteBuffer buffer = primaryNodeService.getIndexNode(id, dirtyOffsetStart);
 
@@ -845,7 +850,7 @@ public class POHNode extends Block {
 		if (dirtyOffsetStart == 0)
 			pointerIdx = children.length;
 
-		assert dirtyOffsetStart+numTSLoaded >= entryIdx;
+		assert dirtyOffsetStart+numTSLoaded > entryIdx;
 
 		dirtyOffsetStart += numTSLoaded;
 		tsCount = dirtyOffsetStart;
@@ -881,13 +886,17 @@ public class POHNode extends Block {
 		// If the node is full, try fetching from the global store. If fails, load from the primary node.
 		// Otherwise, the node is most likely not in the global store. Therefore, fetch from the primary node.
 
+		if (tsCount == entries.length*2) {
+			System.out.printf("[IN] Node %s is full. Not loading.\n",id);
+		}
+
 		if (entryIdx != entries.length) {
 			loadBlockFromPrimary();
 			return;
 		}
 
 		try {
-			loadFromGlobal();
+			loadFromGlobal(id.numNodeInIndexBlock()*nodeSizeBytes+dirtyOffsetStart, nodeSizeBytes-dirtyOffsetStart);
 		} catch (FileNotExistException e) {
 			System.out.println("[PN] Node not found in the global: " + id());
 			loadBlockFromPrimary();

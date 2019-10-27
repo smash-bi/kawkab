@@ -119,6 +119,9 @@ class POHEntry implements TimeRange{
 			maxTS = minTS;
 		}
 
+		assert minTS >= 0;
+		assert segmentInFile >= 0;
+
 		if (srcBuf.remaining() >= Long.BYTES) {
 			long max = srcBuf.getLong();
 

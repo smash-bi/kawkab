@@ -40,7 +40,7 @@ public final class PrimaryNodeServiceClient {
 	public boolean segmentExists(DataSegmentID id) throws KawkabException {
 		System.out.println("[PC] segmentExists: " + id);
 		
-		KSegmentID sid = KSegmentID.newBuilder()
+		KSegmentRequest sid = KSegmentRequest.newBuilder()
 							.setInumber(id.inumber())
 							.setBlockInFile(id.blockInFile())
 							.setSegmentInBlock(id.segmentInBlock())
@@ -51,13 +51,14 @@ public final class PrimaryNodeServiceClient {
 		return client.segmentExists(sid).getExists();
 	}
 
-	public void getSegment(DataSegmentID id, Block block) throws FileNotExistException, KawkabException, IOException {
+	public ByteBuffer getSegment(DataSegmentID id, final int offset) throws FileNotExistException, KawkabException, IOException {
 		System.out.println("[PC] getSegment: " + id);
 		
-		KSegmentID segID = KSegmentID.newBuilder()
+		KSegmentRequest segID = KSegmentRequest.newBuilder()
 				.setInumber(id.inumber())
 				.setBlockInFile(id.blockInFile())
 				.setSegmentInBlock(id.segmentInBlock())
+				.setOffset(offset)
 				.build();
 		
 		int remoteID = id.primaryNodeID();
@@ -70,9 +71,7 @@ public final class PrimaryNodeServiceClient {
 			throw new KawkabException("RPC failed.");
 		}
 		
-		ByteBuffer buf = resp.getSegmentBytes().asReadOnlyByteBuffer();
-		buf.rewind();
-		block.loadFrom(buf);
+		return resp.getSegmentBytes().asReadOnlyByteBuffer();
 	}
 	
 	public boolean inodeBlockExists(InodesBlockID id) throws KawkabException {

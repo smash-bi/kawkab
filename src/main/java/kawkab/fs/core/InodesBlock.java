@@ -1,7 +1,6 @@
 package kawkab.fs.core;
 
 import com.google.protobuf.ByteString;
-import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
@@ -74,10 +73,15 @@ public final class InodesBlock extends Block {
 		//FIXME: Potientially this block will never be stored globally. This may happen if the block is updated
 		// but not stored globally. After that the block is never updated.
 		long now = clock.currentTime();
-		if ((now - lastGlobalStoreTimeMs) < globalStoreTimeGapMs)
+		if ((now - lastGlobalStoreTimeMs) < globalStoreTimeGapMs) {
+			System.out.printf("[IB] XXXXXX Not storing %s globally. Timeout=%d, now=%d, now-lastStore=%d.\n",
+					id, lastGlobalStoreTimeMs, now, now-lastGlobalStoreTimeMs);
 			return false;
+		}
 		
 		lastGlobalStoreTimeMs = now;
+
+		System.out.printf("[IB] >>>> Storing IB %s globally.\n", id);
 		return true;
 		//return false; //FIXME: Disabled inodesBlocks transfer to the GlobalStore
 	}
@@ -128,6 +132,7 @@ public final class InodesBlock extends Block {
 	
 	@Override
 	public int storeTo(FileChannel channel) throws IOException {
+		//System.out.printf("[IB] Store %s to channel\n", id);
 		int bytesWritten = 0;
 		channel.position(0);
 		for(Inode inode : inodes) {
@@ -166,12 +171,14 @@ public final class InodesBlock extends Block {
 		 */
 		
 		long now = System.currentTimeMillis();
+
+		System.out.printf("[IB] loadOnNonPrimary: lastFetchMS=%d, now-timeout=%d\n", lastFetchTimeMs, now-conf.inodesBlockFetchExpiryTimeoutMs);
 		
 		if (lastFetchTimeMs < now - conf.inodesBlockFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
-			try {
-				// System.out.println("[IB] Load from the global: " + id());
+			/*try {
+				System.out.println("[IB] Load from the global: " + id());
 
-				loadFromGlobal(); // First try loading data from the global store
+				loadFromGlobal(0, conf.inodesBlockSizeBytes); // First try loading data from the global store
 				return;
 
 				//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
@@ -180,7 +187,7 @@ public final class InodesBlock extends Block {
 				lastFetchTimeMs = 0; // Failed to fetch from the global store
 			}
 
-			System.out.println("[B] Primary fetch expired or not found from the global: " + id());
+			System.out.println("[B] Primary fetch expired or not found from the global: " + id());*/
 
 			try {
 				System.out.println("[B] Loading from the primary: " + id());
@@ -192,7 +199,7 @@ public final class InodesBlock extends Block {
 				// Check again from the global store because the primary may have deleted the
 				// block after copying to the global store
 				System.out.println("[B] Not found on the primary, trying again from the global: " + id());
-				loadFromGlobal();
+				loadFromGlobal(0, conf.inodesBlockSizeBytes);
 				lastFetchTimeMs = now;
 				//lastPrimaryFetchTimeMs = 0;
 			} catch (IOException ioe) {
