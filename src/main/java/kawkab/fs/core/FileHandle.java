@@ -6,6 +6,8 @@ import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.*;
+import kawkab.fs.core.timerqueue.TimerQueue;
+import kawkab.fs.core.timerqueue.TimerQueueItem;
 
 import java.io.IOException;
 import java.util.List;
@@ -26,6 +28,8 @@ public final class FileHandle {
 	private InodesBlock inodesBlock;	// Not final because we set it to null in the close() in order to free the memory
 	private final boolean onPrimaryNode;	//Indicates whether this file is opened on its primary node or not
 	private final static LocalStoreManager localStore;	// FIXME: Isn't it a bad design to access localStore from a file handle?
+	//private final TimerQueue timerQ;
+	//private TimerQueueItem<InodesBlock> inbAcquired;
 
 	static {
 		Configuration conf = Configuration.instance();
@@ -34,10 +38,11 @@ public final class FileHandle {
 		localStore = LocalStoreManager.instance();
 	}
 
-	public FileHandle(long inumber, FileMode mode, FileOptions opts) throws IOException, KawkabException{
+	public FileHandle(long inumber, FileMode mode, FileOptions opts, TimerQueue tq) throws IOException, KawkabException{
 		this.inumber = inumber;
 		this.fileMode = mode;
 		this.opts = opts;
+		//this.timerQ = tq;
 		onPrimaryNode = Configuration.instance().thisNodeID == Commons.primaryWriterID(inumber); //Is this reader or writer on the primary node?
 
 		int inodesBlockIdx = (int) (inumber / inodesPerBlock);
@@ -49,7 +54,7 @@ public final class FileHandle {
 			inb.loadBlock();
 
 			Inode inode = inb.getInode(inumber);
-			inode.prepare();
+			inode.prepare(tq);
 			if (mode == FileMode.APPEND) //Pre-fetch the last block for writes
 				inode.loadLastBlock();
 		} catch (IOException | KawkabException e) {

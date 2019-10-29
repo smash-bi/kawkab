@@ -8,7 +8,7 @@ import kawkab.fs.core.exceptions.KawkabException;
  * to the cache much slower than required in some cases. As a result, the cache have some items that are eligible
  * for eviction but the cache cannot evict them as their reference count is greater than 0. .
  */
-public class TimerQueue {
+public class TimerQueue implements TimerQueueIface {
 	private final Thread processorThr;
 	private TransferQueue<TimerQueueItem> trnsfrQ;
 	private volatile boolean working = true;
@@ -36,6 +36,7 @@ public class TimerQueue {
 	 * @param item
 	 * @param timeoutMs
 	 */
+	@Override
 	public void enableAndAdd (TimerQueueItem item, long timeoutMs) {
 		assert working;
 		
@@ -50,6 +51,7 @@ public class TimerQueue {
 	 * @param item
 	 * @return true if the timer was not expired and now the timer is disabled successfully. Otherwise, returns false.
 	 */
+	@Override
 	public boolean tryDisable(TimerQueueItem item) {
 		return item.disableIfNotExpired();
 	}
@@ -103,7 +105,8 @@ public class TimerQueue {
 			item.deferredWork();
 		}
 	}
-	
+
+	@Override
 	public void waitUntilEmpty() {
 		while(trnsfrQ.size() > 0) {
 			try {
@@ -112,10 +115,13 @@ public class TimerQueue {
 			}
 		}
 	}
-	
+
+	@Override
 	public void shutdown() {
 		System.out.println("Closing TimerQueue");
 		working = false;
+
+		waitUntilEmpty();
 		
 		processorThr.interrupt();
 		try {

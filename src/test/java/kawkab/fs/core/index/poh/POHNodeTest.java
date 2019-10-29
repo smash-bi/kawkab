@@ -27,7 +27,7 @@ public class POHNodeTest {
 
 		IndexNodeID id = new IndexNodeID(1, 1);
 		POHNode node = new POHNode(id);
-		node.init(1, 0, 10, 4, conf.indexNodeSizeBytes);
+		node.init(1, 0, 10, 4, conf.indexNodeSizeBytes, conf.indexBlockSizeBytes);
 
 		node.appendEntry(1, 1, 1);
 		node.appendEntry(3, 3, 2);
@@ -48,7 +48,7 @@ public class POHNodeTest {
 
 		IndexNodeID id = new IndexNodeID(1, 1);
 		POHNode node = new POHNode(id);
-		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes, conf.indexBlockSizeBytes);
 
 		node.appendEntryMinTS(5, 7);
 
@@ -63,7 +63,7 @@ public class POHNodeTest {
 
 		IndexNodeID id = new IndexNodeID(1, 1);
 		POHNode node = new POHNode(id);
-		node.init(1, 0, 10, 10, conf.indexNodeSizeBytes);
+		node.init(1, 0, 10, 10, conf.indexNodeSizeBytes, conf.indexBlockSizeBytes);
 
 		Assertions.assertTrue(node.findFirstEntry(4) < 0);
 		Assertions.assertTrue(node.findLastEntry(4) < 0);
@@ -76,7 +76,7 @@ public class POHNodeTest {
 
 		IndexNodeID id = new IndexNodeID(1, 1);
 		POHNode node = new POHNode(id);
-		node.init(1, 0, 10, 8, conf.indexNodeSizeBytes);
+		node.init(1, 0, 10, 8, conf.indexNodeSizeBytes, conf.indexBlockSizeBytes);
 
 		node.appendEntry(1, 1, 1);
 		node.appendEntry(2, 2, 2);
@@ -97,7 +97,7 @@ public class POHNodeTest {
 
 		IndexNodeID id = new IndexNodeID(1, 1);
 		POHNode node = new POHNode(id);
-		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes, conf.indexBlockSizeBytes);
 
 		node.appendEntry(2, 2, 1);
 		node.appendEntry(4, 4, 2);
@@ -119,7 +119,7 @@ public class POHNodeTest {
 
 		IndexNodeID id = new IndexNodeID(1, 1);
 		POHNode node = new POHNode(id);
-		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes, conf.indexBlockSizeBytes);
 
 		node.appendEntry(1, 1, 1);
 		node.appendEntry(5, 5, 2);
@@ -142,7 +142,7 @@ public class POHNodeTest {
 
 		IndexNodeID id = new IndexNodeID(1, 1);
 		POHNode node = new POHNode(id);
-		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes, conf.indexBlockSizeBytes);
 
 		node.appendEntry(5, 5, 1);
 		node.appendEntry(7, 7, 2);
@@ -164,7 +164,7 @@ public class POHNodeTest {
 
 		IndexNodeID id = new IndexNodeID(1, 1);
 		POHNode node = new POHNode(id);
-		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes, conf.indexBlockSizeBytes);
 
 		node.appendEntry(5, 5, 1);
 		node.appendEntry(8, 8, 2);
@@ -194,7 +194,7 @@ public class POHNodeTest {
 
 		IndexNodeID id = new IndexNodeID(1, 1);
 		POHNode node = new POHNode(id);
-		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes, conf.indexBlockSizeBytes);
 
 		node.appendEntry(5, 7, 1);
 		node.appendEntry(9, 12, 2);
@@ -220,7 +220,7 @@ public class POHNodeTest {
 
 		IndexNodeID id = new IndexNodeID(1, 1);
 		POHNode node = new POHNode(id);
-		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes);
+		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes, conf.indexBlockSizeBytes);
 
 		node.appendEntry(20, 20, 5);
 		node.appendEntry(20, 25, 6);

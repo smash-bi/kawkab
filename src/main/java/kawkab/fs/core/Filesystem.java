@@ -4,6 +4,7 @@ import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.services.grpc.PrimaryNodeServiceServer;
+import kawkab.fs.core.timerqueue.TimerQueue;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -20,12 +21,15 @@ public final class Filesystem {
 	private static Configuration conf;
 	//private static FFilesystemServiceServer fs;
 
+	private TimerQueue timerQ;
+
 	private Filesystem() throws KawkabException, IOException {
 		namespace = Namespace.instance();
 		ns = new PrimaryNodeServiceServer();
 		//fs = new FFilesystemServiceServer(this);
 		ns.startServer();
 		//fs.startServer();
+		timerQ = new TimerQueue("FS Timer Queue");
 	}
 	
 	public static synchronized Filesystem instance() throws KawkabException, IOException {
@@ -61,7 +65,7 @@ public final class Filesystem {
 		
 		long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber);
-		FileHandle file = new FileHandle(inumber, mode, opts);
+		FileHandle file = new FileHandle(inumber, mode, opts, timerQ);
 		return file;
 	}
 
@@ -70,6 +74,10 @@ public final class Filesystem {
 		fh.close();
 		if (fh.mode() == FileMode.APPEND)
 			namespace.closeAppendFile(fh.inumber());
+	}
+
+	public TimerQueue getTimerQueue() {
+		return timerQ;
 	}
 	
 	/**
@@ -114,7 +122,7 @@ public final class Filesystem {
 		namespace.shutdown();
 		//Ibmap.shutdown();
 		//	InodesBlock.shutdown();
-		Inode.shutdown(); //FIXME: There should not be any inode shutdown method.
+		timerQ.shutdown();
 		Cache.instance().shutdown();
 		Clock.instance().shutdown();
 		

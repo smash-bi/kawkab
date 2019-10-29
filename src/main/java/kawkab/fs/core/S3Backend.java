@@ -61,7 +61,7 @@ public final class S3Backend implements GlobalBackend{
 			rangeEnd = rangeStart + dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
 		}*/
 		
-		System.out.printf("[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n", id, rangeStart, rangeEnd, length, id.localPath());
+		System.out.printf("\t\t[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n", id, rangeStart, rangeEnd, length, id.localPath());
 		
 		String path = id.localPath();
 		GetObjectRequest getReq = new GetObjectRequest(rootBucket, path);
@@ -118,7 +118,7 @@ public final class S3Backend implements GlobalBackend{
 			try {
 				lock.lock();
 
-				System.out.printf("[S3] Reading %d bytes from %s for storing in global: path=%s\n",length, srcBlock.id(), srcBlock.id().localPath());
+				System.out.printf("\t\t[S3] Reading %d bytes from %s for storing in global: path=%s\n",length, srcBlock.id(), srcBlock.id().localPath());
 
 				raf.readFully(buffer, 0, length);
 			} finally {

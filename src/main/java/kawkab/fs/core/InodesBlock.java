@@ -70,11 +70,11 @@ public final class InodesBlock extends Block {
 	
 	@Override
 	public boolean shouldStoreGlobally() {
-		//FIXME: Potientially this block will never be stored globally. This may happen if the block is updated
+		//FIXME: Potentially this block will never be stored globally. This may happen if the block is updated
 		// but not stored globally. After that the block is never updated.
 		long now = clock.currentTime();
 		if ((now - lastGlobalStoreTimeMs) < globalStoreTimeGapMs) {
-			System.out.printf("[IB] XXXXXX Not storing %s globally. Timeout=%d, now=%d, now-lastStore=%d.\n",
+			System.out.printf("[IB] Not storing %s globally. Timeout=%d, now=%d, now-lastStore=%d.\n",
 					id, lastGlobalStoreTimeMs, now, now-lastGlobalStoreTimeMs);
 			return false;
 		}

@@ -35,19 +35,15 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	private static final Clock clock = Clock.instance();
 	private static final LocalStoreManager localStore = LocalStoreManager.instance();
 	private static final Configuration conf = Configuration.instance();
-	private static final TimerQueue timerQ;
+	private TimerQueue timerQ;
 
 	private boolean isInited;
 	private boolean isLoaded;
 	private int recsPerSeg;
 
-	private static final int bufferTimeOffsetMillis = 5;
+	private static final int bufferTimeOffsetMs = 5;
 
 	public static final long MAXFILESIZE = conf.maxFileSizeBytes;
-
-	static {
-		timerQ = new TimerQueue("DSQueue"); //FIXME: We should pass timerQ's object in the constructor and isntantiate TimerQueue once
-	}
 
 	protected Inode(long inumber, int recordSize) {
 		this.inumber = inumber;
@@ -62,19 +58,21 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * Prepare after opening the file.
 	 * This function should be called after the inode has been loaded from the file or the remote node or the global store.
 	 */
-	synchronized void prepare() {
+	synchronized void prepare(TimerQueue tq) {
 		if (isInited)
 			return;
 		isInited = true;
 
 		System.out.printf("[I] Initializing index for inode: %d, recSize=%d\n", inumber, recordSize);
 
+		timerQ = tq;
+
 		assert recordSize >= 1;
-
 		recsPerSeg = conf.segmentSizeBytes / recordSize;
-
 		if (recordSize > 1)
-			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache);
+			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, timerQ);
+
+
 
 		/*try {
 			index.loadAndInit(indexLength(fileSize.get()));
@@ -317,7 +315,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new MaxFileSizeExceededException();
 		}
 
-		if (acquiredSeg == null || (!timerQ.tryDisable(acquiredSeg))) {
+		if (acquiredSeg == null || !timerQ.tryDisable(acquiredSeg)) {
 			boolean createNew = (FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L;
 			acquiredSeg = acquireSegment(fileSizeBuffered, createNew);
 			acquiredSeg.getItem().setIsLoaded();
@@ -337,7 +335,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new KawkabException(e);
 		}
 
-		timerQ.enableAndAdd(acquiredSeg,clock.currentTime()+bufferTimeOffsetMillis);
+		timerQ.enableAndAdd(acquiredSeg,clock.currentTime()+ bufferTimeOffsetMs);
 
 		//tlog1.start();
 		if (ds.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
@@ -385,7 +383,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 				throw new KawkabException(e);
 			}
 
-			timerQ.enableAndAdd(acquiredSeg, clock.currentTime()+bufferTimeOffsetMillis);
+			timerQ.enableAndAdd(acquiredSeg, clock.currentTime()+ bufferTimeOffsetMs);
 
 			//tlog1.start();
 			if (ds.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
@@ -541,15 +539,6 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		} catch (KawkabException e) {
 			e.printStackTrace();
 		}
-	}
-
-	//FIXME: This function should really not be here.
-	public static void shutdown() {
-		timerQ.shutdown();
-	}
-
-	public static void waitUntilSynced() {
-		timerQ.waitUntilEmpty();
 	}
 
 	public long numRecords() {

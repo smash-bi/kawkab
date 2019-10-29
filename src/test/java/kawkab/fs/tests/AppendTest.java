@@ -196,7 +196,7 @@ public class AppendTest {
 		
 		long durSec = (System.currentTimeMillis() - st)/1000;
 		
-		Inode.waitUntilSynced();
+		fs.getTimerQueue().waitUntilEmpty();
 		
 		Cache.instance().flush(); //Clear the cache for the actual append test.
 		

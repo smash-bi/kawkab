@@ -1,10 +1,14 @@
 package kawkab.fs.core.index.poh;
 
 import kawkab.fs.core.Cache;
+import kawkab.fs.core.Clock;
 import kawkab.fs.core.IndexNodeID;
 import kawkab.fs.core.LocalStoreManager;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
+import kawkab.fs.core.timerqueue.TimerQueueIface;
+import kawkab.fs.core.timerqueue.TimerQueueItem;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -18,10 +22,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * The class supports only one modifier thread. The concurrent modifiers should synchronized externally.
  */
 
-public class PostOrderHeapIndex {
+public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	// Persistent variables, persisted in the inode
 	private long inumber;
 	private final LocalStoreManager localStore = LocalStoreManager.instance();
+	private final TimerQueueIface timerQ;
+	private volatile TimerQueueItem<POHNode> acquiredNode;
+	private static final Clock clock = Clock.instance();
+	private static final int bufferTimeOffsetMs = 5;
 
 	private final double logBase;
 	private ConcurrentHashMap<Integer, POHNode> nodes;	//This is an append-only list. The readers should read but not modify the list. Only a single writer should append new nodes.
@@ -50,7 +58,7 @@ public class PostOrderHeapIndex {
 	 * @param indexNodeSizeBytes
 	 * @param percentEntriesPerNode
 	 */
-	public PostOrderHeapIndex(long inumber, int indexNodeSizeBytes, int nodesPerBlock, int percentEntriesPerNode, Cache cache) {
+	public PostOrderHeapIndex(long inumber, int indexNodeSizeBytes, int nodesPerBlock, int percentEntriesPerNode, Cache cache, TimerQueueIface tq) {
 		int entrySize = POHNode.entrySizeBytes();
 		int childSize = POHNode.childSizeBytes();
 		int headerBytes = POHNode.headerSizeBytes();
@@ -70,27 +78,13 @@ public class PostOrderHeapIndex {
 		this.nodesPerBlock = nodesPerBlock;
 		this.logBase = Math.log(childrenPerNode);
 		this.cache = cache;
+		this.timerQ = tq;
 
-		init();
-	}
-
-	// FIXME: Duplicate code in the constructors
-	/*public PostOrderHeapIndex(int entriesPerNode, int childrenPerNode, int nodesPerBlock) {
-		this.entriesPerNode = entriesPerNode;
-		this.childrenPerNode = childrenPerNode;
-		this.nodesPerBlock = nodesPerBlock;
-		logBase = Math.log(childrenPerNode);
-		init();
-
-	}*/
-
-	private void init() {
-		//System.out.printf("Index entries per node:  %d\n", entriesPerNode);
-		//System.out.printf("Index pointers per node: %d\n", childrenPerNode);
+		System.out.printf("Index entries per node:  %d\n", entriesPerNode);
+		System.out.printf("Index pointers per node: %d\n", childrenPerNode);
 
 		nodes = new ConcurrentHashMap<>();
 		//nodes.add(null); // Add a dummy value to match the node number with the array index. We do this to simplify the calculation of the index of the children of a node
-
 		//currentNode = createNewNode(1);
 		//nodes.add(currentNode);
 
@@ -129,7 +123,7 @@ public class PostOrderHeapIndex {
 					System.out.printf("[POH] Acquiring from cache node %d\n", nodeNum);
 					IndexNodeID id = new IndexNodeID(inumber, nodeNum);
 					node = (POHNode) cache.acquireBlock(id);
-					node.init(nodeNum, heightOfNode(nodeNum), entriesPerNode, childrenPerNode, nodeSizeBytes);
+					node.init(nodeNum, heightOfNode(nodeNum), entriesPerNode, childrenPerNode, nodeSizeBytes, nodesPerBlock);
 					POHNode prev = nodes.put(nodeNum, node);
 					assert prev == null;
 				}
@@ -159,7 +153,7 @@ public class PostOrderHeapIndex {
 		System.out.println("[POH] Creating new node: " + nodeID);
 
 		POHNode node = (POHNode) cache.acquireBlock(nodeID);
-		node.init(nodeNumber, heightOfNode(nodeNumber), entriesPerNode, childrenPerNode, nodeSizeBytes);
+		node.init(nodeNumber, heightOfNode(nodeNumber), entriesPerNode, childrenPerNode, nodeSizeBytes, nodesPerBlock);
 		node.initForAppend();
 		setChildren(node);
 		POHNode prev = nodes.put(nodeNumber, node); //No other thread (readers) can concurrently access this node because the filesize is not updated yet
@@ -176,7 +170,7 @@ public class PostOrderHeapIndex {
 		int height = heightOfNode(nodeNumber);
 		IndexNodeID nodeID = new IndexNodeID(inumber, nodeNumber);
 		POHNode node = new POHNode(nodeID);
-		node.init(nodeNumber, height, entriesPerNode, childrenPerNode, nodeSizeBytes);
+		node.init(nodeNumber, height, entriesPerNode, childrenPerNode, nodeSizeBytes, nodesPerBlock);
 		setChildren(node);
 		return node;
 	}
@@ -208,7 +202,7 @@ public class PostOrderHeapIndex {
 	 * @throws IOException
 	 * @throws KawkabException
 	 */
-	public void appendMinTS(final long minTS, final long segmentInFile, final long curIndexLen) throws IOException, KawkabException, InterruptedException {
+	public void appendMinTS(final long minTS, final long segmentInFile, final long curIndexLen) throws IOException, KawkabException {
 		//TODO: check the arguments
 
 		// Current node should not be null.
@@ -225,19 +219,26 @@ public class PostOrderHeapIndex {
 
 		assert (curIndexLen % 2) == 0;
 
-		POHNode currentNode = null;
-		if ((curIndexLen % (entriesPerNode*2)) == 0) { //If last node is full
+		boolean lastNodeFull = (curIndexLen % (entriesPerNode*2)) == 0;
+
+		if (lastNodeFull) { //If last node is full
 			try {
 				int nodeNum = (int)(curIndexLen/2/entriesPerNode) +1;
-				currentNode = createNewNodeCached(nodeNum);
+				POHNode node = createNewNodeCached(nodeNum);
+				acquiredNode = new TimerQueueItem<>(node, this);
 			} catch (IOException | KawkabException | InterruptedException e) {
 				e.printStackTrace();
 				return;
 			}
-		} else {
-			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
-			currentNode = acquireNode(lastNode);
 		}
+
+		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
+			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode)); //ceil(entriesInIndex)/(entriesPerNode) gives the ceil value; FIXME: Note the variable overflow in curIndexLen+1
+			POHNode node = acquireNode(lastNode);
+			acquiredNode = new TimerQueueItem<>(node, this);
+		}
+
+		POHNode currentNode = acquiredNode.getItem();
 
 		try {
 			currentNode.appendEntryMinTS(minTS, segmentInFile);
@@ -245,7 +246,7 @@ public class PostOrderHeapIndex {
 			e.printStackTrace();
 		}
 
-		// length.incrementAndGet();
+		timerQ.enableAndAdd(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
 
 		//System.out.println("Min: " + minTS + ", seg: " + segmentInFile);
 	}
@@ -269,12 +270,21 @@ public class PostOrderHeapIndex {
 
 		assert curIndexLen % 2 == 1;
 
-		int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
-		POHNode currentNode = acquireNode(lastNode);
+		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
+			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
+			POHNode node = acquireNode(lastNode);
+			acquiredNode = new TimerQueueItem<>(node, this);
+		}
+
+		POHNode currentNode = acquiredNode.getItem();
 
 		currentNode.appendEntryMaxTS(maxTS, segmentInFile);
 
-		// length.incrementAndGet();
+		timerQ.enableAndAdd(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
+
+		if (currentNode.isFull()) {
+			acquiredNode = null;
+		}
 
 		//System.out.println("\tMax: " + maxTS + ", seg: " + segmentInFile);
 	}
@@ -288,19 +298,24 @@ public class PostOrderHeapIndex {
 
 		System.out.printf("[POH] appendIndexEntry: segInFile=%d, indexLen=%d\n", segmentInFile, curIndexLen);
 
-		POHNode currentNode = null;
 		if ((curIndexLen % (entriesPerNode*2)) == 0) { //If last node is full
 			try {
 				int nodeNum = (int)(curIndexLen/2/entriesPerNode) +1;
-				currentNode = createNewNodeCached(nodeNum);
+				POHNode node = createNewNodeCached(nodeNum);
+				acquiredNode = new TimerQueueItem<>(node, this);
 			} catch (IOException | KawkabException | InterruptedException e) {
 				e.printStackTrace();
 				return;
 			}
-		} else {
-			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
-			currentNode = acquireNode(lastNode);
 		}
+
+		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
+			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
+			POHNode node = acquireNode(lastNode);
+			acquiredNode = new TimerQueueItem<>(node, this);
+		}
+
+		POHNode currentNode = acquiredNode.getItem();
 
 		try {
 			currentNode.appendEntry(minTS, maxTS, segmentInFile);
@@ -308,7 +323,11 @@ public class PostOrderHeapIndex {
 			e.printStackTrace();
 		}
 
-		//length.addAndGet(2);
+		timerQ.enableAndAdd(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
+
+		if (currentNode.isFull()) {
+			acquiredNode = null;
+		}
 	}
 
 	/**
@@ -617,5 +636,14 @@ public class PostOrderHeapIndex {
 
 		nodes.clear();
 		nodes = null;
+	}
+
+	@Override
+	public void deferredWork(POHNode node) {
+		try {
+			localStore.store(node);
+		} catch (KawkabException e) {
+			e.printStackTrace();
+		}
 	}
 }
