@@ -65,7 +65,7 @@ public final class Filesystem {
 		
 		long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber);
-		FileHandle file = new FileHandle(inumber, mode, opts, timerQ);
+		FileHandle file = new FileHandle(inumber, mode, timerQ);
 		return file;
 	}
 

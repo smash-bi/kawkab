@@ -1,11 +1,11 @@
 package kawkab.fs.core;
 
-import kawkab.fs.api.FileOptions;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.*;
+import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueue;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
 
@@ -18,18 +18,20 @@ import java.util.List;
  * TODO: Keep a reference count of InodeBlocks
  */
 
-public final class FileHandle {
+public final class FileHandle implements DeferredWorkReceiver {
 	private final long inumber;
 	private final FileMode fileMode;
-	private final FileOptions opts;
+	private Inode inode; // Not final because we set it to null in the close() in order to free the memory
+	private InodesBlock inodesBlock; // Not final because we set it to null in the close() in order to free the memory
+	private final boolean onPrimaryNode; //Indicates whether this file is opened on its primary node or not
+	private final TimerQueue timerQ;
+	private TimerQueueItem<InodesBlock> inbAcquired;
+
 	private final static Cache cache;
+	private final static Clock clock = Clock.instance();
 	private final static int inodesPerBlock;	// Used in accessing the inode of this file when on the non-primary node
-	private Inode inode;	// Not final because we set it to null in the close() in order to free the memory
-	private InodesBlock inodesBlock;	// Not final because we set it to null in the close() in order to free the memory
-	private final boolean onPrimaryNode;	//Indicates whether this file is opened on its primary node or not
 	private final static LocalStoreManager localStore;	// FIXME: Isn't it a bad design to access localStore from a file handle?
-	//private final TimerQueue timerQ;
-	//private TimerQueueItem<InodesBlock> inbAcquired;
+	private final static int bufferTimeLimitMs = 5;
 
 	static {
 		Configuration conf = Configuration.instance();
@@ -38,17 +40,16 @@ public final class FileHandle {
 		localStore = LocalStoreManager.instance();
 	}
 
-	public FileHandle(long inumber, FileMode mode, FileOptions opts, TimerQueue tq) throws IOException, KawkabException{
+	public FileHandle(long inumber, FileMode mode, TimerQueue tq) throws IOException, KawkabException{
 		this.inumber = inumber;
 		this.fileMode = mode;
-		this.opts = opts;
-		//this.timerQ = tq;
+		this.timerQ = tq;
 		onPrimaryNode = Configuration.instance().thisNodeID == Commons.primaryWriterID(inumber); //Is this reader or writer on the primary node?
 
 		int inodesBlockIdx = (int) (inumber / inodesPerBlock);
 		BlockID id = new InodesBlockID(inodesBlockIdx);
 		
-		InodesBlock inb = null;
+		InodesBlock inb;
 		try {
 			inb = (InodesBlock) cache.acquireBlock(id);
 			inb.loadBlock();
@@ -253,11 +254,15 @@ public final class FileHandle {
 		if (inodesBlock == null) {
 			throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
 		}
-		
+
 		int appendedBytes = inode.appendBuffered(data, offset, length);
 
-		inodesBlock.markLocalDirty();
-		localStore.store(inodesBlock);
+		if (inbAcquired == null || !timerQ.tryDisable(inbAcquired)) {
+			inbAcquired = new TimerQueueItem(inbAcquired, this);
+		}
+		
+		inbAcquired.getItem().markLocalDirty();
+		timerQ.enableAndAdd(inbAcquired, clock.currentTime()+bufferTimeLimitMs);
 		
 		return appendedBytes;
 	}
@@ -287,9 +292,13 @@ public final class FileHandle {
 		}
 		
 		int appendedBytes = inode.appendBuffered(record);
-		
-		inodesBlock.markLocalDirty();
-		localStore.store(inodesBlock);
+
+		if (inbAcquired == null || !timerQ.tryDisable(inbAcquired)) {
+			inbAcquired = new TimerQueueItem(inodesBlock, this);
+		}
+
+		inbAcquired.getItem().markLocalDirty();
+		timerQ.enableAndAdd(inbAcquired, clock.currentTime()+bufferTimeLimitMs);
 		
 		return appendedBytes;
 	}
@@ -337,6 +346,10 @@ public final class FileHandle {
 	}
 	
 	synchronized void close() throws KawkabException {
+		if (inbAcquired != null && timerQ.tryDisable(inbAcquired)) {
+			deferredWork(inbAcquired.getItem());
+		}
+
 		if (inodesBlock != null) {
 			inode.cleanup();
 			cache.releaseBlock(inodesBlock.id());
@@ -346,5 +359,14 @@ public final class FileHandle {
 		inodesBlock = null;
 		
 		//TODO: Update openFiles table.
+	}
+
+	@Override
+	public void deferredWork(Object item) {
+		try {
+			localStore.store(inodesBlock);
+		} catch (KawkabException e) {
+			e.printStackTrace();
+		}
 	}
 }

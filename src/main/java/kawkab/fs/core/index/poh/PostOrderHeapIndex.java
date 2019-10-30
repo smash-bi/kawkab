@@ -29,7 +29,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	private final TimerQueueIface timerQ;
 	private volatile TimerQueueItem<POHNode> acquiredNode;
 	private static final Clock clock = Clock.instance();
-	private static final int bufferTimeOffsetMs = 5;
+	private static final int bufferTimeOffsetMs = 5; //Giving some time for buffering
 
 	private final double logBase;
 	private ConcurrentHashMap<Integer, POHNode> nodes;	//This is an append-only list. The readers should read but not modify the list. Only a single writer should append new nodes.
