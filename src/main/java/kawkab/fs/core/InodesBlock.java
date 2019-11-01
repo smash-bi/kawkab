@@ -153,9 +153,17 @@ public final class InodesBlock extends Block {
 		buffer.flip();
 		return ByteString.copyFrom(buffer.array());
 	}
+
+	public void storeTo(ByteBuffer dstBuffer) {
+		//TODO: This function takes extra memory to serialize inodes in an input stream. We need an alternate
+		//method for this purpose.
+		for(Inode inode : inodes) {
+			inode.storeTo(dstBuffer);
+		}
+	}
 	
 	private void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException {
-		primaryNodeService.getInodesBlock((InodesBlockID)id(), this);
+		loadFrom(primaryNodeService.getInodesBlock((InodesBlockID)id()));
 	}
 	
 	@Override

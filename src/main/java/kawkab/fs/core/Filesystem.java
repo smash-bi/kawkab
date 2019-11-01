@@ -3,7 +3,9 @@ package kawkab.fs.core;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.*;
-import kawkab.fs.core.services.grpc.PrimaryNodeServiceServer;
+import kawkab.fs.core.services.thrift.FilesystemServiceServer;
+import kawkab.fs.core.services.thrift.PrimaryNodeService;
+import kawkab.fs.core.services.thrift.PrimaryNodeServiceServer;
 import kawkab.fs.core.timerqueue.TimerQueue;
 
 import java.io.IOException;
@@ -17,18 +19,18 @@ public final class Filesystem {
 	
 	private static Filesystem instance;
 	private static Namespace namespace;
-	private static PrimaryNodeServiceServer ns;
 	private static Configuration conf;
-	//private static FFilesystemServiceServer fs;
+	private static FilesystemServiceServer fss;
+	private static PrimaryNodeServiceServer pns;
 
 	private TimerQueue timerQ;
 
 	private Filesystem() throws KawkabException, IOException {
 		namespace = Namespace.instance();
-		ns = new PrimaryNodeServiceServer();
-		//fs = new FFilesystemServiceServer(this);
-		ns.startServer();
-		//fs.startServer();
+		pns = new PrimaryNodeServiceServer();
+		pns.startServer();
+		fss = new FilesystemServiceServer(this);
+		fss.startServer();
 		timerQ = new TimerQueue("FS Timer Queue");
 	}
 	
@@ -56,7 +58,7 @@ public final class Filesystem {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	public FileHandle open(String filename, FileMode mode, FileOptions opts) 
+	public synchronized FileHandle open(String filename, FileMode mode, FileOptions opts)
 			throws IbmapsFullException, IOException, FileAlreadyOpenedException, FileNotExistException, KawkabException, InterruptedException {
 		//TODO: Validate input
 		
@@ -69,7 +71,7 @@ public final class Filesystem {
 		return file;
 	}
 
-	public void close(FileHandle fh) throws KawkabException {
+	public synchronized void close(FileHandle fh) throws KawkabException {
 		System.out.println("[FS] Closing file: " + fh.inumber());
 		fh.close();
 		if (fh.mode() == FileMode.APPEND)
@@ -117,15 +119,16 @@ public final class Filesystem {
 			return;
 		
 		closed = true;
-		//fs.stopServer();
-		//ns.stopServer();
+		fss.stopServer();
+		pns.stopServer();
 		namespace.shutdown();
 		//Ibmap.shutdown();
 		//	InodesBlock.shutdown();
 		timerQ.shutdown();
 		Cache.instance().shutdown();
 		Clock.instance().shutdown();
-		
+
+		//Wakeup the threads waiting in waitUntilShutdown
 		synchronized(instance) {
 			instance.notifyAll();
 		}

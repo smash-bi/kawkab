@@ -395,6 +395,23 @@ public final class DataSegment extends Block {
 
 		return bytes;
 	}
+	public synchronized void storeTo(ByteBuffer dstBuffer, int offset) {
+		if (offset == writePos.get())
+			return;
+
+		int limit = isSegFull ? segmentSizeBytes : writePos.get();
+
+		ByteString bytes = null;
+		storeBuffer.clear();
+		storeBuffer.position(offset);
+		storeBuffer.limit(limit);
+
+		System.out.printf("[DS] ByteString store %s: pos=%d, limit=%d, rem=%d, offset=%d\n", id, storeBuffer.position(), limit, storeBuffer.remaining(), offset);
+
+		dstBuffer.put(storeBuffer);
+
+		return;
+	}
 	
 	private synchronized void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
 		System.out.printf("[DS] Fetch %s from primary. writePos=%d, dirtyOffset=%d, dataBufPost=%d\n", id, writePos.get(), dirtyOffset, dataBuf.position());

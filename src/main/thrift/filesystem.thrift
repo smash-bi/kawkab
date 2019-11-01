@@ -1,11 +1,11 @@
-namespace java kawkab.fs.client.services
+namespace java kawkab.fs.core.services.thrift
 
-enum FileMode {
+enum TFileMode {
 	FM_READ,
 	FM_APPEND
 }
 
-enum ReturnCode {
+enum TReturnCode {
     RC_UNKNOWN,
     RC_SUCCESS,
     RC_FAILED,
@@ -13,69 +13,69 @@ enum ReturnCode {
     RC_FILE_ALREADY_EXIST
 }
 
-exception FileNotExistException {
+exception TFileNotExistException {
 	1: string message
 }
 
-exception FileAlreadyOpenedException {
+exception TFileAlreadyOpenedException {
 	1: string message
 }
 
-exception RequestFailedException {
+exception TRequestFailedException {
 	1: string message
 }
 
-exception InvalidArgumentException {
+exception TInvalidArgumentException {
 	1: string message
 }
 
-exception InvalidSessionException {
+exception TInvalidSessionException {
 	1: string message
 }
 
-struct OpenRequest {
+struct TOpenRequest {
 	1: required string filename,
-	2: required FileMode fileMode
+	2: required TFileMode fileMode
 }
 
-struct OpenResponse {
-	1: required ReturnCode rc,
+struct TOpenResponse {
+	1: required TReturnCode rc,
 	2: required i64 sessionID
 }
 
-struct ReadRequest {
+struct TReadRequest {
 	1: required i64 sessionID,
 	2: required i64 offset,
 	3: required i32 length
 }
 
-struct ReadResponse {
-	1: required ReturnCode rc,
+struct TReadResponse {
+	1: required TReturnCode rc,
 	2: required binary data,
 	3: required i64 latency
 }
 
-struct AppendRequest {
+struct TAppendRequest {
 	1: required i64 sessionID,
 	2: required binary data
 }
 
-struct AppendResponse {
-	1: required ReturnCode rc,
+struct TAppendResponse {
+	1: required TReturnCode rc,
 	2: required i64 latency
 }
 
 service FilesystemService {
-	i64 open (1: string filename, 2: FileMode fileMode) throws 
-		(1: RequestFailedException rfe);
+	i64 open (1: string filename, 2: TFileMode fileMode, 3: i32 recordSize) throws
+		(1: TRequestFailedException rfe);
 	
 	// Returns data read from the given offset in the file
 	binary read (1: i64 sessionID, 2: i64 offset, 3: i32 length) throws
-		(1: RequestFailedException rfe, 2: InvalidSessionException ise, 3: InvalidArgumentException iae);
+		(1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TInvalidArgumentException iae);
 	
 	// Returns ths number of bytes appended
 	i32 append (1: i64 sessionID, 2: binary data) throws 
-		(1: RequestFailedException rfe, 2: InvalidSessionException ise);
+		(1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
 	
 	oneway void close (1: i64 sessionID);
 }

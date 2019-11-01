@@ -3,7 +3,7 @@ package kawkab.fs.core;
 import com.google.protobuf.ByteString;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.services.grpc.PrimaryNodeServiceClient;
+import kawkab.fs.core.services.thrift.PrimaryNodeServiceClient;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -263,7 +263,7 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws IOException
 	 */
 	public void loadBlock() throws FileNotExistException, KawkabException, IOException {
-		if (isOnPrimary) { // If this node is the primary writer of the file
+		if (isOnPrimary && !isLoaded) { // If this node is the primary writer of the file
 			loadBlockOnPrimary();
 			return;
 		}
@@ -342,6 +342,10 @@ public abstract class Block extends AbstractTransferItem {
 	protected void setIsLoaded() {
 		//System.out.printf("[B] Setting %s is loaded\n",id);
 		isLoaded = true;
+	}
+
+	public boolean isLoaded() {
+		return isLoaded;
 	}
 }
 

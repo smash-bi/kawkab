@@ -15,18 +15,13 @@ message KSegmentRequest {
   int32 offset          = 5;
 }
 
-message KInodesBlockID {
-  int32 blockIndex      = 1;
-}
-
-message KIndexNodeID {
-  int64 inumber        = 1;
-  int32 nodeNumInIndex = 2;
-}
-
 message KSegmentResponse {
   bytes segmentBytes   = 1;
   KErrorCode errorCode = 2;
+}
+
+message KInodesBlockID {
+  int32 blockIndex      = 1;
 }
 
 message KInodesBlockResponse {
@@ -38,15 +33,20 @@ message KExistsResponse {
   bool exists = 1;
 }
 
-message KIndexNodeResponse {
-  bytes indexNodeBytes = 1;
-  KErrorCode errorCode = 2;
+message KIndexNodeID {
+  int64 inumber        = 1;
+  int32 nodeNumInIndex = 2;
 }
 
 message KIndexNodeRequest {
   int64 inumber         = 1;
   int32 nodeNumInIndex  = 2;
   int32 fromTsIdx       = 3;
+}
+
+message KIndexNodeResponse {
+  bytes indexNodeBytes = 1;
+  KErrorCode errorCode = 2;
 }
 
 service PrimaryNode {

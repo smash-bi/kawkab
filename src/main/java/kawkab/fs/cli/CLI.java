@@ -44,7 +44,7 @@ public final class CLI {
 	}
 
 	private void cmd() throws IOException {
-		String cmds = "Commands: open, read, rr, apnd, ar, apndTest|at, size, flush, exit";
+		String cmds = "Commands: open, read, rr, apnd, ar, at, size, flush, exit";
 		
 		try (BufferedReader ir = new BufferedReader(new InputStreamReader(System.in))) {
 			System.out.println("--------------------------------");
@@ -89,7 +89,6 @@ public final class CLI {
 						case "size":
 							parseSize(args);
 							continue;
-						case "apndTest":
 						case "at":
 							parseAppendTest(args);
 							continue;

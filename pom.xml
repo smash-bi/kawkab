@@ -188,9 +188,9 @@
 				<version>3.8.0</version>
 				<configuration>
 					<release>11</release>
-					<excludes>
+					<!-- excludes>
 				      <exclude>**/thrift/*.java</exclude>
-				    </excludes>
+				    </excludes -->
 				</configuration>
 			</plugin>
 
@@ -243,6 +243,33 @@
 		        </execution>
 		      </executions>
 		    </plugin>
+
+			<plugin>
+				<groupId>org.apache.thrift.tools</groupId>
+				<artifactId>maven-thrift-plugin</artifactId>
+				<version>0.1.11</version>
+				<configuration>
+					<thriftExecutable>/home/sm3rizvi/packages/thrift-0.13.0/bin/thrift</thriftExecutable>
+					<thriftSourceRoot>${basedir}/src/main/thrift</thriftSourceRoot>
+					<generator>java</generator>
+				</configuration>
+				<executions>
+					<execution>
+						<id>thrift-sources</id>
+						<phase>generate-sources</phase>
+						<goals>
+							<goal>compile</goal>
+						</goals>
+					</execution>
+					<!--execution>
+						<id>thrift-test-sources</id>
+						<phase>generate-test-sources</phase>
+						<goals>
+							<goal>testCompile</goal>
+						</goals>
+					</execution-->
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
 
@@ -339,6 +366,12 @@
 			<groupId>com.google.protobuf</groupId>
 			<artifactId>protobuf-java</artifactId>
 			<version>3.8.0-rc-1</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.thrift</groupId>
+			<artifactId>libthrift</artifactId>
+			<version>0.12.0</version>
 		</dependency>
 	</dependencies>
 

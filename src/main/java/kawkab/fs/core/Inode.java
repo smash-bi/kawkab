@@ -463,7 +463,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			isLoaded = true;
 		}
 
-		System.out.printf("[I] Loading inode %d: fs=%d\n", inum, fs);
+		System.out.printf("[I] Loaded inode %d from buffer: fs=%d, recSize=%d\n", inum, fs, recordSize);
 
 		return Long.BYTES*2 + Integer.BYTES;
 	}
@@ -509,6 +509,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	int storeTo(ByteBuffer buffer) {
 		// assert fileSize.get() == fileSizeBuffered.get(); //Not needed because this is not called by the LocalStoreManager
+		System.out.printf("[I] Storing inode %d to buffer: fs=%d, recSize=%d\n", inumber, fileSize.get(), recordSize);
+
 		buffer.putLong(inumber);
 		buffer.putLong(fileSize.get());
 		buffer.putInt(recordSize);

@@ -3,6 +3,7 @@ package kawkab.fs.core.index.poh;
 import com.google.protobuf.ByteString;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.core.Block;
+import kawkab.fs.core.Clock;
 import kawkab.fs.core.IndexNodeID;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
@@ -47,6 +48,10 @@ public class POHNode extends Block {
 	private int nodeSizeBytes; // The size includes nodeNumber, height, children pointer entries, and index entries
 	private boolean isLastNodeInBlock;
 	private boolean inited;
+
+	private static Clock clock = Clock.instance();
+	private long lastFetchTimeMs;
+	private int fetchTimeLimitMs = 5;
 
 	/**
 	 * @param id Node ID
@@ -778,14 +783,9 @@ public class POHNode extends Block {
 		}
 
 		synchronized (storeBuffer) {
-			try {
-				storeBuffer.clear();
-				storeTo(storeBuffer, fromTSIdx);
-				storeBuffer.flip();
-			} catch (IOException e) {
-				e.printStackTrace();
-				return null;
-			}
+			storeBuffer.clear();
+			storeTo(storeBuffer, fromTSIdx);
+			storeBuffer.flip();
 
 			return ByteString.copyFrom(storeBuffer);
 		}
@@ -798,7 +798,7 @@ public class POHNode extends Block {
 	 * @return Number of TS stored in the buffer
 	 * @throws IOException
 	 */
-	protected int storeTo(ByteBuffer buffer, int fromTSIdx) throws IOException {
+	public int storeTo(ByteBuffer buffer, int fromTSIdx) {
 		System.out.printf("[IN] Storing %s in buffer\n",id);
 
 		boolean withHeader = fromTSIdx % 2 == 0;
@@ -884,12 +884,21 @@ public class POHNode extends Block {
 			return;
 		}*/
 
+		long now = clock.currentTime();
+
+		if (now - lastFetchTimeMs <= fetchTimeLimitMs) {
+			System.out.printf("[IN] Fetch time is not expired. Not loading %s\n",id);
+			return;
+		}
+
 		try {
 			loadFromGlobal(id.numNodeInIndexBlock()*nodeSizeBytes+dirtyOffsetStart, nodeSizeBytes-dirtyOffsetStart);
 		} catch (FileNotExistException e) {
 			System.out.println("[IN] Node not found in the global: " + id());
 			loadBlockFromPrimary();
 		}
+
+		lastFetchTimeMs = now;
 	}
 
 	@Override

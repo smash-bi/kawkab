@@ -1,5 +1,6 @@
 package kawkab.fs.core.index.poh;
 
+import kawkab.fs.commons.Commons;
 import kawkab.fs.core.Cache;
 import kawkab.fs.core.Clock;
 import kawkab.fs.core.IndexNodeID;
@@ -53,6 +54,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 	private int nodeSizeBytes;
 
+	private final boolean isOnPrimary;
+
 	/**
 	 *
 	 * @param indexNodeSizeBytes
@@ -79,6 +82,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		this.logBase = Math.log(childrenPerNode);
 		this.cache = cache;
 		this.timerQ = tq;
+		this.isOnPrimary = Commons.onPrimaryNode(inumber);
 
 		System.out.printf("Index entries per node:  %d\n", entriesPerNode);
 		System.out.printf("Index pointers per node: %d\n", childrenPerNode);
@@ -93,6 +97,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		for (int i=0; i<nodesCountTable.length; i++) {
 			nodesCountTable[i] = totalNodesKAryTree(i);
 		}
+
+
 	}
 
 	/**
@@ -166,14 +172,14 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		return node;
 	}
 
-	private POHNode createNewNodeInMemory(final int nodeNumber) throws IOException, KawkabException {
+	/*private POHNode createNewNodeInMemory(final int nodeNumber) throws IOException, KawkabException {
 		int height = heightOfNode(nodeNumber);
 		IndexNodeID nodeID = new IndexNodeID(inumber, nodeNumber);
 		POHNode node = new POHNode(nodeID);
 		node.init(nodeNumber, height, entriesPerNode, childrenPerNode, nodeSizeBytes, nodesPerBlock);
 		setChildren(node);
 		return node;
-	}
+	}*/
 
 	private void setChildren(final POHNode node) throws IOException, KawkabException {
 		if (node.height() > 0) {

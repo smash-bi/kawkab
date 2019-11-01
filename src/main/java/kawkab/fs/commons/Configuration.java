@@ -85,7 +85,7 @@ public final class Configuration {
 	public final String minioAccessKey; // = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public final String minioSecretKey; // = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
-	//gRPC service
+	//Thrift service port for remote reads
 	public final int primaryNodeServicePort; // = 22332;
 
 	// Filesystem RPC service for the filesystem clients
