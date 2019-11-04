@@ -26,7 +26,7 @@ class POHEntry implements TimeRange{
 	POHEntry(final long minTS, final long maxTS, final long segmentInFile) {
 		assert minTS <= maxTS;
 
-		System.out.println("\t\t\tEntry: "  + segmentInFile + " - " + minTS);
+		//System.out.println("\t\t\tEntry: "  + segmentInFile + " - " + minTS);
 
 		this.segmentInFile = segmentInFile;
 		this.minTS = minTS;
@@ -41,7 +41,7 @@ class POHEntry implements TimeRange{
 		this.maxTS = maxTS;
 		isMaxSet = true;
 
-		System.out.println("\t\t\tEntry with max: " + segmentInFile + " - " + minTS + " - " + maxTS);
+		//System.out.println("\t\t\tEntry with max: " + segmentInFile + " - " + minTS + " - " + maxTS);
 	}
 
 	static int sizeBytes() {
@@ -89,13 +89,13 @@ class POHEntry implements TimeRange{
 		if (withMin) { //If the offset is an even number, the buffer starts with the minTS and segInFile
 			dstBuf.putLong(segmentInFile);
 			dstBuf.putLong(minTS);
-			System.out.printf("\t\t\t\t\tStoring: sif=%d, min=%d", segmentInFile, minTS);
+			//System.out.printf("\t\t\t\t\tStoring: sif=%d, min=%d", segmentInFile, minTS);
 		}
 
 		if (isMaxSet) {
 			dstBuf.putLong(maxTS);
 
-			System.out.printf("\t >, max=%d\n", maxTS);
+			//System.out.printf("\t >, max=%d\n", maxTS);
 
 			return true;
 		}
@@ -129,7 +129,7 @@ class POHEntry implements TimeRange{
 				maxTS = max;
 				isMaxSet = true;
 
-				  System.out.printf("\t\t\t\t\tLoading with max: sif=%d, min=%d, max=%d\n", segmentInFile, minTS, maxTS);
+				  //System.out.printf("\t\t\t\t\tLoading with max: sif=%d, min=%d, max=%d\n", segmentInFile, minTS, maxTS);
 
 				return true;
 			}
@@ -137,7 +137,7 @@ class POHEntry implements TimeRange{
 			srcBuf.position(srcBuf.position() - Long.BYTES);
 		}
 
-		  System.out.printf("\t\t\t\t\tLoading: sif=%d, min=%d, max=%d\n", segmentInFile, minTS, maxTS);
+		  //System.out.printf("\t\t\t\t\tLoading: sif=%d, min=%d, max=%d\n", segmentInFile, minTS, maxTS);
 
 		return false;
 	}

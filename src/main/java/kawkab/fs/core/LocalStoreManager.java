@@ -168,7 +168,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private int processStoreRequest(Block block, FileChannels channels) throws KawkabException {
 		int syncedCnt = 0;
 
-		System.out.printf("[LSM] Store block: %s\n",block.id());
+		//System.out.printf("[LSM] Store block: %s\n",block.id());
 
 		// WARNING! This functions works correctly in combination with the store(block) function only if the same block
 		// is always assigned to the same worker thread.

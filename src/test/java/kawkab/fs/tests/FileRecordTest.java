@@ -50,11 +50,11 @@ public class FileRecordTest {
 		
 		FileHandle file = fs.open("RecordsSmokeTest", Filesystem.FileMode.APPEND, new FileOptions(rec.size()));
 		
-		file.append(rec);
+		file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
 		
 		Record recordOut = new SampleRecord();
 		
-		file.recordNum(recordOut, file.size()/rec.size());
+		file.recordNum(recordOut.copyInDstBuffer(), file.size()/rec.size(), rec.size());
 		
 		fs.close(file);
 		
@@ -83,12 +83,12 @@ public class FileRecordTest {
 			Record rec = new SampleRecord(i+1+offset, rand);
 
 			recs.add(rec);
-			file.append(rec);
+			file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
 		}
 		
 		Record actual = new SampleRecord();
 		for (Record expected : recs) {
-			file.recordNum(actual, nextIndex++);
+			file.recordNum(actual.copyInDstBuffer(), nextIndex++, SampleRecord.length());
 			assertEquals(expected, actual);
 		}
 		
@@ -107,13 +107,13 @@ public class FileRecordTest {
 		
 		FileHandle file = fs.open("SimpleRecordReadTest", Filesystem.FileMode.APPEND, new FileOptions(rec.size()));
 		
-		file.append(rec);
+		file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
 		
 		Record recordOutNum = new SampleRecord();
 		Record recordOutAt = new SampleRecord();
 		
-		file.recordNum(recordOutNum, file.size()/rec.size());
-		file.recordAt(recordOutAt, rec.timestamp());
+		file.recordNum(recordOutNum.copyInDstBuffer(), file.size()/rec.size(), rec.size());
+		file.recordAt(recordOutAt.copyInDstBuffer(), rec.timestamp(), rec.size());
 		
 		fs.close(file);
 		
@@ -139,7 +139,7 @@ public class FileRecordTest {
 			long ts = i*offset+offset;
 			Record rec = new SampleRecord(ts, rand);
 			records[i] = rec;
-			file.append(rec);
+			file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
 		}
 
 		List<Record> results = null;
@@ -191,7 +191,7 @@ public class FileRecordTest {
 			long ts = i * tsOffset + tsOffset;
 			Record rec = new SampleRecord(ts, rand.nextDouble(), rand.nextDouble(), rand.nextBoolean(), rand.nextDouble(), rand.nextDouble(), rand.nextBoolean());
 			records[i] = rec;
-			file.append(rec);
+			file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
 		}
 
 		// Reading the records from the start

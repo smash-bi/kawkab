@@ -14,6 +14,7 @@ import org.apache.thrift.TException;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -32,22 +33,94 @@ public class FilesystemServiceImpl implements Iface {
 
 	@Override
 	public long open(String filename, TFileMode fileMode, int recordSize) throws TException {
+		System.out.printf("[FSI] open(): opening file %s, recSize %d\n", filename, recordSize);
+
 		FileHandle handle = null;
 		try {
 			handle = fs.open(filename, convertFileMode(fileMode), new FileOptions(recordSize));
 		} catch (Exception e) {
+			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
 
 		long sessionID = counter.incrementAndGet();
-
-		assert handle != null;
 
 		if (sessions.putIfAbsent(sessionID, handle) != null) {
 			throw new TRequestFailedException("Session already exist: " + sessionID);
 		}
 
 		return sessionID;
+	}
+
+	@Override
+	public ByteBuffer recordNum(long sessionID, long recNum, int recSize) throws TInvalidSessionException, TRequestFailedException {
+		FileHandle fh = sessions.get(sessionID);
+
+		if (fh == null) {
+			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
+		}
+
+		ByteBuffer dstBuf = ByteBuffer.allocate(recSize);
+		try {
+			fh.recordNum(dstBuf, recNum, recSize);
+			return dstBuf;
+		} catch (IOException | KawkabException e) {
+			e.printStackTrace();
+			throw new TRequestFailedException(e.getMessage());
+		}
+	}
+
+	@Override
+	public ByteBuffer recordAt(long sessionID, long timestamp, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
+		FileHandle fh = sessions.get(sessionID);
+
+		if (fh == null) {
+			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
+		}
+
+		ByteBuffer dstBuf = ByteBuffer.allocate(recSize);
+		try {
+			if (!fh.recordAt(dstBuf, timestamp, recSize)) {
+				throw new TRequestFailedException("Record not found");
+			}
+
+			return dstBuf;
+		} catch (IOException | KawkabException e) {
+			e.printStackTrace();
+			throw new TRequestFailedException(e.getMessage());
+		}
+	}
+
+	@Override
+	public List<ByteBuffer> readRecords(long sessionID, long minTS, long maxTS, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
+		FileHandle fh = sessions.get(sessionID);
+
+		if (fh == null) {
+			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
+		}
+
+		try {
+			return  fh.readRecords(minTS, maxTS, recSize);
+		} catch (KawkabException | IOException e) {
+			e.printStackTrace();
+			throw new TRequestFailedException(e.getMessage());
+		}
+	}
+
+	@Override
+	public int appendRecord(long sessionID, ByteBuffer data, long timestamp, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
+		FileHandle fh = sessions.get(sessionID);
+
+		if (fh == null) {
+			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
+		}
+
+		try {
+			return fh.append(data, timestamp, recSize);
+		} catch (IOException | KawkabException | InterruptedException e) {
+			e.printStackTrace();
+			throw new TRequestFailedException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -100,6 +173,22 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			return fh.append(srcBuf.array(), offset, length);
 		} catch (Exception e) {
+			e.printStackTrace();
+			throw new TRequestFailedException(e.getMessage());
+		}
+	}
+
+	@Override
+	public long size(long sessionID) throws TRequestFailedException, TInvalidSessionException {
+		FileHandle fh = sessions.get(sessionID);
+
+		if (fh == null) {
+			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
+		}
+
+		try {
+			return fh.size();
+		} catch (KawkabException e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}

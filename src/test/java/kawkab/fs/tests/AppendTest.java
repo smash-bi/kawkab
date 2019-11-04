@@ -72,7 +72,8 @@ public class AppendTest {
 		TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Record append", 5);
 		for (int i=0; i<numRecords; i++) {
 			tlog.start();
-			file.append(recs[i]);
+			Record rec = recs[i];
+			file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
 			tlog.end();
 		}
 		double durSec = (System.currentTimeMillis() - startTime) / 1000.0;

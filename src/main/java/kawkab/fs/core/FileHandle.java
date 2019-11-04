@@ -10,6 +10,7 @@ import kawkab.fs.core.timerqueue.TimerQueue;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
 
 /**
@@ -18,7 +19,7 @@ import java.util.List;
  * TODO: Keep a reference count of InodeBlocks
  */
 
-public final class FileHandle implements DeferredWorkReceiver {
+public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	private final long inumber;
 	private final FileMode fileMode;
 	private Inode inode; // Not final because we set it to null in the close() in order to free the memory
@@ -40,7 +41,7 @@ public final class FileHandle implements DeferredWorkReceiver {
 		localStore = LocalStoreManager.instance();
 	}
 
-	public FileHandle(long inumber, FileMode mode, TimerQueue tq) throws IOException, KawkabException{
+	public FileHandle(long inumber, FileMode mode, TimerQueue tq) throws IOException, KawkabException {
 		this.inumber = inumber;
 		this.fileMode = mode;
 		this.timerQ = tq;
@@ -49,23 +50,14 @@ public final class FileHandle implements DeferredWorkReceiver {
 		int inodesBlockIdx = (int) (inumber / inodesPerBlock);
 		BlockID id = new InodesBlockID(inodesBlockIdx);
 		
-		InodesBlock inb;
-		try {
-			inb = (InodesBlock) cache.acquireBlock(id);
-			inb.loadBlock();
+		InodesBlock inb = (InodesBlock) cache.acquireBlock(id);
+		inb.loadBlock();
 
-			Inode inode = inb.getInode(inumber);
-			inode.prepare(tq);
-			if (mode == FileMode.APPEND) //Pre-fetch the last block for writes
-				inode.loadLastBlock();
-		} catch (IOException | KawkabException e) {
-			inode = null;
-			inodesBlock = null;
-			throw e;
-		}
-		
 		inodesBlock = inb;
-		inode = inodesBlock.getInode(inumber);
+		inode = inb.getInode(inumber);
+		inode.prepare(tq);
+		if (mode == FileMode.APPEND) //Pre-fetch the last block for writes
+			inode.loadLastBlock();
 	}
 
 	/**
@@ -119,6 +111,42 @@ public final class FileHandle implements DeferredWorkReceiver {
 		return bytesRead;
 	}
 
+	/**
+	 * @param minTS
+	 * @param maxTS
+	 * @param recSize Size of a record that was appended to the file
+	 * @return
+	 * @throws KawkabException
+	 * @throws IOException
+	 */
+	public synchronized List<ByteBuffer> readRecords(final long minTS, final long maxTS, final int recSize)
+			throws KawkabException, IOException {
+		InodesBlock inb = null;
+		Inode inode;
+
+		try {
+			if (onPrimaryNode) {
+				if (inodesBlock == null) {
+					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+				}
+				inb = this.inodesBlock;
+				inode = this.inode;
+			} else {
+				int blockIndex = (int)(inumber / inodesPerBlock);
+				BlockID id = new InodesBlockID(blockIndex);
+				inb = (InodesBlock) cache.acquireBlock(id);
+				inb.loadBlock();
+				inode = inb.getInode(inumber);
+			}
+
+			return inode.readRecords(minTS, maxTS, recSize);
+		} finally {
+			if (!onPrimaryNode && inb != null) {
+				cache.releaseBlock(inb.id());
+			}
+		}
+	}
+
 	public synchronized List<Record> readRecords(final long minTS, final long maxTS, final Record recFactory) throws KawkabException, IOException {
 		InodesBlock inb = null;
 		Inode inode;
@@ -149,15 +177,16 @@ public final class FileHandle implements DeferredWorkReceiver {
 	/**
 	 * Loads the dstRecord from the key (timestamp) location in the file.
 	 *
-	 * @param dstRecord Output field
-	 * @param key Exact match timestamp
+	 * @param dstBuf Buffer where the read record will be copied
+	 * @param timestamp Exact match timestamp
+	 * @param recSize Size of the record when the record as appended
 	 *
 	 * @return Whether the record is found and loaded
 	 * @throws IOException
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	public synchronized boolean recordAt(final Record dstRecord, final long key) throws
+	public synchronized boolean recordAt(final ByteBuffer dstBuf, final long timestamp, final int recSize) throws
 			IOException, RecordNotFoundException, KawkabException {
 		
 		InodesBlock inb = null;
@@ -178,7 +207,7 @@ public final class FileHandle implements DeferredWorkReceiver {
 				inode = inb.getInode(inumber);
 			}
 			
-			return inode.read(dstRecord, key);
+			return inode.readAt(dstBuf, timestamp, recSize);
 		} finally {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
@@ -189,19 +218,19 @@ public final class FileHandle implements DeferredWorkReceiver {
 	/**
 	 * Loads the dstRecord from the record number recordNum in the file.
 	 *
+	 * @param dstBuf Buffer where the read record will be copied
 	 * @param recordNum the record number in the file, 1 being the first record. recNum should be greater than 0.
+	 * @param recSize Size of the record when the record as appended
 	 *
 	 * @return Whether the record is found and loaded
 	 *
 	 * @throws IOException
 	 * @throws KawkabException
-	 * @throws InterruptedException
 	 * @throws RecordNotFoundException if the record does not exist in the file
 	 * @throws InvalidFileOffsetException if the recordNum is less than 1
 	 */
-	public synchronized boolean recordNum(final Record dstRecord, final long recordNum) throws
+	public synchronized boolean recordNum(final ByteBuffer dstBuf, final long recordNum, final int recSize) throws
 			IOException, KawkabException, RecordNotFoundException, InvalidFileOffsetException {
-		
 		if (recordNum <= 0)
 			throw new InvalidFileOffsetException("Record number " + recordNum + " is invalid.");
 		
@@ -223,7 +252,7 @@ public final class FileHandle implements DeferredWorkReceiver {
 				inode = inb.getInode(inumber);
 			}
 			
-			return inode.readRecordN(dstRecord, recordNum);
+			return inode.readRecordN(dstBuf, recordNum, recSize);
 		} finally {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
@@ -258,7 +287,7 @@ public final class FileHandle implements DeferredWorkReceiver {
 		int appendedBytes = inode.appendBuffered(data, offset, length);
 
 		if (inbAcquired == null || !timerQ.tryDisable(inbAcquired)) {
-			inbAcquired = new TimerQueueItem(inbAcquired, this);
+			inbAcquired = new TimerQueueItem<>(inodesBlock, this);
 		}
 		
 		inbAcquired.getItem().markLocalDirty();
@@ -272,7 +301,7 @@ public final class FileHandle implements DeferredWorkReceiver {
 	
 	/**
 	 * Append data at the end of the file and index with the given key
-	 * @param record A single file-record
+	 *
 	 * @return Number of bytes appended
 	 * dataIndex.timestamp() to refer to the data just written.
 	 * @throws OutOfMemoryException
@@ -281,7 +310,7 @@ public final class FileHandle implements DeferredWorkReceiver {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	public synchronized int append(final Record record) throws MaxFileSizeExceededException,
+	public synchronized int append(final ByteBuffer srcBuf, long timestamp, int recSize) throws MaxFileSizeExceededException,
 			IOException, KawkabException, InterruptedException{
 		if (fileMode != FileMode.APPEND || !onPrimaryNode) {
 			throw new InvalidFileModeException();
@@ -291,10 +320,10 @@ public final class FileHandle implements DeferredWorkReceiver {
 			throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
 		}
 		
-		int appendedBytes = inode.appendBuffered(record);
+		int appendedBytes = inode.appendBuffered(srcBuf, timestamp, recSize);
 
 		if (inbAcquired == null || !timerQ.tryDisable(inbAcquired)) {
-			inbAcquired = new TimerQueueItem(inodesBlock, this);
+			inbAcquired = new TimerQueueItem<>(inodesBlock, this);
 		}
 
 		inbAcquired.getItem().markLocalDirty();
@@ -362,9 +391,9 @@ public final class FileHandle implements DeferredWorkReceiver {
 	}
 
 	@Override
-	public void deferredWork(Object item) {
+	public void deferredWork(InodesBlock ib) {
 		try {
-			localStore.store(inodesBlock);
+			localStore.store(ib);
 		} catch (KawkabException e) {
 			e.printStackTrace();
 		}

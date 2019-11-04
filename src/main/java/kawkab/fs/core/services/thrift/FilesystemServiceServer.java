@@ -3,7 +3,7 @@ package kawkab.fs.core.services.thrift;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.services.thrift.FilesystemService.Processor;
-import org.apache.thrift.protocol.TCompactProtocol;
+import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.transport.TServerSocket;
@@ -27,7 +27,7 @@ public class FilesystemServiceServer {
 
 			TThreadPoolServer.Args args = new TThreadPoolServer.Args(transport);
 			args.transportFactory(new TTransportFactory());
-			args.protocolFactory(new TCompactProtocol.Factory());
+			args.protocolFactory(new TBinaryProtocol.Factory());
 
 			args.processor(new Processor(new FilesystemServiceImpl(fs)));
 			args.executorService(new ThreadPoolExecutor(minThreads, maxThreads, 600,
@@ -44,7 +44,7 @@ public class FilesystemServiceServer {
 			return;
 		started = true;
 
-		System.out.println("[PNS] Staring PrimaryNodeService server");
+		System.out.println("[FSS] Staring FilesystemServiceServer");
 
 		executor = Executors.newSingleThreadExecutor();
 		executor.execute(() -> server.serve());
@@ -55,7 +55,7 @@ public class FilesystemServiceServer {
 			return;
 
 		if (server != null) {
-			System.out.println("[PNS] Stopping PrimaryNodeService server");
+			System.out.println("[FSS] Stopping FilesystemServiceServer");
 			server.stop();
 		}
 

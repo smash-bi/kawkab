@@ -4,7 +4,10 @@ import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.FixedLenRecordUtils;
-import kawkab.fs.core.exceptions.*;
+import kawkab.fs.core.exceptions.InsufficientResourcesException;
+import kawkab.fs.core.exceptions.InvalidFileOffsetException;
+import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.index.poh.PostOrderHeapIndex;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueue;
@@ -126,18 +129,26 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * @throws IOException
 	 * @throws KawkabException
 	 */
-	public boolean read(final Record dstRecord, final long key) throws
-			RecordNotFoundException, IOException, KawkabException {
+	public boolean readAt(final ByteBuffer dstBuf, final long timestamp, final int recSize) throws IOException, KawkabException {
+		if (timestamp < 0) {
+			throw new KawkabException(String.format("Invalid timestamp %d", timestamp));
+		}
 
-		assert dstRecord.size() == recordSize;
+		if (recSize != recordSize) {
+			throw new KawkabException(String.format("Record sizes do not match. Given %d, expected %d", recSize, recordSize));
+		}
 
-		long offsetInFile = index.findHighest(key, indexLength(fileSize.get()));
+		if (dstBuf.remaining() < recordSize) {
+			throw new KawkabException(String.format("Not enough space in the dstBuf, available %d, required %d\n", dstBuf.remaining(), recordSize));
+		}
 
-		if (offsetInFile == -1)
+		long segInFile = index.findHighest(timestamp, indexLength(fileSize.get()));
+
+		if (segInFile == -1)
 			return  false;
 
 		//System.out.println("  Read at offset: " + offsetInFile);
-		BlockID curSegId = getByFileOffset(offsetInFile);
+		BlockID curSegId = idBySegInFile(segInFile);
 
 		//System.out.println("Reading block at offset " + offsetInFile + ": " + curBlkUuid.key);
 
@@ -145,9 +156,11 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		try {
 			curSegment = (DataSegment)cache.acquireBlock(curSegId);
 			curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
-			int bytesRead = curSegment.read(dstRecord.copyInDstBuffer(), offsetInFile);
+			boolean recFound = curSegment.readRecord(dstBuf, timestamp);
+			dstBuf.flip();
 
-			assert bytesRead == recordSize;
+			if (!recFound)
+				return false;
 		} finally {
 			if (curSegment != null) {
 				cache.releaseBlock(curSegment.id());
@@ -164,9 +177,18 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * @throws IOException
 	 * @throws KawkabException
 	 */
-	public boolean readRecordN(final Record dstRecord, final long recNum) throws IOException, KawkabException {
-		assert recNum > 0;
-		assert dstRecord.size() == recordSize;
+	public boolean readRecordN(final ByteBuffer dstBuf, final long recNum, final int recSize) throws IOException, KawkabException {
+		if (recNum <= 0) {
+			throw new KawkabException(String.format("Invalid record number %d", recNum));
+		}
+
+		if (recSize != recordSize) {
+			throw new KawkabException(String.format("Record sizes do not match. Given %d, expected %d", recSize, recordSize));
+		}
+
+		if (dstBuf.remaining() < recordSize) {
+			throw new KawkabException(String.format("Not enough space in the dstBuf, available %d, required %d\n", dstBuf.remaining(), recordSize));
+		}
 
 		long offsetInFile = (recNum-1) * recordSize;
 		long fileSize = this.fileSize.get();
@@ -177,9 +199,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new KawkabException(String.format("Record number %d is out of range of the file. OffsetInFile=%d, recordSize=%d, recsInFile=%d",
 					recNum, offsetInFile, recordSize, fileSize/recordSize));
 
-		if (dstRecord.size() != recordSize)
-			throw new KawkabException(String.format("The record size (%d bytes) does not match with the file's record size (%d bytes)",
-					dstRecord.size(), recordSize));
+		// if (dstRecord.size() != recordSize)
+		//	throw new KawkabException(String.format("The record size (%d bytes) does not match with the file's record size (%d bytes)",
+		//			dstRecord.size(), recordSize));
 
 		//System.out.println("  Read at offset: " + offsetInFile);
 		BlockID curSegId = getByFileOffset(offsetInFile);
@@ -190,7 +212,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		try {
 			curSegment = (DataSegment)cache.acquireBlock(curSegId);
 			curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
-			int bytesRead = curSegment.read(dstRecord.copyInDstBuffer(), offsetInFile);
+			int bytesRead = curSegment.read(dstBuf, offsetInFile);
+			dstBuf.flip();
 
 			assert bytesRead == recordSize;
 		} finally {
@@ -202,8 +225,61 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		return true;
 	}
 
-	public List<Record> readAll(long minTS, long maxTS, Record recFactory) throws IOException, KawkabException {
-		assert recFactory.size() == recordSize;
+	public List<ByteBuffer> readRecords(final long minTS, final long maxTS, final int recSize) throws KawkabException, IOException {
+		if (minTS < 0 || maxTS < 0) {
+			throw new KawkabException(String.format("Invalid minTS (%d) or maxTS (%d) is given", minTS, maxTS));
+		}
+
+		if (recSize != recordSize) {
+			throw new KawkabException(String.format("Record sizes do not match. Given %d, expected %d", recSize, recordSize));
+		}
+
+		List<long[]> offsets = index.findAll(minTS, maxTS, indexLength(fileSize.get())); //Get the offsets
+
+		if (offsets == null)
+			return null;
+
+		int length = offsets.size();
+		List<ByteBuffer> results = new ArrayList<>(); //The lists contains offsets to unique segments.
+		for (int i=0; i<length; i++) {
+			long[] segNums = offsets.get(i);
+			for (int j=0; j<segNums.length; j++) {
+				long segInFile = segNums[j];
+				BlockID curSegId = idBySegInFile(segInFile);
+
+				System.out.printf("[I] Searching recs in: %s\n", curSegId);
+
+				DataSegment curSegment = null;
+				try {
+					curSegment = (DataSegment)cache.acquireBlock(curSegId);
+					curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
+
+					ByteBuffer dstBuf = ByteBuffer.allocate(conf.segmentSizeBytes);
+					int cnt = curSegment.readRecords(minTS, maxTS, dstBuf);
+					dstBuf.flip();
+
+					if (cnt > 0)
+						results.add(dstBuf);
+					//System.out.printf("  seg=%d, cnt=%d\n", segInFile, cnt);
+				} finally {
+					if (curSegment != null) {
+						cache.releaseBlock(curSegment.id()); //We can potentially improve the performance here
+					}
+				}
+			}
+		}
+
+		if (results.size() == 0)
+			return null;
+
+		return results;
+
+	}
+
+	public List<Record> readAll(long minTS, long maxTS, final Record recFactory) throws IOException, KawkabException {
+		if (recFactory.size() != recordSize) {
+			throw new KawkabException(String.format("Record sizes do not match. Given %d, expected %d", recFactory.size(), recordSize));
+		}
 
 		List<long[]> offsets = index.findAll(minTS, maxTS, indexLength(fileSize.get())); //Get the offsets
 
@@ -301,17 +377,13 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		return bufferOffset;
 	}
 
-	public int appendBuffered(final Record record) throws IOException, InterruptedException, KawkabException {
-		assert record.size() == recordSize : String.format("record sizes do not match, given rec size=%d, recSize in inode=%d",record.size(), recordSize);
-
-		int length = record.size();
-
-		if (length != recordSize)
-			throw new KawkabException(String.format("The record size (%d bytes) does not match with the file's record size (%d bytes)", length, recordSize));
+	public int appendBuffered(final ByteBuffer srcBuf, long timestamp, int recSize) throws IOException, InterruptedException, KawkabException {
+		if (recSize != recordSize)
+			throw new KawkabException(String.format("The given record size (%d bytes) does not match with the file's record size (%d bytes)", recSize, recordSize));
 
 		long fileSizeBuffered = this.fileSize.get(); // Current file size
 
-		if (fileSizeBuffered + length > MAXFILESIZE) {
+		if (fileSizeBuffered + recSize > MAXFILESIZE) {
 			throw new MaxFileSizeExceededException();
 		}
 
@@ -322,15 +394,24 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		}
 
 		DataSegment ds = acquiredSeg.getItem();
+		long recInFile = fileSizeBuffered/recordSize;
+		long segInFile = recInFile/recsPerSeg;
+		int appendSize;
 		try {
-			int bytes = ds.append(record.copyOutSrcBuffer(), fileSizeBuffered);
+			appendSize = ds.append(srcBuf, fileSizeBuffered);
 
-			if (FixedLenRecordUtils.recordInSegment(fileSizeBuffered, recordSize) == 0) { // If the current record is the first record in the data segment
+			boolean isFirstRec = recInFile % recsPerSeg == 0;
+			//boolean isFirstRec = FixedLenRecordUtils.recordInSegment(fileSizeBuffered, recordSize) == 0;
+
+			//System.out.printf("[I] isFirstRec=%b, segInFile=%d, recInFile=%d, fs=%d, recPerSeg=%d, recSize=%d, indexLen=%d\n",
+			//		isFirstRec, segInFile, recInFile, fileSizeBuffered, recsPerSeg, recSize, indexLength(fileSizeBuffered));
+
+			if (isFirstRec) { // If the current record is the first record in the data segment
 				long segmentInFile = FixedLenRecordUtils.segmentInFile(fileSizeBuffered, recordSize);
-				index.appendMinTS(record.timestamp(), segmentInFile, indexLength(fileSizeBuffered));
+				index.appendMinTS(timestamp, segmentInFile, indexLength(fileSizeBuffered));
 			}
 
-			fileSizeBuffered += bytes;
+			fileSizeBuffered += appendSize;
 		} catch (IOException e) {
 			throw new KawkabException(e);
 		}
@@ -341,13 +422,16 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (ds.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
 			acquiredSeg = null;		// is now immutable. The segment will be eventually returned to the cache.
 
-			long segmentInFile = FixedLenRecordUtils.segmentInFile(fileSizeBuffered-recordSize, recordSize);
-			index.appendMaxTS(record.timestamp(), segmentInFile, indexLength(fileSizeBuffered)-1);
+			//long segmentInFile = FixedLenRecordUtils.segmentInFile(fileSizeBuffered-recordSize, recordSize);
+
+			//System.out.printf("[I] DS is full: segInFile=%d, indexLen=%d\n", segInFile, indexLength(fileSizeBuffered-recordSize));
+
+			index.appendMaxTS(timestamp, segInFile, indexLength(fileSizeBuffered-recordSize));
 		}
 
 		fileSize.set(fileSizeBuffered);
 
-		return length;
+		return appendSize;
 	}
 
 	//public static TimeLog tlog1 = new TimeLog(TimeLog.TimeLogUnit.NANOS, "ab all");
@@ -509,7 +593,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	int storeTo(ByteBuffer buffer) {
 		// assert fileSize.get() == fileSizeBuffered.get(); //Not needed because this is not called by the LocalStoreManager
-		System.out.printf("[I] Storing inode %d to buffer: fs=%d, recSize=%d\n", inumber, fileSize.get(), recordSize);
+		//System.out.printf("[I] Storing inode %d to buffer: fs=%d, recSize=%d\n", inumber, fileSize.get(), recordSize);
 
 		buffer.putLong(inumber);
 		buffer.putLong(fileSize.get());
@@ -552,7 +636,12 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		// 0 1 2 | 3 4 5 | 6 7
 		// (fs / recordSize) / (segSize / recordSize)
 		long recsInFile = filesize / recordSize;
-		long segsInFile = (long) Math.ceil(filesize / (double)conf.segmentSizeBytes); // Taking the ceil value
+		//long segsInFile = (long) Math.ceil(recsInFile / (double)recsPerSeg); // Taking the ceil value
+		long segsInFile = (recsInFile+recsPerSeg-1)/recsPerSeg; //FIXME: The long value may overflow
 		return segsInFile * 2 - ((recsInFile % recsPerSeg) == 0 ? 0 : 1);
+	}
+
+	public int recordSize() {
+		return recordSize;
 	}
 }

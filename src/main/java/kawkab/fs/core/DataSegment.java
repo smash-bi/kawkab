@@ -202,23 +202,53 @@ public final class DataSegment extends Block {
 		return buf.position() - offsetInSegment;
 	}
 
+	boolean readRecord(final ByteBuffer dstBuf, final long timestamp) {
+		ByteBuffer buf = dataBuf.duplicate();
+		buf.rewind(); //To read the first record
+
+		// FIXME: The timestamps are read based on the assumption that the first 8 bytes of a record is a timestamp.
+		// We need a systematic way to parse and read a record.
+
+
+		int limit = writePos.get();
+		buf.limit(limit);
+
+		assert buf.remaining() >= recordSize; // at least have one record
+		if (timestamp < buf.getLong(0)) { // if the records in this segment are all greater than the given ts
+			return false;
+		}
+
+		if (buf.getLong(limit-recordSize) < timestamp) { // All the records in this segment are smaller than the given ts
+			return false;
+		}
+
+		int recIndex = binarySearch(buf, timestamp); //Record number in this segment that has the matching timestamp
+		int pos = recIndex*recordSize;
+		buf.position(pos);
+		buf.limit(pos+recordSize);
+		dstBuf.put(buf);
+
+		return true;
+	}
+
 	/**
 	 * Add all the records in the results list that have the timestamp within the given minTS and maxTS inclusively
 	 *
 	 * @param minTS
 	 * @param maxTS
-	 * @param recordFactory Factory object
-	 * @param results
+	 * @param dstBuf
 	 * @return the number of records added in the list
 	 */
-	public int readAll(long minTS, long maxTS, Record recordFactory, List<Record> results) {
+	int readRecords(long minTS, long maxTS, ByteBuffer dstBuf) {
 		ByteBuffer buf = dataBuf.duplicate();
 		buf.rewind(); //To read the first record
 
+		// FIXME: The timestamps are read based on the assumption that the first 8 bytes of a record is a timestamp.
+		// We need a systematic way to parse and read a record.
+
+
 		int limit = writePos.get();
 		buf.limit(limit);
-
-		//FIXME: The offset of timestamps in the records should based on the recordFactory. Currently it is done without any knowledge about the records.
 
 		assert buf.remaining() >= recordSize; // at least have one record
 		if (maxTS < buf.getLong(0)) { // if the records in this segment are all greater than the given range
@@ -229,6 +259,76 @@ public final class DataSegment extends Block {
 			return 0;
 		}
 
+		int recIndex = binarySearch(buf, maxTS); //Record number in this segment that has the matching timestamp
+		int pos = recIndex*recordSize;
+		int cnt = 0;
+		while (recIndex >= 0 && buf.getLong(pos) >= minTS) {
+			cnt++;
+
+			buf.position(pos);
+			buf.limit(pos+recordSize);
+
+			dstBuf.put(buf);
+
+			recIndex--;
+			pos = recIndex*recordSize;
+		}
+
+		return cnt;
+	}
+
+	/**
+	 * Add all the records in the results list that have the timestamp within the given minTS and maxTS inclusively
+	 *
+	 * @param minTS
+	 * @param maxTS
+	 * @param recordFactory Factory object
+	 * @param results
+	 * @return the number of records added in the list
+	 */
+	int readAll(long minTS, long maxTS, Record recordFactory, List<Record> results) {
+		ByteBuffer buf = dataBuf.duplicate();
+		buf.rewind(); //To read the first record
+
+		// FIXME: The offset of timestamps in the records should be based on the recordFactory. Currently it is based on the
+		// assumption that the first 8 bytes of the record is the timestamp
+
+		int limit = writePos.get();
+		buf.limit(limit);
+
+		assert buf.remaining() >= recordSize; // at least have one record
+		if (maxTS < buf.getLong(0)) { // if the records in this segment are all greater than the given range
+			return 0;
+		}
+
+		if (buf.getLong(limit-recordSize) < minTS) { // All the records in this segment are smaller than the given range
+			return 0;
+		}
+
+		int recIndex = binarySearch(buf, maxTS); //Record number in this segment that has the matching timestamp
+		int pos = recIndex*recordSize;
+		int cnt = 0;
+		while (recIndex >= 0 && buf.getLong(pos) >= minTS) {
+			cnt++;
+
+			buf.position(pos);
+			buf.limit(pos+recordSize);
+
+			Record rec = recordFactory.newRecord();
+			rec.copyInDstBuffer().put(buf);
+			results.add(rec);
+
+			recIndex--;
+			pos = recIndex*recordSize;
+
+			System.out.printf("[DS] Rec found in %s; %s\n",id, rec);
+		}
+
+		return cnt;
+	}
+
+	private int binarySearch(ByteBuffer buf, long maxTS) {
+		int limit = buf.limit();
 		int lowRecNum=0;
 		int numRecords = limit/recordSize;
 		int highRecNum = numRecords-1; // Doubling the total records because we want to start search from the last record
@@ -255,26 +355,7 @@ public final class DataSegment extends Block {
 		if (maxTS < buf.getLong(lowRecNum*recordSize))
 			return 0;
 
-		int cnt = 0;
-		int recIndex = lowRecNum; //Record number in this segment that has the matching timestamp
-		int pos = recIndex*recordSize;
-		while (recIndex >= 0 && buf.getLong(pos) >= minTS) {
-			cnt++;
-
-			buf.position(pos);
-			buf.limit(pos+recordSize);
-
-			Record rec = recordFactory.newRecord();
-			rec.copyInDstBuffer().put(buf);
-			results.add(rec);
-
-			recIndex--;
-			pos = recIndex*recordSize;
-
-			System.out.printf("[DS] Rec found in %s; %s\n",id, rec);
-		}
-
-		return cnt;
+		return lowRecNum; //Record number in this segment that has the matching timestamp
 	}
 	
 	@Override
@@ -312,8 +393,8 @@ public final class DataSegment extends Block {
 	
 	@Override
 	public synchronized int loadFrom(ReadableByteChannel channel) throws IOException {
-		System.out.printf("[DS] Loading %s from channel: rem=%d, writePos=%d\n",
-				id, dataBuf.remaining(), dataBuf.position());
+		//System.out.printf("[DS] Loading %s from channel: rem=%d, writePos=%d\n",
+		//		id, dataBuf.remaining(), dataBuf.position());
 
 		int bytesRead = Commons.readFrom(channel, dataBuf);
 		int pos = writePos.addAndGet(bytesRead);
@@ -347,8 +428,8 @@ public final class DataSegment extends Block {
 		//storeBuffer.clear();
 		//storeBuffer.position(pos);
 
-		System.out.printf("[DS] Loading %s from buffer: srcRem=%d, srcPos=%d, dstRem=%d, dstPos=%d, dirtyOffset=%d\n",
-				id, srcBuffer.remaining(), srcBuffer.position(), dataBuf.remaining(), pos, dirtyOffset);
+		//System.out.printf("[DS] Loading %s from buffer: srcRem=%d, srcPos=%d, dstRem=%d, dstPos=%d, dirtyOffset=%d\n",
+		//		id, srcBuffer.remaining(), srcBuffer.position(), dataBuf.remaining(), pos, dirtyOffset);
 
 		dataBuf.put(srcBuffer);
 
@@ -357,8 +438,8 @@ public final class DataSegment extends Block {
 		dirtyOffset += bytesRead;
 		isSegFull = pos+recordSize > segmentSizeBytes;
 
-		System.out.printf("[DS] After loading %s from buffer: bytesRead=%d, writePos=%d, datBufPos=%d, dirtyOffset=%d\n",
-				id, bytesRead, writePos.get(), dataBuf.position(), dirtyOffset);
+		//System.out.printf("[DS] After loading %s from buffer: bytesRead=%d, writePos=%d, datBufPos=%d, dirtyOffset=%d\n",
+		//		id, bytesRead, writePos.get(), dataBuf.position(), dirtyOffset);
 
 		return bytesRead;
 	}
@@ -389,7 +470,7 @@ public final class DataSegment extends Block {
 		storeBuffer.position(offset);
 		storeBuffer.limit(limit);
 
-		System.out.printf("[DS] ByteString store %s: pos=%d, limit=%d, rem=%d, offset=%d\n", id, storeBuffer.position(), limit, storeBuffer.remaining(), offset);
+		//System.out.printf("[DS] ByteString store %s: pos=%d, limit=%d, rem=%d, offset=%d\n", id, storeBuffer.position(), limit, storeBuffer.remaining(), offset);
 
 		bytes = ByteString.copyFrom(storeBuffer);
 
@@ -406,7 +487,7 @@ public final class DataSegment extends Block {
 		storeBuffer.position(offset);
 		storeBuffer.limit(limit);
 
-		System.out.printf("[DS] ByteString store %s: pos=%d, limit=%d, rem=%d, offset=%d\n", id, storeBuffer.position(), limit, storeBuffer.remaining(), offset);
+		//System.out.printf("[DS] ByteBuffer store %s: pos=%d, limit=%d, rem=%d, offset=%d\n", id, storeBuffer.position(), limit, storeBuffer.remaining(), offset);
 
 		dstBuffer.put(storeBuffer);
 
@@ -451,8 +532,8 @@ public final class DataSegment extends Block {
 			storeBuffer.position(dirtyOffset);
 			storeBuffer.limit(limit);
 
-			System.out.printf("[DS] Storing %s in channel: bufRem=%d, bufPos=%d, dirtyOffset=%d, limit=%d, toWrite=%d, chanPos=%d\n",
-					id, storeBuffer.remaining(), storeBuffer.position(), dirtyOffset, limit, limit-dirtyOffset, channel.position());
+			//System.out.printf("[DS] Storing %s in channel: bufRem=%d, bufPos=%d, dirtyOffset=%d, limit=%d, toWrite=%d, chanPos=%d\n",
+			//		id, storeBuffer.remaining(), storeBuffer.position(), dirtyOffset, limit, limit-dirtyOffset, channel.position());
 
 			int size = limit-dirtyOffset;
 
@@ -465,8 +546,8 @@ public final class DataSegment extends Block {
 			dirtyOffset += bytesWritten;
 		}
 
-		System.out.printf("[DS] After storing %s in channel: written=%d, dirtyOffset=%d, writePos=%d, chanPos=%d\n",
-				id, bytesWritten, dirtyOffset, writePos.get(), channel.position());
+		//System.out.printf("[DS] After storing %s in channel: written=%d, dirtyOffset=%d, writePos=%d, chanPos=%d\n",
+		//		id, bytesWritten, dirtyOffset, writePos.get(), channel.position());
 
 		return bytesWritten;
 	}
@@ -540,7 +621,7 @@ public final class DataSegment extends Block {
 	public int sizeWhenSerialized() {
 		return segmentSizeBytes;
 	}
-	
+
 	@Override
 	public String toString(){
 		return id().toString();

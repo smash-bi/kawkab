@@ -85,6 +85,6 @@ public class IndexNodeID extends BlockID {
 
 	@Override
 	public String toString() {
-		return String.format("N-%d-%d-%d",inumber, nodeNumInIndex, blockInIndex);
+		return String.format("N-%d-%d-%d",inumber, blockInIndex, nodeNumInIndex);
 	}
 }

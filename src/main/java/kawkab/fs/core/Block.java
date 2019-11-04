@@ -263,8 +263,9 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws IOException
 	 */
 	public void loadBlock() throws FileNotExistException, KawkabException, IOException {
-		if (isOnPrimary && !isLoaded) { // If this node is the primary writer of the file
-			loadBlockOnPrimary();
+		if (isOnPrimary) { // If this node is the primary writer of the file
+			if (!isLoaded)
+				loadBlockOnPrimary();
 			return;
 		}
 		

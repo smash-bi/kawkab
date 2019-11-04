@@ -2,6 +2,7 @@ package kawkab.fs.cli;
 
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.api.Record;
+import kawkab.fs.client.KClient;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
 import kawkab.fs.core.Cache;
@@ -10,6 +11,7 @@ import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.records.SampleRecord;
+import kawkab.fs.core.services.thrift.FilesystemServiceClient;
 import kawkab.fs.utils.TimeLog;
 
 import java.io.*;
@@ -18,6 +20,7 @@ import java.util.*;
 public final class CLI {
 	private Filesystem fs;
 	private Map<String, FileHandle> openedFiles;
+	private KClient client;
 	
 	public CLI() {
 		openedFiles = new HashMap<>();
@@ -44,7 +47,7 @@ public final class CLI {
 	}
 
 	private void cmd() throws IOException {
-		String cmds = "Commands: open, read, rr, apnd, ar, at, size, flush, exit";
+		String cmds = "Commands: cc, co, ca, cr, cd, open, read, rr, apnd, ar, at, size, flush, exit";
 		
 		try (BufferedReader ir = new BufferedReader(new InputStreamReader(System.in))) {
 			System.out.println("--------------------------------");
@@ -71,6 +74,21 @@ public final class CLI {
 					String cmd = args[0];
 					
 					switch (cmd) {
+						case "cc":
+							parseClientConnect(args);
+							continue;
+						case "co":
+							parseClientOpen(args);
+							continue;
+						case "ca":
+							parseClientAppend(args);
+							continue;
+						case "cr":
+							parseClientRead(args);
+							continue;
+						case "cd":
+							parseClientDisconnect(args);
+							continue;
 						case "ar":
 							parseAppendRecord(args);
 							continue;
@@ -100,7 +118,6 @@ public final class CLI {
 							break;
 						default:
 							System.out.println(cmds);
-							continue;
 					}
 				} catch (Exception e) {
 					e.printStackTrace();
@@ -114,6 +131,172 @@ public final class CLI {
 					e.printStackTrace();
 				}
 			}
+		}
+	}
+
+	private void parseClientConnect(String[] args) {
+		if (client != null) {
+			System.out.printf("Client is already connected to %s:%d\n", client.ip(), client.port());
+			return;
+		}
+
+		String usage = "Usage: cc <ip> <port>";
+
+		if (args.length != 3) {
+			System.out.println("Incorrect parameters: " + usage);
+			return;
+		}
+
+		client = new KClient(1);
+		try {
+			client.connect(args[1], Integer.parseInt(args[2]));
+		} catch (KawkabException e) {
+			e.printStackTrace();
+			client = null;
+		}
+	}
+
+	private void parseClientDisconnect(String[] args) {
+		if (client == null) {
+			System.out.println("Client is not connected to any server. Connect the client using the command cc");
+			return;
+		}
+
+		try {
+			client.disconnect();
+		} catch (KawkabException e) {
+			e.printStackTrace();
+		}
+
+		client = null;
+
+		System.out.println("The client is disconnected.");
+	}
+
+	private void parseClientOpen(String[] args) throws InterruptedException, IOException, KawkabException {
+		if (client == null) {
+			System.out.println("Client is not connected to any server. Connect the client using the command cc");
+			return;
+		}
+
+		String usage = "Usage: co <filename> <r|a>";
+
+		if (args.length != 3) {
+			System.out.println(usage);
+			return;
+		}
+
+		String fn = args[1];
+		String fm = args[2];
+		FileMode mode = parseMode(fm);
+		FileOptions opts = new FileOptions(SampleRecord.length());
+
+		client.open(fn, mode, new SampleRecord());
+	}
+
+	private void parseClientAppend(String args[]) throws KawkabException {
+		String usage = "Usage: ca <filename> [<num-recs>]";
+		if (args.length < 2) {
+			System.out.println(usage);
+			return;
+		}
+
+		if (client == null) {
+			System.out.println("Client is not connected to any server. Connect the client using the command cc");
+			return;
+		}
+
+		String fname = args[1];
+		int numRecs = args.length > 2 ? Integer.parseInt(args[2]) : 1;
+
+		Random rand = new Random();
+		long tsOffset = client.size(fname)/SampleRecord.length() + 1;
+		for (int i=0; i<numRecs; i++) {
+			client.append(fname, new SampleRecord(i+tsOffset, rand));
+		}
+
+		System.out.printf("Appended %d records of %d bytes. New file size is %d records.\n",numRecs, SampleRecord.length(), client.size(fname)/SampleRecord.length());
+	}
+
+	private void parseClientRead(String[] args) throws KawkabException {
+		String usage = "Usage: cr <filename> [<n num> | <t ts> | <r ts1 ts2>]";
+		if (args.length < 2) {
+			System.out.println(usage);
+			return;
+		}
+
+		if (client == null) {
+			System.out.println("Client is not connected to any server. Connect the client using the command cc");
+			return;
+		}
+
+		String fname = args[1];
+
+		if (args.length == 2) {
+			List<Record> recs = client.readRecords(fname, 1, Long.MAX_VALUE-1, new SampleRecord());
+
+			if (recs == null) {
+				System.out.printf("Records not found b/w %d and %d\n", 1, Long.MAX_VALUE-1);
+				return;
+			}
+
+			for (Record rec : recs) {
+				System.out.println(rec);
+			}
+			return;
+		}
+
+		String type = args[2];
+		switch (type) {
+			case "n": {
+				if (args.length < 4) {
+					System.out.println("Insufficient args: " + usage);
+					break;
+				}
+
+				int recNum = Integer.parseInt(args[3]);
+				Record rec = new SampleRecord();
+				rec = client.recordNum(fname, recNum, rec);
+				System.out.println(rec);
+				break;
+			}
+			case "t": {
+				if (args.length < 4) {
+					System.out.println("Insufficient args: " + usage);
+					break;
+				}
+
+				long atTS = Long.parseLong(args[3]);
+				Record rec = new SampleRecord();
+				rec = client.recordAt(fname, atTS, rec);
+				if (rec != null)
+					System.out.println(rec);
+				else
+					System.out.println("Record not found at " + atTS);
+				break;
+			}
+			case "r": {
+				if (args.length < 5) {
+					System.out.println("Two timestamps are required: " + usage);
+					break;
+				}
+
+				long t1 = Long.parseLong(args[3]);
+				long t2 = Long.parseLong(args[4]);
+				List<Record> recs = client.readRecords(fname, t1, t2, new SampleRecord());
+
+				if (recs == null) {
+					System.out.printf("Records not found b/w %d and %d\n", t1, t2);
+					break;
+				}
+
+				for (Record rec : recs) {
+					System.out.println(rec);
+				}
+				break;
+			}
+			default:
+				System.out.printf("Invalid read type %s. %s\n", type, usage);
 		}
 	}
 
@@ -154,7 +337,7 @@ public final class CLI {
 
 				int recNum = Integer.parseInt(args[3]);
 				SampleRecord rec = new SampleRecord();
-				file.recordNum(rec, recNum);
+				file.recordNum(rec.copyInDstBuffer(), recNum, rec.size());
 				System.out.println(rec);
 				break;
 			}
@@ -166,7 +349,7 @@ public final class CLI {
 
 				long atTS = Long.parseLong(args[3]);
 				SampleRecord rec = new SampleRecord();
-				if (file.recordAt(rec, atTS))
+				if (file.recordAt(rec.copyInDstBuffer(), atTS, rec.size()))
 					System.out.println(rec);
 				else
 					System.out.println("Record not found at " + atTS);
@@ -193,7 +376,7 @@ public final class CLI {
 				break;
 			}
 			default:
-				throw new KawkabException("Invalid read type: " + type);
+				System.out.printf("Invalid read type %s. %s\n", type, usage);
 		}
 	}
 
@@ -214,7 +397,8 @@ public final class CLI {
 		Random rand = new Random();
 		long tsOffset = file.size()/SampleRecord.length() + 1;
 		for (int i=0; i<numRecs; i++) {
-			file.append(new SampleRecord(i+tsOffset, rand));
+			Record rec = new SampleRecord(i+tsOffset, rand);
+			file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
 		}
 
 		System.out.printf("Appended %d records of %d bytes. New file size is %d records.\n",numRecs, SampleRecord.length(), file.size()/SampleRecord.length());
@@ -529,20 +713,9 @@ public final class CLI {
 	}
 
 	private FileHandle openFile(String fn, String fm, String type) throws IOException, KawkabException, InterruptedException {
-		FileMode mode;
-		if (fm.equals("r"))
-			mode = FileMode.READ;
-		else if (fm.equals("a"))
-			mode = FileMode.APPEND;
-		else
-			throw new IOException("Invalid file mode");
+		FileMode mode = parseMode(fm);
 
-		FileOptions opts = new FileOptions();
-		if (type.equals("s"))
-			opts = new FileOptions(SampleRecord.length());
-		else if (!type.equals("b")) {
-			throw new KawkabException("Invalid file type " + type);
-		}
+		FileOptions opts = parseFileOpts(type);
 
 		return fs.open(fn, mode, opts);
 	}
@@ -564,5 +737,27 @@ public final class CLI {
 		}
 
 		return data;
+	}
+
+	private FileMode parseMode(String fm) throws IOException {
+		FileMode mode;
+		if (fm.equals("r"))
+			mode = FileMode.READ;
+		else if (fm.equals("a"))
+			mode = FileMode.APPEND;
+		else
+			throw new IOException("Invalid file mode");
+
+		return mode;
+	}
+
+	private FileOptions parseFileOpts(String type) throws KawkabException {
+		FileOptions opts = new FileOptions();
+		if (type.equals("s"))
+			opts = new FileOptions(SampleRecord.length());
+		else if (!type.equals("b")) {
+			throw new KawkabException("Invalid file type " + type);
+		}
+		return opts;
 	}
 }

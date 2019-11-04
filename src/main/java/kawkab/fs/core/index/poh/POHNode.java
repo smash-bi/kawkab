@@ -508,7 +508,7 @@ public class POHNode extends Block {
 	 */
 	@Override
 	public int loadFrom(ReadableByteChannel channel) throws IOException {
-		System.out.printf("[IN] Loading %s from channel\n",id);
+		//System.out.printf("[IN] Loading %s from channel\n",id);
 
 		// System.out.println("\t[IN] Bytes to load from the buffer = " + srcBuffer.remaining() + ", storeBuffer pos = " + srcBuffer.position());
 
@@ -702,7 +702,7 @@ public class POHNode extends Block {
 
 	@Override
 	protected int storeTo(FileChannel channel) throws IOException {
-		System.out.printf("[IN] Storing %s in channel\n",id);
+		//System.out.printf("[IN] Storing %s in channel\n",id);
 
 		assert isOnPrimary;
 		//System.out.printf("  >> [IN] Storing node %d at channel pos %d, channel size %d\n", nodeNumber, channel.position(), channel.size());
@@ -799,7 +799,7 @@ public class POHNode extends Block {
 	 * @throws IOException
 	 */
 	public int storeTo(ByteBuffer buffer, int fromTSIdx) {
-		System.out.printf("[IN] Storing %s in buffer\n",id);
+		//System.out.printf("[IN] Storing %s in buffer\n",id);
 
 		boolean withHeader = fromTSIdx % 2 == 0;
 		if (withHeader) {
@@ -818,7 +818,7 @@ public class POHNode extends Block {
 	}
 
 	public int loadFrom(ByteBuffer buffer, int atTSOffset) throws IOException {
-		System.out.printf("[IN] Loading %s from buffer at offset \n",id, atTSOffset);
+		//System.out.printf("[IN] Loading %s from buffer at offset \n",id, atTSOffset);
 
 		assert !isOnPrimary;
 
@@ -831,7 +831,7 @@ public class POHNode extends Block {
 	}
 
 	private void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
-		System.out.printf("[IN] Loading %s from the primary at offset %d\n",id, dirtyOffsetStart);
+		//System.out.printf("[IN] Loading %s from the primary at offset %d\n",id, dirtyOffsetStart);
 
 		ByteBuffer buffer = primaryNodeService.getIndexNode(id, dirtyOffsetStart);
 

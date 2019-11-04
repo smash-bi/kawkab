@@ -22,6 +22,7 @@ public final class Filesystem {
 	private static Configuration conf;
 	private static FilesystemServiceServer fss;
 	private static PrimaryNodeServiceServer pns;
+	private static Cache cache;
 
 	private TimerQueue timerQ;
 
@@ -32,6 +33,8 @@ public final class Filesystem {
 		fss = new FilesystemServiceServer(this);
 		fss.startServer();
 		timerQ = new TimerQueue("FS Timer Queue");
+		cache = Cache.instance();
+		conf = Configuration.instance();
 	}
 	
 	public static synchronized Filesystem instance() throws KawkabException, IOException {
@@ -68,7 +71,27 @@ public final class Filesystem {
 		long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber);
 		FileHandle file = new FileHandle(inumber, mode, timerQ);
+		verify(inumber, opts.recordSize());
 		return file;
+	}
+
+	private void verify(long inumber, int recSize) throws IOException, KawkabException {
+		BlockID id = new InodesBlockID((int) (inumber / conf.inodesPerBlock));
+		InodesBlock inb = null;
+		try {
+			inb = (InodesBlock) cache.acquireBlock(id);
+			inb.loadBlock();
+
+			Inode inode = inb.getInode(inumber);
+			if (inode.recordSize() != recSize) {
+				throw new KawkabException(String.format("Record sizes do not match while opening the file %d. Given=%d, expected=%d",
+						inumber, recSize, inode.recordSize()));
+			}
+		} finally {
+			if (inb != null) {
+				cache.releaseBlock(id);
+			}
+		}
 	}
 
 	public synchronized void close(FileHandle fh) throws KawkabException {
@@ -94,14 +117,15 @@ public final class Filesystem {
 	 */
 	public static synchronized Filesystem bootstrap(int nodeID, Properties confProps) throws IOException, InterruptedException, KawkabException, AlreadyConfiguredException {
 		if (initialized) {
-			System.out.println("\tFilesystem is already bootstraped, not doing it again...");
+			System.out.println("\tFilesystem is already bootstrapped, not doing it again...");
 			return instance;
 		}
+
+		System.out.println("Filesystem bootstrap...");
 		
 		Configuration.configure(nodeID, confProps);
 		
 		instance = new Filesystem();
-
 		
 		InodesBlock.bootstrap();
 		Ibmap.bootstrap();

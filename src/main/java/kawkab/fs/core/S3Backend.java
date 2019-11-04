@@ -118,7 +118,7 @@ public final class S3Backend implements GlobalBackend{
 			try {
 				lock.lock();
 
-				System.out.printf("\t\t[S3] Reading %d bytes from %s for storing in global: path=%s\n",length, srcBlock.id(), srcBlock.id().localPath());
+				//System.out.printf("\t\t[S3] Reading %d bytes from %s for storing in global: path=%s\n",length, srcBlock.id(), srcBlock.id().localPath());
 
 				raf.readFully(buffer, 0, length);
 			} finally {

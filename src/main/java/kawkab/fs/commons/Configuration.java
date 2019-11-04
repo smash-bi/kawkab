@@ -109,6 +109,7 @@ public final class Configuration {
 	}
 	
 	private Configuration(int nodeID, Properties props) {
+		System.out.println("Configuring the system...");
 		thisNodeID = nodeID;
 		
 		for(Object keyObj : props.keySet()) {

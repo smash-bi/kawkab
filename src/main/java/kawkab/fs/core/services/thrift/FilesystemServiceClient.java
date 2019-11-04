@@ -1,5 +1,6 @@
 package kawkab.fs.core.services.thrift;
 
+import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.services.thrift.TFileMode;
@@ -10,7 +11,9 @@ import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 
 public class FilesystemServiceClient {
 	private FilesystemService.Client client;
@@ -22,8 +25,9 @@ public class FilesystemServiceClient {
 	 * @throws KawkabException
 	 */
 	public FilesystemServiceClient(String serverIP, int port) throws KawkabException {
+		System.out.printf("[FSC] Connecting to %s:%d\n",serverIP,port);
 		try {
-			transport = new TSocket(serverIP, 9090);
+			transport = new TSocket(serverIP, port);
 			transport.open();
 
 			TProtocol protocol = new TBinaryProtocol(transport);
@@ -50,9 +54,25 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public synchronized ByteBuffer read(long sessionID, long offset, int length) throws KawkabException {
+	public synchronized ByteBuffer recordNum(long sessionID, long recNum, int recSize) throws KawkabException {
 		try {
-			return client.read(sessionID, offset, length);
+			return client.recordNum(sessionID, recNum, recSize);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
+	public ByteBuffer recordAt(long sessionID, long timestamp, int recSize) throws KawkabException {
+		try {
+			return client.recordAt(sessionID, timestamp, recSize);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
+	public List<ByteBuffer> readRecords(long sessionID, long minTS, long maxTS, int recSize) throws KawkabException {
+		try {
+			return client.readRecords(sessionID, minTS, maxTS, recSize);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -67,6 +87,22 @@ public class FilesystemServiceClient {
 	public synchronized int append(long sessionID, ByteBuffer buffer) throws KawkabException {
 		try {
 			return client.append(sessionID, buffer);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
+	public synchronized int append(long sessionID, ByteBuffer srcBuf, long timestamp, int recSize) throws KawkabException {
+		try {
+			return client.appendRecord(sessionID, srcBuf, timestamp, recSize);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
+	public synchronized long size(long sessionID) throws KawkabException {
+		try {
+			return client.size(sessionID);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}

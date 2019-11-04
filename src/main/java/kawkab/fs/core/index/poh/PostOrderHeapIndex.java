@@ -120,13 +120,13 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	}
 
 	private POHNode acquireNode(final int nodeNum) throws IOException, KawkabException {
-		System.out.printf("[POH] Acquire node %d\n", nodeNum);
+		//System.out.printf("[POH] Acquire node %d\n", nodeNum);
 		POHNode node = nodes.get(nodeNum);
 		if (node == null) {
 			synchronized (nodes) {
 				node = nodes.get(nodeNum);
 				if (node == null) {
-					System.out.printf("[POH] Acquiring from cache node %d\n", nodeNum);
+					//System.out.printf("[POH] Acquiring from cache node %d\n", nodeNum);
 					IndexNodeID id = new IndexNodeID(inumber, nodeNum);
 					node = (POHNode) cache.acquireBlock(id);
 					node.init(nodeNum, heightOfNode(nodeNum), entriesPerNode, childrenPerNode, nodeSizeBytes, nodesPerBlock);
@@ -148,7 +148,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @return
 	 */
 	private void createNewBlock(IndexNodeID nodeID) throws IOException, InterruptedException {
-		  System.out.println("[POH] Creating new block: " + nodeID.localPath());
+		  //System.out.println("[POH] Creating new block: " + nodeID.localPath());
 
 		localStore.createBlock(nodeID);
 	}
@@ -156,7 +156,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	private POHNode createNewNodeCached(final int nodeNumber) throws IOException, KawkabException, InterruptedException {
 		IndexNodeID nodeID = new IndexNodeID(inumber, nodeNumber);
 
-		System.out.println("[POH] Creating new node: " + nodeID);
+		//System.out.println("[POH] Creating new node: " + nodeID);
 
 		POHNode node = (POHNode) cache.acquireBlock(nodeID);
 		node.init(nodeNumber, heightOfNode(nodeNumber), entriesPerNode, childrenPerNode, nodeSizeBytes, nodesPerBlock);
@@ -221,11 +221,13 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		//long curLength = length.get();
 
-		System.out.printf("[POH] appendMinTS: segInFile=%d, indexLen=%d\n", segmentInFile, curIndexLen);
+		//System.out.printf("[POH] appendMinTS: segInFile=%d, indexLen=%d\n", segmentInFile, curIndexLen);
 
 		assert (curIndexLen % 2) == 0;
 
 		boolean lastNodeFull = (curIndexLen % (entriesPerNode*2)) == 0;
+
+		//System.out.printf("[POH] lastNodeFull=%b, curIdxLen=%d, entriesPerNodd=%d\n", lastNodeFull, curIndexLen, entriesPerNode);
 
 		if (lastNodeFull) { //If last node is full
 			try {
@@ -272,7 +274,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	public void appendMaxTS(final long maxTS, final long segmentInFile, final long curIndexLen) throws IOException, KawkabException {
 		//long curLength = length.get();
 
-		System.out.printf("[POH] appendMaxTS: segInFile=%d, indexLen=%d\n", segmentInFile, curIndexLen);
+		//System.out.printf("[POH] appendMaxTS: segInFile=%d, indexLen=%d\n", segmentInFile, curIndexLen);
 
 		assert curIndexLen % 2 == 1;
 
