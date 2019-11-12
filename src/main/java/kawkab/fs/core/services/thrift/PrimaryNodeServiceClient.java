@@ -10,8 +10,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.services.thrift.PrimaryNodeService.Client;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.protocol.TCompactProtocol;
-import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
@@ -97,11 +96,9 @@ public class PrimaryNodeServiceClient {
 		try {
 			int port = Configuration.instance().primaryNodeServicePort;
 			System.out.printf("[PNSC] Connecting to %s:%d\n",ip, port);
-			transport = new TSocket(ip, port);
+			transport = new TFramedTransport(new TSocket(ip, port));
 			transport.open();
-
-			TProtocol protocol = new TBinaryProtocol(transport);
-			client = new PrimaryNodeService.Client(protocol);
+			client = new PrimaryNodeService.Client(new TBinaryProtocol(transport));
 		} catch (TException x) {
 			x.printStackTrace();
 			throw new KawkabException(x);

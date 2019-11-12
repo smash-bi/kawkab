@@ -1,6 +1,5 @@
 package kawkab.fs.core;
 
-import com.google.protobuf.ByteString;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.services.thrift.PrimaryNodeServiceClient;
@@ -133,13 +132,6 @@ public abstract class Block extends AbstractTransferItem {
 	 * @return Number of bytes written in the file.
 	 */
 	protected abstract int storeToFile() throws IOException;
-
-	/**
-	 * Returns a ByteArrayInputStream that wraps around the byte[] containing the block in bytes. PrimaryNodeService
-	 * calls this function to transfer data to the remote readers.Note that no guarantees are made about the concurrent
-	 * modification of the block while the block is read from the stream.
-	 */
-	public abstract ByteString byteString();
 
 	/**
 	 * @return Size of the block in bytes when the complete block is serialized.

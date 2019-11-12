@@ -7,6 +7,7 @@ import kawkab.fs.core.services.thrift.FilesystemServiceServer;
 import kawkab.fs.core.services.thrift.PrimaryNodeService;
 import kawkab.fs.core.services.thrift.PrimaryNodeServiceServer;
 import kawkab.fs.core.timerqueue.TimerQueue;
+import kawkab.fs.utils.GCMonitor;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -130,9 +131,8 @@ public final class Filesystem {
 		InodesBlock.bootstrap();
 		Ibmap.bootstrap();
 		namespace.bootstrap();
-		
-		
-		
+		GCMonitor.initialize();
+
 		initialized = true;
 		
 		return instance;
@@ -146,8 +146,6 @@ public final class Filesystem {
 		fss.stopServer();
 		pns.stopServer();
 		namespace.shutdown();
-		//Ibmap.shutdown();
-		//	InodesBlock.shutdown();
 		timerQ.shutdown();
 		Cache.instance().shutdown();
 		Clock.instance().shutdown();
@@ -156,7 +154,9 @@ public final class Filesystem {
 		synchronized(instance) {
 			instance.notifyAll();
 		}
-		
+
+		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
+
 		System.out.println("Closed FileSystem");
 		// GlobalStoreManager.instance().shutdown(); //The LocalStore closes the GlobalStore
 	}
@@ -169,6 +169,11 @@ public final class Filesystem {
 		synchronized(instance) {
 			instance.wait();
 		}
+	}
+
+	public void flush() throws KawkabException {
+		timerQ.waitUntilEmpty();
+		cache.flush();
 	}
 	
 	public Configuration getConf() {

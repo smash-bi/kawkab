@@ -1,18 +1,15 @@
 package kawkab.fs.core.services.thrift;
 
 import kawkab.fs.api.FileOptions;
+import kawkab.fs.api.Record;
 import kawkab.fs.commons.Configuration;
+import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
-import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.services.thrift.FilesystemService.Iface;
-import kawkab.fs.core.services.thrift.TRequestFailedException;
-import kawkab.fs.core.services.thrift.TInvalidSessionException;
-import kawkab.fs.core.services.thrift.TInvalidArgumentException;
-import kawkab.fs.core.services.thrift.TFileMode;
+import kawkab.fs.records.SampleRecord;
 import org.apache.thrift.TException;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +30,7 @@ public class FilesystemServiceImpl implements Iface {
 
 	@Override
 	public long open(String filename, TFileMode fileMode, int recordSize) throws TException {
-		System.out.printf("[FSI] open(): opening file %s, recSize %d\n", filename, recordSize);
+		//System.out.printf("[FSI] open(): opening file %s, recSize %d\n", filename, recordSize);
 
 		FileHandle handle = null;
 		try {
@@ -64,7 +61,7 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			fh.recordNum(dstBuf, recNum, recSize);
 			return dstBuf;
-		} catch (IOException | KawkabException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -85,7 +82,7 @@ public class FilesystemServiceImpl implements Iface {
 			}
 
 			return dstBuf;
-		} catch (IOException | KawkabException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -100,15 +97,41 @@ public class FilesystemServiceImpl implements Iface {
 		}
 
 		try {
-			return  fh.readRecords(minTS, maxTS, recSize);
-		} catch (KawkabException | IOException e) {
+			List<ByteBuffer> results = fh.readRecords(minTS, maxTS, recSize);
+			//printBuffers(results);
+			return results;
+		} catch (Exception e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
 	}
 
+	private void printBuffers(List<ByteBuffer> results) {
+		Record recFactory = new SampleRecord();
+		int recSize = recFactory.size();
+
+		for (ByteBuffer buf : results) {
+			int remaining = buf.remaining();
+
+			int idx = 0;
+			while (remaining >= recSize) {
+				int offset = idx++*recSize;
+				buf.position(offset);
+				buf.limit(offset+recSize);
+
+				Record rec = recFactory.newRecord();
+				rec.copyInDstBuffer().put(buf);
+				System.out.printf("[FSI] Sending record: %s\n",rec);
+
+				remaining -= recSize;
+			}
+
+			buf.rewind();
+		}
+	}
+
 	@Override
-	public int appendRecord(long sessionID, ByteBuffer data, long timestamp, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
+	public int appendRecord(long sessionID, ByteBuffer data, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
 		FileHandle fh = sessions.get(sessionID);
 
 		if (fh == null) {
@@ -116,11 +139,64 @@ public class FilesystemServiceImpl implements Iface {
 		}
 
 		try {
-			return fh.append(data, timestamp, recSize);
-		} catch (IOException | KawkabException | InterruptedException e) {
+			return fh.append(data, recSize);
+		} catch (Exception e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
+	}
+
+	@Override
+	public int appendRecordBuffered(long sessionID, ByteBuffer srcBuf, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
+		FileHandle fh = sessions.get(sessionID);
+
+		if (fh == null) {
+			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
+		}
+
+		try {
+			return fh.append(srcBuf, recSize);
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new TRequestFailedException(e.getMessage());
+		}
+
+		/*int pos = srcBuf.position();
+		int initLimit = srcBuf.limit();
+		int cnt = 0;
+		while(pos < initLimit) {
+			try {
+				srcBuf.position(pos);
+				srcBuf.limit(pos+recSize);
+				cnt += fh.append(srcBuf, recSize);
+				pos += recSize;
+			} catch (Exception e) {
+				e.printStackTrace();
+				throw new TRequestFailedException(e.getMessage());
+			}
+		}
+		return cnt;*/
+	}
+
+	@Override
+	public int appendRecordBatched(long sessionID, List<ByteBuffer> data, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
+		FileHandle fh = sessions.get(sessionID);
+
+		if (fh == null) {
+			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
+		}
+
+		int cnt = 0;
+		for(ByteBuffer srcBuf : data) {
+			//data.position(offset);
+			try {
+				cnt += fh.append(srcBuf, recSize);
+			} catch (Exception e) {
+				e.printStackTrace();
+				throw new TRequestFailedException(e.getMessage());
+			}
+		}
+		return cnt;
 	}
 
 	@Override
@@ -138,7 +214,7 @@ public class FilesystemServiceImpl implements Iface {
 		long size;
 		try {
 			size = fh.size();
-		} catch (KawkabException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -152,7 +228,7 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			fh.read(buffer, offset, length);
-		} catch (IllegalArgumentException | IOException | KawkabException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -188,7 +264,7 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			return fh.size();
-		} catch (KawkabException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -204,7 +280,7 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			fs.close(fh);
-		} catch (KawkabException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 

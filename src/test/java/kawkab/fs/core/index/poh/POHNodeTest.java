@@ -16,7 +16,7 @@ public class POHNodeTest {
 	@BeforeAll
 	public static void initialize() throws IOException, InterruptedException, KawkabException {
 		int nodeID = Configuration.getNodeID();
-		Properties props = Configuration.getProperties(Configuration.propsFileCluster);
+		Properties props = Configuration.getProperties(Configuration.propsFileClusterSmall);
 		Configuration.configure(nodeID, props);
 		conf = Configuration.instance();
 	}

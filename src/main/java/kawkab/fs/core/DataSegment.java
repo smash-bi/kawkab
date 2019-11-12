@@ -1,6 +1,5 @@
 package kawkab.fs.core;
 
-import com.google.protobuf.ByteString;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
@@ -81,10 +80,6 @@ public final class DataSegment extends Block {
 		return isSegFull;
 	}
 	
-	int remaining() {
-		return segmentSizeBytes - writePos.get();
-	}
-	
 	/**
 	 * @param data Data to be appended
 	 * @param offset  Offset in data
@@ -137,11 +132,12 @@ public final class DataSegment extends Block {
 				String.format("dataBuf pos %d is incorrect, expected %d", dataBuf.position(), offsetInSegment);
 		
 		int length = srcBuffer.remaining();
-		assert remaining() >= length;
+
+		assert segmentSizeBytes - writePos.get() >= length;
+		assert length % recordSize == 0;
 		
 		dataBuf.put(srcBuffer);
-		srcBuffer.rewind();
-		
+
 		int pos = writePos.addAndGet(length);
 		
 		//Mark block as full
@@ -444,45 +440,12 @@ public final class DataSegment extends Block {
 		return bytesRead;
 	}
 
-	/**
-	 * Returns a bytestring that contains all the valid bytes starting from the given offset.
-	 * @return
-	 */
-	@Override
-	public ByteString byteString() {
-		assert false;
-		return null;
-	}
-
-	public synchronized ByteString byteString(int offset) {
-		if (offset == writePos.get())
-			return ByteString.EMPTY;
-
-		/*int limit = bytesLoaded; //The bytes loaded for reading
-		if (initedForAppends) { //If the segment was initialized for appends, the limit should be the write position
-			limit = writePos.get();
-		}*/
-
-		int limit = isSegFull ? segmentSizeBytes : writePos.get();
-
-		ByteString bytes = null;
-		storeBuffer.clear();
-		storeBuffer.position(offset);
-		storeBuffer.limit(limit);
-
-		//System.out.printf("[DS] ByteString store %s: pos=%d, limit=%d, rem=%d, offset=%d\n", id, storeBuffer.position(), limit, storeBuffer.remaining(), offset);
-
-		bytes = ByteString.copyFrom(storeBuffer);
-
-		return bytes;
-	}
 	public synchronized void storeTo(ByteBuffer dstBuffer, int offset) {
 		if (offset == writePos.get())
 			return;
 
 		int limit = isSegFull ? segmentSizeBytes : writePos.get();
 
-		ByteString bytes = null;
 		storeBuffer.clear();
 		storeBuffer.position(offset);
 		storeBuffer.limit(limit);

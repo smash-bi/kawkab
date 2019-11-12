@@ -1,4 +1,4 @@
-package kawkab.fs.core.records;
+package kawkab.fs.records;
 
 import kawkab.fs.api.Record;
 
@@ -74,7 +74,12 @@ public class SampleRecord implements Record {
 	public long timestamp() {
 		return buffer.getLong(TIMESTAMP);
 	}
-	
+
+	@Override
+	public void timestamp(long newTimestamp) {
+		buffer.putLong(TIMESTAMP, newTimestamp);
+	}
+
 	@Override
 	public ByteBuffer copyInDstBuffer() {
 		buffer.clear();

@@ -1,6 +1,5 @@
 package kawkab.fs.core.index.poh;
 
-import com.google.protobuf.ByteString;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.core.Block;
 import kawkab.fs.core.Clock;
@@ -768,27 +767,6 @@ public class POHNode extends Block {
 		channel.close();
 
 		return count;
-	}
-
-	@Override
-	public ByteString byteString() {
-		assert false;
-
-		return null;
-	}
-
-	public ByteString byteString(int fromTSIdx) throws IOException {
-		if (fromTSIdx == tsCount.get()) { //If no new entry is present
-			return ByteString.EMPTY;
-		}
-
-		synchronized (storeBuffer) {
-			storeBuffer.clear();
-			storeTo(storeBuffer, fromTSIdx);
-			storeBuffer.flip();
-
-			return ByteString.copyFrom(storeBuffer);
-		}
 	}
 
 	/**

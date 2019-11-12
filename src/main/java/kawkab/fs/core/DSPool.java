@@ -9,7 +9,8 @@ public class DSPool {
 		System.out.println("Initializing DataSegments pool of size " + capacity);
 		pool = new ConcurrentLinkedQueue<>();
 		for (int i=0; i<capacity; i++) {
-			pool.offer(new DataSegment(new DataSegmentID(-1,-1,-1, -1)));
+			DataSegmentID tempID = new DataSegmentID(-1,-1,-1, -1);
+			pool.offer(new DataSegment(tempID));
 		}
 	}
 	

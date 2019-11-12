@@ -1,17 +1,14 @@
 package kawkab.fs.core.services.thrift;
 
-import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.services.thrift.TFileMode;
-import kawkab.fs.core.services.thrift.FilesystemService;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 
@@ -27,7 +24,7 @@ public class FilesystemServiceClient {
 	public FilesystemServiceClient(String serverIP, int port) throws KawkabException {
 		System.out.printf("[FSC] Connecting to %s:%d\n",serverIP,port);
 		try {
-			transport = new TSocket(serverIP, port);
+			transport = new TFramedTransport(new TSocket(serverIP, port));
 			transport.open();
 
 			TProtocol protocol = new TBinaryProtocol(transport);
@@ -46,7 +43,7 @@ public class FilesystemServiceClient {
 	 *         append, and close.
 	 * @throws KawkabException Exceptions from the server are wrapped in KawkabException
 	 */
-	public synchronized long open(String filename, Filesystem.FileMode mode, int recordSize) throws KawkabException{
+	public long open(String filename, Filesystem.FileMode mode, int recordSize) throws KawkabException {
 		try {
 			return client.open(filename, convertFileMode(mode), recordSize);
 		} catch (TException e) {
@@ -54,7 +51,7 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public synchronized ByteBuffer recordNum(long sessionID, long recNum, int recSize) throws KawkabException {
+	public ByteBuffer recordNum(long sessionID, long recNum, int recSize) throws KawkabException {
 		try {
 			return client.recordNum(sessionID, recNum, recSize);
 		} catch (TException e) {
@@ -84,7 +81,7 @@ public class FilesystemServiceClient {
 	 * @return Number of bytes appended
 	 * @throws KawkabException
 	 */
-	public synchronized int append(long sessionID, ByteBuffer buffer) throws KawkabException {
+	public int append(long sessionID, ByteBuffer buffer) throws KawkabException {
 		try {
 			return client.append(sessionID, buffer);
 		} catch (TException e) {
@@ -92,15 +89,32 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public synchronized int append(long sessionID, ByteBuffer srcBuf, long timestamp, int recSize) throws KawkabException {
+	public int append(long sessionID, ByteBuffer srcBuf, int recSize) throws KawkabException {
 		try {
-			return client.appendRecord(sessionID, srcBuf, timestamp, recSize);
+			return client.appendRecord(sessionID, srcBuf, recSize);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
 	}
 
-	public synchronized long size(long sessionID) throws KawkabException {
+	public int appendBuffered(long sessionID, ByteBuffer srcBuf, int recSize) throws KawkabException {
+		try {
+			//System.out.printf("pos=%d, lim=%d, recSize=%d\n", srcBuf.position(), srcBuf.limit(), recSize);
+			return client.appendRecordBuffered(sessionID, srcBuf, recSize);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
+	public int appendBatched(long sessionID, List<ByteBuffer> srcBufs, int recSize) throws KawkabException {
+		try {
+			return client.appendRecordBatched(sessionID, srcBufs, recSize);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
+	public long size(long sessionID) throws KawkabException {
 		try {
 			return client.size(sessionID);
 		} catch (TException e) {
@@ -108,7 +122,7 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public synchronized void close(long sessionID) throws KawkabException {
+	public void close(long sessionID) throws KawkabException {
 		try {
 			client.close(sessionID);
 		} catch (TException e) {
@@ -123,6 +137,7 @@ public class FilesystemServiceClient {
 		client = null;
 	}
 
+
 	private TFileMode convertFileMode(Filesystem.FileMode mode){
 		switch(mode) {
 			case READ:
@@ -132,5 +147,10 @@ public class FilesystemServiceClient {
 			default:
 				return null;
 		}
+	}
+
+	private void verifyConnected() throws KawkabException {
+		if (transport == null || !transport.isOpen())
+			throw new KawkabException("Client is not connected");
 	}
 }

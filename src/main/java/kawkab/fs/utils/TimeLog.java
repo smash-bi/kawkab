@@ -2,8 +2,14 @@ package kawkab.fs.utils;
 
 import java.util.Random;
 
-/*
-This class is not thread safe.
+/**
+ * TimeLog measures latency of an operation p.
+ * Usage semantics: timeLog.start(); p(); timeLog.end();
+ *
+ * TimeLog takes measurements based on the given sample rate. If the rate is 100%, all the start/end pairs are included
+ * in the measurements. Otherwise, the start/end pair is included by following a uniform distribution.
+ *
+ * This class is not thread safe.
  */
 public class TimeLog {
 	public enum TimeLogUnit {
@@ -23,7 +29,7 @@ public class TimeLog {
 	private long lastTS;
 	private Accumulator stats;
 	private boolean started;
-	private int count;
+	private long count;
 	private String tag;
 	private int[] rand;
 	private int randIdx;
@@ -53,7 +59,7 @@ public class TimeLog {
 		
 		count++;
 		randIdx = ++randIdx % rand.length;
-		if (rand[randIdx] > samplePercent)
+		if (rand[randIdx] >= samplePercent)
 			return;
 		
 		started = true;
@@ -84,6 +90,14 @@ public class TimeLog {
 			return System.currentTimeMillis();
 		else
 			return System.nanoTime();
+	}
+
+	public long count() {
+		return count;
+	}
+
+	public long sampled() {
+		return stats.count();
 	}
 	
 	public void reset() {

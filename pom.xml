@@ -1,5 +1,5 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>smash</groupId>
@@ -8,24 +8,25 @@
 	<name>Kawkab Distributed Filesystem</name>
 	<url>https://github.com/smash-bi/kawkab</url>
 
-	  <properties>
-	    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-	    <nodeID>0</nodeID>
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<nodeID>0</nodeID>
+		<Xmn>5g</Xmn>
+		<Xmx>8g</Xmx>
+		<MaxDirectMemorySize>5g</MaxDirectMemorySize>
+		<cmdArgs>""</cmdArgs>
 		<mainClass>kawkab.fs.cli.CLI</mainClass>
-          <Xmn>-Xmn2g</Xmn>
-          <Xmx>-Xmx4g</Xmx>
-          <MaxDirectMemorySize>-XX:MaxDirectMemorySize=2g</MaxDirectMemorySize>
-	  </properties>
+	</properties>
 
 	<build>
-		<extensions>
-		    <extension>
-		      <!-- for gRPC -->
-		      <groupId>kr.motd.maven</groupId>
-		      <artifactId>os-maven-plugin</artifactId>
-		      <version>1.6.2</version>
-		    </extension>
-		  </extensions>
+		<!--extensions>
+		    <extension -->
+		<!-- for gRPC -->
+		<!--groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>1.6.2</version>
+      </extension>
+    </extensions-->
 
 		<plugins>
 			<plugin>
@@ -49,14 +50,14 @@
 				</executions>
 			</plugin>
 
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>versions-maven-plugin</artifactId>
-                <version>2.7</version>
-                <configuration>
-                    <generateBackupPoms>false</generateBackupPoms>
-                </configuration>
-            </plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>versions-maven-plugin</artifactId>
+				<version>2.7</version>
+				<configuration>
+					<generateBackupPoms>false</generateBackupPoms>
+				</configuration>
+			</plugin>
 
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -74,7 +75,7 @@
 							<minimizeJar>false</minimizeJar>
 							<transformers>
 								<transformer
-									implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+										implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
 									<mainClass>kawkab.fs.Main</mainClass>
 								</transformer>
 							</transformers>
@@ -132,51 +133,55 @@
 				<artifactId>exec-maven-plugin</artifactId>
 				<version>1.6.0</version>
 				<executions>
-		          <execution>
-		            <goals>
-		              <goal>exec</goal>
-		            </goals>
-		          </execution>
-		        </executions>
+					<execution>
+						<goals>
+							<goal>exec</goal>
+						</goals>
+					</execution>
+				</executions>
 				<configuration>
 					<executable>java</executable>
 					<arguments>
 						<argument>-ea</argument>
-						<argument>${Xmn}</argument>
-						<argument>${Xmx}</argument>
-						<argument>${MaxDirectMemorySize}</argument>
+						<argument>-Xmn${Xmn}</argument>
+						<argument>-Xmx${Xmx}</argument>
+						<argument>-XX:MaxDirectMemorySize=${MaxDirectMemorySize}</argument>
 
-<!--						<argument>-javaagent:temp/allocation-tracker/target/allocation-tracker-agent-0.0.1-SNAPSHOT.jar=kawkab.fs</argument>-->
+						<!--<argument>-javaagent:temp/allocation-tracker/target/allocation-tracker-agent-0.0.1-SNAPSHOT.jar=kawkab.fs</argument>-->
+						<!--<argument>-Xlog:gc*</argument>-->
+						<!--<argument>-Xlog:safepoint</argument>-->
 
-<!--						<argument>-XX:+PrintGCDetails</argument>-->
-<!--						<argument>-XX:+PrintGCTimeStamps</argument>-->
-<!--						<argument>-XX:+PrintGCDateStamps</argument>-->
-<!--						<argument>-XX:+PrintTenuringDistribution</argument>-->
-<!--						<argument>-XX:+PrintGCApplicationStoppedTime</argument>-->
+						<!--						<argument>-XX:CMSInitiatingOccupancyFraction=92</argument>-->
+						<!--						<argument>-XX:+UseCMSInitiatingOccupancyOnly</argument>-->
 
-<!--						<argument>-XX:CMSInitiatingOccupancyFraction=92</argument>-->
-<!--						<argument>-XX:+UseCMSInitiatingOccupancyOnly</argument>-->
+						<!--						<argument>-XX:+UseConcMarkSweepGC</argument>-->
+						<!--						<argument>-XX:+UseSerialGC</argument>-->
+						<!--						<argument>-XX:+UseParallelGC</argument>-->
+						<!--						<argument>-XX:ParallelCMSThreads=2</argument>-->
+						<!--						<argument>-XX:ParallelCMSThreads=4</argument>-->
+						<!--						<argument>-XX:+UseG1GC</argument>-->
+						<!--						<argument>XX:+UseDynamicNumberOfCompilerThreads</argument>-->
 
-<!--						<argument>-XX:+UseConcMarkSweepGC</argument>-->
-<!--						<argument>-XX:+UseSerialGC</argument>-->
-<!--						<argument>-XX:+UseParallelGC</argument>-->
-<!--						<argument>-XX:ParallelCMSThreads=2</argument>-->
-<!--						<argument>-XX:ParallelCMSThreads=4</argument>-->
-<!--						<argument>-XX:+UseG1GC</argument>-->
-<!--						<argument>XX:+UseDynamicNumberOfCompilerThreads</argument>-->
-
-							<!-- ZGC requires JDK 11 -->
+						<!-- ZGC requires JDK 11 -->
 						<argument>-XX:+UnlockExperimentalVMOptions</argument>
 						<argument>-XX:+UseZGC</argument>
 
 						<!-- EpsilonGC, a no-op GC, requires JDK11 -->
-<!--						<argument>-XX:+UnlockExperimentalVMOptions</argument>-->
-<!--						<argument>-XX:+UseEpsilonGC</argument>-->
+						<!--						<argument>-XX:+UnlockExperimentalVMOptions</argument>-->
+						<!--						<argument>-XX:+UseEpsilonGC</argument>-->
+
+						<!-- Use ShenandoahGC -->
+						<!--argument>-XX:+UseShenandoahGC</argument>
+						<argument>-XX:+UnlockExperimentalVMOptions</argument>
+						<argument>-XX:ShenandoahUncommitDelay=2000</argument>
+						<argument>-XX:ShenandoahGuaranteedGCInterval=12000</argument-->
+
 
 						<argument>-DnodeID=${nodeID}</argument>
 						<argument>-classpath</argument>
 						<classpath/>
 						<argument>${mainClass}</argument>
+						<argument>${cmdArgs}</argument>
 					</arguments>
 					<addResourcesToClasspath>true</addResourcesToClasspath>
 				</configuration>
@@ -205,16 +210,16 @@
 				<configuration>
 					<enableAssertions>true</enableAssertions>
 					<argLine>--illegal-access=permit</argLine>
-					<argLine>${Xmx}</argLine>
+					<argLine>-Xmx${Xmx}</argLine>
 					<!--argLine>-XX:+UseG1GC -XX:MaxGCPauseMillis=10 -XX:ParallelGCThreads=4 -XX:ConcGCThreads=4</argLine-->
 					<!--argLine>-agentpath:/home/sm3rizvi/packages/YourKit-JavaProfiler-2019.1/bin/linux-x86-64/libyjpagent.so</argLine-->
 					<!-- argLine>-Xcomp</argLine -->
 					<!--argLine>-verbose:gc</argLine -->
-<!--					<argLine>-XX:+PrintGCDetails</argLine>-->
-<!--					<argLine>-XX:+PrintGCTimeStamps</argLine>-->
-<!--					<argLine>-XX:+PrintGCDateStamps</argLine>-->
-<!--					<argLine>-XX:+PrintTenuringDistribution</argLine>-->
-<!--					<argLine>-XX:+PrintGCApplicationStoppedTime</argLine>-->
+					<!--					<argLine>-XX:+PrintGCDetails</argLine>-->
+					<!--					<argLine>-XX:+PrintGCTimeStamps</argLine>-->
+					<!--					<argLine>-XX:+PrintGCDateStamps</argLine>-->
+					<!--					<argLine>-XX:+PrintTenuringDistribution</argLine>-->
+					<!--					<argLine>-XX:+PrintGCApplicationStoppedTime</argLine>-->
 					<systemPropertyVariables>
 						<propertyName>nodeID</propertyName>
 						<buildDirectory>${0}</buildDirectory>
@@ -224,25 +229,25 @@
 				</configuration>
 			</plugin>
 
-			<plugin>
-			  <!-- for gRPC -->
-		      <groupId>org.xolstice.maven.plugins</groupId>
-		      <artifactId>protobuf-maven-plugin</artifactId>
-		      <version>0.6.1</version>
-				<configuration>
-					<protocArtifact>com.google.protobuf:protoc:3.9.0:exe:${os.detected.classifier}</protocArtifact>
-					<pluginId>grpc-java</pluginId>
-					<pluginArtifact>io.grpc:protoc-gen-grpc-java:1.24.0:exe:${os.detected.classifier}</pluginArtifact>
-				</configuration>
-		      <executions>
-		        <execution>
-		          <goals>
-		            <goal>compile</goal>
-		            <goal>compile-custom</goal>
-		          </goals>
-		        </execution>
-		      </executions>
-		    </plugin>
+			<!--plugin-->
+			<!-- for gRPC -->
+			<!--groupId>org.xolstice.maven.plugins</groupId>
+            <artifactId>protobuf-maven-plugin</artifactId>
+            <version>0.6.1</version>
+              <configuration>
+                  <protocArtifact>com.google.protobuf:protoc:3.9.0:exe:${os.detected.classifier}</protocArtifact>
+                  <pluginId>grpc-java</pluginId>
+                  <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.24.0:exe:${os.detected.classifier}</pluginArtifact>
+              </configuration>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>compile</goal>
+                  <goal>compile-custom</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin-->
 
 			<plugin>
 				<groupId>org.apache.thrift.tools</groupId>
@@ -294,10 +299,10 @@
 		</dependency>
 
 		<dependency>
-		  <!-- Chronicle Queue for batching -->
-		  <groupId>net.openhft</groupId>
-		  <artifactId>chronicle-queue</artifactId>
-		  <version>5.17.13</version>
+			<!-- Chronicle Queue for batching -->
+			<groupId>net.openhft</groupId>
+			<artifactId>chronicle-queue</artifactId>
+			<version>5.17.13</version>
 		</dependency>
 
 		<dependency>
@@ -341,32 +346,33 @@
 			<artifactId>aws-java-sdk-s3</artifactId>
 		</dependency>
 
-        <dependency>
-            <groupId>javax.annotation</groupId>
-            <artifactId>javax.annotation-api</artifactId>
-            <version>1.2</version>
-        </dependency>
-        <dependency>
-		  <groupId>io.grpc</groupId>
-			<artifactId>grpc-netty-shaded</artifactId>
-			<version>1.24.0</version>
-		</dependency>
 		<dependency>
-		  <groupId>io.grpc</groupId>
-		  <artifactId>grpc-protobuf</artifactId>
-		  <version>1.24.0</version>
-		</dependency>
-		<dependency>
-		  <groupId>io.grpc</groupId>
-		  <artifactId>grpc-stub</artifactId>
-		  <version>1.24.0</version>
+			<groupId>javax.annotation</groupId>
+			<artifactId>javax.annotation-api</artifactId>
+			<version>1.2</version>
 		</dependency>
 
-		<dependency>
-			<groupId>com.google.protobuf</groupId>
-			<artifactId>protobuf-java</artifactId>
-			<version>3.8.0-rc-1</version>
-		</dependency>
+		<!--dependency>
+          <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty-shaded</artifactId>
+            <version>1.24.0</version>
+        </dependency>
+        <dependency>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-protobuf</artifactId>
+          <version>1.24.0</version>
+        </dependency>
+        <dependency>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-stub</artifactId>
+          <version>1.24.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>3.8.0-rc-1</version>
+        </dependency-->
 
 		<dependency>
 			<groupId>org.apache.thrift</groupId>

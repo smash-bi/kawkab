@@ -82,8 +82,14 @@ service FilesystemService {
 	list<binary> readRecords(1: i64 sessionID, 2: i64 minTS, 3: i64 maxTS, 4: i32 recSize) throws
 	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
 
-	i32 appendRecord (1: i64 sessionID, 2: binary data, 3: i64 timestamp, 4: i32 recSize) throws
+	i32 appendRecord (1: i64 sessionID, 2: binary data, 3: i32 recSize) throws
 	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
+
+	i32 appendRecordBatched (1: i64 sessionID, 2: list<binary> data, 3: i32 recSize) throws
+    	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
+
+    i32 appendRecordBuffered (1: i64 sessionID, 2: binary data, 3: i32 recSize) throws
+        	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
 
 	// Returns ths number of bytes appended
 	i32 append (1: i64 sessionID, 2: binary data) throws 

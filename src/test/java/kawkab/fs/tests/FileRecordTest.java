@@ -5,7 +5,7 @@ import kawkab.fs.api.Record;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
-import kawkab.fs.core.records.SampleRecord;
+import kawkab.fs.records.SampleRecord;
 import kawkab.fs.core.exceptions.KawkabException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -50,7 +50,7 @@ public class FileRecordTest {
 		
 		FileHandle file = fs.open("RecordsSmokeTest", Filesystem.FileMode.APPEND, new FileOptions(rec.size()));
 		
-		file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
+		file.append(rec.copyOutSrcBuffer(), rec.size());
 		
 		Record recordOut = new SampleRecord();
 		
@@ -83,7 +83,7 @@ public class FileRecordTest {
 			Record rec = new SampleRecord(i+1+offset, rand);
 
 			recs.add(rec);
-			file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
+			file.append(rec.copyOutSrcBuffer(), rec.size());
 		}
 		
 		Record actual = new SampleRecord();
@@ -107,7 +107,7 @@ public class FileRecordTest {
 		
 		FileHandle file = fs.open("SimpleRecordReadTest", Filesystem.FileMode.APPEND, new FileOptions(rec.size()));
 		
-		file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
+		file.append(rec.copyOutSrcBuffer(), rec.size());
 		
 		Record recordOutNum = new SampleRecord();
 		Record recordOutAt = new SampleRecord();
@@ -139,7 +139,7 @@ public class FileRecordTest {
 			long ts = i*offset+offset;
 			Record rec = new SampleRecord(ts, rand);
 			records[i] = rec;
-			file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
+			file.append(rec.copyOutSrcBuffer(), rec.size());
 		}
 
 		List<Record> results = null;
@@ -191,7 +191,7 @@ public class FileRecordTest {
 			long ts = i * tsOffset + tsOffset;
 			Record rec = new SampleRecord(ts, rand.nextDouble(), rand.nextDouble(), rand.nextBoolean(), rand.nextDouble(), rand.nextDouble(), rand.nextBoolean());
 			records[i] = rec;
-			file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
+			file.append(rec.copyOutSrcBuffer(), rec.size());
 		}
 
 		// Reading the records from the start

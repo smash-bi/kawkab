@@ -61,7 +61,7 @@ public class PartialReadTest {
 		// Release the inodesBlock for cache flush
 		fs.close(file);
 		// Empty the cache so that the data is partially loaded for append next time
-		Cache.instance().flush();
+		fs.flush();
 
 		System.out.println("Writing after flush");
 

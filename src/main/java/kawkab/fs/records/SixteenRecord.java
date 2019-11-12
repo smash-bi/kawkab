@@ -1,4 +1,4 @@
-package kawkab.fs.core.records;
+package kawkab.fs.records;
 
 import kawkab.fs.api.Record;
 
@@ -6,7 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.Random;
 
-public class SixteenBytesRecord implements Record {
+public class SixteenRecord implements Record {
 	private ByteBuffer buffer; //The buffer that holds the record's fields in sequence
 
 	//The following variables denote the byte start position of the corresponding field in the buffer
@@ -23,11 +23,11 @@ public class SixteenBytesRecord implements Record {
 		SIZE = VALUE + Long.BYTES;
 	}
 
-	public SixteenBytesRecord() {
+	public SixteenRecord() {
 		buffer = ByteBuffer.allocate(SIZE);
 	}
 
-	public SixteenBytesRecord(final long timestamp, final long value) {
+	public SixteenRecord(final long timestamp, final long value) {
 		this();
 
 		buffer.putLong(timestamp);
@@ -40,6 +40,11 @@ public class SixteenBytesRecord implements Record {
 	@Override
 	public long timestamp() {
 		return buffer.getLong(TIMESTAMP);
+	}
+
+	@Override
+	public void timestamp(long newTimestamp) {
+		buffer.putLong(TIMESTAMP, newTimestamp);
 	}
 
 	public long value() {
@@ -65,7 +70,7 @@ public class SixteenBytesRecord implements Record {
 
 	@Override
 	public Record newRecord() {
-		return new SixteenBytesRecord();
+		return new SixteenRecord();
 	}
 
 	@Override
@@ -77,7 +82,7 @@ public class SixteenBytesRecord implements Record {
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
-		SixteenBytesRecord that = (SixteenBytesRecord) o;
+		SixteenRecord that = (SixteenRecord) o;
 		return	this.size() 		== that.size() &&
 				this.timestamp() 	== that.timestamp() &&
 				this.value()	 	== that.value();
@@ -90,6 +95,6 @@ public class SixteenBytesRecord implements Record {
 
 	@Override
 	public Record newRandomRecord(final Random rand, final long timestamp) {
-		return new SixteenBytesRecord(timestamp, rand.nextLong());
+		return new SixteenRecord(timestamp, rand.nextLong());
 	}
 }

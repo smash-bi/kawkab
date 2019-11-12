@@ -10,8 +10,7 @@ import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.records.SampleRecord;
-import kawkab.fs.core.services.thrift.FilesystemServiceClient;
+import kawkab.fs.records.SampleRecord;
 import kawkab.fs.utils.TimeLog;
 
 import java.io.*;
@@ -37,7 +36,7 @@ public final class CLI {
 	private void initFS() throws IOException, KawkabException, InterruptedException {
 		//Constants.printConfig();
 		int nodeID = Configuration.getNodeID();
-		String propsFile = System.getProperty("conf", Configuration.propsFileCluster);
+		String propsFile = System.getProperty("conf", Configuration.propsFileClusterSmall);
 		
 		System.out.println("Node ID = " + nodeID);
 		System.out.println("Loading properties from: " + propsFile);
@@ -191,7 +190,7 @@ public final class CLI {
 		FileMode mode = parseMode(fm);
 		FileOptions opts = new FileOptions(SampleRecord.length());
 
-		client.open(fn, mode, new SampleRecord());
+		client.open(fn, mode, SampleRecord.length());
 	}
 
 	private void parseClientAppend(String args[]) throws KawkabException {
@@ -256,8 +255,14 @@ public final class CLI {
 
 				int recNum = Integer.parseInt(args[3]);
 				Record rec = new SampleRecord();
+
+				TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "read-lat", 100);
+				tlog.start();
 				rec = client.recordNum(fname, recNum, rec);
+				tlog.end();
+
 				System.out.println(rec);
+				tlog.printStats();
 				break;
 			}
 			case "t": {
@@ -337,8 +342,14 @@ public final class CLI {
 
 				int recNum = Integer.parseInt(args[3]);
 				SampleRecord rec = new SampleRecord();
+
+				TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "read-lat", 100);
+				tlog.start();
 				file.recordNum(rec.copyInDstBuffer(), recNum, rec.size());
+				tlog.end();
+
 				System.out.println(rec);
+				tlog.printStats();
 				break;
 			}
 			case "t": {
@@ -398,14 +409,14 @@ public final class CLI {
 		long tsOffset = file.size()/SampleRecord.length() + 1;
 		for (int i=0; i<numRecs; i++) {
 			Record rec = new SampleRecord(i+tsOffset, rand);
-			file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
+			file.append(rec.copyOutSrcBuffer(), rec.size());
 		}
 
 		System.out.printf("Appended %d records of %d bytes. New file size is %d records.\n",numRecs, SampleRecord.length(), file.size()/SampleRecord.length());
 	}
 
 	private void flushCache() throws KawkabException {
-		Cache.instance().flush();
+		fs.flush();
 	}
 	
 	private void parseSize(String[] args) throws IOException, KawkabException {

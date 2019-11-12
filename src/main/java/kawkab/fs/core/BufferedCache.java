@@ -2,7 +2,6 @@ package kawkab.fs.core;
 
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.utils.GCMonitor;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -315,7 +314,6 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		//System.out.printf("AcquireStats (us): %s\n", acquireStats);
 		//System.out.printf("ReleaseStats (us): %s\n", releaseStats);
 		//System.out.printf("LoadStats (us): %s\n", loadStats);
-		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
 		flush();
 		localStore.shutdown();
 	}

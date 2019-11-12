@@ -80,7 +80,7 @@ public class Namespace {
 					inumber = ns.getInumber(filename);
 				} catch (FileNotExistException fnee) { // If the file does not exist
 					if (appendMode) { // Create file if the file is opened in the append mode.
-						System.out.println("[NS] Creating new file: " + filename);
+						// System.out.println("[NS] Creating new file: " + filename);
 						inumber = createNewFile(opts.recordSize());
 						
 						try {
@@ -89,7 +89,7 @@ public class Namespace {
 							//System.out.println("[N] Created a new file: " + filename + ", inumber: " + inumber);
 						} catch (FileAlreadyExistsException faee) { // If the file already exists, e.g., because another
 							// node created the same file with different inumber
-							System.out.println("[NS] File already exists in ZK: " + filename);
+							// System.out.println("[NS] File already exists in ZK: " + filename);
 							releaseInumber(inumber);
 							continue;
 							//inumber = ns.getInumber(filename); // We may get another exception if another node deletes

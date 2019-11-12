@@ -17,6 +17,7 @@ public final class Configuration {
 	
 	public final static String propsFileLocal = "config-local.properties";
 	public final static String propsFileCluster = "config.properties";
+	public final static String propsFileClusterSmall = "config-small.properties";
 	
 	public final int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
 	

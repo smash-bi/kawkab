@@ -8,6 +8,13 @@ public interface Record {
 	 * @return Returns the globally unique key of the record.
 	 */
 	long timestamp();
+
+	/**
+	 * A convenient method for testing and evaluation.
+	 *
+	 * @param newTimestamp
+	 */
+	void timestamp(long newTimestamp);
 	
 	/**
 	 * Returns a buffer to load data from the file.

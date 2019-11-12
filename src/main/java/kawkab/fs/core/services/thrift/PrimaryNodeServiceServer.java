@@ -3,13 +3,14 @@ package kawkab.fs.core.services.thrift;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.services.thrift.PrimaryNodeService.Processor;
 import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.server.THsHaServer;
 import org.apache.thrift.server.TServer;
-import org.apache.thrift.server.TThreadPoolServer;
-import org.apache.thrift.transport.TServerSocket;
-import org.apache.thrift.transport.TServerTransport;
-import org.apache.thrift.transport.TTransportFactory;
+import org.apache.thrift.transport.TFramedTransport;
+import org.apache.thrift.transport.TNonblockingServerSocket;
+import org.apache.thrift.transport.TNonblockingServerTransport;
 
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class PrimaryNodeServiceServer {
 	private TServer server;
@@ -18,21 +19,28 @@ public class PrimaryNodeServiceServer {
 
 	public PrimaryNodeServiceServer() {
 		System.out.println("[PNS] Creating Primary Node Service");
-		int minThreads = 2;
-		int maxThreads = 4;
+		int minThreads = 4;
+		int maxThreads = 8;
 
 		try {
-			TServerTransport transport = new TServerSocket(Configuration.instance().primaryNodeServicePort);
+			TNonblockingServerTransport transport = new TNonblockingServerSocket(Configuration.instance().primaryNodeServicePort);
+			//TServerTransport transport = new TServerSocket(Configuration.instance().primaryNodeServicePort);
 
-			TThreadPoolServer.Args args = new TThreadPoolServer.Args(transport);
+			server = new THsHaServer(new THsHaServer.Args(transport)
+					.transportFactory(new TFramedTransport.Factory())
+					.protocolFactory(new TBinaryProtocol.Factory())
+					.processor(new Processor<>(new PrimaryNodeServiceImpl()))
+					.minWorkerThreads(minThreads)
+					.maxWorkerThreads(maxThreads));
+
+			/*TThreadPoolServer.Args args = new TThreadPoolServer.Args(transport);
 			args.transportFactory(new TTransportFactory());
 			args.protocolFactory(new TBinaryProtocol.Factory());
 
 			args.processor(new Processor<PrimaryNodeService.Iface>(new PrimaryNodeServiceImpl()));
 			args.executorService(new ThreadPoolExecutor(minThreads, maxThreads, 600,
-					TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>()));
+					TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>()));*/
 
-			server = new TThreadPoolServer(args);
 		} catch(Exception e) {
 			e.printStackTrace();
 		}

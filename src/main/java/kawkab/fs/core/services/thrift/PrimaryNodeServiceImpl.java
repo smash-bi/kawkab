@@ -60,6 +60,7 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 			block = (InodesBlock)cache.acquireBlock(id);
 			block.storeTo(buffer);
 			buffer.flip();
+
 			return buffer;
 		} catch (IOException | KawkabException e) {
 			e.printStackTrace();

@@ -8,9 +8,9 @@ import kawkab.fs.core.Cache;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
-import kawkab.fs.core.Inode;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.records.SampleRecord;
+import kawkab.fs.records.SampleRecord;
+import kawkab.fs.records.SixteenRecord;
 import kawkab.fs.utils.TimeLog;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -36,7 +36,7 @@ public class AppendTest {
 		Filesystem.instance().shutdown();
 	}
 
-	@Test
+	@Test @Disabled
 	public void appendRecordsSingleFileTest() throws IOException, KawkabException, InterruptedException {
 		System.out.println("----------------------------------------------------------------");
 		System.out.println("       Append Performance Test (records, single Files)");
@@ -46,7 +46,7 @@ public class AppendTest {
 		String filename = "/home/smash/arsft-"+ Configuration.instance().thisNodeID;
 		Record recFactory = new SampleRecord();
 		Random rand = new Random();
-		int numRecords = 10000000;
+		int numRecords = 1200000;
 		int tsOffset = 10;
 		Stats writeStats = new Stats();
 		Stats opStats = new Stats();
@@ -54,6 +54,50 @@ public class AppendTest {
 		appendRecords(fs, filename, recFactory, rand, numRecords, tsOffset, writeStats, opStats);
 
 		System.out.printf("\n\nWriters stats: sum=%.0f, %s, record size=%d\nOps stats: %s\n\n", writeStats.sum(), writeStats, recFactory.size(), opStats);
+	}
+
+	@Test
+	public void appendRecordsMultipleFileTest() throws IOException, KawkabException, InterruptedException {
+		System.out.println("----------------------------------------------------------------");
+		System.out.println("       Append Performance Test (records, Multiple Files)");
+		System.out.println("----------------------------------------------------------------");
+
+		final int numRecords = Integer.parseInt(System.getProperty("numRecords", "1000000"));
+		final long recSize = Long.parseLong(System.getProperty("recSize", "16"));
+		final int numWriters = Integer.parseInt(System.getProperty("numWriters", "1"));
+		Thread[] workers = new Thread[numWriters];
+		final Record recGen = recSize == 16 ? new SixteenRecord() : new SampleRecord();
+
+		final Filesystem fs = Filesystem.instance();
+		final Stats wStats = new Stats();
+		final Stats opStats = new Stats();
+		for (int i=0; i<numWriters; i++) {
+			final int id = i+1;
+			workers[i] = new Thread(() -> {
+				int tsOffset = 10;
+				String filename = "/home/smash/armft-"+ Configuration.instance().thisNodeID+"-"+id;
+				try {
+					appendRecords(fs, filename, recGen.newRecord(), new Random(), numRecords, tsOffset, wStats, opStats);
+				} catch (KawkabException | InterruptedException | IOException e) {
+					e.printStackTrace();
+				}
+			});
+
+			workers[i].start();
+		}
+
+		for (Thread worker : workers) {
+			try {
+				worker.join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+
+		System.out.printf("\n\nAggregate stats: recSize=%d, tput=%,.0f MB/s, %s, numWriters=%d\nOps stats: opsTput=%,.0f OPS, %s\n\n",
+				recSize, wStats.sum(), wStats, numWriters, opStats.sum(), opStats);
+		System.out.println(wStats);
+		System.out.println(opStats);
 	}
 
 	private void appendRecords(Filesystem fs, String filename, Record recFactory, Random rand, int numRecords, int tsOffset, Stats writeStats, Stats opStats)
@@ -69,11 +113,11 @@ public class AppendTest {
 		}
 
 		long startTime = System.currentTimeMillis();
-		TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Record append", 5);
+		TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "RecAppend", 5);
 		for (int i=0; i<numRecords; i++) {
 			tlog.start();
 			Record rec = recs[i];
-			file.append(rec.copyOutSrcBuffer(), rec.timestamp(), rec.size());
+			file.append(rec.copyOutSrcBuffer(), rec.size());
 			tlog.end();
 		}
 		double durSec = (System.currentTimeMillis() - startTime) / 1000.0;
@@ -84,7 +128,7 @@ public class AppendTest {
 		writeStats.putValue(thr);
 		opStats.putValue(opThr);
 
-		System.out.printf("Record write results: Rec. size=%d, count=%d, Data size=%.0fMB, W tput=%,.0f MB/s, Ops tput=%,.0fOPS, tlog: %s\n", recSize, numRecords, sizeMB, thr, opThr, tlog.getStats());
+		System.out.printf("Record append: recSize=%d, numRecs=%d, wTput=%,.0f MB/s, opsTput=%,.0f OPS, Lat %s\n", recSize, numRecords, thr, opThr, tlog.getStats());
 
 		fs.close(file);
 	}

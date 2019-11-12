@@ -1,26 +1,23 @@
 package kawkab.fs;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Properties;
-
+import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.AlreadyConfiguredException;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.utils.GCMonitor;
+
+import java.io.IOException;
+import java.util.Properties;
 
 public class Main {
 	public static void main(String[] args) throws KawkabException, IOException, InterruptedException, AlreadyConfiguredException {
-		int nodeID = getNodeID();
-		Properties props = getProperties();
-		
-		Filesystem fs = Filesystem.bootstrap(nodeID, props);
-
+		initialize();
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			@Override
 			public void run() {
 				try {
-					fs.shutdown();
-				} catch (KawkabException | InterruptedException e) {
+					Filesystem.instance().shutdown();
+				} catch (KawkabException | InterruptedException | IOException e) {
 					e.printStackTrace();
 				}
 			}
@@ -28,26 +25,18 @@ public class Main {
 
 		Thread.currentThread().setName("Main thread");
 		System.out.println("Running...");
-		fs.waitUntilShutdown();
+		Filesystem.instance().waitUntilShutdown();
 	}
-	
-	private static Properties getProperties() throws IOException {
-		String propsFile = "/config.properties";
-		
-		try (InputStream in = Thread.class.getResourceAsStream(propsFile)) {
-			Properties props = new Properties();
-			props.load(in);
-			return props;
-		}
-	}
-	
-	private static int getNodeID() throws KawkabException {
-		String nodeIDProp = "nodeID";
-		
-		if (System.getProperty(nodeIDProp) == null) {
-			throw new KawkabException("System property nodeID is not defined.");
-		}
-		
-		return Integer.parseInt(System.getProperty(nodeIDProp));
+
+	private static void initialize() throws IOException, InterruptedException, KawkabException {
+		System.out.println("-------------------------------");
+		System.out.println("- Initializing the filesystem -");
+		System.out.println("-------------------------------");
+
+		int nodeID = Configuration.getNodeID();
+		Properties props = Configuration.getProperties(Configuration.propsFileCluster);
+		Filesystem.bootstrap(nodeID, props);
+
+		GCMonitor.initialize();
 	}
 }

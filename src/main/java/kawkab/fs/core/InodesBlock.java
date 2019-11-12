@@ -1,6 +1,5 @@
 package kawkab.fs.core;
 
-import com.google.protobuf.ByteString;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
@@ -74,14 +73,14 @@ public final class InodesBlock extends Block {
 		// but not stored globally. After that the block is never updated.
 		long now = clock.currentTime();
 		if ((now - lastGlobalStoreTimeMs) < globalStoreTimeGapMs) {
-			System.out.printf("[IB] Not storing %s globally. Timeout=%d, now=%d, now-lastStore=%d.\n",
-					id, lastGlobalStoreTimeMs, now, now-lastGlobalStoreTimeMs);
+			//System.out.printf("[IB] Not storing %s globally. Timeout=%d, now=%d, now-lastStore=%d.\n",
+			//		id, lastGlobalStoreTimeMs, now, now-lastGlobalStoreTimeMs);
 			return false;
 		}
 		
 		lastGlobalStoreTimeMs = now;
 
-		System.out.printf("[IB] >>>> Storing IB %s globally.\n", id);
+		//System.out.printf("[IB] >>>> Storing IB %s globally.\n", id);
 		return true;
 		//return false; //FIXME: Disabled inodesBlocks transfer to the GlobalStore
 	}
@@ -142,18 +141,6 @@ public final class InodesBlock extends Block {
 		return bytesWritten;
 	}
 	
-	@Override 
-	public ByteString byteString() {
-		//TODO: This function takes extra memory to serialize inodes in an input stream. We need an alternate
-		//method for this purpose.
-		ByteBuffer buffer = ByteBuffer.allocate(inodes.length * conf.inodeSizeBytes);
-		for(Inode inode : inodes) {
-			inode.storeTo(buffer);
-		}
-		buffer.flip();
-		return ByteString.copyFrom(buffer.array());
-	}
-
 	public void storeTo(ByteBuffer dstBuffer) {
 		//TODO: This function takes extra memory to serialize inodes in an input stream. We need an alternate
 		//method for this purpose.

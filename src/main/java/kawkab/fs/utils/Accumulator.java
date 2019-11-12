@@ -5,7 +5,7 @@ public class Accumulator{
     private long totalSum;
     private long totalCnt;
     private double prodSum = 0;
-    private int maxCntBucket;
+    //private int maxCntBucket;
     private double maxValue;
     private double minValue = Double.MAX_VALUE;
     
@@ -15,24 +15,23 @@ public class Accumulator{
     }
     
     public synchronized void reset(){
-        int maxValue = 2000000; //in microseconds
+        int maxValue = 1500000; //in microseconds
         buckets = new long[maxValue];
-        maxCntBucket = 0;
+        //maxCntBucket = 0;
         this.maxValue = 0;
         totalSum = 0;
         totalCnt = 0;
         prodSum = 0;
-        this.maxValue = 0;
         this.minValue = Double.MAX_VALUE;
     }
     
     public synchronized void put(int value){
+        assert value >= 0;
+
         int bucket = value;
+
         if (bucket >= buckets.length){
             bucket = buckets.length-1;
-        } else if (bucket < 0){
-            assert bucket >= 0;
-            return;
         }
         
         buckets[bucket]++;
@@ -40,8 +39,8 @@ public class Accumulator{
         totalCnt += 1;
         prodSum += (value*value);
         
-        if (buckets[maxCntBucket] < buckets[bucket])
-            maxCntBucket = bucket;
+        //if (buckets[maxCntBucket] < buckets[bucket])
+        //   maxCntBucket = bucket;
 
         if (maxValue < value)
             maxValue = value;
@@ -67,7 +66,7 @@ public class Accumulator{
     
     public double variance(){
         if (totalCnt > 0)
-            return (prodSum - (totalSum*totalSum/totalCnt))/totalCnt;
+            return (prodSum - (1.0*totalSum*totalSum/totalCnt))/totalCnt;
         else
             return -1;
     }
@@ -92,9 +91,6 @@ public class Accumulator{
         int perc99Bucket = buckets.length;
         long sum = 0;
         for (int i = 0; i < buckets.length; i++) {
-            /*if (buckets[i].count <= 0)
-                continue;
-            sum += buckets[i].count;*/
             if (buckets[i] <= 0)
                 continue;
             sum += buckets[i];
@@ -132,7 +128,7 @@ public class Accumulator{
     @Override
     public synchronized String toString() {
         double[] lats = getLatencies();
-        return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f,mean=%.2f,stdev=%.2f",
+        return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f, mean=%.2f, stdev=%.2f",
                 lats[0],lats[1],lats[2], min(), max(), mean(), stdDev());
     }
     
@@ -165,5 +161,22 @@ public class Accumulator{
         }
         
         return cdf;
+    }
+
+    public synchronized void merge(Accumulator from) {
+        assert buckets.length == from.buckets.length;
+
+        for (int i=0; i<buckets.length; i++) {
+            buckets[i] += from.buckets[i];
+        }
+
+        totalSum += from.totalSum;
+        totalCnt += from.totalCnt;
+        prodSum += prodSum;
+        if (maxValue < from.maxValue)
+            maxValue = from.maxValue;
+
+        if (minValue > from.minValue)
+            minValue = from.minValue;
     }
 }

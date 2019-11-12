@@ -84,8 +84,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		this.timerQ = tq;
 		this.isOnPrimary = Commons.onPrimaryNode(inumber);
 
-		System.out.printf("Index entries per node:  %d\n", entriesPerNode);
-		System.out.printf("Index pointers per node: %d\n", childrenPerNode);
+		//System.out.printf("Index entries per node:  %d\n", entriesPerNode);
+		//System.out.printf("Index pointers per node: %d\n", childrenPerNode);
 
 		nodes = new ConcurrentHashMap<>();
 		//nodes.add(null); // Add a dummy value to match the node number with the array index. We do this to simplify the calculation of the index of the children of a node
@@ -619,7 +619,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 */
 	private int heightOfRoot(int numNodes) {
 		// h(i, k) = floor( log_k( nodeNum*(k-1) + 1 ) ) - 1  where k is the branching factor
-		return (int)(Math.log(numNodes*(childrenPerNode-1) + 1)/logBase) - 1;
+		//https://stackoverflow.com/questions/3305059/how-do-you-calculate-log-base-2-in-java-for-integers
+		return (int)((Math.log(numNodes*(childrenPerNode-1) + 1)/logBase) - 1 + 1e-10); // +1e-10 is avoid rounding-off error. See the above link.
 	}
 
 	/**
@@ -638,6 +639,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	}
 
 	public void shutdown() throws KawkabException {
+		timerQ.waitUntilEmpty();
+
 		for (POHNode node : nodes.values()) {
 			cache.releaseBlock(node.id());
 		}

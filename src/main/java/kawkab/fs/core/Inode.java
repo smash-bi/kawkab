@@ -41,7 +41,6 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	private TimerQueue timerQ;
 
 	private boolean isInited;
-	private boolean isLoaded;
 	private int recsPerSeg;
 
 	private static final int bufferTimeOffsetMs = 5;
@@ -51,10 +50,6 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	protected Inode(long inumber, int recordSize) {
 		this.inumber = inumber;
 		this.recordSize = recordSize;
-
-		if (recordSize >= 1) {
-			System.out.printf("[I] Initializing inode: %d, recSize=%d\n", inumber, recordSize);
-		}
 	}
 
 	/**
@@ -66,7 +61,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			return;
 		isInited = true;
 
-		System.out.printf("[I] Initializing index for inode: %d, recSize=%d\n", inumber, recordSize);
+		//System.out.printf("[I] Initializing index for inode: %d, recSize=%d\n", inumber, recordSize);
 
 		timerQ = tq;
 
@@ -88,8 +83,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		// Pre-fetching the last block to warm up for writes
 		long fs = fileSize.get();
 
-		System.out.printf("[I] Should load the last block? %b, fs=%d, recsPerSeg*recSize=%d\n",
-				fs%(recsPerSeg*recordSize)!=0, fs, recsPerSeg*recordSize);
+		// System.out.printf("[I] Should load the last block? %b, fs=%d, recsPerSeg*recSize=%d\n",
+		//		fs%(recsPerSeg*recordSize)!=0, fs, recsPerSeg*recordSize);
 
 		if (fs % (recsPerSeg*recordSize) != 0) {
 			BlockID curSegId = getByFileOffset(fs);
@@ -377,15 +372,47 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		return bufferOffset;
 	}
 
-	public int appendBuffered(final ByteBuffer srcBuf, long timestamp, int recSize) throws IOException, InterruptedException, KawkabException {
+	int appendRecords(final ByteBuffer srcBuf, int recSize) throws IOException, InterruptedException, KawkabException {
 		if (recSize != recordSize)
 			throw new KawkabException(String.format("The given record size (%d bytes) does not match with the file's record size (%d bytes)", recSize, recordSize));
 
 		long fileSizeBuffered = this.fileSize.get(); // Current file size
 
-		if (fileSizeBuffered + recSize > MAXFILESIZE) {
+		int appended = 0;
+		int pos = srcBuf.position();
+		int initLimit = srcBuf.limit();
+		int initPos = pos;
+
+		if (fileSizeBuffered + (initLimit-pos)*recSize > MAXFILESIZE) {
 			throw new MaxFileSizeExceededException();
 		}
+
+		while(pos < initLimit) {
+			long recInFile = fileSizeBuffered / recSize;
+			int recInSeg = (int) (recInFile % recsPerSeg);
+			int toAppend = (recsPerSeg - recInSeg) * recSize;
+			int limit = Math.min(pos + toAppend, initLimit);
+			srcBuf.limit(limit);
+
+			int wBytes = appendBuffered(srcBuf, recSize);
+
+			pos += wBytes;
+			appended += wBytes;
+			fileSizeBuffered += wBytes;
+		}
+
+		return appended;
+	}
+
+	private int appendBuffered(final ByteBuffer srcBuf, int recSize) throws IOException, InterruptedException, KawkabException {
+		if (recSize != recordSize)
+			throw new KawkabException(String.format("The given record size (%d bytes) does not match with the file's record size (%d bytes)", recSize, recordSize));
+
+		long fileSizeBuffered = this.fileSize.get(); // Current file size
+
+		/*if (fileSizeBuffered + recSize > MAXFILESIZE) {
+			throw new MaxFileSizeExceededException();
+		}*/
 
 		if (acquiredSeg == null || !timerQ.tryDisable(acquiredSeg)) {
 			boolean createNew = (FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L;
@@ -393,28 +420,20 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			acquiredSeg.getItem().setIsLoaded();
 		}
 
+
+		long timestamp = srcBuf.getLong(srcBuf.position());
 		DataSegment ds = acquiredSeg.getItem();
+
+		int appended = ds.append(srcBuf, fileSizeBuffered);
+
 		long recInFile = fileSizeBuffered/recordSize;
+		boolean isFirstRec = recInFile % recsPerSeg == 0;
 		long segInFile = recInFile/recsPerSeg;
-		int appendSize;
-		try {
-			appendSize = ds.append(srcBuf, fileSizeBuffered);
-
-			boolean isFirstRec = recInFile % recsPerSeg == 0;
-			//boolean isFirstRec = FixedLenRecordUtils.recordInSegment(fileSizeBuffered, recordSize) == 0;
-
-			//System.out.printf("[I] isFirstRec=%b, segInFile=%d, recInFile=%d, fs=%d, recPerSeg=%d, recSize=%d, indexLen=%d\n",
-			//		isFirstRec, segInFile, recInFile, fileSizeBuffered, recsPerSeg, recSize, indexLength(fileSizeBuffered));
-
-			if (isFirstRec) { // If the current record is the first record in the data segment
-				long segmentInFile = FixedLenRecordUtils.segmentInFile(fileSizeBuffered, recordSize);
-				index.appendMinTS(timestamp, segmentInFile, indexLength(fileSizeBuffered));
-			}
-
-			fileSizeBuffered += appendSize;
-		} catch (IOException e) {
-			throw new KawkabException(e);
+		if (isFirstRec) { // If the current record is the first record in the data segment
+			index.appendMinTS(timestamp, segInFile, indexLength(fileSizeBuffered));
 		}
+
+		fileSizeBuffered += appended;
 
 		timerQ.enableAndAdd(acquiredSeg,clock.currentTime()+ bufferTimeOffsetMs);
 
@@ -426,12 +445,13 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 			//System.out.printf("[I] DS is full: segInFile=%d, indexLen=%d\n", segInFile, indexLength(fileSizeBuffered-recordSize));
 
-			index.appendMaxTS(timestamp, segInFile, indexLength(fileSizeBuffered-recordSize));
+			long lastTS = srcBuf.getLong(srcBuf.position()-recSize);
+			index.appendMaxTS(lastTS, segInFile, indexLength(fileSizeBuffered-recSize));
 		}
 
 		fileSize.set(fileSizeBuffered);
 
-		return appendSize;
+		return appended;
 	}
 
 	//public static TimeLog tlog1 = new TimeLog(TimeLog.TimeLogUnit.NANOS, "ab all");
@@ -541,13 +561,12 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		assert fileSize.get() <= fs;
 
 		fileSize.set(fs);
-		if (!isLoaded) {
+		if (!isInited) {
 			inumber = inum;
 			recordSize = recSize;
-			isLoaded = true;
 		}
 
-		System.out.printf("[I] Loaded inode %d from buffer: fs=%d, recSize=%d\n", inum, fs, recordSize);
+		//System.out.printf("[I] Loaded inode %d from buffer: fs=%d, recSize=%d, recordSize=%d\n", inum, fs, recSize, recordSize);
 
 		return Long.BYTES*2 + Integer.BYTES;
 	}
@@ -643,5 +662,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	public int recordSize() {
 		return recordSize;
+	}
+
+	public long recordsInFile() {
+		return fileSize.get()/recordSize;
 	}
 }

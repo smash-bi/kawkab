@@ -1,13 +1,10 @@
 package kawkab.fs.core;
 
-import com.google.protobuf.ByteString;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.InodeNumberOutOfRangeException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
-import kawkab.fs.core.exceptions.KawkabException;
 
-import javax.naming.OperationNotSupportedException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -162,11 +159,6 @@ public final class Ibmap extends Block{
 		return bytesWritten;
 	}
 
-	@Override
-	public synchronized ByteString byteString() {
-		return ByteString.copyFrom(bitset.toByteArray());
-	}
-	
 	@Override
 	public int sizeWhenSerialized() {
 		//FIXME: This creates a copy in memory. Get size without memory copy.
