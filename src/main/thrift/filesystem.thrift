@@ -98,4 +98,6 @@ service FilesystemService {
 	i64 size(1: i64 sessionID) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
 	
 	oneway void close (1: i64 sessionID);
+
+	i32 noop (1: i64 none) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
 }

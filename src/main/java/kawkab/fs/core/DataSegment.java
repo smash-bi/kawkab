@@ -127,7 +127,8 @@ public final class DataSegment extends Block {
 	int append(final ByteBuffer srcBuffer, long offsetInFile) throws IOException {
 		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
 		
-		assert writePos.get() == offsetInSegment;
+		assert writePos.get() == offsetInSegment :
+				String.format("writePos (%d) !=OffsetInSeg (%d) for seg %s", writePos.get(), offsetInSegment, id());
 		assert dataBuf.position() == offsetInSegment :
 				String.format("dataBuf pos %d is incorrect, expected %d", dataBuf.position(), offsetInSegment);
 		

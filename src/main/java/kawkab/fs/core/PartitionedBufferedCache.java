@@ -3,10 +3,12 @@ package kawkab.fs.core;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.utils.GCMonitor;
+import kawkab.fs.utils.TimeLog;
 
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -16,48 +18,40 @@ import static kawkab.fs.core.BlockID.BlockType;
  * An LRU cache for Block objects. The objects are acquired and released using BlockIDs. This class is singleton and
  * thread safe.
  */
-public class PartitionedBufferedCache extends Cache implements BlockEvictionListener{
+public class PartitionedBufferedCache extends Cache {
 	private static final Object initLock = new Object();
 	private static PartitionedBufferedCache instance;
 	
 	private Configuration conf;
-	private LRUCache[] cache; // An extended LinkedHashMap that implements removeEldestEntry()
-	private Lock[] cacheLock; // Cache level locking
+	private BufferedCache[] cache; // An extended LinkedHashMap that implements removeEldestEntry()
 	private LocalStoreManager localStore;
-	private final int MAX_BLOCKS_IN_CACHE;
-	private DSPool[] dsp;
-	private int numPartitions = 8;
-	
+	private int numPartitions = 1;
+
+	private ConcurrentHashMap<BlockID, CachedItem> pinnedMap;
+	private KeyedLock<Integer> pinLock;
+
 	private PartitionedBufferedCache() {
-		System.out.println("Initializing cache..." );
+		System.out.println("Initializing PartitionedBufferedCache cache..." );
 		
 		conf = Configuration.instance();
 		
-		
-		
-		cacheLock = new ReentrantLock[numPartitions];
 		localStore = LocalStoreManager.instance();
 		
-		int numSegmentsInCache =
-				(int)((conf.cacheSizeMiB * 1048576L)/conf.segmentSizeBytes);
+		int numSegmentsInCache = (int)((conf.cacheSizeMiB * 1048576L)/conf.segmentSizeBytes);
 		if (numSegmentsInCache <= 0) {
 			System.out.println("Cache size is not sufficient to cache the metadata and the data segments");
 		}
 		assert numSegmentsInCache > 0;
+
+		int numSegmentsPerPart = numSegmentsInCache/numPartitions;
 		
-		dsp = new DSPool[numPartitions];
-		cache = new LRUCache[numPartitions];
-		
-		//dsp = new DSPool(numSegmentsInCache);
-		//cache = new LRUCache(numSegmentsInCache, this);
-		
+		cache = new BufferedCache[numPartitions];
 		for (int i=0; i<numPartitions; i++) {
-			cacheLock[i] = new ReentrantLock();
-			dsp[i] = new DSPool(numSegmentsInCache/numPartitions);
-			cache[i] = new LRUCache(numSegmentsInCache/numPartitions, this);
+			cache[i] = new BufferedCache(numSegmentsPerPart);
 		}
-		
-		MAX_BLOCKS_IN_CACHE = numSegmentsInCache + conf.inodeBlocksPerMachine + conf.ibmapsPerMachine; //FIXME: The size of cache is not what is reflected from the configuration
+
+		pinnedMap = new ConcurrentHashMap<>();
+		pinLock = new KeyedLock<>();
 	}
 	
 	public static PartitionedBufferedCache instance() {
@@ -119,117 +113,70 @@ public class PartitionedBufferedCache extends Cache implements BlockEvictionList
 	 * @throws KawkabException The block is not cached if the exception is thrown
 	 */
 	@Override
-	public Block acquireBlock(BlockID blockID) throws IOException, KawkabException {
+	public Block acquireBlock(BlockID blockID)  throws KawkabException {
+		if (blockID.type() != BlockType.DATA_SEGMENT) {
+			return acquirePinned(blockID);
+		}
 		// System.out.println("[C] acquire: " + blockID);
 
-		CachedItem cachedItem = null;
-		int numPart = blockID.hashCode()%numPartitions;
-		
-		cacheLock[numPart].lock(); // Lock the whole cache. This is necessary to prevent from creating multiple references to the
-		                  // same block when the block is not already cached.
-		try { // To unlock the cache
-			cachedItem = cache[numPart].get(blockID); // Try acquiring the block from the memory
-			
-			if (cachedItem == null){ // If the block is not cached
-				//long t = System.nanoTime();
-				Block block;
-				if (blockID.type() == BlockType.DATA_SEGMENT) {
-					DataSegment seg = dsp[numPart].acquire((DataSegmentID)blockID);
-					seg.reset(blockID);
-					block = seg;
-				} else {
-					block = blockID.newBlock();   // Creates a new block object to save in the cache
-				}
-				
-				//Block block = blockID.newBlock();
-				
-				//t = (System.nanoTime() - t)/1000;
-				//acquireStats.putValue(t);
-
-				cachedItem = new CachedItem(block); // Wrap the object in a cached item
-				cache[numPart].put(blockID, cachedItem);
-			}
-			
-			cachedItem.incrementRefCnt();
-			assert cache[numPart].size() <= MAX_BLOCKS_IN_CACHE;
-		} finally {                 // FIXME: Catch any exceptions and decrement the reference count before throwing  
-			cacheLock[numPart].unlock();     //        the exception. Change the caller functions to not release the block in
-		                            //        the case of an exception.
-		}
-		
-		return cachedItem.block();
+		int numPart = blockID.hashCode() % numPartitions;
+		return cache[numPart].acquireBlock(blockID);
 	}
-	
+
 	/**
 	 * Releases the block and decrements its reference count. Blocks with reference count 0 are eligible for eviction.
-	 * 
+	 *
 	 * The released block is added in a queue for persistence if the block is dirty.
-	 * 
+	 *
 	 * @param blockID
-	 * @throws KawkabException 
+	 * @throws KawkabException
 	 */
 	@Override
 	public void releaseBlock(BlockID blockID) throws KawkabException {
+		if (blockID.type() != BlockType.DATA_SEGMENT) {
+			releasePinned(blockID);
+			return;
+		}
+
 		// System.out.println("[C] Release block: " + blockID);
 		int numPart = blockID.hashCode()%numPartitions;
-		
-		CachedItem cachedItem = null;
-		cacheLock[numPart].lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
-		
-		try { //For cacheLock.lock()
-			cachedItem = cache[numPart].get(blockID);
-			
-			if (cachedItem == null) {
-				System.out.println(" Releasing non-existing block: " + blockID);
-				
-				assert cachedItem != null; //To exit the system during testing
-				return;
-			}
-			
-			cachedItem.decrementRefCnt(); // No need to acquire any lock for the cachedItem because the incrementRefCnt() and
-			                              // decrementRefCnt() functions are only called while holding the cacheLock.
-		} finally {
-			cacheLock[numPart].unlock();
-			
-			//releaseStats.putValue((System.nanoTime()-t)/1000);
-		}
-		
-		if (blockID.onPrimaryNode() && cachedItem.block().isLocalDirty()) { // Persist blocks only through the primary node
-			// If the dirty bit for the local store is set
-			localStore.store(cachedItem.block()); // The call is non-blocking. Multiple threads are allowed
-													  // to add the same block in the queue.
-			// FIXME: What to do with the exception?
-		}
+		cache[numPart].releaseBlock(blockID);
 	}
-	
-	/**
-	 * This function is called when the cache is full and this block is the LRU block that is being evicted from the cache.
-	 * This function blocks until the local dirty count of the block becomes zero. If the local dirty count is already
-	 * zero, this function returns without any wait or sleep.
-	 * 
-	 * The caller already has the cacheLock acquired when this function is called.
-	 * 
-	 * The reference count for the cachedItem is zero. Otherwise, this function cannot be called.
-	 * @throws KawkabException 
-	 */
-	@Override
-	public void beforeEviction(CachedItem cachedItem) {
-		System.out.println("Evicting from cache: "+cachedItem.block().id());
-		Block block = cachedItem.block();
-		BlockID blockID = block.id();
-		int numPart = blockID.hashCode()%numPartitions;
-		try {
-			block.waitUntilSynced();  // FIXME: This is a blocking call and the cacheLock is locked. This may
-	                                  // lead to performance problems because the thread sleeps while holding
-	                                  // the cacheLock. The lock cannot be released because otherwise another
-	                                  // thread can come and may acquire the block.
-			localStore.notifyEvictedFromCache(cachedItem.block());
-			
-			if (blockID.type() == BlockType.DATA_SEGMENT)
-				dsp[numPart].release((DataSegment) block);
-		} catch (InterruptedException | KawkabException e) {
-			e.printStackTrace();
+
+	private Block acquirePinned(BlockID blockID) {
+		CachedItem ci = pinnedMap.get(blockID);
+
+		if (ci == null) {
+			//A lock is required to prevent concurrent additions of different memory blocks for the same blockID
+			pinLock.lock(blockID.hashCode());  // Lock based on the blockID
+
+			try{
+				if ((ci = pinnedMap.get(blockID)) == null) {
+					ci = new CachedItem(blockID.newBlock());
+					pinnedMap.put(blockID, ci);
+				}
+			} finally {
+				pinLock.unlock(blockID.hashCode());
+			}
 		}
+
+		ci.incrementRefCnt();
+
+		return ci.block();
+	}
+
+	private void releasePinned(BlockID blockID) throws KawkabException {
+		CachedItem ci = pinnedMap.get(blockID);
+
+		assert ci != null : "Releasing non-cached item: " + blockID;
+
+		ci.decrementRefCnt();
+		Block block = ci.block();
+		if (blockID.onPrimaryNode() && block.isLocalDirty()) {
+			localStore.store(block);
+		}
+
+		//FIXME: Remove entries from the pinnedMap that have zero reference count
 	}
 	
 	/**
@@ -240,47 +187,40 @@ public class PartitionedBufferedCache extends Cache implements BlockEvictionList
 	@Override
 	public void flush() throws KawkabException {
 		for (int i=0; i<numPartitions; i++) {
-			cacheLock[i].lock();
-			try {
-				Iterator<Map.Entry<BlockID, CachedItem>> itr = cache[i].entrySet().iterator();
-				while (itr.hasNext()) {
-					//We need to close all the readers and writers before we can empty the cache.
-					//TODO: Wait until the reference count for the cached object becomes zero.
-					CachedItem cachedItem = itr.next().getValue();
-					//beforeEviction(cachedItem);
-					Block block = cachedItem.block();
-					if (block.id().onPrimaryNode() && block.isLocalDirty()) {
-						localStore.store(block);
-						try {
-							block.waitUntilSynced();
-							localStore.notifyEvictedFromCache(block);
-						} catch (InterruptedException e) {
-							e.printStackTrace();
-						}
-					}
-					
-					if (cachedItem.refCount() != 0) {
-						System.out.println("Ref count is not 0: id: " + block.id() + ", count: " + cachedItem.refCount());
-					}
-					
-					assert cachedItem.refCount() == 0;
-					
-					itr.remove();
-				}
-				assert cache[i].size() == 0;
-			} finally {
-				cacheLock[i].unlock();
-			}
+			cache[i].flush();
 		}
+
+		for (CachedItem cachedItem : pinnedMap.values()) {
+			Block block = cachedItem.block();
+			if (block.id().onPrimaryNode() && block.isLocalDirty()) {
+				localStore.store(block);
+				try {
+					block.waitUntilSynced();
+					localStore.notifyEvictedFromCache(block);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+
+			if (cachedItem.refCount() != 0) {
+				System.out.println("Ref count is not 0: id: " + block.id() + ", count: " + cachedItem.refCount());
+			}
+
+			assert cachedItem.refCount() == 0;
+		}
+
+		pinnedMap.clear();
 	}
 	
 	@Override
 	public void shutdown() throws KawkabException {
-		int size = 0;
+		int size = pinnedMap.size();
 		for (int i=0; i<numPartitions; i++) {
 			size += cache[i].size();
+			cache[i].shutdown();
 		}
-		System.out.println("Closing cache. Current size = "+size);
+
+		System.out.println("Closing PartitionedBufferedCache cache. Current size = "+size);
 		//System.out.printf("AcquireStats (us): %s\n", acquireStats);
 		//System.out.printf("ReleaseStats (us): %s\n", releaseStats);
 		//System.out.printf("LoadStats (us): %s\n", loadStats);
@@ -291,10 +231,35 @@ public class PartitionedBufferedCache extends Cache implements BlockEvictionList
 	
 	@Override
 	public long size() {
-		int size = 0;
+		int size = pinnedMap.size();
 		for (int i=0; i<numPartitions; i++) {
 			size += cache[i].size();
 		}
 		return size;
+	}
+
+	@Override
+	public String getStats() {
+		long evicted = 0;
+		long missed = 0;
+		long accessed = 0;
+		long waited = 0;
+		long size = 0;
+
+		StringBuilder stats = new StringBuilder();
+		for (int i=0; i<numPartitions; i++) {
+			stats.append(cache[i].getStats());
+			evicted += cache[i].evictCount();
+			missed += cache[i].missCount();
+			accessed += cache[i].accessCount();
+			waited += cache[i].waitCount();
+			size += cache[i].size();
+		}
+
+		if (accessed > 0)
+			stats.append(String.format("size=%d, accessed=%d, missed=%d, evicted=%d, waited=%d, hitRatio=%.02f\n",
+					size, accessed, missed, evicted, waited, 100.0*(accessed-missed)/accessed));
+
+		return stats.toString();
 	}
 }

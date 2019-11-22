@@ -11,9 +11,9 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<nodeID>0</nodeID>
-		<Xmn>5g</Xmn>
-		<Xmx>8g</Xmx>
-		<MaxDirectMemorySize>5g</MaxDirectMemorySize>
+		<Xms>2g</Xms>
+		<Xmx>16g</Xmx>
+		<MaxDirectMemorySize>16484g</MaxDirectMemorySize>
 		<cmdArgs>""</cmdArgs>
 		<mainClass>kawkab.fs.cli.CLI</mainClass>
 	</properties>
@@ -143,7 +143,7 @@
 					<executable>java</executable>
 					<arguments>
 						<argument>-ea</argument>
-						<argument>-Xmn${Xmn}</argument>
+						<argument>-Xms${Xms}</argument>
 						<argument>-Xmx${Xmx}</argument>
 						<argument>-XX:MaxDirectMemorySize=${MaxDirectMemorySize}</argument>
 
@@ -288,6 +288,15 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+
+			<dependency>
+				<groupId>net.openhft</groupId>
+				<artifactId>chronicle-bom</artifactId>
+				<version>2.17.442</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+
 		</dependencies>
 	</dependencyManagement>
 
@@ -296,13 +305,6 @@
 			<groupId>com.google.guava</groupId>
 			<artifactId>guava</artifactId>
 			<version>28.0-jre</version>
-		</dependency>
-
-		<dependency>
-			<!-- Chronicle Queue for batching -->
-			<groupId>net.openhft</groupId>
-			<artifactId>chronicle-queue</artifactId>
-			<version>5.17.13</version>
 		</dependency>
 
 		<dependency>
@@ -317,16 +319,17 @@
 			<version>5.4.2</version>
 			<scope>test</scope>
 		</dependency>
+
 		<dependency>
 			<groupId>net.openhft</groupId>
 			<artifactId>chronicle-map</artifactId>
-			<version>3.17.2</version>
+			<!--<version>3.17.6</version>
 			<exclusions>
 				<exclusion>
 					<groupId>com.sun.java</groupId>
 					<artifactId>tools</artifactId>
 				</exclusion>
-			</exclusions>
+			</exclusions>-->
 		</dependency>
 
 		<dependency>

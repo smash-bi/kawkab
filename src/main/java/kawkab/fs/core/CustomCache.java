@@ -26,7 +26,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	private Lock cacheLock; // Cache level locking
 	private LocalStoreManager localStore;
 	private ConcurrentMap<BlockID, Lock> locksMap;
-	
+
 	private CustomCache() {
 		System.out.println("Initializing cache..." );
 		
@@ -37,7 +37,8 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 		
 		MAX_BLOCKS_IN_CACHE = (int)(conf.cacheSizeMiB / (conf.segmentSizeBytes/1048576.0) + conf.inodeBlocksPerMachine + conf.ibmapsPerMachine); //FIXME: Not calculated correctly
 		assert MAX_BLOCKS_IN_CACHE > 0;
-		
+
+
 		cache = new LRUCache(MAX_BLOCKS_IN_CACHE, this);
 		
 		locksMap = new ConcurrentHashMap<BlockID, Lock>();
@@ -196,7 +197,11 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 			e.printStackTrace();
 		}
 	}
-	
+
+	@Override
+	public void onEvictBlock(Block block) {
+	}
+
 	/**
 	 * Flushes the block in the persistent store. This should be used only for system shutdown. There must not be any
 	 * concurrent readers or writers accessing the cache. All the acquired blocks must be returned to the cache
@@ -249,5 +254,10 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	@Override
 	public long size() {
 		return cache.size();
+	}
+
+	@Override
+	public String getStats() {
+		return null;
 	}
 }

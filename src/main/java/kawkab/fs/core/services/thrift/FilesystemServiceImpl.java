@@ -3,7 +3,6 @@ package kawkab.fs.core.services.thrift;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Configuration;
-import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.services.thrift.FilesystemService.Iface;
@@ -35,7 +34,7 @@ public class FilesystemServiceImpl implements Iface {
 		FileHandle handle = null;
 		try {
 			handle = fs.open(filename, convertFileMode(fileMode), new FileOptions(recordSize));
-		} catch (Exception e) {
+		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -61,7 +60,7 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			fh.recordNum(dstBuf, recNum, recSize);
 			return dstBuf;
-		} catch (Exception e) {
+		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -82,7 +81,7 @@ public class FilesystemServiceImpl implements Iface {
 			}
 
 			return dstBuf;
-		} catch (Exception e) {
+		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -100,7 +99,7 @@ public class FilesystemServiceImpl implements Iface {
 			List<ByteBuffer> results = fh.readRecords(minTS, maxTS, recSize);
 			//printBuffers(results);
 			return results;
-		} catch (Exception e) {
+		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -140,7 +139,7 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			return fh.append(data, recSize);
-		} catch (Exception e) {
+		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -151,12 +150,13 @@ public class FilesystemServiceImpl implements Iface {
 		FileHandle fh = sessions.get(sessionID);
 
 		if (fh == null) {
+			System.out.println("Fh = null");
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
 
 		try {
 			return fh.append(srcBuf, recSize);
-		} catch (Exception e) {
+		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -170,7 +170,7 @@ public class FilesystemServiceImpl implements Iface {
 				srcBuf.limit(pos+recSize);
 				cnt += fh.append(srcBuf, recSize);
 				pos += recSize;
-			} catch (Exception e) {
+			} catch (Exception | AssertionError e) {
 				e.printStackTrace();
 				throw new TRequestFailedException(e.getMessage());
 			}
@@ -191,7 +191,7 @@ public class FilesystemServiceImpl implements Iface {
 			//data.position(offset);
 			try {
 				cnt += fh.append(srcBuf, recSize);
-			} catch (Exception e) {
+			} catch (Exception | AssertionError e) {
 				e.printStackTrace();
 				throw new TRequestFailedException(e.getMessage());
 			}
@@ -214,7 +214,7 @@ public class FilesystemServiceImpl implements Iface {
 		long size;
 		try {
 			size = fh.size();
-		} catch (Exception e) {
+		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -228,7 +228,7 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			fh.read(buffer, offset, length);
-		} catch (Exception e) {
+		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -248,7 +248,7 @@ public class FilesystemServiceImpl implements Iface {
 		int length = srcBuf.remaining();
 		try {
 			return fh.append(srcBuf.array(), offset, length);
-		} catch (Exception e) {
+		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -264,7 +264,7 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			return fh.size();
-		} catch (Exception e) {
+		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
@@ -280,11 +280,16 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			fs.close(fh);
-		} catch (Exception e) {
+		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 		}
 
 		sessions.remove(sessionID);
+	}
+
+	@Override
+	public int noop(long none) throws TRequestFailedException, TInvalidSessionException, TException {
+		return 0;
 	}
 
 	private Filesystem.FileMode convertFileMode(TFileMode mode){

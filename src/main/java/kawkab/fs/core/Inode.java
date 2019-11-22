@@ -11,6 +11,7 @@ import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
 import kawkab.fs.core.index.poh.PostOrderHeapIndex;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueue;
+import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
 
 import java.io.IOException;
@@ -38,12 +39,12 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	private static final Clock clock = Clock.instance();
 	private static final LocalStoreManager localStore = LocalStoreManager.instance();
 	private static final Configuration conf = Configuration.instance();
-	private TimerQueue timerQ;
+	private TimerQueueIface timerQ;
 
 	private boolean isInited;
 	private int recsPerSeg;
 
-	private static final int bufferTimeOffsetMs = 5;
+	private static final int bufferTimeOffsetMs = 2;
 
 	public static final long MAXFILESIZE = conf.maxFileSizeBytes;
 
@@ -56,19 +57,19 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * Prepare after opening the file.
 	 * This function should be called after the inode has been loaded from the file or the remote node or the global store.
 	 */
-	synchronized void prepare(TimerQueue tq) {
+	synchronized void prepare(TimerQueueIface fsQ, TimerQueueIface segsQ) {
 		if (isInited)
 			return;
 		isInited = true;
 
 		//System.out.printf("[I] Initializing index for inode: %d, recSize=%d\n", inumber, recordSize);
 
-		timerQ = tq;
+		timerQ = segsQ;
 
 		assert recordSize >= 1;
 		recsPerSeg = conf.segmentSizeBytes / recordSize;
 		if (recordSize > 1)
-			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, timerQ);
+			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, fsQ);
 
 
 
@@ -381,7 +382,6 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		int appended = 0;
 		int pos = srcBuf.position();
 		int initLimit = srcBuf.limit();
-		int initPos = pos;
 
 		if (fileSizeBuffered + (initLimit-pos)*recSize > MAXFILESIZE) {
 			throw new MaxFileSizeExceededException();
@@ -416,13 +416,18 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 		if (acquiredSeg == null || !timerQ.tryDisable(acquiredSeg)) {
 			boolean createNew = (FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L;
-			acquiredSeg = acquireSegment(fileSizeBuffered, createNew);
+			try{
+				acquiredSeg = acquireSegment(fileSizeBuffered, createNew);
+			} catch (Exception e) {
+				e.printStackTrace();
+				throw e;
+			}
 			acquiredSeg.getItem().setIsLoaded();
 		}
 
-
 		long timestamp = srcBuf.getLong(srcBuf.position());
 		DataSegment ds = acquiredSeg.getItem();
+
 
 		int appended = ds.append(srcBuf, fileSizeBuffered);
 

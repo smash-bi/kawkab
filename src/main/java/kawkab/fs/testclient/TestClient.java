@@ -9,23 +9,25 @@ import kawkab.fs.utils.Accumulator;
 import java.util.Random;
 
 public class TestClient {
+	public enum TestType {
+		APPEND,
+		NOOP,
+		READ
+	}
+
 	private int id;
 	private String sip;
 	private int sport;
-	private String mip;
-	private int mport;
 
 	private KClient client;
 	private Random rand;
 	private Printer pr;
 	private Record recGen;
 
-	public TestClient(int id, String sip, int sport, String mip, int mport, Record recGen, Printer printer) throws KawkabException {
+	public TestClient(int id, String sip, int sport, Record recGen, Printer printer) {
 		this.id = id;
 		this.sip = sip;
 		this.sport = sport;
-		this.mip = mip;
-		this.mport = mport;
 
 		this.pr = printer;
 
@@ -34,50 +36,61 @@ public class TestClient {
 		this.recGen = recGen;
 	}
 
-	public Accumulator runAppendTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
+	public Accumulator runTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
 		pr.print("Starting append test...");
 		
 		if (client == null || !client.isConnected()) {
 			throw new KawkabException("Client is not connected");
 		}
 
-		Accumulator accm = null;
-		if (batchSize == 1) {
-			accm = appendTest(testDurSec, nTestFiles, warmupSecs);
-		} else {
-			accm = appendTestBatched(testDurSec, nTestFiles, warmupSecs, batchSize);
+		Accumulator accm = appendTest(testDurSec, nTestFiles, warmupSecs, batchSize);
+
+		printStats(accm, batchSize, testDurSec);
+
+		return accm;
+	}
+
+	public Accumulator runNoopTest(int testDurSec, int warmupSecs) throws KawkabException {
+		pr.print("Starting NoOp test...");
+
+		if (client == null || !client.isConnected()) {
+			throw new KawkabException("Client is not connected");
 		}
 
-		long cnt = accm.count();
+		Accumulator accm = noopTest(testDurSec, warmupSecs);
+		printStats(accm, 1, testDurSec);
+
+		return accm;
+	}
+
+	private void printStats(Accumulator accm, int batchSize, int testDurSec) {
+		long cnt = accm.count()*batchSize;
 		double sizeMB = recGen.size()*cnt / (1024.0 * 1024.0);
 		double thr = sizeMB / testDurSec;
 		int opThr = (int)(cnt / testDurSec);
 
-		pr.print(String.format("AppendTest: duration=%d sec, size=%.2f MB, thr=%.2f MB/s, opThr=%d, Latency (us): %s.\n",
+		pr.print(String.format("TestClient: duration=%d sec, size=%,.2f MB, thr=%,.2f MB/s, opThr=%,d, Latency (us): %s.\n",
 				testDurSec, sizeMB, thr, opThr, accm));
-
-		return accm;
 	}
 
-	private Accumulator appendTest(int testDurSec, int nTestFiles, int warmupSecs) throws KawkabException {
+	private Accumulator appendTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
 		String[] fnames = openFiles(nTestFiles, "append", Filesystem.FileMode.APPEND);
 
-		pr.print(String.format("Ramp-up for %d seconds...", warmupSecs));
-		appendRecs(fnames, warmupSecs, recGen.newRecord());
+		if (batchSize == 1) {
 
-		pr.print("Appending records...");
-		Accumulator accm = appendRecs(fnames, testDurSec, recGen.newRecord());
+			pr.print(String.format("Ramp-up for %d seconds...", warmupSecs));
+			appendRecs(fnames, warmupSecs, recGen.newRecord());
 
-		pr.print(String.format("Ramp-down for %d seconds...", warmupSecs));
-		appendRecs(fnames, warmupSecs, recGen.newRecord());
+			pr.print("Appending records...");
+			Accumulator accm = appendRecs(fnames, testDurSec, recGen.newRecord());
 
-		closeFiles(fnames);
+			pr.print(String.format("Ramp-down for %d seconds...", 5));
+			appendRecs(fnames, 5, recGen.newRecord());
 
-		return accm;
-	}
+			closeFiles(fnames);
 
-	private Accumulator appendTestBatched(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
-		String[] fnames = openFiles(nTestFiles, "append", Filesystem.FileMode.APPEND);
+			return accm;
+		}
 
 		pr.print(String.format("Ramp-up for %d seconds...", warmupSecs));
 		appendRecsBatched(fnames, warmupSecs, recGen.newRecord(), batchSize);
@@ -85,8 +98,8 @@ public class TestClient {
 		pr.print("Appending records...");
 		Accumulator accm = appendRecsBatched(fnames, testDurSec, recGen.newRecord(), batchSize);
 
-		pr.print(String.format("Ramp-down for %d seconds...", warmupSecs));
-		appendRecsBatched(fnames, warmupSecs, recGen.newRecord(), batchSize);
+		pr.print(String.format("Ramp-down for %d seconds...", 5));
+		appendRecsBatched(fnames, 5, recGen.newRecord(), batchSize);
 
 		closeFiles(fnames);
 
@@ -135,6 +148,34 @@ public class TestClient {
 			long durNano = System.nanoTime()-st;
 
 			accm.put((int)(durNano/1000));
+		}
+
+		return accm;
+	}
+
+	private Accumulator noopTest(int testDurSec, int warmupSecs) throws KawkabException {
+		pr.print(String.format("Ramp-up for %d seconds...", warmupSecs));
+		sendNoops(warmupSecs);
+
+		pr.print("Sending noops ...");
+		Accumulator accm = sendNoops(testDurSec);
+
+		pr.print(String.format("Ramp-down for %d seconds...", warmupSecs));
+		sendNoops(warmupSecs);
+
+		return accm;
+	}
+
+	private Accumulator sendNoops(int durSec) throws KawkabException {
+		long et = System.currentTimeMillis() + durSec*1000;
+
+		Accumulator accm = new Accumulator();
+
+		while (System.currentTimeMillis() < et) {
+			long st = System.nanoTime();
+			client.noop(0);
+			long durNano = System.nanoTime() - st;
+			accm.put((int) (durNano / 1000));
 		}
 
 		return accm;

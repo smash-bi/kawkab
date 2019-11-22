@@ -80,7 +80,7 @@ public abstract class Block extends AbstractTransferItem {
 		inLocalStore.set(false);
 		inCache.set(false);
 		isLoaded = false;
-		isOnPrimary = id.onPrimaryNode();
+		isOnPrimary = id != null && id.onPrimaryNode();
 	}
 	
 	/**

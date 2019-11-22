@@ -4,7 +4,6 @@ import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.services.thrift.FilesystemServiceServer;
-import kawkab.fs.core.services.thrift.PrimaryNodeService;
 import kawkab.fs.core.services.thrift.PrimaryNodeServiceServer;
 import kawkab.fs.core.timerqueue.TimerQueue;
 import kawkab.fs.utils.GCMonitor;
@@ -25,7 +24,8 @@ public final class Filesystem {
 	private static PrimaryNodeServiceServer pns;
 	private static Cache cache;
 
-	private TimerQueue timerQ;
+	private TimerQueue fsQ;
+	private TimerQueue segsQ;
 
 	private Filesystem() throws KawkabException, IOException {
 		namespace = Namespace.instance();
@@ -33,7 +33,8 @@ public final class Filesystem {
 		pns.startServer();
 		fss = new FilesystemServiceServer(this);
 		fss.startServer();
-		timerQ = new TimerQueue("FS Timer Queue");
+		fsQ = new TimerQueue("FS Timer Queue");
+		segsQ = new TimerQueue("Segs Timer Queue");
 		cache = Cache.instance();
 		conf = Configuration.instance();
 	}
@@ -71,7 +72,7 @@ public final class Filesystem {
 		
 		long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber);
-		FileHandle file = new FileHandle(inumber, mode, timerQ);
+		FileHandle file = new FileHandle(inumber, mode, fsQ, segsQ);
 		verify(inumber, opts.recordSize());
 		return file;
 	}
@@ -103,7 +104,7 @@ public final class Filesystem {
 	}
 
 	public TimerQueue getTimerQueue() {
-		return timerQ;
+		return fsQ;
 	}
 	
 	/**
@@ -146,19 +147,19 @@ public final class Filesystem {
 		fss.stopServer();
 		pns.stopServer();
 		namespace.shutdown();
-		timerQ.shutdown();
+		segsQ.shutdown();
+		fsQ.shutdown();
 		Cache.instance().shutdown();
 		Clock.instance().shutdown();
+
+		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
+		System.out.println("Closed FileSystem");
+		// GlobalStoreManager.instance().shutdown(); //The LocalStore closes the GlobalStore
 
 		//Wakeup the threads waiting in waitUntilShutdown
 		synchronized(instance) {
 			instance.notifyAll();
 		}
-
-		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
-
-		System.out.println("Closed FileSystem");
-		// GlobalStoreManager.instance().shutdown(); //The LocalStore closes the GlobalStore
 	}
 	
 	public boolean initialized() {
@@ -172,7 +173,7 @@ public final class Filesystem {
 	}
 
 	public void flush() throws KawkabException {
-		timerQ.waitUntilEmpty();
+		fsQ.waitUntilEmpty();
 		cache.flush();
 	}
 	

@@ -2,6 +2,7 @@ package kawkab.fs.testclient;
 
 import kawkab.fs.api.Record;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.records.BytesRecord;
 import kawkab.fs.records.SampleRecord;
 import kawkab.fs.records.SixteenRecord;
 import kawkab.fs.utils.Accumulator;
@@ -41,6 +42,7 @@ public class ClientMain {
 		int bs		= 0; // batch size; number of requests per message
 		int rs		= 0; // record size in bytes
 		int nf		= 0; //Number of files to read/write
+		int warmupsec = 5;
 		int testDurSec = 10;
 
 		for (String iArg : args) {
@@ -63,6 +65,17 @@ public class ClientMain {
 			}
 		}
 
+		Record recGen;
+		if (rs == 16) {
+			recGen =  new SixteenRecord();
+		} else if (rs == SampleRecord.length()) {
+			recGen = new SampleRecord();
+		} else {
+			recGen = new BytesRecord(rs);
+		}
+
+		System.out.printf("Warmup sec=%d, test sec=%d, record size=%d\n", warmupsec, testDurSec, recGen.size());
+
 		if (mgc) {
 			GCMonitor.initialize();
 		}
@@ -77,14 +90,15 @@ public class ClientMain {
 		//Result result = runTest(10, cid, nf, sip, sport, mip, mport, pr);
 		//System.out.println(result.toJson(false));
 
-		Record recGen = new SixteenRecord();
-
-		AppendTest at = new AppendTest();
-		Accumulator[] accms = at.runTest(testDurSec, nc, cid, nf, sip, sport, mip, mport, bs, recGen, pr);
+		TestRunner at = new TestRunner();
+		Accumulator[] accms = at.runTest(testDurSec, nc, cid, nf, sip, sport, bs, recGen, pr, warmupsec, TestRunner.TestType.APPEND);
+		//Accumulator[] accms = at.runTest(testDurSec, nc, cid, nf, sip, sport, bs, recGen, pr, warmupsec, TestRunner.TestType.NOOP);
 		Accumulator accm = merge(accms);
 		Result result = prepareResult(accm, testDurSec, recGen.size(), nc, nf, bs);
 
 		System.out.println(result.toJson(false));
+		System.out.println(result.csvHeader());
+		System.out.println(result.csv());
 
 		pr.print("Finished client " + cid);
 	}
@@ -109,10 +123,8 @@ public class ClientMain {
 				testDurSec, batchSize, nc, nf*nc, sizeMB, thr, opThr, accm));
 
 		double[] lats = accm.getLatencies();
-		Result result = new Result(accm.count(), opThr, thr, lats[0], lats[1], lats[2], accm.min(), accm.max(), accm.mean(),
+		return new Result(cnt, opThr, thr, lats[0], lats[1], lats[2], accm.min(), accm.max(), accm.mean(),
 				0, lats[0], 0, accm.mean(), 0, accm.max(), new long[]{}, accm.histogram());
-
-		return result;
 	}
 
 	private void initWait(int waitTime) {

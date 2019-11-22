@@ -9,6 +9,7 @@ import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.records.BytesRecord;
 import kawkab.fs.records.SampleRecord;
 import kawkab.fs.records.SixteenRecord;
 import kawkab.fs.utils.TimeLog;
@@ -63,10 +64,17 @@ public class AppendTest {
 		System.out.println("----------------------------------------------------------------");
 
 		final int numRecords = Integer.parseInt(System.getProperty("numRecords", "1000000"));
-		final long recSize = Long.parseLong(System.getProperty("recSize", "16"));
+		final int recSize = Integer.parseInt(System.getProperty("recSize", "16"));
 		final int numWriters = Integer.parseInt(System.getProperty("numWriters", "1"));
 		Thread[] workers = new Thread[numWriters];
-		final Record recGen = recSize == 16 ? new SixteenRecord() : new SampleRecord();
+
+		final Record recGen;
+		if (recSize == 16)
+			recGen = new SixteenRecord();
+		else if (recSize == SampleRecord.length())
+			recGen = new SampleRecord();
+		else
+			recGen = new BytesRecord(recSize);
 
 		final Filesystem fs = Filesystem.instance();
 		final Stats wStats = new Stats();
@@ -106,17 +114,12 @@ public class AppendTest {
 		System.out.println("Opening file: " + filename);
 		FileHandle file = fs.open(filename, FileMode.APPEND, new FileOptions(recSize));
 
-		Record[] recs = new Record[numRecords];
-		for (int i=0; i<numRecords; i++) {
-			long ts = (i+1)*tsOffset;
-			recs[i] = recFactory.newRandomRecord(rand, ts);
-		}
-
+		Record rec = recFactory.newRandomRecord(rand, 1);
 		long startTime = System.currentTimeMillis();
 		TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "RecAppend", 5);
 		for (int i=0; i<numRecords; i++) {
+			rec.timestamp(i+1);
 			tlog.start();
-			Record rec = recs[i];
 			file.append(rec.copyOutSrcBuffer(), rec.size());
 			tlog.end();
 		}
@@ -262,7 +265,7 @@ public class AppendTest {
 	public static void main(String args[]) throws InterruptedException, KawkabException, IOException {
 		AppendTest test = new AppendTest();
 		test.initialize();
-		test.appendBytesTest();
+		test.appendRecordsMultipleFileTest();
 		test.terminate();
 	}
 }

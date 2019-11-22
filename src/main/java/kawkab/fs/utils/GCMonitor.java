@@ -68,13 +68,10 @@ public class GCMonitor implements NotificationListener {
             long duration = info.getDuration();
             System.out.printf("    GC: %dms\n", duration);
             Map<String, MemoryUsage> befMem = info.getMemoryUsageBeforeGc();
-            Map<String, MemoryUsage> aftMem = info.getMemoryUsageAfterGc();
-
-            /*for(String str : befMem.keySet()) {
-                System.out.printf("%s = %s\n",str, befMem.get(str));
-            }*/
 
             if (befMem.containsKey("PS Eden Space")) {
+                Map<String, MemoryUsage> aftMem = info.getMemoryUsageAfterGc();
+
                 System.out.printf("Eden: %dM->%dM, ",
                         befMem.get("PS Eden Space").getUsed() / 1048576,
                         aftMem.get("PS Eden Space").getUsed() / 1048576);
@@ -113,5 +110,9 @@ public class GCMonitor implements NotificationListener {
     
     public static void printStats() {
     	System.out.println(durationStats);
+    }
+
+    public static String getStats() {
+        return durationStats.toString();
     }
 }

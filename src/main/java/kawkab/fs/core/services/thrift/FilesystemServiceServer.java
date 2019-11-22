@@ -17,7 +17,7 @@ import java.util.concurrent.Executors;
 
 /**
  * See the following for the brief explanation of different Thrift servers:
- * http://mmalithh.blogspot.com/2012/10/comparison-of-apache-thrift-java-servers.html
+ * https://livebook.manning.com/book/programmers-guide-to-apache-thrift/chapter-10/
  */
 public class FilesystemServiceServer {
 	private TServer server;
@@ -25,13 +25,14 @@ public class FilesystemServiceServer {
 	private ExecutorService executor;
 
 	public FilesystemServiceServer(Filesystem fs) throws KawkabException {
-		int minThreads = 100;
+		int minThreads = 8;
 		int maxThreads = 1000;
+		int ioThreads = 8;
 
 		FilesystemService.Iface handler = new FilesystemServiceImpl(fs);
 
 		//server = hsHaServer(handler, minThreads, maxThreads);
-		server = threadedSelectorServer(handler, minThreads, 2);
+		server = threadedSelectorServer(handler, minThreads, ioThreads);
 		//server = threadPoolServer(handler, minThreads, maxThreads);
 	}
 

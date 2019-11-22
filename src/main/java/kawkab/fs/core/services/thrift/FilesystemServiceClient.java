@@ -130,13 +130,20 @@ public class FilesystemServiceClient {
 		}
 	}
 
+	public int noop(long none) throws KawkabException {
+		try {
+			return client.noop(none);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
 	public synchronized void disconnect() {
 		transport.close();
 
 		transport = null;
 		client = null;
 	}
-
 
 	private TFileMode convertFileMode(Filesystem.FileMode mode){
 		switch(mode) {

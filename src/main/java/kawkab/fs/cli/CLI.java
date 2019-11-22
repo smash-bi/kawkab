@@ -11,6 +11,7 @@ import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.records.SampleRecord;
+import kawkab.fs.utils.GCMonitor;
 import kawkab.fs.utils.TimeLog;
 
 import java.io.*;
@@ -36,7 +37,7 @@ public final class CLI {
 	private void initFS() throws IOException, KawkabException, InterruptedException {
 		//Constants.printConfig();
 		int nodeID = Configuration.getNodeID();
-		String propsFile = System.getProperty("conf", Configuration.propsFileClusterSmall);
+		String propsFile = System.getProperty("conf", Configuration.propsFileCluster);
 		
 		System.out.println("Node ID = " + nodeID);
 		System.out.println("Loading properties from: " + propsFile);
@@ -46,7 +47,7 @@ public final class CLI {
 	}
 
 	private void cmd() throws IOException {
-		String cmds = "Commands: cc, co, ca, cr, cd, open, read, rr, apnd, ar, at, size, flush, exit";
+		String cmds = "Commands: cc, co, ca, cr, cd, open, read, rr, apnd, ar, at, size, stats, flush, gc, exit";
 		
 		try (BufferedReader ir = new BufferedReader(new InputStreamReader(System.in))) {
 			System.out.println("--------------------------------");
@@ -73,6 +74,12 @@ public final class CLI {
 					String cmd = args[0];
 					
 					switch (cmd) {
+						case "gc":
+							parseGC(args);
+							continue;
+						case "stats":
+							parseStats(args);
+							continue;
 						case "cc":
 							parseClientConnect(args);
 							continue;
@@ -131,6 +138,15 @@ public final class CLI {
 				}
 			}
 		}
+	}
+
+	private void parseGC(String[] args) {
+		System.gc();
+	}
+
+	private void parseStats(String[] args) {
+		System.out.printf("GC stats (ms): %s\n", GCMonitor.getStats());
+		System.out.printf("Cache stats:\n%s", Cache.instance().getStats());
 	}
 
 	private void parseClientConnect(String[] args) {
@@ -256,13 +272,12 @@ public final class CLI {
 				int recNum = Integer.parseInt(args[3]);
 				Record rec = new SampleRecord();
 
-				TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "read-lat", 100);
-				tlog.start();
+				long t = System.nanoTime();
 				rec = client.recordNum(fname, recNum, rec);
-				tlog.end();
+				long elapsed = System.nanoTime() - t;
 
 				System.out.println(rec);
-				tlog.printStats();
+				System.out.printf("Latency (ns): %,d\n", elapsed);
 				break;
 			}
 			case "t": {

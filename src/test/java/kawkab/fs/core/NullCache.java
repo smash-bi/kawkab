@@ -26,4 +26,9 @@ public class NullCache extends Cache {
 	public long size() {
 		return 0;
 	}
+
+	@Override
+	public String getStats() {
+		return null;
+	}
 }

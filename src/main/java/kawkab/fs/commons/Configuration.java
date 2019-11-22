@@ -200,25 +200,24 @@ public final class Configuration {
 		System.out.println(String.format("Data block size MB ....... = %.3f",dataBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Data block segment size MB = %.3f",segmentSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Num. of segments per block = %d", segmentsPerBlock));
-		System.out.println(String.format("Direct blocks per inode .. = %d", directBlocksPerInode));
+		//System.out.println(String.format("Direct blocks per inode .. = %d", directBlocksPerInode));
 		//System.out.println(String.format("Pointers per index block . = %d", numPointersInIndexBlock));
-		System.out.println(String.format("Maximum file size MB ..... = %.3f", maxFileSizeBytes/1024.0/1024.0));
+		//System.out.println(String.format("Maximum file size MB ..... = %.3f", maxFileSizeBytes/1024.0/1024.0));
 		System.out.println();
 		System.out.println(String.format("Ibmap block size MB ...... = %.3f", ibmapBlockSizeBytes/1024.0/1024.0));
-		System.out.println(String.format("Ibmap blocks per machine . = %d", ibmapsPerMachine));
-		System.out.println(String.format("Ibmaps total size MB ..... = %.3f", ibmapBlockSizeBytes*ibmapsPerMachine/1024.0/1024.0));
-		System.out.println(String.format("Ibmaps range start ....... = %d", ibmapBlocksRangeStart));
+		//System.out.println(String.format("Ibmap blocks per machine . = %d", ibmapsPerMachine));
+		//System.out.println(String.format("Ibmaps total size MB ..... = %.3f", ibmapBlockSizeBytes*ibmapsPerMachine/1024.0/1024.0));
+		//System.out.println(String.format("Ibmaps range start ....... = %d", ibmapBlocksRangeStart));
 		System.out.println();
 		System.out.println(String.format("Inode block size MB ...... = %.3f", inodesBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Inode size bytes ......... = %d", inodeSizeBytes));
 		System.out.println(String.format("Inodes per block ......... = %d", inodesPerBlock));
 		System.out.println(String.format("Inode blocks per machine . = %d", inodeBlocksPerMachine));
-		System.out.println(String.format("Inode blocks total size MB = %.3f", inodeBlocksPerMachine*inodesBlockSizeBytes/1024.0/1024.0));
-		System.out.println(String.format("Inode blocks range start . = %d", inodeBlocksRangeStart));
-		System.out.println(String.format("Max blocks per local device= %d", maxBlocksPerLocalDevice));
+		//System.out.println(String.format("Inode blocks total size MB = %.3f", inodeBlocksPerMachine*inodesBlockSizeBytes/1024.0/1024.0));
+		//System.out.println(String.format("Inode blocks range start . = %d", inodeBlocksRangeStart));
 		System.out.println();
+		System.out.println(String.format("Max blocks per local device= %d", maxBlocksPerLocalDevice));
 		System.out.println(String.format("Index node size bytes= %d", indexNodeSizeBytes));
-		System.out.println(String.format("Index entries per block %% = %d", indexNodeSizeBytes));
 		System.out.println(String.format("Cache size (MiB) ......... = %d", cacheSizeMiB));
 	}
 	

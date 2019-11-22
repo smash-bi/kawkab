@@ -44,21 +44,21 @@ public class Result {
 
 	public String toJson(boolean exportHists){
 		StringBuilder json = new StringBuilder();
-		json.append(String.format("  \"Requests successful\":%d,\n", reqsCount));
-		json.append(String.format("  \"Ops throughput (OPS)\":%d,\n", opsThr));
-		json.append(String.format("  \"Throughput (MiB/s)\":%.2f,\n", dataThr));
-		json.append(String.format("  \"Mean latency\":%.2f,\n", latAvg));
-		json.append(String.format("  \"Median latency\":%.2f,\n", lat50));
-		json.append(String.format("  \"95%% latency\":%.2f,\n", lat95));
-		json.append(String.format("  \"99%% latency\":%.2f,\n", lat99));
-		json.append(String.format("  \"Min latency\":%.2f,\n", latMin));
-		json.append(String.format("  \"Max latency\":%.2f,\n", latMax));
-		json.append(String.format("  \"Median read latency\":%.2f,\n", readMedLat));
-		json.append(String.format("  \"Median write latency\":%.2f,\n", writeMedLat));
-		json.append(String.format("  \"Max read latency\":%.2f,\n", readMaxLat));
-		json.append(String.format("  \"Max write latency\":%.2f,\n", writeMaxLat));
-		json.append(String.format("  \"Average read latency\":%.2f,\n", readAvgLat));
-		json.append(String.format("  \"Average write latency\":%.2f\n", writeAvgLat));
+		json.append(String.format("  \"reqs\":%d,\n", reqsCount));
+		json.append(String.format("  \"opsPs\":%d,\n", opsThr));
+		json.append(String.format("  \"thrMBps)\":%.2f,\n", dataThr));
+		json.append(String.format("  \"mean-lat\":%.2f,\n", latAvg));
+		json.append(String.format("  \"50%%Lat\":%.2f,\n", lat50));
+		json.append(String.format("  \"95%%Lat\":%.2f,\n", lat95));
+		json.append(String.format("  \"99%%Lat\":%.2f,\n", lat99));
+		json.append(String.format("  \"minLat\":%.2f,\n", latMin));
+		json.append(String.format("  \"maxLat\":%.2f,\n", latMax));
+		json.append(String.format("  \"50%%rLat\":%.2f,\n", readMedLat));
+		json.append(String.format("  \"50%%wLat\":%.2f,\n", writeMedLat));
+		json.append(String.format("  \"maxRLat\":%.2f,\n", readMaxLat));
+		json.append(String.format("  \"maxWLat\":%.2f,\n", writeMaxLat));
+		json.append(String.format("  \"meanRLat\":%.2f,\n", readAvgLat));
+		json.append(String.format("  \"meanWLat\":%.2f\n", writeAvgLat));
 
 		if (exportHists) {
 			long[][] hists = {readHistogram,     writeHistogram};
@@ -94,23 +94,46 @@ public class Result {
 		return json.toString();
 	}
 
-	public String toCSV() {
+	public String csvHeader() {
+		StringBuilder header = new StringBuilder();
+		header.append("#");
+		header.append("\"Requests successful\", ");
+		header.append("\"Ops throughput (Ops/s)\", ");
+		header.append("\"Throughput (MiB/s)\", ");
+		header.append("\"Mean latency\", ");
+		header.append("\"Median latency\", ");
+		header.append("\"95%% latency\", ");
+		header.append("\"99%% latency\", ");
+		header.append("\"Min latency\", ");
+		header.append("\"Max latency\", ");
+		header.append("\"Median read latency\", ");
+		header.append("\"Median write latency\", ");
+		header.append("\"Max read latency\", ");
+		header.append("\"Max write latency\", ");
+		header.append("\"Average read latency\", ");
+		header.append("\"Average write latency\"");
+
+		return header.toString();
+	}
+
+
+	public String csv() {
 		StringBuilder csv = new StringBuilder();
-		csv.append(String.format("\"Requests successful\", ", reqsCount));
-		csv.append(String.format("\"Ops throughput (OPS)\", ", opsThr));
-		csv.append(String.format("\"Throughput (MiB/s)\", ", dataThr));
-		csv.append(String.format("\"Mean latency\":%.2f,\n", latAvg));
-		csv.append(String.format("\"Median latency\":%.2f,\n", lat50));
-		csv.append(String.format("\"95%% latency\":%.2f,\n", lat95));
-		csv.append(String.format("\"99%% latency\":%.2f,\n", lat99));
-		csv.append(String.format("\"Min latency\":%.2f,\n", latMin));
-		csv.append(String.format("\"Max latency\":%.2f,\n", latMax));
-		csv.append(String.format("\"Median read latency\":%.2f,\n", readMedLat));
-		csv.append(String.format("\"Median write latency\":%.2f,\n", writeMedLat));
-		csv.append(String.format("\"Max read latency\":%.2f,\n", readMaxLat));
-		csv.append(String.format("\"Max write latency\":%.2f,\n", writeMaxLat));
-		csv.append(String.format("\"Average read latency\":%.2f,\n", readAvgLat));
-		csv.append(String.format("\"Average write latency\":%.2f\n", writeAvgLat));
+		csv.append(String.format("%d, ", reqsCount));
+		csv.append(String.format("%d, ", opsThr));
+		csv.append(String.format("%.2f, ", dataThr));
+		csv.append(String.format("%.0f, ", latAvg));
+		csv.append(String.format("%.0f, ", lat50));
+		csv.append(String.format("%.0f, ", lat95));
+		csv.append(String.format("%.0f, ", lat99));
+		csv.append(String.format("%.0f, ", latMin));
+		csv.append(String.format("%.0f, ", latMax));
+		csv.append(String.format("%.0f, ", readMedLat));
+		csv.append(String.format("%.0f, ", writeMedLat));
+		csv.append(String.format("%.0f, ", readMaxLat));
+		csv.append(String.format("%.0f, ", writeMaxLat));
+		csv.append(String.format("%.0f, ", readAvgLat));
+		csv.append(String.format("%.0f\n", writeAvgLat));
 
 		return csv.toString();
 	}

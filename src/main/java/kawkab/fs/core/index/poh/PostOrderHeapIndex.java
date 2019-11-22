@@ -639,10 +639,16 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	}
 
 	public void shutdown() throws KawkabException {
-		timerQ.waitUntilEmpty();
+		//timerQ.waitUntilEmpty();
+
+		if (acquiredNode != null && timerQ.tryDisable(acquiredNode)) {
+			deferredWork(acquiredNode.getItem());
+		}
 
 		for (POHNode node : nodes.values()) {
-			cache.releaseBlock(node.id());
+			if (node != null) {
+				cache.releaseBlock(node.id());
+			}
 		}
 
 		nodes.clear();

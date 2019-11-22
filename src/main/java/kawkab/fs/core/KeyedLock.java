@@ -5,10 +5,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
-public final class KeyedLock {
-	private Map<String, KeyLock> locks = new HashMap<String, KeyLock>();
+public final class KeyedLock<T> {
+	private Map<T, KeyLock> locks = new HashMap<>();
 
-	public void lock(String key) {
+	public void lock(T key) {
 		KeyLock keyLock = null;
 		synchronized (locks) {
 			keyLock = locks.get(key);
@@ -23,7 +23,7 @@ public final class KeyedLock {
 		keyLock.lock.lock();
 	}
 	
-	public void unlock(String key) {
+	public void unlock(T key) {
 		KeyLock keyLock = null;
 		synchronized (locks) {
 			keyLock = locks.get(key);
@@ -45,7 +45,6 @@ public final class KeyedLock {
 		private int count;
 		private KeyLock() {
 			lock = new ReentrantLock();
-			count = 0;
 		}
 	}
 }

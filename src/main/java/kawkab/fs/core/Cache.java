@@ -84,4 +84,6 @@ public abstract class Cache {
 	public abstract void shutdown() throws KawkabException;
 	
 	public abstract long size();
+
+	public abstract String getStats();
 }

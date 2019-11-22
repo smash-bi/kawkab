@@ -1,10 +1,11 @@
 package kawkab.fs.core;
 
+import java.io.PrintStream;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class DSPool {
 	private ConcurrentLinkedQueue<DataSegment> pool;
-	
+
 	public DSPool(int capacity) {
 		System.out.println("Initializing DataSegments pool of size " + capacity);
 		pool = new ConcurrentLinkedQueue<>();
@@ -18,7 +19,7 @@ public class DSPool {
 		//TODO: Wait if the queue is empty
 		DataSegment ds = pool.poll();
 		
-		assert ds != null;
+		assert ds != null : "DSPool is empty";
 		
 		ds.reInit(dsid);
 		
@@ -27,8 +28,9 @@ public class DSPool {
 	
 	public void release(DataSegment ds) {
 		//System.out.println("Released " + ds.id());
+		ds.reset(null);
 		pool.offer(ds);
-		
+
 		//TODO: If the current pool size is larger than the initial capcity for a timeout, wakeup the thread to destory
 		// some DSes
 	}

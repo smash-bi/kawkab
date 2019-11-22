@@ -22,7 +22,7 @@ public class Namespace {
 	private NamespaceService ns;
 	private Cache cache;
 	private int lastIbmapUsed;
-	private KeyedLock locks;
+	private KeyedLock<String> locks;
 	private static LocalStoreManager localStore;
 
 	private Map<Long, Boolean> openedFiles; // Map<inumber, appendMode> //FIXME: Should we use a bit-map instead of a map?
@@ -33,7 +33,7 @@ public class Namespace {
 
 	private Namespace() throws KawkabException {
 		cache = Cache.instance();
-		locks = new KeyedLock();
+		locks = new KeyedLock<>();
 		lastIbmapUsed = Configuration.instance().ibmapBlocksRangeStart;
 		openedFiles = new ConcurrentHashMap<>();
 		ns = NamespaceService.instance();

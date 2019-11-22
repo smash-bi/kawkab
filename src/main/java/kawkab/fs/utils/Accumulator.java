@@ -2,12 +2,15 @@ package kawkab.fs.utils;
 
 public class Accumulator{
     private long[] buckets;
-    private long totalSum;
+    //private long totalSum;
     private long totalCnt;
-    private double prodSum = 0;
+    //private double prodSum = 0;
     //private int maxCntBucket;
     private double maxValue;
     private double minValue = Double.MAX_VALUE;
+
+    //private double aggMean;
+    //private double m2;
     
     
     public Accumulator(){
@@ -15,18 +18,18 @@ public class Accumulator{
     }
     
     public synchronized void reset(){
-        int maxValue = 1500000; //in microseconds
+        int maxValue = 1000000; //in microseconds
         buckets = new long[maxValue];
         //maxCntBucket = 0;
         this.maxValue = 0;
-        totalSum = 0;
+        //totalSum = 0;
         totalCnt = 0;
-        prodSum = 0;
+        //prodSum = 0;
         this.minValue = Double.MAX_VALUE;
     }
     
-    public synchronized void put(int value){
-        assert value >= 0;
+    public synchronized void put(int value) {
+        assert value >= 0 : "Value is negative: " + value;
 
         int bucket = value;
 
@@ -35,9 +38,14 @@ public class Accumulator{
         }
         
         buckets[bucket]++;
-        totalSum += value;
+        //totalSum += value;
         totalCnt += 1;
-        prodSum += (value*value);
+
+        //long prod = value*value;
+
+        //assert prodSum + prod > 0: String.format("prodSum is rolled over: old=%,.2f, new=%d, sum=%,.2f, value=%d", prodSum, prod, (prodSum+prod), value);
+
+        //prodSum += prod;
         
         //if (buckets[maxCntBucket] < buckets[bucket])
         //   maxCntBucket = bucket;
@@ -47,13 +55,24 @@ public class Accumulator{
         
         if (minValue > value)
             minValue = value;
+
+        // Welford's online algorithm
+        //https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
+        //double delta = value - aggMean;
+        //aggMean += delta / totalCnt;
+        //double delta2 = value - aggMean;
+        //m2 += delta * delta2;
     }
     
     public synchronized double mean(){
-        if (totalCnt > 0)
+        /*if (totalCnt > 0)
             return 1.0*totalSum/totalCnt;
         else
-            return -1;
+            return -1;*/
+
+        //return aggMean;
+
+        return mean(buckets);
     }
     
     public synchronized double min(){
@@ -64,11 +83,13 @@ public class Accumulator{
         return maxValue;
     }
     
-    public double variance(){
-        if (totalCnt > 0)
-            return (prodSum - (1.0*totalSum*totalSum/totalCnt))/totalCnt;
+    /*public double variance(){
+        if (totalCnt > 2)
+            //return (prodSum - (1.0*totalSum*totalSum/totalCnt))/totalCnt;
+            return m2 /totalCnt;
         else
             return -1;
+
     }
     
     public synchronized double stdDev(){
@@ -76,7 +97,7 @@ public class Accumulator{
             return Math.sqrt(variance());
         else
             return -1;
-    }
+    }*/
     
     public synchronized long count() {
         return totalCnt;
@@ -128,8 +149,8 @@ public class Accumulator{
     @Override
     public synchronized String toString() {
         double[] lats = getLatencies();
-        return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f, mean=%.2f, stdev=%.2f",
-                lats[0],lats[1],lats[2], min(), max(), mean(), stdDev());
+        return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f, mean=%.2f",
+                lats[0],lats[1],lats[2], min(), max(), mean());
     }
     
     public synchronized void printCDF() {
@@ -170,13 +191,29 @@ public class Accumulator{
             buckets[i] += from.buckets[i];
         }
 
-        totalSum += from.totalSum;
+        //totalSum += from.totalSum;
         totalCnt += from.totalCnt;
-        prodSum += prodSum;
+        //prodSum += from.prodSum;
+        //aggMean = (aggMean+from.aggMean)/2.0;
+        //aggMean = mean(buckets);
+        //m2 += this.m2;
+
         if (maxValue < from.maxValue)
             maxValue = from.maxValue;
 
         if (minValue > from.minValue)
             minValue = from.minValue;
+    }
+
+    private double mean(long[] hist) {
+        double avg = 0;
+        int n = 1;
+        for (int x=0; x<hist.length; x++) {
+            for (int j=0; j<hist[x]; j++) {
+                avg += (x - avg) / n;
+                ++n;
+            }
+        }
+        return avg;
     }
 }

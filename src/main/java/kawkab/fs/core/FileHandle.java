@@ -3,11 +3,10 @@ package kawkab.fs.core;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
-import kawkab.fs.commons.Stats;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
-import kawkab.fs.core.timerqueue.TimerQueue;
+import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
 import kawkab.fs.utils.TimeLog;
 
@@ -27,14 +26,14 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	private Inode inode; // Not final because we set it to null in the close() in order to free the memory
 	private InodesBlock inodesBlock; // Not final because we set it to null in the close() in order to free the memory
 	private final boolean onPrimaryNode; //Indicates whether this file is opened on its primary node or not
-	private final TimerQueue timerQ;
+	private final TimerQueueIface fsQ;
 	private TimerQueueItem<InodesBlock> inbAcquired;
 
 	private final static Cache cache;
 	private final static Clock clock = Clock.instance();
 	private final static int inodesPerBlock;	// Used in accessing the inode of this file when on the non-primary node
 	private final static LocalStoreManager localStore;	// FIXME: Isn't it a bad design to access localStore from a file handle?
-	private final static int bufferTimeLimitMs = 1000;
+	private final static int bufferTimeLimitMs = 5000;
 	private final TimeLog rLog;
 	private final TimeLog wLog;
 
@@ -45,10 +44,11 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		localStore = LocalStoreManager.instance();
 	}
 
-	public FileHandle(long inumber, FileMode mode, TimerQueue tq) throws IOException, KawkabException {
+	public FileHandle(long inumber, FileMode mode, TimerQueueIface fsQ, TimerQueueIface segsQ) throws IOException, KawkabException {
 		this.inumber = inumber;
 		this.fileMode = mode;
-		this.timerQ = tq;
+		this.fsQ = fsQ;
+
 		onPrimaryNode = Configuration.instance().thisNodeID == Commons.primaryWriterID(inumber); //Is this reader or writer on the primary node?
 
 		int inodesBlockIdx = (int) (inumber / inodesPerBlock);
@@ -59,12 +59,12 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 
 		inodesBlock = inb;
 		inode = inb.getInode(inumber);
-		inode.prepare(tq);
+		inode.prepare(fsQ, segsQ);
 		if (mode == FileMode.APPEND) //Pre-fetch the last block for writes
 			inode.loadLastBlock();
 
-		rLog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "R-"+inumber, 5);
-		wLog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "W-"+inumber, 5);
+		rLog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "R-"+inumber, 1);
+		wLog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "W-"+inumber, 1);
 	}
 
 	/**
@@ -82,46 +82,43 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 			throw new IllegalArgumentException("Read length is negative or greater than the given buffer size.");
 
 		rLog.start();
+
+		long fileSize = 0;
+		InodesBlock inb = null;
+		Inode inode;
+		int bytesRead = 0;
+
 		try {
-
-			long fileSize = 0;
-			InodesBlock inb = null;
-			Inode inode;
-			int bytesRead = 0;
-
-			try {
-				if (onPrimaryNode) {
-					if (inodesBlock == null) {
-						throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
-					}
-					inb = this.inodesBlock;
-					inode = this.inode;
-				} else {
-					int blockIndex = (int) (inumber / inodesPerBlock);
-					BlockID id = new InodesBlockID(blockIndex);
-					inb = (InodesBlock) cache.acquireBlock(id);
-					inb.loadBlock();
-					inode = inb.getInode(inumber);
+			if (onPrimaryNode) {
+				if (inodesBlock == null) {
+					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
 				}
-
-				fileSize = inode.fileSize();
-
-				if (readOffsetInFile + length > fileSize)
-					throw new IllegalArgumentException(String.format(
-							"Read length exceeds file length: Read offset=%d, read length=%d, file size=%d.",
-							readOffsetInFile, length, fileSize));
-
-				bytesRead = inode.read(buffer, length, readOffsetInFile);
-			} finally {
-				if (!onPrimaryNode && inb != null) {
-					cache.releaseBlock(inb.id());
-				}
+				inb = this.inodesBlock;
+				inode = this.inode;
+			} else {
+				int blockIndex = (int) (inumber / inodesPerBlock);
+				BlockID id = new InodesBlockID(blockIndex);
+				inb = (InodesBlock) cache.acquireBlock(id);
+				inb.loadBlock();
+				inode = inb.getInode(inumber);
 			}
 
-			return bytesRead;
+			fileSize = inode.fileSize();
+
+			if (readOffsetInFile + length > fileSize)
+				throw new IllegalArgumentException(String.format(
+						"Read length exceeds file length: Read offset=%d, read length=%d, file size=%d.",
+						readOffsetInFile, length, fileSize));
+
+			bytesRead = inode.read(buffer, length, readOffsetInFile);
 		} finally {
-			rLog.end();
+			if (!onPrimaryNode && inb != null) {
+				cache.releaseBlock(inb.id());
+			}
 		}
+
+		rLog.end();
+		return bytesRead;
 	}
 
 	/**
@@ -135,65 +132,59 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	public synchronized List<ByteBuffer> readRecords(final long minTS, final long maxTS, final int recSize)
 			throws KawkabException, IOException {
 		rLog.start();
+		InodesBlock inb = null;
+		Inode inode;
+
 		try {
-			InodesBlock inb = null;
-			Inode inode;
-
-			try {
-				if (onPrimaryNode) {
-					if (inodesBlock == null) {
-						throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
-					}
-					inb = this.inodesBlock;
-					inode = this.inode;
-				} else {
-					int blockIndex = (int) (inumber / inodesPerBlock);
-					BlockID id = new InodesBlockID(blockIndex);
-					inb = (InodesBlock) cache.acquireBlock(id);
-					inb.loadBlock();
-					inode = inb.getInode(inumber);
+			if (onPrimaryNode) {
+				if (inodesBlock == null) {
+					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
 				}
-
-				return inode.readRecords(minTS, maxTS, recSize);
-			} finally {
-				if (!onPrimaryNode && inb != null) {
-					cache.releaseBlock(inb.id());
-				}
+				inb = this.inodesBlock;
+				inode = this.inode;
+			} else {
+				int blockIndex = (int) (inumber / inodesPerBlock);
+				BlockID id = new InodesBlockID(blockIndex);
+				inb = (InodesBlock) cache.acquireBlock(id);
+				inb.loadBlock();
+				inode = inb.getInode(inumber);
 			}
-		} finally {
+
 			rLog.end();
+			return inode.readRecords(minTS, maxTS, recSize);
+		} finally {
+			if (!onPrimaryNode && inb != null) {
+				cache.releaseBlock(inb.id());
+			}
 		}
 	}
 
 	public synchronized List<Record> readRecords(final long minTS, final long maxTS, final Record recFactory) throws KawkabException, IOException {
 		rLog.start();
+		InodesBlock inb = null;
+		Inode inode;
+
 		try {
-			InodesBlock inb = null;
-			Inode inode;
-
-			try {
-				if (onPrimaryNode) {
-					if (inodesBlock == null) {
-						throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
-					}
-					inb = this.inodesBlock;
-					inode = this.inode;
-				} else {
-					int blockIndex = (int) (inumber / inodesPerBlock);
-					BlockID id = new InodesBlockID(blockIndex);
-					inb = (InodesBlock) cache.acquireBlock(id);
-					inb.loadBlock();
-					inode = inb.getInode(inumber);
+			if (onPrimaryNode) {
+				if (inodesBlock == null) {
+					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
 				}
-
-				return inode.readAll(minTS, maxTS, recFactory);
-			} finally {
-				if (!onPrimaryNode && inb != null) {
-					cache.releaseBlock(inb.id());
-				}
+				inb = this.inodesBlock;
+				inode = this.inode;
+			} else {
+				int blockIndex = (int) (inumber / inodesPerBlock);
+				BlockID id = new InodesBlockID(blockIndex);
+				inb = (InodesBlock) cache.acquireBlock(id);
+				inb.loadBlock();
+				inode = inb.getInode(inumber);
 			}
-		} finally {
+
 			rLog.end();
+			return inode.readAll(minTS, maxTS, recFactory);
+		} finally {
+			if (!onPrimaryNode && inb != null) {
+				cache.releaseBlock(inb.id());
+			}
 		}
 	}
 	
@@ -213,33 +204,30 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 			IOException, RecordNotFoundException, KawkabException {
 
 		rLog.start();
+		InodesBlock inb = null;
+		Inode inode;
+
 		try {
-			InodesBlock inb = null;
-			Inode inode;
-
-			try {
-				if (onPrimaryNode) {
-					if (inodesBlock == null) {
-						throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
-					}
-					inb = this.inodesBlock;
-					inode = this.inode;
-				} else {
-					int blockIndex = (int) (inumber / inodesPerBlock);
-					BlockID id = new InodesBlockID(blockIndex);
-					inb = (InodesBlock) cache.acquireBlock(id);
-					inb.loadBlock();
-					inode = inb.getInode(inumber);
+			if (onPrimaryNode) {
+				if (inodesBlock == null) {
+					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
 				}
-
-				return inode.readAt(dstBuf, timestamp, recSize);
-			} finally {
-				if (!onPrimaryNode && inb != null) {
-					cache.releaseBlock(inb.id());
-				}
+				inb = this.inodesBlock;
+				inode = this.inode;
+			} else {
+				int blockIndex = (int) (inumber / inodesPerBlock);
+				BlockID id = new InodesBlockID(blockIndex);
+				inb = (InodesBlock) cache.acquireBlock(id);
+				inb.loadBlock();
+				inode = inb.getInode(inumber);
 			}
-		} finally {
+
 			rLog.end();
+			return inode.readAt(dstBuf, timestamp, recSize);
+		} finally {
+			if (!onPrimaryNode && inb != null) {
+				cache.releaseBlock(inb.id());
+			}
 		}
 	}
 	
@@ -261,36 +249,33 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 			IOException, KawkabException, RecordNotFoundException, InvalidFileOffsetException {
 		rLog.start();
 
+		if (recordNum <= 0)
+			throw new InvalidFileOffsetException("Record number " + recordNum + " is invalid.");
+
+		InodesBlock inb = null;
+		Inode inode;
+
 		try {
-			if (recordNum <= 0)
-				throw new InvalidFileOffsetException("Record number " + recordNum + " is invalid.");
-
-			InodesBlock inb = null;
-			Inode inode;
-
-			try {
-				if (onPrimaryNode) {
-					if (inodesBlock == null) {
-						throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
-					}
-					inb = this.inodesBlock;
-					inode = this.inode;
-				} else {
-					int blockIndex = (int) (inumber / inodesPerBlock);
-					BlockID id = new InodesBlockID(blockIndex);
-					inb = (InodesBlock) cache.acquireBlock(id);
-					inb.loadBlock();
-					inode = inb.getInode(inumber);
+			if (onPrimaryNode) {
+				if (inodesBlock == null) {
+					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
 				}
-
-				return inode.readRecordN(dstBuf, recordNum, recSize);
-			} finally {
-				if (!onPrimaryNode && inb != null) {
-					cache.releaseBlock(inb.id());
-				}
+				inb = this.inodesBlock;
+				inode = this.inode;
+			} else {
+				int blockIndex = (int) (inumber / inodesPerBlock);
+				BlockID id = new InodesBlockID(blockIndex);
+				inb = (InodesBlock) cache.acquireBlock(id);
+				inb.loadBlock();
+				inode = inb.getInode(inumber);
 			}
-		} finally {
+
 			rLog.end();
+			return inode.readRecordN(dstBuf, recordNum, recSize);
+		} finally {
+			if (!onPrimaryNode && inb != null) {
+				cache.releaseBlock(inb.id());
+			}
 		}
 	}
 
@@ -312,28 +297,25 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 									IOException, KawkabException, InterruptedException{
 		wLog.start();
 
-		try {
-			if (fileMode != FileMode.APPEND || !onPrimaryNode) {
-				throw new InvalidFileModeException();
-			}
-
-			if (inodesBlock == null) {
-				throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
-			}
-
-			int appendedBytes = inode.appendBuffered(data, offset, length);
-
-			if (inbAcquired == null || !timerQ.tryDisable(inbAcquired)) {
-				inbAcquired = new TimerQueueItem<>(inodesBlock, this);
-			}
-
-			inbAcquired.getItem().markLocalDirty();
-			timerQ.enableAndAdd(inbAcquired, clock.currentTime() + bufferTimeLimitMs);
-
-			return appendedBytes;
-		} finally {
-			wLog.end();
+		if (fileMode != FileMode.APPEND || !onPrimaryNode) {
+			throw new InvalidFileModeException();
 		}
+
+		if (inodesBlock == null) {
+			throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+		}
+
+		int appendedBytes = inode.appendBuffered(data, offset, length);
+
+		if (inbAcquired == null || !fsQ.tryDisable(inbAcquired)) {
+			inbAcquired = new TimerQueueItem<>(inodesBlock, this);
+		}
+
+		inbAcquired.getItem().markLocalDirty();
+		fsQ.enableAndAdd(inbAcquired, clock.currentTime() + bufferTimeLimitMs);
+
+		wLog.end();
+		return appendedBytes;
 	}
 	
 	// FIXME: Create a separate interface for binary and structured files. Binary append and record-based appends
@@ -352,30 +334,27 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	 */
 	public synchronized int append(final ByteBuffer srcBuf, int recSize) throws MaxFileSizeExceededException,
 			IOException, KawkabException, InterruptedException{
+		if (fileMode != FileMode.APPEND || !onPrimaryNode) {
+			throw new InvalidFileModeException();
+		}
+
+		if (inodesBlock == null) {
+			throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+		}
+
 		wLog.start();
 
-		try {
-			if (fileMode != FileMode.APPEND || !onPrimaryNode) {
-				throw new InvalidFileModeException();
-			}
+		int appendedBytes = inode.appendRecords(srcBuf, recSize);
 
-			if (inodesBlock == null) {
-				throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
-			}
-
-			int appendedBytes = inode.appendRecords(srcBuf, recSize);
-
-			if (inbAcquired == null || !timerQ.tryDisable(inbAcquired)) {
-				inbAcquired = new TimerQueueItem<>(inodesBlock, this);
-			}
-
-			inbAcquired.getItem().markLocalDirty();
-			timerQ.enableAndAdd(inbAcquired, clock.currentTime() + bufferTimeLimitMs);
-
-			return appendedBytes;
-		} finally {
-			wLog.end();
+		if (inbAcquired == null || !fsQ.tryDisable(inbAcquired)) {
+			inbAcquired = new TimerQueueItem<>(inodesBlock, this);
 		}
+
+		inbAcquired.getItem().markLocalDirty();
+		fsQ.enableAndAdd(inbAcquired, clock.currentTime() + bufferTimeLimitMs);
+
+		wLog.end();
+		return appendedBytes;
 	}
 
 	/**
@@ -448,12 +427,12 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	}
 	
 	synchronized void close() throws KawkabException {
-		if (inbAcquired != null && timerQ.tryDisable(inbAcquired)) {
+		if (inbAcquired != null && fsQ.tryDisable(inbAcquired)) {
 			deferredWork(inbAcquired.getItem());
 		}
 
 		if (inodesBlock != null) {
-			inode.cleanup();
+			inode.cleanup(); //FIXME: This will cleanup for all the clients that have opened the file, which is wrong.
 			cache.releaseBlock(inodesBlock.id());
 		}
 

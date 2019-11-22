@@ -230,6 +230,11 @@ public class KClient {
 		}
 	}
 
+	public int noop(int none) throws KawkabException {
+		assert client != null;
+		return client.noop(none);
+	}
+
 	public void close(String fn) throws KawkabException {
 		assert client != null;
 		Session session = sessions.get(fn);

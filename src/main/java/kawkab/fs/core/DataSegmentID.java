@@ -111,11 +111,12 @@ public final class DataSegmentID extends BlockID {
 	
 	@Override
 	public int hashCode() {
-		if (hash == 0)
+		/*if (hash == 0)
 			hash = Objects.hash(inumber, blockInFile, segmentInBlock);
-		return hash;
+		return hash;*/
+		return Objects.hash(inumber, blockInFile, segmentInBlock);
 	}
-	
+
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;

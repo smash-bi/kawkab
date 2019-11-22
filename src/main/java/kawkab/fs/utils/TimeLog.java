@@ -1,5 +1,6 @@
 package kawkab.fs.utils;
 
+import java.time.Clock;
 import java.util.Random;
 
 /**
@@ -34,7 +35,7 @@ public class TimeLog {
 	private int[] rand;
 	private int randIdx;
 	private int samplePercent;
-	
+
 	public TimeLog(TimeLogUnit unit, String tag, int samplePercent) {
 		assert 0 <= samplePercent && samplePercent <= 100 : "Sample percent must be between 0 and 100";
 		this.unit = unit;
@@ -48,6 +49,8 @@ public class TimeLog {
 		for(int i=0; i<count; i++) {
 			rand[i] = r.nextInt(100);
 		}
+
+		started = false;
 	}
 	
 	
@@ -55,8 +58,7 @@ public class TimeLog {
 	 * start() and end() must be called in a combination, surrounding the code that is being timed
 	 */
 	public void start() {
-		assert !started;
-		
+		//assert !started; Allow repeated starts, the last one wins
 		count++;
 		randIdx = ++randIdx % rand.length;
 		if (rand[randIdx] >= samplePercent)
@@ -70,19 +72,21 @@ public class TimeLog {
 	public void end() {
 		if (!started)
 			return;
-		
-		stats.put((int)(timeNow() - lastTS));
+
+		int diff = (int)(timeNow() - lastTS); //Diff can be negative due to using nanoTime() in multi-cpu hardware
+		if (diff >= 0)
+			stats.put(diff);
 		
 		started = false;
 	}
 	
 	public void printStats() {
 		//System.out.printf("\t%s (%s): %s, num calls: %,d\n", tag, unit.getUnit(), stats, count);
-		System.out.printf("\t%s (%s): %s, num calls = %,d, sampled = %d\n", tag, unit.getUnit(), stats, count, stats.count());
+		System.out.printf("\t%s\n", getStats());
 	}
 	
 	public String getStats() {
-		return String.format("(%s): %s, total calls = %,d, sampled = %d\n", unit.getUnit(), stats, count,stats.count());
+		return String.format("(%s): %s, count=%,d, sampled=%d", unit.getUnit(), stats, count,stats.count());
 	}
 	
 	private long timeNow() {
