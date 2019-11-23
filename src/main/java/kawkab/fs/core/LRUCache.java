@@ -24,7 +24,8 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 
 	@Override
 	protected boolean removeEldestEntry(Entry<BlockID, CachedItem> eldest) {
-		if (size() < maxBlocksInCache-1)
+		int maxAllowed = maxBlocksInCache-1;
+		if (size() < maxAllowed)
 			return false;
 
 		CachedItem toEvict = eldest.getValue();
@@ -43,6 +44,7 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 		}*/
 
 		//addDirty(block);
+		// Move the non-evictable LRU item to the head
 		super.replace(eldest.getKey(), eldest.getValue()); //FIXME: This is not a good approach.
 		//System.out.println(" ============> Ref cnt " + toEvict.refCount() + " for " + toEvict.block().name());
 
@@ -56,9 +58,9 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 					System.out.println("\t\t\t ---> Evicting just added block.");
 				}
 
-				System.out.println("[LRUC] **** Cannot evict " + toEvict.block().id() + ", evicting: " + altToEvict.block().id());
+				//System.out.println("[LRUC] **** Cannot evict " + toEvict.block().id() + ", evicting: " + altToEvict.block().id());
 
-				super.remove(entry.getKey());
+				//super.remove(entry.getKey());
 				evictListener.beforeEviction(altToEvict);
 
 				return false;
@@ -66,24 +68,25 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 		}
 
 		//FIXME: What should we do in this situation? We don't have any block that can be evicted. All the blocks have ref-count > 0.
+		//evictListener.beforeEviction(toEvict);
 
-		evictListener.beforeEviction(toEvict);
-
-		return true;
+		return false;
 	}
 
 
 
-	public void bulkRemove() {
-		int toEvict = size() - lowMark;
-
-		System.out.println("[LC] To evict = "+toEvict);
+	void bulkRemove(int toEvict) {
+		//System.out.println("[LC] To evict = "+toEvict);
 
 		CachedItem firstDirty = null;
 		int evicted = 0;
 		int skipped = 0;
 		Iterator<Entry<BlockID, CachedItem>> itr = super.entrySet().iterator();
-		while(evicted < toEvict && itr.hasNext()) {
+		//while(evicted < toEvict && itr.hasNext()) {
+		for (int i=0; i<toEvict; i++) {
+			if (!itr.hasNext())
+				break;
+
 			Entry<BlockID, CachedItem> e = itr.next();
 			CachedItem ci = e.getValue();
 
@@ -111,16 +114,16 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 
 		// Can't evict a block that is dirty. However, if all the blocks are dirty or are referenced,
 		// evict the most LRU dirty block
-		if (evicted == 0 && firstDirty != null) {
+		/*if (evicted == 0 && firstDirty != null) {
 			assert firstDirty.refCount() == 0 : String.format("[LC] Evicting a referenced block: %s", firstDirty.block().id());
 
 			evictListener.beforeEviction(firstDirty);
 			// Do not call the onEvictBlock here as we want to release the lock before waiting for localStore sync
 			System.out.println("[LC] Evicted after sync = 1");
 			return;
-		}
+		}*/
 
-		if (evicted != toEvict)
-			System.out.println("[LC] Evicted = "+evicted+", skipped="+skipped);
+		//if (evicted != toEvict)
+		//	System.out.println("[LC] Evicted = "+evicted+", skipped="+skipped);
 	}
 }

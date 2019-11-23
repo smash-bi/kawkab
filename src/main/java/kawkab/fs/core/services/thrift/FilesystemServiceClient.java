@@ -2,6 +2,7 @@ package kawkab.fs.core.services.thrift;
 
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.OutOfMemoryException;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -15,6 +16,7 @@ import java.util.List;
 public class FilesystemServiceClient {
 	private FilesystemService.Client client;
 	private TTransport transport;
+	private final int MAX_TRIES = 3;
 
 	/**
 	 * @param serverIP IP of the server to connect
@@ -97,13 +99,20 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public int appendBuffered(long sessionID, ByteBuffer srcBuf, int recSize) throws KawkabException {
-		try {
-			//System.out.printf("pos=%d, lim=%d, recSize=%d\n", srcBuf.position(), srcBuf.limit(), recSize);
-			return client.appendRecordBuffered(sessionID, srcBuf, recSize);
-		} catch (TException e) {
-			throw new KawkabException(e);
+	public int appendBuffered(long sessionID, ByteBuffer srcBuf, int recSize) throws OutOfMemoryException, KawkabException {
+		int tries = 0;
+		while(++tries < MAX_TRIES) {
+			try {
+				//System.out.printf("pos=%d, lim=%d, recSize=%d\n", srcBuf.position(), srcBuf.limit(), recSize);
+				return client.appendRecordBuffered(sessionID, srcBuf, recSize);
+			} catch (TOutOfMemoryException e) {
+				// Retry if the memory was full
+			} catch (TException e) {
+				throw new KawkabException(e);
+			}
 		}
+
+		throw new OutOfMemoryException(String.format("Request failed after %d tries", tries));
 	}
 
 	public int appendBatched(long sessionID, List<ByteBuffer> srcBufs, int recSize) throws KawkabException {

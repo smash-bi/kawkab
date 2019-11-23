@@ -62,6 +62,8 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	private int acquireCount;
 
 	public TimerQueueItem(T item, DeferredWorkReceiver<T> receiver) {
+		assert item != null;
+
 		this.item = item;
 		this.receiver = receiver;
 		timer = new ItemTimer();
@@ -80,7 +82,7 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	 * in which case the caller should create a new item and throw away the existing item to ensure that deferredWork()
 	 * is called only once.
 	 */
-	protected final boolean disableIfNotExpired() {
+	protected synchronized final boolean disableIfNotExpired() {
 		return timer.disableIfNotExpired();
 	}
 	
@@ -93,7 +95,7 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	 *
 	 * @param futureTimeInMillis Time offset in millis after which the deferredWork() function can be called.
 	 */
-	protected final void enable(final long futureTimeInMillis) {
+	protected synchronized final void enable(final long futureTimeInMillis) {
 		timer.update(futureTimeInMillis);
 	}
 	
@@ -110,7 +112,7 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	 *
 	 * @throws KawkabException
 	 */
-	protected final long tryExpire() throws KawkabException {
+	protected synchronized final long tryExpire() throws KawkabException {
 		return timer.tryExpire(clock.currentTime());
 	}
 	
@@ -119,7 +121,7 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	 *
 	 * @throws KawkabException
 	 */
-	protected void deferredWork() {
+	protected synchronized void deferredWork() {
 		receiver.deferredWork(item);
 		item = null;
 	}
@@ -137,15 +139,15 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 		return item.toString(); //FIXME: This is not thread safe. This should only be used for debuggin purposes.
 	}
 
-	public int incrementAndGet() {
+	public synchronized int incrementAndGet() {
 		return ++acquireCount;
 	}
 
-	public int decrementAndGet() {
+	public synchronized int decrementAndGet() {
 		return --acquireCount;
 	}
 
-	public int count() {
+	public synchronized int count() {
 		return acquireCount;
 	}
 }

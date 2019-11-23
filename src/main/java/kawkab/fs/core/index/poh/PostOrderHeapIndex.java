@@ -241,7 +241,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		}
 
 		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
-			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode)); //ceil(entriesInIndex)/(entriesPerNode) gives the ceil value; FIXME: Note the variable overflow in curIndexLen+1
+			// FIXME: Note the variable overflow in curIndexLen+1
+			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode)); //ceil(entriesInIndex)/(entriesPerNode) gives the ceil value;
 			POHNode node = acquireNode(lastNode);
 			acquiredNode = new TimerQueueItem<>(node, this);
 		}

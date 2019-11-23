@@ -4,6 +4,7 @@ import kawkab.fs.api.Record;
 import kawkab.fs.client.KClient;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.utils.Accumulator;
 
 import java.util.Random;
@@ -76,37 +77,42 @@ public class TestClient {
 	private Accumulator appendTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
 		String[] fnames = openFiles(nTestFiles, "append", Filesystem.FileMode.APPEND);
 
-		if (batchSize == 1) {
+		Accumulator accm = null;
+		try {
+			if (batchSize == 1) {
+
+				pr.print(String.format("Ramp-up for %d seconds...", warmupSecs));
+				appendRecs(fnames, warmupSecs, recGen.newRecord());
+
+				pr.print("Appending records...");
+				accm = appendRecs(fnames, testDurSec, recGen.newRecord());
+
+				pr.print(String.format("Ramp-down for %d seconds...", 5));
+				appendRecs(fnames, 5, recGen.newRecord());
+
+				closeFiles(fnames);
+
+				return accm;
+			}
 
 			pr.print(String.format("Ramp-up for %d seconds...", warmupSecs));
-			appendRecs(fnames, warmupSecs, recGen.newRecord());
+			appendRecsBuffered(fnames, warmupSecs, recGen.newRecord(), batchSize);
 
 			pr.print("Appending records...");
-			Accumulator accm = appendRecs(fnames, testDurSec, recGen.newRecord());
+			accm = appendRecsBuffered(fnames, testDurSec, recGen.newRecord(), batchSize);
 
 			pr.print(String.format("Ramp-down for %d seconds...", 5));
-			appendRecs(fnames, 5, recGen.newRecord());
-
-			closeFiles(fnames);
-
-			return accm;
+			appendRecsBuffered(fnames, 5, recGen.newRecord(), batchSize);
+		}catch (OutOfMemoryException e) {
+			e.printStackTrace();
 		}
-
-		pr.print(String.format("Ramp-up for %d seconds...", warmupSecs));
-		appendRecsBatched(fnames, warmupSecs, recGen.newRecord(), batchSize);
-
-		pr.print("Appending records...");
-		Accumulator accm = appendRecsBatched(fnames, testDurSec, recGen.newRecord(), batchSize);
-
-		pr.print(String.format("Ramp-down for %d seconds...", 5));
-		appendRecsBatched(fnames, 5, recGen.newRecord(), batchSize);
 
 		closeFiles(fnames);
 
 		return accm;
 	}
 
-	private Accumulator appendRecsBatched(String[] fnames, int durSec, Record recGen, int batchSize) throws KawkabException {
+	private Accumulator appendRecsBuffered(String[] fnames, int durSec, Record recGen, int batchSize) throws OutOfMemoryException, KawkabException {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 

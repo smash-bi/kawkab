@@ -92,7 +92,6 @@ public class TimerQueue implements TimerQueueIface {
 	
 	private void process(TimerQueueItem item) throws KawkabException {
 		long ret = item.tryExpire();
-		
 		while (ret > 0) { //While (!EXPIRED && !DISABLED), which implies VALID, which implies a positive value greater than zero
 			try {
 				Thread.sleep(ret);

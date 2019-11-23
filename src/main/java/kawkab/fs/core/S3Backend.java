@@ -104,17 +104,17 @@ public final class S3Backend implements GlobalBackend{
 	}
 	
 	@Override
-	public void storeToGlobal(final Block srcBlock) throws KawkabException {
+	public void storeToGlobal(final BlockID id) throws KawkabException {
 		//System.out.println("[S3] Storing to global: " + id.localPath());
 		
 		int length = 0;
 		try(
-				RandomAccessFile raf = new RandomAccessFile(srcBlock.id().localPath(), "r");
+				RandomAccessFile raf = new RandomAccessFile(id.localPath(), "r");
             ) {
 			
 			length = (int)raf.length(); //Block size in Kawkab is an integer
 
-			Lock lock = fileLocks.grabLock(srcBlock.id());
+			Lock lock = fileLocks.grabLock(id);
 			try {
 				lock.lock();
 
@@ -134,9 +134,9 @@ public final class S3Backend implements GlobalBackend{
 			metadata.setContentLength(length);
 			metadata.setContentType(contentType);
 			try {
-				client.putObject(rootBucket, srcBlock.id().localPath(), istream, metadata);
+				client.putObject(rootBucket, id.localPath(), istream, metadata);
 			} catch (AmazonServiceException ase) {
-				System.out.println("Failed to upload block: " + srcBlock.id());
+				System.out.println("Failed to upload block: " + id);
 				throw ase;
 			}
 		} catch (IOException e) {

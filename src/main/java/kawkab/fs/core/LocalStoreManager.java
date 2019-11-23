@@ -109,7 +109,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 
 		// Perform the remaining tasks in the queue
-		Block block = null;
+		Block block;
 		while( (block = reqs.poll()) != null) {
 			try {
 				processStoreRequest(block, channels);
@@ -196,7 +196,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 			syncedCnt += block.storeTo(channel);
 
-			block.markGlobalDirty();
+			//block.markGlobalDirty();
 
 		} catch (IOException e) {
 			System.out.println("Unbale to store data for ID: " + bid);
@@ -229,7 +229,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			block.notifyLocalSyncComplete();
 
 			if (block.shouldStoreGlobally()) { // If this block is the last data segment or an ibmap or an inodesBlock
-				globalProc.store(block, this); // Add the block in the queue to be transferred to the globalStore
+				globalProc.store(block.id(), this); // Add the block in the queue to be transferred to the globalStore
 			}
 		}
 
@@ -243,7 +243,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	}*/
 	
 	@Override
-	public void notifyGlobalStoreComplete(Block block, boolean successful) throws KawkabException {
+	public void notifyGlobalStoreComplete(BlockID blockID, boolean successful) throws KawkabException {
 		// Called by the global store manager when it is done with storing the block in the global store
 		
 		/* if not successful, add in some queue to retry later  */
@@ -261,36 +261,40 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}*/
 
 		if (!successful) {
-			System.out.println("[LS] Store to global failed for: " + block.id());
-			globalProc.store(block, this); //FIXME: This doesn't seem to be the right approach
+			System.out.println("[LS] Store to global failed for: " + blockID);
+			globalProc.store(blockID, this); //FIXME: This doesn't seem to be the right approach
 			return;
 		}
 		
 		//System.out.println("[LSM] Finished storing to global: " + block.id());
-		
-		if (!block.isInCache() && block.evictLocallyOnMemoryEviction()) {
+
+		/*if (!block.isInCache() && block.evictLocallyOnMemoryEviction()) {
 			// Block is not cached. Therefore, the cache will not delete the block.
 			// The block is in the local store and it can be deleted.
 			// Therefore, mark that the block can be evicted from the local store.
 			evictFromLocal(block);
+		}*/
+
+		if (blockID.type() == BlockID.BlockType.DATA_SEGMENT) {
+			evictFromLocal(blockID); //FIXME: We should add it in the list of toBeEvicted
 		}
 	}
 	
 	public void notifyEvictedFromCache(Block block) throws KawkabException {
 		block.unsetInCache();
 		
-		if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
+		//if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
+		/*if (block.evictLocallyOnMemoryEviction()) {
 			evictFromLocal(block);
-		} else {
-			//TODO: Add in canBeEvicted list. Also, remove from the canBeEvicted list if the block becomes dirty again
-		}
+			return;
+		}*/
+
+		//TODO: Add in canBeEvicted list. Also, remove from the canBeEvicted list if the block becomes dirty again
 	}
 	
-	private void evictFromLocal(Block block) throws KawkabException {
-		if (block.id().onPrimaryNode() && !block.isInLocal())
+	private void evictFromLocal(BlockID id) throws KawkabException {
+		if (id.onPrimaryNode())
 			return;
-		
-		BlockID id = block.id();
 		
 		//System.out.println("[LSM] Evict locally: " + id);
 		
@@ -303,7 +307,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			throw new KawkabException("[LSM] Unable to delete file: " + file.getAbsolutePath());
 		}
 		
-		block.unsetInLocalStore();
+		//block.unsetInLocalStore();
 		
 		//int mapSize = storedFilesMap.size();
 		//int permits = storePermits.availablePermits();
@@ -365,7 +369,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		try {
 			block.loadFromFile();
-			block.setInLocalStore(); // This happens when we load the block from the local store after a reboot, or after eviction from the cache
+			//block.setInLocalStore(); // This happens when we load the block from the local store after a reboot, or after eviction from the cache
 		} catch (IOException e) {
 			throw new KawkabException(e);
 		}

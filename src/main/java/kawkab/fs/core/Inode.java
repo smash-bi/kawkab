@@ -4,10 +4,7 @@ import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.FixedLenRecordUtils;
-import kawkab.fs.core.exceptions.InsufficientResourcesException;
-import kawkab.fs.core.exceptions.InvalidFileOffsetException;
-import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.exceptions.MaxFileSizeExceededException;
+import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.index.poh.PostOrderHeapIndex;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueue;
@@ -373,7 +370,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		return bufferOffset;
 	}
 
-	int appendRecords(final ByteBuffer srcBuf, int recSize) throws IOException, InterruptedException, KawkabException {
+	int appendRecords(final ByteBuffer srcBuf, int recSize) throws OutOfMemoryException, IOException, InterruptedException, KawkabException {
 		if (recSize != recordSize)
 			throw new KawkabException(String.format("The given record size (%d bytes) does not match with the file's record size (%d bytes)", recSize, recordSize));
 
@@ -404,7 +401,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		return appended;
 	}
 
-	private int appendBuffered(final ByteBuffer srcBuf, int recSize) throws IOException, InterruptedException, KawkabException {
+	private int appendBuffered(final ByteBuffer srcBuf, int recSize) throws OutOfMemoryException, IOException, InterruptedException, KawkabException {
 		if (recSize != recordSize)
 			throw new KawkabException(String.format("The given record size (%d bytes) does not match with the file's record size (%d bytes)", recSize, recordSize));
 
@@ -461,7 +458,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	//public static TimeLog tlog1 = new TimeLog(TimeLog.TimeLogUnit.NANOS, "ab all");
 	public synchronized int appendBuffered(final byte[] data, int offset, final int length) //Syncrhonized with close() due to acquiredSeg
-			throws MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
+			throws OutOfMemoryException, MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
 
 		assert recordSize == 1;
 
@@ -522,7 +519,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			segId = getSegmentID(fileSize);
 		}
 		DataSegment ds = (DataSegment) cache.acquireBlock(segId);
+		assert ds.id() != null;
 		//ds.initForAppend(fileSize, recordSize);
+		ds.incDbg();
 		return new TimerQueueItem<>(ds, this);
 	}
 
@@ -645,6 +644,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	@Override
 	public void deferredWork(DataSegment ds) {
 		try {
+			ds.decDbg();
+			assert ds.dbgAcq() == 0 : " ds is not zero when returned: " + ds.dbgAcq();
+			assert ds.id() != null : String.format(" ds %d id is null, cnt %d", ds.dbgSig, ds.dbgAcq());
 			cache.releaseBlock(ds.id());
 		} catch (KawkabException e) {
 			e.printStackTrace();

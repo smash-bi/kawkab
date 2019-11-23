@@ -9,7 +9,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -29,6 +28,21 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 
 public abstract class Block extends AbstractTransferItem {
+	public int dbgDspCnt = 0;
+	private static int dbgCnt = 0;
+	public final int dbgSig;
+	private int dbgAcq;
+	public synchronized void incDbg(){
+		dbgAcq++;
+	}
+	public synchronized void  decDbg(){
+		dbgAcq--;
+	}
+	public synchronized int dbgAcq(){
+		return dbgAcq;
+	}
+
+
 	protected BlockID id;
 	
 	private final static GlobalStoreManager globalStoreManager = GlobalStoreManager.instance(); // Backend store such as S3
@@ -39,7 +53,7 @@ public abstract class Block extends AbstractTransferItem {
 	
 	private final Lock dataLoadLock; //Lock for loading data in memory, disabling other threads from reading the block until data is loaded
 	
-	private AtomicInteger globalDirtyCnt;
+	//private AtomicInteger globalDirtyCnt;
 	private volatile boolean isLocalDirty; // Keeps track of the number of times the block is udpated. It helps in keeping track of the
 	                        // updated bytes and flush only the updated bytes to the local/global store. 
 	                        // TODO: Change this to a dirty bit. This can be achieved by an AtomicBoolean instead of
@@ -65,17 +79,19 @@ public abstract class Block extends AbstractTransferItem {
 
 		isOnPrimary    = id.onPrimaryNode();
 		isLocalDirty   = false;
-		globalDirtyCnt = new AtomicInteger(0);
+		//globalDirtyCnt = new AtomicInteger(0);
 		inGlobalQueue  = new AtomicBoolean(false);
 		inLocalStore   = new AtomicBoolean(false);
 		inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and 
 		                                          // the newly created blocks are always cached.
+
+		dbgSig = ++dbgCnt;
 	}
 	
 	protected void reset(BlockID id) {
 		this.id = id;
 		isLocalDirty = false;
-		globalDirtyCnt.set(0);
+		//globalDirtyCnt.set(0);
 		inGlobalQueue.set(false);
 		inLocalStore.set(false);
 		inCache.set(false);
@@ -153,9 +169,9 @@ public abstract class Block extends AbstractTransferItem {
 	/**
 	 * Increment the global dirty counts.
 	 */
-	public void markGlobalDirty() {
+	/*public void markGlobalDirty() {
 		globalDirtyCnt.incrementAndGet();
-	}
+	}*/
 	
 	/**
 	 * @return Returns whether this block has been modified until now or not.
@@ -180,35 +196,35 @@ public abstract class Block extends AbstractTransferItem {
 	 * Returns the current value of the global dirty count
 	 * @return
 	 */
-	public int globalDirtyCount() {
+	/*public int globalDirtyCount() {
 		return globalDirtyCnt.get();
-	}
+	}*/
 	
-	public int decAndGetGlobalDirty(int count) {
+	/*public int decAndGetGlobalDirty(int count) {
 		return globalDirtyCnt.addAndGet(-count);
-	}
+	}*/
 	
-	public boolean inGlobalQueue() {
+	/*public boolean inGlobalQueue() {
 		return inGlobalQueue.get();
-	}
+	}*/
 	
 	/**
 	 * Marks that the block is in a queue to be persisted in the local store.
 	 * 
 	 * @return Returns true if the block was already marked to be in a local store queue
 	 */
-	public boolean markInGlobalQueue() {
+	/*public boolean markInGlobalQueue() {
 		return inGlobalQueue.getAndSet(true);
-	}
+	}*/
 	
 	/**
 	 * Clears the mark that the block is in a queue for persistence in the local store.
 	 * 
 	 * @return Returns false if the marker was already clear
 	 */
-	public boolean clearInGlobalQueue() {
+	/*public boolean clearInGlobalQueue() {
 		return inGlobalQueue.getAndSet(false);
-	}
+	}*/
 	
 	public abstract boolean evictLocallyOnMemoryEviction();
 	
@@ -225,8 +241,8 @@ public abstract class Block extends AbstractTransferItem {
 		if (isLocalDirty || inTransferQueue()) {
 			synchronized(localStoreSyncLock) {
 				while (isLocalDirty || inTransferQueue()) { // It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
-					System.out.println("[B] swait: " + id + ", dty: " +
-								isLocalDirty + ", inLQ="+inTransferQueue());
+					//System.out.println("[B] swait: " + id + ", dty: " +
+					//			isLocalDirty + ", inLQ="+inTransferQueue());
 					localStoreSyncLock.wait();
 				}
 				//System.out.println("[B] Block synced, now evicting: " + id);
@@ -310,7 +326,7 @@ public abstract class Block extends AbstractTransferItem {
 		}
 	}
 
-	void setInLocalStore() {
+	/*void setInLocalStore() {
 		inLocalStore.set(true);
 	}
 	
@@ -320,7 +336,7 @@ public abstract class Block extends AbstractTransferItem {
 	
 	boolean isInLocal() {
 		return inLocalStore.get();
-	}
+	}*/
 	
 	void unsetInCache() {
 		inCache.set(false);

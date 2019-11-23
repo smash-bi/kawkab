@@ -2,6 +2,7 @@ package kawkab.fs.core;
 
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.utils.GCMonitor;
 import kawkab.fs.utils.TimeLog;
 
@@ -113,7 +114,7 @@ public class PartitionedBufferedCache extends Cache {
 	 * @throws KawkabException The block is not cached if the exception is thrown
 	 */
 	@Override
-	public Block acquireBlock(BlockID blockID)  throws KawkabException {
+	public Block acquireBlock(BlockID blockID)  throws OutOfMemoryException, KawkabException {
 		if (blockID.type() != BlockType.DATA_SEGMENT) {
 			return acquirePinned(blockID);
 		}

@@ -5,6 +5,7 @@ import kawkab.fs.api.Record;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
+import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.core.services.thrift.FilesystemService.Iface;
 import kawkab.fs.records.SampleRecord;
 import org.apache.thrift.TException;
@@ -49,7 +50,7 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public ByteBuffer recordNum(long sessionID, long recNum, int recSize) throws TInvalidSessionException, TRequestFailedException {
+	public ByteBuffer recordNum(long sessionID, long recNum, int recSize) throws TInvalidSessionException, TRequestFailedException, TOutOfMemoryException {
 		FileHandle fh = sessions.get(sessionID);
 
 		if (fh == null) {
@@ -60,14 +61,17 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			fh.recordNum(dstBuf, recNum, recSize);
 			return dstBuf;
-		} catch (Exception | AssertionError e) {
+		} catch (OutOfMemoryException e) {
+			e.getMessage();
+			throw new TOutOfMemoryException(e.getMessage());
+		}  catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
 		}
 	}
 
 	@Override
-	public ByteBuffer recordAt(long sessionID, long timestamp, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
+	public ByteBuffer recordAt(long sessionID, long timestamp, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
 		FileHandle fh = sessions.get(sessionID);
 
 		if (fh == null) {
@@ -81,6 +85,9 @@ public class FilesystemServiceImpl implements Iface {
 			}
 
 			return dstBuf;
+		} catch (OutOfMemoryException e) {
+			e.getMessage();
+			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
@@ -88,7 +95,7 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public List<ByteBuffer> readRecords(long sessionID, long minTS, long maxTS, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
+	public List<ByteBuffer> readRecords(long sessionID, long minTS, long maxTS, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
 		FileHandle fh = sessions.get(sessionID);
 
 		if (fh == null) {
@@ -99,6 +106,9 @@ public class FilesystemServiceImpl implements Iface {
 			List<ByteBuffer> results = fh.readRecords(minTS, maxTS, recSize);
 			//printBuffers(results);
 			return results;
+		} catch (OutOfMemoryException e) {
+			e.getMessage();
+			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
@@ -130,7 +140,7 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public int appendRecord(long sessionID, ByteBuffer data, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
+	public int appendRecord(long sessionID, ByteBuffer data, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
 		FileHandle fh = sessions.get(sessionID);
 
 		if (fh == null) {
@@ -139,6 +149,9 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			return fh.append(data, recSize);
+		} catch (OutOfMemoryException e) {
+			e.getMessage();
+			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
@@ -146,7 +159,7 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public int appendRecordBuffered(long sessionID, ByteBuffer srcBuf, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
+	public int appendRecordBuffered(long sessionID, ByteBuffer srcBuf, int recSize) throws TOutOfMemoryException, TRequestFailedException, TInvalidSessionException {
 		FileHandle fh = sessions.get(sessionID);
 
 		if (fh == null) {
@@ -156,6 +169,9 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			return fh.append(srcBuf, recSize);
+		} catch (OutOfMemoryException e) {
+			e.getMessage();
+			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
@@ -179,7 +195,7 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public int appendRecordBatched(long sessionID, List<ByteBuffer> data, int recSize) throws TRequestFailedException, TInvalidSessionException, TException {
+	public int appendRecordBatched(long sessionID, List<ByteBuffer> data, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
 		FileHandle fh = sessions.get(sessionID);
 
 		if (fh == null) {
@@ -191,6 +207,9 @@ public class FilesystemServiceImpl implements Iface {
 			//data.position(offset);
 			try {
 				cnt += fh.append(srcBuf, recSize);
+			} catch (OutOfMemoryException e) {
+				e.getMessage();
+				throw new TOutOfMemoryException(e.getMessage());
 			} catch (Exception | AssertionError e) {
 				e.printStackTrace();
 				throw new TRequestFailedException(e.getMessage());
@@ -200,7 +219,7 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public ByteBuffer read(long sessionID, long offset, int length) throws TRequestFailedException, TInvalidSessionException, TInvalidArgumentException, TException {
+	public ByteBuffer read(long sessionID, long offset, int length) throws TRequestFailedException, TInvalidSessionException, TInvalidArgumentException, TOutOfMemoryException {
 		FileHandle fh = sessions.get(sessionID);
 
 		if (fh == null) {
@@ -228,6 +247,9 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			fh.read(buffer, offset, length);
+		} catch (OutOfMemoryException e) {
+			e.getMessage();
+			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
@@ -237,7 +259,7 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public int append(long sessionID, ByteBuffer srcBuf) throws TRequestFailedException, TInvalidSessionException, TException {
+	public int append(long sessionID, ByteBuffer srcBuf) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
 		FileHandle fh = sessions.get(sessionID);
 
 		if (fh == null) {
@@ -248,6 +270,9 @@ public class FilesystemServiceImpl implements Iface {
 		int length = srcBuf.remaining();
 		try {
 			return fh.append(srcBuf.array(), offset, length);
+		} catch (OutOfMemoryException e) {
+			e.getMessage();
+			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
@@ -255,7 +280,7 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public long size(long sessionID) throws TRequestFailedException, TInvalidSessionException {
+	public long size(long sessionID) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
 		FileHandle fh = sessions.get(sessionID);
 
 		if (fh == null) {
@@ -264,6 +289,9 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			return fh.size();
+		} catch (OutOfMemoryException e) {
+			e.getMessage();
+			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 			throw new TRequestFailedException(e.getMessage());
@@ -288,7 +316,7 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public int noop(long none) throws TRequestFailedException, TInvalidSessionException, TException {
+	public int noop(long none) throws TRequestFailedException, TInvalidSessionException {
 		return 0;
 	}
 

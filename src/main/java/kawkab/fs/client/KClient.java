@@ -3,6 +3,7 @@ package kawkab.fs.client;
 import kawkab.fs.api.Record;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.core.services.thrift.FilesystemServiceClient;
 
 import java.nio.ByteBuffer;
@@ -122,7 +123,7 @@ public class KClient {
 		return client.appendBatched(session.id, srcBufs, recSize);
 	}
 
-	public int appendBuffered(String fn, Record[] records, int recSize) throws KawkabException {
+	public int appendBuffered(String fn, Record[] records, int recSize) throws OutOfMemoryException, KawkabException {
 		assert client != null;
 		Session session = sessions.get(fn);
 		if (session == null)

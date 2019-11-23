@@ -76,7 +76,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	public synchronized int read(byte[] buffer, long readOffsetInFile, int length) throws
+	public synchronized int read(byte[] buffer, long readOffsetInFile, int length) throws OutOfMemoryException,
 			IOException, IllegalArgumentException, KawkabException, InvalidFileOffsetException {
 		if (length > buffer.length || length < 0)
 			throw new IllegalArgumentException("Read length is negative or greater than the given buffer size.");
@@ -130,7 +130,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	 * @throws IOException
 	 */
 	public synchronized List<ByteBuffer> readRecords(final long minTS, final long maxTS, final int recSize)
-			throws KawkabException, IOException {
+			throws OutOfMemoryException, KawkabException, IOException {
 		rLog.start();
 		InodesBlock inb = null;
 		Inode inode;
@@ -159,7 +159,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		}
 	}
 
-	public synchronized List<Record> readRecords(final long minTS, final long maxTS, final Record recFactory) throws KawkabException, IOException {
+	public synchronized List<Record> readRecords(final long minTS, final long maxTS, final Record recFactory) throws OutOfMemoryException, KawkabException, IOException {
 		rLog.start();
 		InodesBlock inb = null;
 		Inode inode;
@@ -201,7 +201,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	 * @throws InterruptedException
 	 */
 	public synchronized boolean recordAt(final ByteBuffer dstBuf, final long timestamp, final int recSize) throws
-			IOException, RecordNotFoundException, KawkabException {
+			OutOfMemoryException, IOException, RecordNotFoundException, KawkabException {
 
 		rLog.start();
 		InodesBlock inb = null;
@@ -246,7 +246,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	 * @throws InvalidFileOffsetException if the recordNum is less than 1
 	 */
 	public synchronized boolean recordNum(final ByteBuffer dstBuf, final long recordNum, final int recSize) throws
-			IOException, KawkabException, RecordNotFoundException, InvalidFileOffsetException {
+			OutOfMemoryException, IOException, KawkabException, RecordNotFoundException, InvalidFileOffsetException {
 		rLog.start();
 
 		if (recordNum <= 0)
@@ -293,7 +293,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	 * @throws InterruptedException
 	 */
 	
-	public synchronized int append(byte[] data, int offset, int length) throws MaxFileSizeExceededException,
+	public synchronized int append(byte[] data, int offset, int length) throws OutOfMemoryException, MaxFileSizeExceededException,
 									IOException, KawkabException, InterruptedException{
 		wLog.start();
 
@@ -332,7 +332,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	public synchronized int append(final ByteBuffer srcBuf, int recSize) throws MaxFileSizeExceededException,
+	public synchronized int append(final ByteBuffer srcBuf, int recSize) throws OutOfMemoryException, MaxFileSizeExceededException,
 			IOException, KawkabException, InterruptedException{
 		if (fileMode != FileMode.APPEND || !onPrimaryNode) {
 			throw new InvalidFileModeException();
