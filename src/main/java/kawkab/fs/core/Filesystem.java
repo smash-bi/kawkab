@@ -9,6 +9,8 @@ import kawkab.fs.core.timerqueue.TimerQueue;
 import kawkab.fs.utils.GCMonitor;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 public final class Filesystem {
@@ -24,6 +26,8 @@ public final class Filesystem {
 	private static PrimaryNodeServiceServer pns;
 	private static Cache cache;
 
+	private static Map<Long, FileHandle> openFiles;
+
 	private TimerQueue fsQ;
 	private TimerQueue segsQ;
 
@@ -35,6 +39,7 @@ public final class Filesystem {
 		fss.startServer();
 		fsQ = new TimerQueue("FS Timer Queue");
 		segsQ = new TimerQueue("Segs Timer Queue");
+		openFiles = new HashMap<>();
 		cache = Cache.instance();
 		conf = Configuration.instance();
 	}
@@ -74,6 +79,7 @@ public final class Filesystem {
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber);
 		FileHandle file = new FileHandle(inumber, mode, fsQ, segsQ);
 		verify(inumber, opts.recordSize());
+		openFiles.put(file.inumber(), file);
 		return file;
 	}
 
@@ -174,10 +180,22 @@ public final class Filesystem {
 
 	public void flush() throws KawkabException {
 		fsQ.waitUntilEmpty();
+		segsQ.waitUntilEmpty();
+
+		for(FileHandle fh : openFiles.values()) {
+			fh.flush();
+		}
+
 		cache.flush();
 	}
 	
 	public Configuration getConf() {
 		return Configuration.instance();
+	}
+
+	public void printStats() throws KawkabException {
+		for (FileHandle file : openFiles.values()) {
+			file.printStats();
+		}
 	}
 }

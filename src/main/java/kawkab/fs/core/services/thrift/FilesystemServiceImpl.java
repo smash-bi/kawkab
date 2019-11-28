@@ -5,6 +5,7 @@ import kawkab.fs.api.Record;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
+import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.core.services.thrift.FilesystemService.Iface;
 import kawkab.fs.records.SampleRecord;
@@ -299,6 +300,25 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
+	public int recordSize(long sessionID) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
+		FileHandle fh = sessions.get(sessionID);
+
+		if (fh == null) {
+			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
+		}
+
+		try {
+			return fh.recordSize();
+		} catch (OutOfMemoryException e) {
+			e.getMessage();
+			throw new TOutOfMemoryException(e.getMessage());
+		} catch (Exception | AssertionError e) {
+			e.printStackTrace();
+			throw new TRequestFailedException(e.getMessage());
+		}
+	}
+
+	@Override
 	public void close(long sessionID) throws TException {
 		FileHandle fh = sessions.get(sessionID);
 		if (fh == null) {
@@ -316,8 +336,24 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public int noop(long none) throws TRequestFailedException, TInvalidSessionException {
+	public int flush() throws TException {
+		try {
+			fs.flush();
+		} catch (KawkabException e) {
+			e.printStackTrace();
+		}
+
 		return 0;
+	}
+
+	@Override
+	public int noopWrite(long none) throws TRequestFailedException, TInvalidSessionException {
+		return 0;
+	}
+
+	@Override
+	public ByteBuffer noopRead(int recSize) throws TRequestFailedException, TInvalidSessionException {
+		return ByteBuffer.allocate(recSize);
 	}
 
 	private Filesystem.FileMode convertFileMode(TFileMode mode){

@@ -13,6 +13,7 @@ import kawkab.fs.utils.TimeLog;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * TODO: Store InodeBlocks in a separate table than the cache.
@@ -63,8 +64,8 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		if (mode == FileMode.APPEND) //Pre-fetch the last block for writes
 			inode.loadLastBlock();
 
-		rLog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "R-"+inumber, 1);
-		wLog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "W-"+inumber, 1);
+		rLog = new TimeLog(TimeUnit.NANOSECONDS, "R-"+inumber, 1);
+		wLog = new TimeLog(TimeUnit.NANOSECONDS, "W-"+inumber, 1);
 	}
 
 	/**
@@ -391,6 +392,33 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		return size;
 	}
 
+	public synchronized int recordSize() throws KawkabException {
+		if (onPrimaryNode) {
+			if (inodesBlock == null) {
+				throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+			}
+
+			return inode.recordSize();
+		}
+
+		int inodesBlockIdx = (int)(inumber / inodesPerBlock);
+		BlockID id = new InodesBlockID(inodesBlockIdx);
+
+		InodesBlock block = null;
+		try {
+			block = (InodesBlock) cache.acquireBlock(id);
+			block.loadBlock();
+			return block.getInode(inumber).recordSize();
+		} catch (IOException e) {
+			e.printStackTrace();
+			throw new KawkabException(e);
+		} finally {
+			if (block != null) {
+				cache.releaseBlock(block.id());
+			}
+		}
+	}
+
 	public synchronized long recordsInFile() throws KawkabException {
 		if (onPrimaryNode) {
 			if (inodesBlock == null) {
@@ -450,6 +478,63 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		}
 		
 		//TODO: Update openFiles table.
+	}
+
+	public void printStats() throws KawkabException {
+		if (onPrimaryNode) {
+			if (inodesBlock == null) {
+				throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+			}
+
+			inode.printStats();
+			return;
+		}
+
+		int inodesBlockIdx = (int)(inumber / inodesPerBlock);
+		BlockID id = new InodesBlockID(inodesBlockIdx);
+
+		InodesBlock block = null;
+		try {
+			block = (InodesBlock) cache.acquireBlock(id);
+			block.loadBlock();
+			block.getInode(inumber).printStats();
+		} catch (IOException e) {
+			e.printStackTrace();
+			throw new KawkabException(e);
+		} finally {
+			if (block != null) {
+				cache.releaseBlock(block.id());
+			}
+		}
+	}
+
+	public void flush() throws KawkabException {
+		if (onPrimaryNode) {
+			if (inodesBlock == null) {
+				throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+			}
+
+			inode.flush();
+			return;
+		}
+
+		int inodesBlockIdx = (int)(inumber / inodesPerBlock);
+		BlockID id = new InodesBlockID(inodesBlockIdx);
+
+		InodesBlock block = null;
+		try {
+			block = (InodesBlock) cache.acquireBlock(id);
+			block.loadBlock();
+			block.getInode(inumber).flush();
+		} catch (IOException e) {
+			e.printStackTrace();
+			throw new KawkabException(e);
+		} finally {
+			if (block != null) {
+				cache.releaseBlock(block.id());
+			}
+		}
+
 	}
 
 	@Override

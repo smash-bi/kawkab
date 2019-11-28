@@ -7,9 +7,9 @@ import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.index.poh.PostOrderHeapIndex;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
-import kawkab.fs.core.timerqueue.TimerQueue;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
+import kawkab.fs.utils.TimeLog;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -17,6 +17,7 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class Inode implements DeferredWorkReceiver<DataSegment> {
@@ -50,6 +51,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		this.recordSize = recordSize;
 	}
 
+	private TimeLog idxLog;
+
 	/**
 	 * Prepare after opening the file.
 	 * This function should be called after the inode has been loaded from the file or the remote node or the global store.
@@ -69,6 +72,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, fsQ);
 
 
+		idxLog = new TimeLog(TimeUnit.NANOSECONDS, "Index search", 3);
 
 		/*try {
 			index.loadAndInit(indexLength(fileSize.get()));
@@ -135,7 +139,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new KawkabException(String.format("Not enough space in the dstBuf, available %d, required %d\n", dstBuf.remaining(), recordSize));
 		}
 
+		idxLog.start();
 		long segInFile = index.findHighest(timestamp, indexLength(fileSize.get()));
+		idxLog.end();
 
 		if (segInFile == -1)
 			return  false;
@@ -227,7 +233,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new KawkabException(String.format("Record sizes do not match. Given %d, expected %d", recSize, recordSize));
 		}
 
+		idxLog.start();
 		List<long[]> offsets = index.findAll(minTS, maxTS, indexLength(fileSize.get())); //Get the offsets
+		idxLog.end();
 
 		if (offsets == null)
 			return null;
@@ -240,7 +248,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 				long segInFile = segNums[j];
 				BlockID curSegId = idBySegInFile(segInFile);
 
-				System.out.printf("[I] Searching recs in: %s\n", curSegId);
+				//System.out.printf("[I] Searching recs in: %s\n", curSegId);
 
 				DataSegment curSegment = null;
 				try {
@@ -274,7 +282,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new KawkabException(String.format("Record sizes do not match. Given %d, expected %d", recFactory.size(), recordSize));
 		}
 
+		idxLog.start();
 		List<long[]> offsets = index.findAll(minTS, maxTS, indexLength(fileSize.get())); //Get the offsets
+		idxLog.end();
 
 		if (offsets == null)
 			return null;
@@ -289,7 +299,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 				long segInFile = segNums[j];
 				BlockID curSegId = idBySegInFile(segInFile);
 
-				System.out.printf("[I] Searching recs in: %s\n", curSegId);
+				//System.out.printf("[I] Searching recs in: %s\n", curSegId);
 
 				DataSegment curSegment = null;
 				try {
@@ -521,7 +531,6 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		DataSegment ds = (DataSegment) cache.acquireBlock(segId);
 		assert ds.id() != null;
 		//ds.initForAppend(fileSize, recordSize);
-		ds.incDbg();
 		return new TimerQueueItem<>(ds, this);
 	}
 
@@ -632,21 +641,34 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	synchronized void cleanup() throws KawkabException { //Synchronized with appendBuffered() due to acquiredSeg
 		//tlog.printStats("DS.append,ls.store");
 
+		releaseAcquiredSeg();
+
+		if (index != null)
+			index.shutdown();
+
+		idxLog.printStats();
+	}
+
+	synchronized void flush() throws KawkabException {
+		releaseAcquiredSeg();
+		if (index != null)
+			index.flush();
+	}
+
+	private void releaseAcquiredSeg() {
 		if (acquiredSeg != null && timerQ.tryDisable(acquiredSeg)) {
 			deferredWork(acquiredSeg.getItem());
 			acquiredSeg = null;
 		}
+	}
 
-		if (index != null)
-			index.shutdown();
+	public void printStats() {
+		idxLog.printStats();
 	}
 
 	@Override
 	public void deferredWork(DataSegment ds) {
 		try {
-			ds.decDbg();
-			assert ds.dbgAcq() == 0 : " ds is not zero when returned: " + ds.dbgAcq();
-			assert ds.id() != null : String.format(" ds %d id is null, cnt %d", ds.dbgSig, ds.dbgAcq());
 			cache.releaseBlock(ds.id());
 		} catch (KawkabException e) {
 			e.printStackTrace();

@@ -6,9 +6,9 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.utils.TimeLog;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -67,8 +67,8 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		//FIXME: The size of cache is not what is reflected from the configuration
 		MAX_BLOCKS_IN_CACHE = numSegmentsInCache + conf.inodeBlocksPerMachine + conf.ibmapsPerMachine;
 
-		acqLog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Cache acquire", 1);
-		relLog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Cache release", 1);
+		acqLog = new TimeLog(TimeUnit.NANOSECONDS, "Cache acquire", 1);
+		relLog = new TimeLog(TimeUnit.NANOSECONDS, "Cache release", 1);
 
 		highMark = numSegmentsInCache;
 		lowMark = (int) (numSegmentsInCache*0.5);
@@ -171,11 +171,6 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 				if (blockID.type() == BlockType.DATA_SEGMENT) {
 					DataSegment seg = dsp.acquire((DataSegmentID)blockID);
 					block = seg;
-
-					assert seg.dbgAcq() == 0 : String.format("DS %s has cnt %d\n", seg.dbgSig, seg.dbgAcq());
-
-					assert seg.id() != null;
-
 				} else {
 					block = blockID.newBlock();   // Creates a new block object to save in the cache
 
@@ -240,10 +235,6 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 			assert cachedItem != null : String.format("[BC] Releasing non-existing block: %s", blockID);
 			
 			cachedItem.decrementRefCnt();
-
-			Block blk = cachedItem.block();
-			assert blk.dbgAcq() == 0 : String.format(" block %s cnt %d: ", blk.dbgSig, blk.dbgAcq());
-
 		} finally {
 			relLog.end();
 			cacheLock.unlock();

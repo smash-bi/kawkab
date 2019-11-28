@@ -1,6 +1,5 @@
 package kawkab.fs.core;
 
-import java.io.PrintStream;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class DSPool {
@@ -24,14 +23,6 @@ public class DSPool {
 		
 		assert ds != null : "DSPool is empty";
 
-		assert ds.id() == null || ds.id().equals(tempID);
-
-		assert ds.dbgDspCnt == 0;
-
-		assert ds.dbgAcq() == 0 : String.format("DS %s is ref by %s cnt %d while acq for %s\n", ds.dbgSig, ds.id(), ds.dbgAcq(), dsid);
-
-		ds.dbgDspCnt++;
-
 		ds.reInit(dsid);
 		
 		return ds;
@@ -40,14 +31,7 @@ public class DSPool {
 	public synchronized void release(DataSegment ds) {
 		//System.out.println("Released " + ds.id());
 
-		assert ds.dbgAcq() == 0 : " DS ref should be zero: " + ds.dbgAcq();
-
 		ds.reset(null);
-
-		ds.dbgDspCnt--;
-
-		assert ds.id() == null;
-		assert ds.dbgDspCnt == 0;
 
 		pool.offer(ds);
 

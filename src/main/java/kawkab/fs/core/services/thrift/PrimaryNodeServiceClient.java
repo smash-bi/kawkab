@@ -42,7 +42,7 @@ public class PrimaryNodeServiceClient {
 	}
 
 	public ByteBuffer getSegment(DataSegmentID id, final int offset) throws FileNotExistException, KawkabException {
-		System.out.println("[PC] getSegment: " + id);
+		//System.out.println("[PC] getSegment: " + id);
 
 		try {
 			return client(id.primaryNodeID()).getSegment(id.inumber(), id.blockInFile(), id.segmentInBlock(), id.recordSize(), offset);
@@ -55,7 +55,7 @@ public class PrimaryNodeServiceClient {
 	}
 
 	public ByteBuffer getInodesBlock(InodesBlockID id) throws FileNotExistException, KawkabException{
-		System.out.println("[PC] getInodesBlock: " + id);
+		//System.out.println("[PC] getInodesBlock: " + id);
 
 		try {
 			return client(id.primaryNodeID()).getInodesBlock(id.blockIndex());
@@ -67,7 +67,7 @@ public class PrimaryNodeServiceClient {
 	}
 
 	public ByteBuffer getIndexNode(IndexNodeID id, int fromTsIdx) throws FileNotExistException, KawkabException {
-		System.out.println("[PC] getIndexNode: " + id);
+		//System.out.println("[PC] getIndexNode: " + id);
 
 		try {
 			return client(id.primaryNodeID()).getIndexNode(id.inumber(), id.numNodeInIndexBlock(), fromTsIdx);
@@ -109,7 +109,7 @@ public class PrimaryNodeServiceClient {
 		return client;
 	}
 
-	public synchronized void shutdown(){
+	public void shutdown(){
 		for(TTransport tp : transports.values()) {
 			tp.close();
 		}

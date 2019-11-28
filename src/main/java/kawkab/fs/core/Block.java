@@ -28,21 +28,6 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 
 public abstract class Block extends AbstractTransferItem {
-	public int dbgDspCnt = 0;
-	private static int dbgCnt = 0;
-	public final int dbgSig;
-	private int dbgAcq;
-	public synchronized void incDbg(){
-		dbgAcq++;
-	}
-	public synchronized void  decDbg(){
-		dbgAcq--;
-	}
-	public synchronized int dbgAcq(){
-		return dbgAcq;
-	}
-
-
 	protected BlockID id;
 	
 	private final static GlobalStoreManager globalStoreManager = GlobalStoreManager.instance(); // Backend store such as S3
@@ -60,7 +45,7 @@ public abstract class Block extends AbstractTransferItem {
 	                        // an AtomicInteger
 	
 	//private volatile boolean inLocalQueue;  // The block is in a queue for local persistence
-	private AtomicBoolean inGlobalQueue; // The block is in a queue for global persistence
+	//private AtomicBoolean inGlobalQueue; // The block is in a queue for global persistence
 	private AtomicBoolean inLocalStore; // The blocks is currently in the local store (can be in more places as well)
 	private AtomicBoolean inCache;      // The block is in cache
 	
@@ -80,19 +65,17 @@ public abstract class Block extends AbstractTransferItem {
 		isOnPrimary    = id.onPrimaryNode();
 		isLocalDirty   = false;
 		//globalDirtyCnt = new AtomicInteger(0);
-		inGlobalQueue  = new AtomicBoolean(false);
+		//inGlobalQueue  = new AtomicBoolean(false);
 		inLocalStore   = new AtomicBoolean(false);
 		inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and 
 		                                          // the newly created blocks are always cached.
-
-		dbgSig = ++dbgCnt;
 	}
 	
 	protected void reset(BlockID id) {
 		this.id = id;
 		isLocalDirty = false;
 		//globalDirtyCnt.set(0);
-		inGlobalQueue.set(false);
+		//inGlobalQueue.set(false);
 		inLocalStore.set(false);
 		inCache.set(false);
 		isLoaded = false;

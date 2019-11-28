@@ -82,6 +82,16 @@ public class KClient {
 		return client.size(session.id);
 	}
 
+	public int recordSize(String fn) throws KawkabException {
+		assert client != null;
+
+		Session session = sessions.get(fn);
+		if (session == null)
+			throw new KawkabException(String.format("File %s is not opened",fn));
+
+		return client.recordSize(session.id);
+	}
+
 	public int append(String fn, Record rec) throws KawkabException {
 		assert client != null;
 		Session session = sessions.get(fn);
@@ -231,9 +241,19 @@ public class KClient {
 		}
 	}
 
-	public int noop(int none) throws KawkabException {
+	public int noopWrite(int none) throws KawkabException {
 		assert client != null;
-		return client.noop(none);
+		return client.noopWrite(none);
+	}
+
+	public ByteBuffer noopRead(int recSize) throws KawkabException {
+		assert client != null;
+		return client.noopRead(recSize);
+	}
+
+	public void flush() {
+		assert client != null;
+		client.flush();
 	}
 
 	public void close(String fn) throws KawkabException {

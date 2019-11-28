@@ -13,7 +13,7 @@
 		<nodeID>0</nodeID>
 		<Xms>2g</Xms>
 		<Xmx>16g</Xmx>
-		<MaxDirectMemorySize>16484g</MaxDirectMemorySize>
+		<MaxDirectMemorySize>16484m</MaxDirectMemorySize>
 		<cmdArgs>""</cmdArgs>
 		<mainClass>kawkab.fs.cli.CLI</mainClass>
 	</properties>
@@ -382,6 +382,15 @@
 			<artifactId>libthrift</artifactId>
 			<version>0.12.0</version>
 		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/org.apache.commons/commons-lang3 -->
+		<!-- For StopWatch -->
+		<!-- dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-lang3</artifactId>
+			<version>3.9</version>
+		</dependency -->
+
 	</dependencies>
 
 </project>

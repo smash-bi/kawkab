@@ -347,11 +347,11 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @return the segment number in file that contains ts, or -1 if no entry found
 	 */
 	public long findHighest(final long ts, final long indexLength) throws IOException, KawkabException {
-		System.out.printf("[POH] findHighest %d, index len %d, num nodes %d\n", ts, indexLength, nodes.size());
+		//System.out.printf("[POH] findHighest %d, index len %d, num nodes %d\n", ts, indexLength, nodes.size());
 		//long curLen = length.get();
 		int lastNodeIdx = lastNodeIndex(indexLength, entriesPerNode);
 
-		System.out.println();
+		//System.out.println();
 
 		int curNode = findNode(ts, true, lastNodeIdx);
 
@@ -425,7 +425,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		assert minTS <= maxTS;
 
-		System.out.printf("[POH] findAll b/w %d and %d, index len %d, num nodes %d\n", minTS, maxTS, indexLength, nodes.size());
+		//System.out.printf("[POH] findAll b/w %d and %d, index len %d, num nodes %d\n", minTS, maxTS, indexLength, nodes.size());
 
 		//long curLen = length.get();
 		int lastNodeIdx = lastNodeIndex(indexLength, entriesPerNode);
@@ -654,6 +654,20 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		nodes.clear();
 		nodes = null;
+	}
+
+	public void flush() throws KawkabException {
+		if (acquiredNode != null && timerQ.tryDisable(acquiredNode)) {
+			deferredWork(acquiredNode.getItem());
+		}
+
+		for (POHNode node : nodes.values()) {
+			if (node != null) {
+				cache.releaseBlock(node.id());
+			}
+		}
+
+		nodes.clear();
 	}
 
 	@Override

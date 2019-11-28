@@ -63,7 +63,7 @@ public class BytesRecord implements Record {
 
 	@Override
 	public Record newRecord() {
-		return new BytesRecord();
+		return new BytesRecord(size());
 	}
 
 	public Record newRandomRecord(Random rand, long timestamp) {

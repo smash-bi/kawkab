@@ -19,7 +19,7 @@ public class Result {
 	long[] readHistogram;
 	long[] writeHistogram;
 
-	Result(long reqsCount_, int opsThr_, double myThr_,
+	public Result(long reqsCount_, int opsThr_, double myThr_,
 		   double l50, double l95, double l99, double lMin, double lMax, double lAvg,
 		   double readMedLat_, double writeMedLat_,
 		   double readAvgLat_, double writeAvgLat_,
@@ -33,7 +33,7 @@ public class Result {
 		readHistogram=readHistogram_; writeHistogram=writeHistogram_;
 	}
 
-	Result(Result res) {
+	public Result(Result res) {
 		reqsCount=res.reqsCount; opsThr =res.opsThr; dataThr =res.dataThr;
 		lat50=res.lat50; lat95=res.lat95; lat99=res.lat99; latMin=res.latMin; latMax=res.latMax; latAvg=res.latAvg;
 		readMedLat=res.readMedLat; writeMedLat=res.writeMedLat;

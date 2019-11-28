@@ -167,7 +167,7 @@ public final class InodesBlock extends Block {
 		
 		long now = System.currentTimeMillis();
 
-		System.out.printf("[IB] loadOnNonPrimary: lastFetchMS=%d, now-timeout=%d\n", lastFetchTimeMs, now-conf.inodesBlockFetchExpiryTimeoutMs);
+		//System.out.printf("[IB] loadOnNonPrimary: lastFetchMS=%d, now-timeout=%d\n", lastFetchTimeMs, now-conf.inodesBlockFetchExpiryTimeoutMs);
 		
 		if (lastFetchTimeMs < now - conf.inodesBlockFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
 			/*try {
@@ -185,7 +185,7 @@ public final class InodesBlock extends Block {
 			System.out.println("[B] Primary fetch expired or not found from the global: " + id());*/
 
 			try {
-				System.out.println("[B] Loading from the primary: " + id());
+				//System.out.println("[IB] Loading from the primary: " + id());
 				loadBlockFromPrimary(); // Fetch data from the primary node
 				//lastPrimaryFetchTimeMs = now;
 				if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed

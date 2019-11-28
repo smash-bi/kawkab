@@ -1,16 +1,9 @@
 package kawkab.fs.core.services.thrift;
 
 import kawkab.fs.commons.Configuration;
-import kawkab.fs.core.Cache;
-import kawkab.fs.core.DataSegment;
-import kawkab.fs.core.DataSegmentID;
-import kawkab.fs.core.InodesBlock;
-import kawkab.fs.core.InodesBlockID;
-import kawkab.fs.core.index.poh.POHNode;
-import kawkab.fs.core.IndexNodeID;
+import kawkab.fs.core.*;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.services.thrift.TFileNotExistException;
-import kawkab.fs.core.services.thrift.PrimaryNodeService;
+import kawkab.fs.core.index.poh.POHNode;
 import org.apache.thrift.TException;
 
 import java.io.IOException;
@@ -49,7 +42,7 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 
 	@Override
 	public ByteBuffer getInodesBlock(int blockIndex) throws TFileNotExistException, TException {
-		System.out.printf("[PNSS] getInodesBlock: %d\n", blockIndex);
+		//System.out.printf("[PSI] getInodesBlock: %d\n", blockIndex);
 
 		InodesBlockID id = new InodesBlockID(blockIndex);
 		ByteBuffer buffer = ByteBuffer.allocate(inodesBlockSizeBytes);

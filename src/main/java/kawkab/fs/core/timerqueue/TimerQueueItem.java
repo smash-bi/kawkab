@@ -82,7 +82,7 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	 * in which case the caller should create a new item and throw away the existing item to ensure that deferredWork()
 	 * is called only once.
 	 */
-	protected synchronized final boolean disableIfNotExpired() {
+	protected final boolean disableIfNotExpired() {
 		return timer.disableIfNotExpired();
 	}
 	
@@ -95,7 +95,7 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	 *
 	 * @param futureTimeInMillis Time offset in millis after which the deferredWork() function can be called.
 	 */
-	protected synchronized final void enable(final long futureTimeInMillis) {
+	protected final void enable(final long futureTimeInMillis) {
 		timer.update(futureTimeInMillis);
 	}
 	
@@ -112,7 +112,7 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	 *
 	 * @throws KawkabException
 	 */
-	protected synchronized final long tryExpire() throws KawkabException {
+	protected final long tryExpire() throws KawkabException {
 		return timer.tryExpire(clock.currentTime());
 	}
 	
@@ -121,7 +121,7 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 	 *
 	 * @throws KawkabException
 	 */
-	protected synchronized void deferredWork() {
+	protected void deferredWork() {
 		receiver.deferredWork(item);
 		item = null;
 	}
@@ -139,15 +139,15 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 		return item.toString(); //FIXME: This is not thread safe. This should only be used for debuggin purposes.
 	}
 
-	public synchronized int incrementAndGet() {
+	public int incrementAndGet() {
 		return ++acquireCount;
 	}
 
-	public synchronized int decrementAndGet() {
+	public int decrementAndGet() {
 		return --acquireCount;
 	}
 
-	public synchronized int count() {
+	public int count() {
 		return acquireCount;
 	}
 }

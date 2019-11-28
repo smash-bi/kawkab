@@ -73,14 +73,12 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 		return false;
 	}
 
-
-
 	void bulkRemove(int toEvict) {
 		//System.out.println("[LC] To evict = "+toEvict);
 
 		CachedItem firstDirty = null;
-		int evicted = 0;
-		int skipped = 0;
+		//int evicted = 0;
+		//int skipped = 0;
 		Iterator<Entry<BlockID, CachedItem>> itr = super.entrySet().iterator();
 		//while(evicted < toEvict && itr.hasNext()) {
 		for (int i=0; i<toEvict; i++) {
@@ -91,12 +89,12 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 			CachedItem ci = e.getValue();
 
 			if (ci.refCount() != 0) {
-				skipped++;
+				//skipped++;
 				continue;
 			}
 
 			if (ci.block().isLocalDirty()) {
-				skipped++;
+				//skipped++;
 				// The most LRU dirty block
 				if (firstDirty == null)
 					firstDirty = ci;
@@ -105,7 +103,7 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 
 			evictListener.onEvictBlock(ci.block());
 
-			evicted++;
+			//evicted++;
 			itr.remove();
 
 			//assert dbgCI.equals(ci) : String.format("CachedItems not equal, eci.hc=%d, dbgCI.hc=%d, eci.id=%s, dbgCI.id=%s, eci.id.hc=%d, dbgCI.id.hc=%d\n",

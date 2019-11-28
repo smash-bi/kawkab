@@ -179,7 +179,7 @@ public class TestClient {
 
 		while (System.currentTimeMillis() < et) {
 			long st = System.nanoTime();
-			client.noop(0);
+			client.noopWrite(0);
 			long durNano = System.nanoTime() - st;
 			accm.put((int) (durNano / 1000));
 		}

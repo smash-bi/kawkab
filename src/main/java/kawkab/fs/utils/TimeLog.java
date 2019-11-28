@@ -1,7 +1,9 @@
 package kawkab.fs.utils;
 
-import java.time.Clock;
+import com.google.common.base.Stopwatch;
+
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 /**
  * TimeLog measures latency of an operation p.
@@ -13,40 +15,27 @@ import java.util.Random;
  * This class is not thread safe.
  */
 public class TimeLog {
-	public enum TimeLogUnit {
-		MILLIS("ms"), NANOS("ns");
-		
-		private String unit;
-		TimeLogUnit(String unit) {
-			this.unit = unit;
-		}
-		
-		public String getUnit() {
-			return unit;
-		}
-		
-	};
-	private TimeLogUnit unit;
-	private long lastTS;
+	private TimeUnit unit;
 	private Accumulator stats;
 	private boolean started;
-	private long count;
+	private long tCount;
 	private String tag;
 	private int[] rand;
 	private int randIdx;
 	private int samplePercent;
+	private Stopwatch sw;
 
-	public TimeLog(TimeLogUnit unit, String tag, int samplePercent) {
+	public TimeLog(TimeUnit unit, String tag, int samplePercent) {
 		assert 0 <= samplePercent && samplePercent <= 100 : "Sample percent must be between 0 and 100";
 		this.unit = unit;
 		this.tag = tag;
 		this.samplePercent = samplePercent;
-		stats = new Accumulator(); //Ignore initial 1000 readings
+		stats = new Accumulator();
 
-		int count = 100000;
-		rand = new int[count];
+		int cnt = 100000;
+		rand = new int[cnt];
 		Random r = new Random();
-		for(int i=0; i<count; i++) {
+		for(int i=0; i<cnt; i++) {
 			rand[i] = r.nextInt(100);
 		}
 
@@ -58,56 +47,75 @@ public class TimeLog {
 	 * start() and end() must be called in a combination, surrounding the code that is being timed
 	 */
 	public void start() {
-		//assert !started; Allow repeated starts, the last one wins
-		count++;
-		randIdx = ++randIdx % rand.length;
+		// Allow repeated starts, the last one wins
+		tCount++;
+		randIdx = (randIdx+1) % rand.length;
 		if (rand[randIdx] >= samplePercent)
 			return;
 		
 		started = true;
 		
-		lastTS = timeNow();
+		sw = Stopwatch.createStarted();
 	}
 	
 	public void end() {
 		if (!started)
 			return;
 
-		int diff = (int)(timeNow() - lastTS); //Diff can be negative due to using nanoTime() in multi-cpu hardware
+		int diff = (int)(sw.stop().elapsed(unit)); //Diff can be negative due to using nanoTime() in multi-cpu hardware
 		if (diff >= 0)
 			stats.put(diff);
-		
+
 		started = false;
 	}
 	
 	public void printStats() {
-		//System.out.printf("\t%s (%s): %s, num calls: %,d\n", tag, unit.getUnit(), stats, count);
 		System.out.printf("\t%s\n", getStats());
 	}
 	
 	public String getStats() {
-		return String.format("(%s): %s, count=%,d, sampled=%d", unit.getUnit(), stats, count,stats.count());
+		return String.format("%s (%s): %s, count=%,d, sampled=%d", tag, abbv(unit), stats, tCount,stats.count());
 	}
-	
-	private long timeNow() {
-		if (unit == TimeLogUnit.MILLIS)
-			return System.currentTimeMillis();
-		else
-			return System.nanoTime();
+
+	private String abbv(TimeUnit unit) {
+		switch(unit) {
+			case NANOSECONDS:
+				return "ns";
+			case MILLISECONDS:
+				return "ms";
+			case SECONDS:
+				return "sec";
+			default:
+				return unit.toString();
+		}
 	}
 
 	public long count() {
-		return count;
+		return tCount;
 	}
 
 	public long sampled() {
 		return stats.count();
 	}
+
+	public double[] stats() {
+		return stats.getLatencies();
+	}
+
+	public double min() {
+		return stats.min();
+	}
+
+	public double max() {
+		return stats.max();
+	}
+
+	public double mean() {
+		return stats.mean();
+	}
 	
 	public void reset() {
-		stats = new Accumulator(); //Ignore initial 1000 readings
-		count = 0;
-		lastTS = 0;
-		stats.reset();
+		stats = new Accumulator();
+		tCount = 0;
 	}
 }

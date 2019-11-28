@@ -1,5 +1,6 @@
 package kawkab.fs.cli;
 
+import com.google.common.base.Stopwatch;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.api.Record;
 import kawkab.fs.client.KClient;
@@ -10,12 +11,16 @@ import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.records.BytesRecord;
 import kawkab.fs.records.SampleRecord;
+import kawkab.fs.records.SixteenRecord;
+import kawkab.fs.testclient.Result;
 import kawkab.fs.utils.GCMonitor;
 import kawkab.fs.utils.TimeLog;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public final class CLI {
 	private Filesystem fs;
@@ -47,7 +52,7 @@ public final class CLI {
 	}
 
 	private void cmd() throws IOException {
-		String cmds = "Commands: cc, co, ca, cr, cd, open, read, rr, apnd, ar, at, size, stats, flush, gc, exit";
+		String cmds = "Commands: cc, co, ca, cr, cd, cf, open, read, rr, apnd, ar, at, size, stats, flush, gc, exit";
 		
 		try (BufferedReader ir = new BufferedReader(new InputStreamReader(System.in))) {
 			System.out.println("--------------------------------");
@@ -95,6 +100,9 @@ public final class CLI {
 						case "cd":
 							parseClientDisconnect(args);
 							continue;
+						case "cf":
+							pareseClientFlush();
+							continue;
 						case "ar":
 							parseAppendRecord(args);
 							continue;
@@ -140,13 +148,24 @@ public final class CLI {
 		}
 	}
 
+	private void pareseClientFlush() {
+		if (client == null) {
+			System.out.println("Client is not connected to any server. Connect the client using the command cc");
+			return;
+		}
+
+		client.flush();
+	}
+
 	private void parseGC(String[] args) {
 		System.gc();
 	}
 
-	private void parseStats(String[] args) {
+	private void parseStats(String[] args) throws KawkabException {
 		System.out.printf("GC stats (ms): %s\n", GCMonitor.getStats());
 		System.out.printf("Cache stats:\n%s", Cache.instance().getStats());
+		System.out.println("File stats:");
+		fs.printStats();
 	}
 
 	private void parseClientConnect(String[] args) {
@@ -194,19 +213,18 @@ public final class CLI {
 			return;
 		}
 
-		String usage = "Usage: co <filename> <r|a>";
+		String usage = "Usage: co <filename> <r rec|a> [<recSize>]";
 
-		if (args.length != 3) {
+		if (args.length < 3) {
 			System.out.println(usage);
 			return;
 		}
 
 		String fn = args[1];
 		String fm = args[2];
+		int recSize = args.length == 4 ? Integer.parseInt(args[3]) : 42;
 		FileMode mode = parseMode(fm);
-		FileOptions opts = new FileOptions(SampleRecord.length());
-
-		client.open(fn, mode, SampleRecord.length());
+		client.open(fn, mode, recSize);
 	}
 
 	private void parseClientAppend(String args[]) throws KawkabException {
@@ -223,18 +241,19 @@ public final class CLI {
 
 		String fname = args[1];
 		int numRecs = args.length > 2 ? Integer.parseInt(args[2]) : 1;
-
+		int recSize = client.recordSize(fname);
 		Random rand = new Random();
-		long tsOffset = client.size(fname)/SampleRecord.length() + 1;
+		long tsOffset = client.size(fname)/recSize + 1;
+		Record recgen = recGen(recSize);
 		for (int i=0; i<numRecs; i++) {
-			client.append(fname, new SampleRecord(i+tsOffset, rand));
+			client.append(fname, recgen.newRandomRecord(rand, i+tsOffset));
 		}
 
-		System.out.printf("Appended %d records of %d bytes. New file size is %d records.\n",numRecs, SampleRecord.length(), client.size(fname)/SampleRecord.length());
+		System.out.printf("Appended %d records of %d bytes. New file size is %d records.\n",numRecs, recSize, client.size(fname)/recSize);
 	}
 
 	private void parseClientRead(String[] args) throws KawkabException {
-		String usage = "Usage: cr <filename> [<n num> | <t ts> | <r ts1 ts2>]";
+		String usage = "Usage: cr <filename> [<n num> | <t ts> | <r ts1 ts2> [p] | <rn|rt ts1 ts2 numrecs [f]> | <np [count]>] ";
 		if (args.length < 2) {
 			System.out.println(usage);
 			return;
@@ -246,9 +265,11 @@ public final class CLI {
 		}
 
 		String fname = args[1];
+		int recSize = client.recordSize(fname);
+		Record recgen = recGen(recSize);
 
 		if (args.length == 2) {
-			List<Record> recs = client.readRecords(fname, 1, Long.MAX_VALUE-1, new SampleRecord());
+			List<Record> recs = client.readRecords(fname, 1, Long.MAX_VALUE-1, recgen);
 
 			if (recs == null) {
 				System.out.printf("Records not found b/w %d and %d\n", 1, Long.MAX_VALUE-1);
@@ -270,13 +291,12 @@ public final class CLI {
 				}
 
 				int recNum = Integer.parseInt(args[3]);
-				Record rec = new SampleRecord();
 
-				long t = System.nanoTime();
-				rec = client.recordNum(fname, recNum, rec);
-				long elapsed = System.nanoTime() - t;
+				Stopwatch sw = Stopwatch.createStarted();
+				recgen = client.recordNum(fname, recNum, recgen);
+				long elapsed = sw.stop().elapsed(TimeUnit.NANOSECONDS);
 
-				System.out.println(rec);
+				System.out.println(recgen);
 				System.out.printf("Latency (ns): %,d\n", elapsed);
 				break;
 			}
@@ -287,12 +307,18 @@ public final class CLI {
 				}
 
 				long atTS = Long.parseLong(args[3]);
-				Record rec = new SampleRecord();
-				rec = client.recordAt(fname, atTS, rec);
-				if (rec != null)
-					System.out.println(rec);
+
+				Stopwatch sw = Stopwatch.createStarted();
+				recgen = client.recordAt(fname, atTS, recgen);
+				long elapsed = sw.stop().elapsed(TimeUnit.NANOSECONDS);
+
+				if (recgen != null)
+					System.out.println(recgen);
 				else
 					System.out.println("Record not found at " + atTS);
+
+				System.out.printf("Latency (ns): %,d\n", elapsed);
+
 				break;
 			}
 			case "r": {
@@ -303,21 +329,122 @@ public final class CLI {
 
 				long t1 = Long.parseLong(args[3]);
 				long t2 = Long.parseLong(args[4]);
-				List<Record> recs = client.readRecords(fname, t1, t2, new SampleRecord());
+
+				Stopwatch sw = Stopwatch.createStarted();
+				List<Record> recs = client.readRecords(fname, t1, t2, recgen);
+				long elapsed = sw.stop().elapsed(TimeUnit.NANOSECONDS);
 
 				if (recs == null) {
 					System.out.printf("Records not found b/w %d and %d\n", t1, t2);
 					break;
 				}
 
-				for (Record rec : recs) {
-					System.out.println(rec);
+				if (args.length == 6) {
+					for (Record rec : recs) {
+						System.out.println(rec);
+					}
 				}
+
+				System.out.println("Read records: " + recs.size());
+				System.out.printf("Latency (ns): %,d\n", elapsed);
+
+				break;
+			}
+			case "rn":
+			case "rt": {
+				if (args.length < 6) {
+					System.out.println("Reads numRecs randomly selected b/w ts1 and ts2, needs four args\n" + usage);
+					break;
+				}
+
+				long t1 = Long.parseLong(args[3]);
+				long t2 = Long.parseLong(args[4]);
+				int numRecs = Integer.parseInt(args[5]);
+
+				clientExactReadTest(fname, recSize, t1, t2, numRecs, recgen, type.equals("rn"), args.length == 7);
+
+				break;
+			}
+			case "np": {
+				int count = args.length == 4 ? Integer.parseInt(args[3]) : 1000000;
+				readNoops(fname, count);
 				break;
 			}
 			default:
 				System.out.printf("Invalid read type %s. %s\n", type, usage);
 		}
+	}
+
+	private void readNoops(String fname, int count) throws KawkabException {
+		int recSize = client.recordSize(fname);
+
+		TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "NoOPRead latency", 100);
+		System.out.printf("Reading %,d noops, recSize %d\n", count, recSize);
+
+		long startTime = System.currentTimeMillis();
+		for (int i=0; i<count; i++) {
+			tlog.start();
+			client.noopRead(recSize);
+			tlog.end();
+		}
+
+		assert count == tlog.sampled();
+
+		double durSec = (System.currentTimeMillis() - startTime) / 1000.0;
+
+		Result res = getResults(tlog, durSec, count, recSize, 1, "NoOP reads");
+		System.out.println(res.csvHeader());
+		System.out.println(res.csv());
+	}
+
+	private void clientExactReadTest(String fname, int recSize, long t1, long t2, int numRecs, Record recgen,
+									 boolean byRecNum, boolean withFlush) throws KawkabException {
+		Random rand = new Random();
+
+		TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "Read latency", 100);
+
+		System.out.printf("Reading %,d records from %s using %s, recSize %d, in range %d and %d\n", numRecs, fname,
+				byRecNum?"rec nums":"exact time", recSize, t1, t2);
+
+		long startTime = System.currentTimeMillis();
+
+		for (int i=0; i<numRecs; i++) {
+			tlog.start();
+			if (byRecNum) {
+				int recNum = (int) (t1 + rand.nextInt((int) (t2 - t1)));
+				recgen = client.recordNum(fname, recNum, recgen);
+			} else {
+				int recTime = (int) (t1 + rand.nextInt((int) (t2 - t1)));
+				recgen = client.recordAt(fname, recTime, recgen);
+			}
+			tlog.end();
+
+			if (withFlush) {
+				client.flush();
+			}
+		}
+
+		assert numRecs == tlog.sampled();
+
+		double durSec = (System.currentTimeMillis() - startTime) / 1000.0;
+
+		Result res = getResults(tlog, durSec, numRecs, recSize, 1, "Read test");
+		System.out.println(res.csvHeader());
+		System.out.println(res.csv());
+	}
+
+	private Result getResults(TimeLog tlog, double durSec, int numRecs, int recSize, int batchSize, String tag) {
+		long cnt = tlog.sampled()*batchSize;
+		double sizeMB = recSize*cnt / (1024.0 * 1024.0);
+		double thr = sizeMB / durSec;
+		int opThr = (int)(cnt / durSec);
+
+		System.out.printf("%s: recSize=%d, numRecs=%d, rTput=%,.0f MB/s, opsTput=%,d OPS, Lat %s\n",
+				tag, recSize, numRecs, thr, opThr, tlog.getStats());
+
+		double[] lats = tlog.stats();
+		return new Result(tlog.sampled(), (int)opThr, thr, lats[0], lats[1], lats[2], tlog.min(), tlog.max(), tlog.mean(),
+				lats[0], 0, tlog.mean(), 0, tlog.max(), 0, new long[]{}, new long[]{});
 	}
 
 	private void parseReadRecord(String[] args) throws IOException, KawkabException {
@@ -333,8 +460,11 @@ public final class CLI {
 			throw new IOException("File not opened: " + fname);
 		}
 
+		int recSize = file.recordSize();
+		Record recgen = recGen(recSize);
+
 		if (args.length == 2) {
-			List<Record> recs = file.readRecords(1, Long.MAX_VALUE-1, new SampleRecord());
+			List<Record> recs = file.readRecords(1, Long.MAX_VALUE-1, recgen.newRecord());
 
 			if (recs == null) {
 				System.out.printf("Records not found b/w %d and %d\n", 1, Long.MAX_VALUE-1);
@@ -356,14 +486,13 @@ public final class CLI {
 				}
 
 				int recNum = Integer.parseInt(args[3]);
-				SampleRecord rec = new SampleRecord();
 
-				TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "read-lat", 100);
+				TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "read-lat", 100);
 				tlog.start();
-				file.recordNum(rec.copyInDstBuffer(), recNum, rec.size());
+				file.recordNum(recgen.copyInDstBuffer(), recNum, recgen.size());
 				tlog.end();
 
-				System.out.println(rec);
+				System.out.println(recgen);
 				tlog.printStats();
 				break;
 			}
@@ -374,9 +503,8 @@ public final class CLI {
 				}
 
 				long atTS = Long.parseLong(args[3]);
-				SampleRecord rec = new SampleRecord();
-				if (file.recordAt(rec.copyInDstBuffer(), atTS, rec.size()))
-					System.out.println(rec);
+				if (file.recordAt(recgen.copyInDstBuffer(), atTS, recgen.size()))
+					System.out.println(recgen);
 				else
 					System.out.println("Record not found at " + atTS);
 				break;
@@ -389,7 +517,7 @@ public final class CLI {
 
 				long t1 = Long.parseLong(args[3]);
 				long t2 = Long.parseLong(args[4]);
-				List<Record> recs = file.readRecords(t1, t2, new SampleRecord());
+				List<Record> recs = file.readRecords(t1, t2, recgen);
 
 				if (recs == null) {
 					System.out.printf("Records not found b/w %d and %d\n", t1, t2);
@@ -421,13 +549,20 @@ public final class CLI {
 		}
 
 		Random rand = new Random();
-		long tsOffset = file.size()/SampleRecord.length() + 1;
+		int recSize = file.recordSize();
+		long tsOffset = file.size()/recSize + 1;
+
+		Stopwatch sw = Stopwatch.createStarted();
+		Record recgen = recGen(recSize);
 		for (int i=0; i<numRecs; i++) {
-			Record rec = new SampleRecord(i+tsOffset, rand);
+			Record rec = recgen.newRandomRecord(rand, i+tsOffset);
 			file.append(rec.copyOutSrcBuffer(), rec.size());
 		}
+		long elapsed = sw.stop().elapsed(TimeUnit.NANOSECONDS);
 
-		System.out.printf("Appended %d records of %d bytes. New file size is %d records.\n",numRecs, SampleRecord.length(), file.size()/SampleRecord.length());
+		System.out.printf("Appended %d records of %d bytes. New file size is %d records.\n",numRecs, recSize, file.size()/recSize);
+
+		System.out.printf("Elapsed time (ns): %,d\n",elapsed);
 	}
 
 	private void flushCache() throws KawkabException {
@@ -505,7 +640,7 @@ public final class CLI {
 						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
 						
-						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Main append", 5);
+						TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "Main append", 5);
 						long startTime = System.currentTimeMillis();
 						int toWrite = bufSize;
 						long ops = 0;
@@ -727,21 +862,22 @@ public final class CLI {
 
 	private void parseOpen(String[] args) throws IOException, KawkabException, InterruptedException {
 		if (args.length < 4) {
-			System.out.println("Usage: open <filename> <r|a> <b|s>");
+			System.out.println("Usage: open <filename> <r|a> <b|s> [<recSize>]");
 			return;
 		}
 
 		String fn = args[1];
 		String mode = args[2];
 		String type = args[3];
-		FileHandle fh = openFile(fn, mode, type);
+		int recSize = args.length == 5 ? Integer.parseInt(args[4]) : 42;
+		FileHandle fh = openFile(fn, mode, type, recSize);
 		openedFiles.put(fn, fh);
 	}
 
-	private FileHandle openFile(String fn, String fm, String type) throws IOException, KawkabException, InterruptedException {
+	private FileHandle openFile(String fn, String fm, String type, int recSize) throws IOException, KawkabException, InterruptedException {
 		FileMode mode = parseMode(fm);
 
-		FileOptions opts = parseFileOpts(type);
+		FileOptions opts = parseFileOpts(type, recSize);
 
 		return fs.open(fn, mode, opts);
 	}
@@ -777,13 +913,27 @@ public final class CLI {
 		return mode;
 	}
 
-	private FileOptions parseFileOpts(String type) throws KawkabException {
+	private FileOptions parseFileOpts(String type, int recSize) throws KawkabException {
 		FileOptions opts = new FileOptions();
 		if (type.equals("s"))
-			opts = new FileOptions(SampleRecord.length());
+			opts = new FileOptions(recSize);
 		else if (!type.equals("b")) {
 			throw new KawkabException("Invalid file type " + type);
 		}
 		return opts;
+	}
+
+	private Record recGen(int recSize) {
+		switch(recSize) {
+			case 16: {
+				return new SixteenRecord();
+			}
+			case 42: {
+				return new SampleRecord();
+			}
+			default: {
+				return new BytesRecord(recSize);
+			}
+		}
 	}
 }

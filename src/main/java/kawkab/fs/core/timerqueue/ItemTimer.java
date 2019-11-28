@@ -52,7 +52,7 @@ public class ItemTimer {
 	 * Restarts the timer, which was newly created or previously disabled. The timer must be disabled before calling
 	 * this update(). The timer is disabled by calling the disableIfNotExpired() function.
 	 */
-	public synchronized void update(long futureTime) {
+	public void update(long futureTime) {
 		// The state is DISABLED at this point in all the cases. This is because this timer is either new or is disabled
 		// before it is expired. If it is new, the worker thread does not have access to the timer. If it is disabled,
 		// the worker thread does not update the state. The worker changes the state only if the read state is not
@@ -69,7 +69,7 @@ public class ItemTimer {
 	 * 
 	 * @return false if the timer has already expired based on the previous timer value, otherwise returns true
 	 */
-	public synchronized boolean disableIfNotExpired() {
+	public boolean disableIfNotExpired() {
 		long state;
 		do {
 			state = mState.get();
@@ -97,7 +97,7 @@ public class ItemTimer {
 	 *         0 (DISABLED) if the timer is disabled in this function call,
 	 *         remaining clock of the timer in millis otherwise.
 	 */
-	public synchronized long tryExpire(long timeNow) throws KawkabException {
+	public long tryExpire(long timeNow) throws KawkabException {
 		long state;
 		do {
 			state = mState.get();
@@ -122,11 +122,11 @@ public class ItemTimer {
 		return EXPIRED;
 	}
 	
-	public synchronized boolean isDisabled() {
+	public boolean isDisabled() {
 		return mState.get() == DISABLED;
 	}
 	
-	public synchronized boolean isExpired() {
+	public boolean isExpired() {
 		return mState.get() == EXPIRED;
 	}
 }

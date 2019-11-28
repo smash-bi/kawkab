@@ -100,8 +100,13 @@ service FilesystemService {
 		(1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
 	i64 size(1: i64 sessionID) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
+
+	i32 recordSize(1: i64 sessionID) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
 	
 	oneway void close (1: i64 sessionID);
 
-	i32 noop (1: i64 none) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
+	i32 flush();
+
+	i32 noopWrite (1: i64 none) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
+	binary noopRead (1: i32 recSize) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
 }

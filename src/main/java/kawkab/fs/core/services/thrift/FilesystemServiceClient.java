@@ -131,6 +131,14 @@ public class FilesystemServiceClient {
 		}
 	}
 
+	public int recordSize(long sessionID) throws KawkabException {
+		try {
+			return client.recordSize(sessionID);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
 	public void close(long sessionID) throws KawkabException {
 		try {
 			client.close(sessionID);
@@ -139,15 +147,31 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public int noop(long none) throws KawkabException {
+	public int noopWrite(long none) throws KawkabException {
 		try {
-			return client.noop(none);
+			return client.noopWrite(none);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
 	}
 
-	public synchronized void disconnect() {
+	public ByteBuffer noopRead(int recSize) throws KawkabException {
+		try {
+			return client.noopRead(recSize);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
+	public void flush() {
+		try {
+			client.flush();
+		} catch (TException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void disconnect() {
 		transport.close();
 
 		transport = null;

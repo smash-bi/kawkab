@@ -4,14 +4,9 @@ import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.utils.GCMonitor;
-import kawkab.fs.utils.TimeLog;
 
 import java.io.IOException;
-import java.util.Iterator;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 import static kawkab.fs.core.BlockID.BlockType;
 
@@ -26,7 +21,7 @@ public class PartitionedBufferedCache extends Cache {
 	private Configuration conf;
 	private BufferedCache[] cache; // An extended LinkedHashMap that implements removeEldestEntry()
 	private LocalStoreManager localStore;
-	private int numPartitions = 1;
+	private int numPartitions = 8;
 
 	private ConcurrentHashMap<BlockID, CachedItem> pinnedMap;
 	private KeyedLock<Integer> pinLock;
@@ -190,7 +185,9 @@ public class PartitionedBufferedCache extends Cache {
 		for (int i=0; i<numPartitions; i++) {
 			cache[i].flush();
 		}
+	}
 
+	private void flushAll() throws KawkabException {
 		for (CachedItem cachedItem : pinnedMap.values()) {
 			Block block = cachedItem.block();
 			if (block.id().onPrimaryNode() && block.isLocalDirty()) {
@@ -226,7 +223,7 @@ public class PartitionedBufferedCache extends Cache {
 		//System.out.printf("ReleaseStats (us): %s\n", releaseStats);
 		//System.out.printf("LoadStats (us): %s\n", loadStats);
 		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
-		flush();
+		flushAll();
 		localStore.shutdown();
 	}
 	

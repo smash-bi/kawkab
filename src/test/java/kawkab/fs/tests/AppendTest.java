@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 public class AppendTest {
 
@@ -116,7 +117,7 @@ public class AppendTest {
 
 		Record rec = recFactory.newRandomRecord(rand, 1);
 		long startTime = System.currentTimeMillis();
-		TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "RecAppend", 5);
+		TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "RecAppend", 5);
 		for (int i=0; i<numRecords; i++) {
 			rec.timestamp(i+1);
 			tlog.start();
@@ -172,7 +173,7 @@ public class AppendTest {
 						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
 						
-						TimeLog tlog = new TimeLog(TimeLog.TimeLogUnit.NANOS, "Main append", 5);
+						TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "Main append", 5);
 						long startTime = System.currentTimeMillis();
 						int toWrite = bufSize;
 						long ops = 0;
