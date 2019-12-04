@@ -26,7 +26,7 @@ public class BytesRecord implements Record {
 	}
 
 	public BytesRecord(long timestamp, int sizeBytes) {
-		assert sizeBytes >= 16;
+		assert sizeBytes >= 16 : " Record size should be greater than 16, given "+sizeBytes;
 
 		buffer = ByteBuffer.allocate(sizeBytes);
 		timestamp(timestamp);

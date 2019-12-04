@@ -32,10 +32,10 @@ public class TimeLog {
 		this.samplePercent = samplePercent;
 		stats = new Accumulator();
 
-		int cnt = 100000;
-		rand = new int[cnt];
+		int numRands = 100000;
+		rand = new int[numRands];
 		Random r = new Random();
-		for(int i=0; i<cnt; i++) {
+		for(int i=0; i<numRands; i++) {
 			rand[i] = r.nextInt(100);
 		}
 
@@ -74,13 +74,18 @@ public class TimeLog {
 	}
 	
 	public String getStats() {
-		return String.format("%s (%s): %s, count=%,d, sampled=%d", tag, abbv(unit), stats, tCount,stats.count());
+		if (stats.count() == 0)
+			return tag + ": No stats";
+
+		return String.format("%s (%s): %s, count=%,d, sampled=%,d", tag, abbv(unit), stats, tCount,stats.count());
 	}
 
 	private String abbv(TimeUnit unit) {
 		switch(unit) {
 			case NANOSECONDS:
 				return "ns";
+			case MICROSECONDS:
+				return "us";
 			case MILLISECONDS:
 				return "ms";
 			case SECONDS:
@@ -117,5 +122,9 @@ public class TimeLog {
 	public void reset() {
 		stats = new Accumulator();
 		tCount = 0;
+	}
+
+	public Accumulator accumulator() {
+		return stats;
 	}
 }

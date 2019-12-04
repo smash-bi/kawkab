@@ -67,8 +67,8 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		//FIXME: The size of cache is not what is reflected from the configuration
 		MAX_BLOCKS_IN_CACHE = numSegmentsInCache + conf.inodeBlocksPerMachine + conf.ibmapsPerMachine;
 
-		acqLog = new TimeLog(TimeUnit.NANOSECONDS, "Cache acquire", 1);
-		relLog = new TimeLog(TimeUnit.NANOSECONDS, "Cache release", 1);
+		acqLog = new TimeLog(TimeUnit.MICROSECONDS, "Cache acquire", 1);
+		relLog = new TimeLog(TimeUnit.MICROSECONDS, "Cache release", 1);
 
 		highMark = numSegmentsInCache;
 		lowMark = (int) (numSegmentsInCache*0.5);
@@ -361,7 +361,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 			cacheLock.unlock();
 		}
 		
-		System.out.printf("Flushed %d entries from the cache. Current DSPool size is %d, cache size is %d.\n", count, dsp.size(), cache.size());
+		//System.out.printf("Flushed %d entries from the cache. Current DSPool size is %d, cache size is %d.\n", count, dsp.size(), cache.size());
 	}
 	
 	@Override
@@ -382,6 +382,9 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 
 	@Override
 	public String getStats() {
+		if (accessed == 0)
+			return "No stats";
+
 		return String.format("size=%d, accessed=%d, missed=%d, evicted=%d, waited=%d, hitRatio=%.02f\nacqLog: %s\nrelLog: %s\n",
 				size(), accessed, missed, evicted, waited, 100.0*(accessed-missed)/accessed, acqLog.getStats(), relLog.getStats());
 

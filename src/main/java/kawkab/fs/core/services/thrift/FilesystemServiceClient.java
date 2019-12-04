@@ -6,7 +6,7 @@ import kawkab.fs.core.exceptions.OutOfMemoryException;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.transport.TFramedTransport;
+import org.apache.thrift.transport.TFastFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
@@ -26,7 +26,7 @@ public class FilesystemServiceClient {
 	public FilesystemServiceClient(String serverIP, int port) throws KawkabException {
 		System.out.printf("[FSC] Connecting to %s:%d\n",serverIP,port);
 		try {
-			transport = new TFramedTransport(new TSocket(serverIP, port));
+			transport = new TFastFramedTransport(new TSocket(serverIP, port));
 			transport.open();
 
 			TProtocol protocol = new TBinaryProtocol(transport);
@@ -45,7 +45,7 @@ public class FilesystemServiceClient {
 	 *         append, and close.
 	 * @throws KawkabException Exceptions from the server are wrapped in KawkabException
 	 */
-	public long open(String filename, Filesystem.FileMode mode, int recordSize) throws KawkabException {
+	public int open(String filename, Filesystem.FileMode mode, int recordSize) throws KawkabException {
 		try {
 			return client.open(filename, convertFileMode(mode), recordSize);
 		} catch (TException e) {
@@ -53,7 +53,7 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public ByteBuffer recordNum(long sessionID, long recNum, int recSize) throws KawkabException {
+	public ByteBuffer recordNum(int sessionID, long recNum, int recSize) throws KawkabException {
 		try {
 			return client.recordNum(sessionID, recNum, recSize);
 		} catch (TException e) {
@@ -61,7 +61,7 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public ByteBuffer recordAt(long sessionID, long timestamp, int recSize) throws KawkabException {
+	public ByteBuffer recordAt(int sessionID, long timestamp, int recSize) throws KawkabException {
 		try {
 			return client.recordAt(sessionID, timestamp, recSize);
 		} catch (TException e) {
@@ -69,7 +69,7 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public List<ByteBuffer> readRecords(long sessionID, long minTS, long maxTS, int recSize) throws KawkabException {
+	public List<ByteBuffer> readRecords(int sessionID, long minTS, long maxTS, int recSize) throws KawkabException {
 		try {
 			return client.readRecords(sessionID, minTS, maxTS, recSize);
 		} catch (TException e) {
@@ -83,7 +83,7 @@ public class FilesystemServiceClient {
 	 * @return Number of bytes appended
 	 * @throws KawkabException
 	 */
-	public int append(long sessionID, ByteBuffer buffer) throws KawkabException {
+	public int append(int sessionID, ByteBuffer buffer) throws KawkabException {
 		try {
 			return client.append(sessionID, buffer);
 		} catch (TException e) {
@@ -91,7 +91,7 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public int append(long sessionID, ByteBuffer srcBuf, int recSize) throws KawkabException {
+	public int append(int sessionID, ByteBuffer srcBuf, int recSize) throws KawkabException {
 		try {
 			return client.appendRecord(sessionID, srcBuf, recSize);
 		} catch (TException e) {
@@ -99,7 +99,22 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public int appendBuffered(long sessionID, ByteBuffer srcBuf, int recSize) throws OutOfMemoryException, KawkabException {
+	public int appendRecords(ByteBuffer buffer) throws OutOfMemoryException, KawkabException {
+		int tries = 0;
+		while(++tries < MAX_TRIES) {
+			try {
+				return client.appendRecords(buffer);
+			} catch (TOutOfMemoryException e) {
+				// Retry if the memory was full
+			} catch (TException e) {
+				throw new KawkabException(e);
+			}
+		}
+
+		throw new OutOfMemoryException(String.format("Request failed after %d tries", tries));
+	}
+
+	public int appendBuffered(int sessionID, ByteBuffer srcBuf, int recSize) throws OutOfMemoryException, KawkabException {
 		int tries = 0;
 		while(++tries < MAX_TRIES) {
 			try {
@@ -115,7 +130,7 @@ public class FilesystemServiceClient {
 		throw new OutOfMemoryException(String.format("Request failed after %d tries", tries));
 	}
 
-	public int appendBatched(long sessionID, List<ByteBuffer> srcBufs, int recSize) throws KawkabException {
+	public int appendBatched(int sessionID, List<ByteBuffer> srcBufs, int recSize) throws KawkabException {
 		try {
 			return client.appendRecordBatched(sessionID, srcBufs, recSize);
 		} catch (TException e) {
@@ -123,7 +138,7 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public long size(long sessionID) throws KawkabException {
+	public long size(int sessionID) throws KawkabException {
 		try {
 			return client.size(sessionID);
 		} catch (TException e) {
@@ -131,7 +146,7 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public int recordSize(long sessionID) throws KawkabException {
+	public int recordSize(int sessionID) throws KawkabException {
 		try {
 			return client.recordSize(sessionID);
 		} catch (TException e) {
@@ -139,7 +154,7 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public void close(long sessionID) throws KawkabException {
+	public void close(int sessionID) throws KawkabException {
 		try {
 			client.close(sessionID);
 		} catch (TException e) {

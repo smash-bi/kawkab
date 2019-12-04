@@ -1,25 +1,27 @@
 package kawkab.fs.utils;
 
-public class Accumulator{
+public class Accumulator {
     private long[] buckets;
-    //private long totalSum;
     private long totalCnt;
-    //private double prodSum = 0;
-    //private int maxCntBucket;
     private double maxValue;
     private double minValue = Double.MAX_VALUE;
 
-    //private double aggMean;
-    //private double m2;
-    
-    
+    private double dataTput;
+    private double opsTput;
+
     public Accumulator(){
         reset();
     }
+
+    public Accumulator(long[] histogram, long totalCnt, double min, double max) {
+        this.buckets = histogram;
+        this.totalCnt = totalCnt;
+        this.minValue = min;
+        this.maxValue = max;
+    }
     
     public synchronized void reset(){
-        int maxValue = 1000000; //in microseconds
-        buckets = new long[maxValue];
+        buckets = new long[1000000];
         //maxCntBucket = 0;
         this.maxValue = 0;
         //totalSum = 0;
@@ -107,9 +109,9 @@ public class Accumulator{
      * @return Returns [median lat, 95 %ile lat, 99 %ile lat]
      * */
     public synchronized double[] getLatencies() {
-        int medianBucket = buckets.length;
-        int perc95Bucket = buckets.length;
-        int perc99Bucket = buckets.length;
+        int medianBucket = -1;
+        int perc95Bucket = -1;
+        int perc99Bucket = -1;
         long sum = 0;
         for (int i = 0; i < buckets.length; i++) {
             if (buckets[i] <= 0)
@@ -121,6 +123,8 @@ public class Accumulator{
                 perc95Bucket = i;
             else if (sum <= 0.99 * totalCnt)
                 perc99Bucket = i;
+            else if (sum == buckets[i])
+                medianBucket = perc95Bucket = perc99Bucket = i;
         }
         
         return new double[]{ medianBucket, perc95Bucket, perc99Bucket };
@@ -148,6 +152,9 @@ public class Accumulator{
     
     @Override
     public synchronized String toString() {
+        if (totalCnt == 0)
+            return "No stats";
+
         double[] lats = getLatencies();
         return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f, mean=%.2f",
                 lats[0],lats[1],lats[2], min(), max(), mean());
@@ -203,6 +210,9 @@ public class Accumulator{
 
         if (minValue > from.minValue)
             minValue = from.minValue;
+
+        opsTput += from.opsTput;
+        dataTput += from.dataTput;
     }
 
     private double mean(long[] hist) {
@@ -215,5 +225,21 @@ public class Accumulator{
             }
         }
         return avg;
+    }
+
+    public void setDataTput(double tput) {
+        dataTput = tput;
+    }
+
+    public void setOpsTput(double tput) {
+        opsTput = tput;
+    }
+
+    public double dataTput() {
+        return dataTput;
+    }
+
+    public double opsTput() {
+        return opsTput;
     }
 }

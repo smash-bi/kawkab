@@ -15,12 +15,12 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class FilesystemServiceImpl implements Iface {
 	private Filesystem fs;
-	private Map<Long, FileHandle> sessions;			// Opened files from the clients
-	private AtomicLong counter = new AtomicLong();	//To assigns unique sessionsIDs for each file open request from the clients
+	private Map<Integer, Session> sessions;			// Opened files from the clients
+	private AtomicInteger counter = new AtomicInteger();	//To assigns unique sessionsIDs for each file open request from the clients
 
 	private static Configuration conf = Configuration.instance();
 
@@ -30,7 +30,7 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public long open(String filename, TFileMode fileMode, int recordSize) throws TException {
+	public int open(String filename, TFileMode fileMode, int recordSize) throws TException {
 		//System.out.printf("[FSI] open(): opening file %s, recSize %d\n", filename, recordSize);
 
 		FileHandle handle = null;
@@ -41,9 +41,20 @@ public class FilesystemServiceImpl implements Iface {
 			throw new TRequestFailedException(e.getMessage());
 		}
 
-		long sessionID = counter.incrementAndGet();
+		int sessionID = counter.incrementAndGet();
+		int recSize = -1;
+		try {
+			recSize = handle.recordSize();
+		} catch (OutOfMemoryException e) {
+			e.getMessage();
+			throw new TOutOfMemoryException(e.getMessage());
+		}  catch (Exception | AssertionError e) {
+			e.printStackTrace();
+			throw new TRequestFailedException(e.getMessage());
+		}
 
-		if (sessions.putIfAbsent(sessionID, handle) != null) {
+		Session session = new Session(sessionID, recSize, handle);
+		if (sessions.putIfAbsent(sessionID, session) != null) {
 			throw new TRequestFailedException("Session already exist: " + sessionID);
 		}
 
@@ -51,12 +62,12 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public ByteBuffer recordNum(long sessionID, long recNum, int recSize) throws TInvalidSessionException, TRequestFailedException, TOutOfMemoryException {
-		FileHandle fh = sessions.get(sessionID);
-
-		if (fh == null) {
+	public ByteBuffer recordNum(int sessionID, long recNum, int recSize) throws TInvalidSessionException, TRequestFailedException, TOutOfMemoryException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
+		FileHandle fh = s.fh;
 
 		ByteBuffer dstBuf = ByteBuffer.allocate(recSize);
 		try {
@@ -72,12 +83,12 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public ByteBuffer recordAt(long sessionID, long timestamp, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
-		FileHandle fh = sessions.get(sessionID);
-
-		if (fh == null) {
+	public ByteBuffer recordAt(int sessionID, long timestamp, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
+		FileHandle fh = s.fh;
 
 		ByteBuffer dstBuf = ByteBuffer.allocate(recSize);
 		try {
@@ -96,12 +107,12 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public List<ByteBuffer> readRecords(long sessionID, long minTS, long maxTS, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
-		FileHandle fh = sessions.get(sessionID);
-
-		if (fh == null) {
+	public List<ByteBuffer> readRecords(int sessionID, long minTS, long maxTS, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
+		FileHandle fh = s.fh;
 
 		try {
 			List<ByteBuffer> results = fh.readRecords(minTS, maxTS, recSize);
@@ -141,12 +152,12 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public int appendRecord(long sessionID, ByteBuffer data, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
-		FileHandle fh = sessions.get(sessionID);
-
-		if (fh == null) {
+	public int appendRecord(int sessionID, ByteBuffer data, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
+		FileHandle fh = s.fh;
 
 		try {
 			return fh.append(data, recSize);
@@ -160,13 +171,12 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public int appendRecordBuffered(long sessionID, ByteBuffer srcBuf, int recSize) throws TOutOfMemoryException, TRequestFailedException, TInvalidSessionException {
-		FileHandle fh = sessions.get(sessionID);
-
-		if (fh == null) {
-			System.out.println("Fh = null");
+	public int appendRecordBuffered(int sessionID, ByteBuffer srcBuf, int recSize) throws TOutOfMemoryException, TRequestFailedException, TInvalidSessionException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
+		FileHandle fh = s.fh;
 
 		try {
 			return fh.append(srcBuf, recSize);
@@ -195,13 +205,59 @@ public class FilesystemServiceImpl implements Iface {
 		return cnt;*/
 	}
 
+	/**
+	 * Appends records batched in the buffer. The buffer contains the pairs {sessionID, record}.
+	 * @param data
+	 * @return Returns the number of records appended
+	 * @throws TRequestFailedException
+	 * @throws TInvalidSessionException
+	 * @throws TOutOfMemoryException
+	 * @throws TException
+	 */
 	@Override
-	public int appendRecordBatched(long sessionID, List<ByteBuffer> data, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
-		FileHandle fh = sessions.get(sessionID);
+	public int appendRecords(ByteBuffer data) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException, TException {
+		int pos = data.position();
+		int limit = data.limit();
 
-		if (fh == null) {
+		assert data.remaining() >= Integer.BYTES;
+
+		int cnt = 0;
+		while(pos < limit) {
+			int sessionID = data.getInt();
+
+			Session s = sessions.get(sessionID);
+			if (s == null) {
+				throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
+			}
+			FileHandle fh = s.fh;
+
+			pos += Integer.BYTES + s.recSize;
+			data.limit(pos);
+
+			try {
+				fh.append(data, s.recSize);
+			} catch (OutOfMemoryException e) {
+				e.getMessage();
+				throw new TOutOfMemoryException(e.getMessage());
+			} catch (Exception | AssertionError e) {
+				e.printStackTrace();
+				throw new TRequestFailedException(e.getMessage());
+			}
+
+			data.limit(limit);
+			cnt++;
+		}
+
+		return cnt;
+	}
+
+	@Override
+	public int appendRecordBatched(int sessionID, List<ByteBuffer> data, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
+		FileHandle fh = s.fh;
 
 		int cnt = 0;
 		for(ByteBuffer srcBuf : data) {
@@ -220,12 +276,12 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public ByteBuffer read(long sessionID, long offset, int length) throws TRequestFailedException, TInvalidSessionException, TInvalidArgumentException, TOutOfMemoryException {
-		FileHandle fh = sessions.get(sessionID);
-
-		if (fh == null) {
+	public ByteBuffer read(int sessionID, long offset, int length) throws TRequestFailedException, TInvalidSessionException, TInvalidArgumentException, TOutOfMemoryException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
+		FileHandle fh = s.fh;
 
 		if (length > conf.maxBufferLen) {
 			throw new TInvalidArgumentException("Maximum allowed length in bytes is "+conf.maxBufferLen);
@@ -260,12 +316,12 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public int append(long sessionID, ByteBuffer srcBuf) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
-		FileHandle fh = sessions.get(sessionID);
-
-		if (fh == null) {
+	public int append(int sessionID, ByteBuffer srcBuf) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
+		FileHandle fh = s.fh;
 
 		int offset = srcBuf.position();
 		int length = srcBuf.remaining();
@@ -281,12 +337,12 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public long size(long sessionID) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
-		FileHandle fh = sessions.get(sessionID);
-
-		if (fh == null) {
+	public long size(int sessionID) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
+		FileHandle fh = s.fh;
 
 		try {
 			return fh.size();
@@ -300,12 +356,12 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public int recordSize(long sessionID) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
-		FileHandle fh = sessions.get(sessionID);
-
-		if (fh == null) {
+	public int recordSize(int sessionID) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
+		FileHandle fh = s.fh;
 
 		try {
 			return fh.recordSize();
@@ -319,12 +375,12 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public void close(long sessionID) throws TException {
-		FileHandle fh = sessions.get(sessionID);
-		if (fh == null) {
-			System.out.println("[FSS] ERROR: Session ID is invalid or the session does not exist to close " + fh.inumber());
-			return;
+	public void close(int sessionID) throws TException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
+			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
 		}
+		FileHandle fh = s.fh;
 
 		try {
 			fs.close(fh);
@@ -364,6 +420,18 @@ public class FilesystemServiceImpl implements Iface {
 				return Filesystem.FileMode.APPEND;
 			default:
 				return null;
+		}
+	}
+
+	private class Session {
+		private final int id;
+		private final int recSize;
+		private final FileHandle fh;
+
+		private Session(int id, int recSize, FileHandle fh) {
+			this.id = id;
+			this.recSize = recSize;
+			this.fh = fh;
 		}
 	}
 }

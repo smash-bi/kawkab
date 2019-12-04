@@ -142,6 +142,7 @@
 				<configuration>
 					<executable>java</executable>
 					<arguments>
+						<argument>--add-opens=java.base/jdk.internal.ref=ALL-UNNAMED</argument>
 						<argument>-ea</argument>
 						<argument>-Xms${Xms}</argument>
 						<argument>-Xmx${Xmx}</argument>
@@ -190,9 +191,11 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.8.0</version>
+				<version>3.8.1</version>
 				<configuration>
-					<release>11</release>
+					<source>13</source>
+					<target>13</target>
+					<!--release>13</release-->
 					<!-- excludes>
 				      <exclude>**/thrift/*.java</exclude>
 				    </excludes -->
@@ -292,7 +295,7 @@
 			<dependency>
 				<groupId>net.openhft</groupId>
 				<artifactId>chronicle-bom</artifactId>
-				<version>2.17.442</version>
+				<version>2.17.476</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -304,7 +307,7 @@
 		<dependency>
 			<groupId>com.google.guava</groupId>
 			<artifactId>guava</artifactId>
-			<version>28.0-jre</version>
+			<version>28.1-jre</version>
 		</dependency>
 
 		<dependency>

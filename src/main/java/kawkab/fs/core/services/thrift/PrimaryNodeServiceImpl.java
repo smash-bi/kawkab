@@ -4,21 +4,43 @@ import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.*;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.index.poh.POHNode;
+import kawkab.fs.utils.TimeLog;
 import org.apache.thrift.TException;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 
 public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 	private static Cache cache = Cache.instance();
 	private static int segmentSizeBytes = Configuration.instance().segmentSizeBytes;
-	private static int inodesBlockSizeBytes = Configuration.instance().inodesBlockSizeBytes;
-	private static int indexNodeSizeBytes = Configuration.instance().indexNodeSizeBytes;
+	//private static int inodesBlockSizeBytes = Configuration.instance().inodesBlockSizeBytes;
+	//private static int indexNodeSizeBytes = Configuration.instance().indexNodeSizeBytes;
+	private ConcurrentLinkedQueue<ByteBuffer> buffers;
+
+	private TimeLog segLog;
+
+	public PrimaryNodeServiceImpl(int numWorkers) {
+		int segmentSizeBytes = Configuration.instance().segmentSizeBytes;
+		buffers = new ConcurrentLinkedQueue<>();
+		for (int i=0; i<numWorkers; i++) {
+			ByteBuffer buffer = ByteBuffer.allocate(segmentSizeBytes);
+			buffers.add(buffer);
+		}
+
+		segLog = new TimeLog(TimeUnit.MICROSECONDS, "PN segLog", 100);
+	}
 
 	@Override
 	public ByteBuffer getSegment(long inumber, long blockInFile, int segmentInBlock, int recordSize, int offset) throws TFileNotExistException, TException {
+		segLog.start();
+
 		DataSegmentID id = new DataSegmentID(inumber, blockInFile, segmentInBlock, recordSize);
-		ByteBuffer buffer = ByteBuffer.allocate(segmentSizeBytes);
+
+		ByteBuffer buffer = buffers.poll();
+		if (buffer == null) buffer = ByteBuffer.allocate(segmentSizeBytes);
+		buffer.clear();
 
 		DataSegment ds = null;
 		try {
@@ -37,6 +59,9 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 					e.printStackTrace();
 				}
 			}
+
+			buffers.offer(buffer);
+			segLog.end();
 		}
 	}
 
@@ -45,7 +70,10 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 		//System.out.printf("[PSI] getInodesBlock: %d\n", blockIndex);
 
 		InodesBlockID id = new InodesBlockID(blockIndex);
-		ByteBuffer buffer = ByteBuffer.allocate(inodesBlockSizeBytes);
+
+		ByteBuffer buffer = buffers.poll();
+		if (buffer == null) buffer = ByteBuffer.allocate(segmentSizeBytes);
+		buffer.clear();
 
 		InodesBlock block = null;
 
@@ -66,13 +94,18 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 					e.printStackTrace();
 				}
 			}
+
+			buffers.offer(buffer);
 		}
 	}
 
 	@Override
 	public ByteBuffer getIndexNode(long inumber, int nodeNumInIndex, int fromTsIndex) throws TFileNotExistException, TException {
 		IndexNodeID id = new IndexNodeID(inumber, nodeNumInIndex);
-		ByteBuffer buffer = ByteBuffer.allocate(indexNodeSizeBytes);
+
+		ByteBuffer buffer = buffers.poll();
+		if (buffer == null) buffer = ByteBuffer.allocate(segmentSizeBytes);
+		buffer.clear();
 
 		POHNode node = null;
 
@@ -92,6 +125,12 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 					e.printStackTrace();
 				}
 			}
+
+			buffers.offer(buffer);
 		}
+	}
+
+	public void printStats() {
+		segLog.printStats();
 	}
 }

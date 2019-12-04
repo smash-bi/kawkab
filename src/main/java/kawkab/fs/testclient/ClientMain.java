@@ -8,25 +8,32 @@ import kawkab.fs.records.SixteenRecord;
 import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.GCMonitor;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+
+import static kawkab.fs.testclient.TestRunner.*;
+
 public class ClientMain {
 	private Printer pr;
 
-	public static void main(String[] args) throws KawkabException {
+	public static void main(String[] args) throws KawkabException, InterruptedException {
 		ClientMain main = new ClientMain();
 		main.init(args);
 	}
 
-	private void init(String[] args) throws KawkabException {
+	private void init(String[] args) throws KawkabException, InterruptedException {
 		String usage = "Usage: TestClient cid=clientID sip=svrIP sport=svrPort wt=waitTimeMs " +
 				"mid=masterID mip=masterIP mport=masterPort mgc=true|false nc=numClients" +
-				"bs=batchSize rs=16|42";
+				"bs=batchSize rs=16|42 fp=filePrefix type=apnd|noop tc=totalClients";
 
 		if (args.length == 1) {
 			args = args[0].split(" ");
 		}
 
-		if (args.length != 12) {
-			System.out.printf("Expecting 9 arguments, %d given.\n%s\n", args.length, usage);
+		if (args.length != 15) {
+			System.out.printf("Expecting 15 arguments, %d given.\n%s\n", args.length, usage);
 			return;
 		}
 
@@ -38,16 +45,22 @@ public class ClientMain {
 		String mip	= "";	// master client IP
 		int mport	= 0;	// master client port
 		boolean mgc	= false; // Should monitor and log garbage collection
-		int nc		= 0; // Total number of clients
+		int tc 		= 0; // Total number of clients
+		int nc		= 0; // Number of client threads in this instance
 		int bs		= 0; // batch size; number of requests per message
 		int rs		= 0; // record size in bytes
 		int nf		= 0; //Number of files to read/write
-		int warmupsec = 5;
-		int testDurSec = 10;
+		String type = "apnd";
+		int warmupsec = 30;
+		int testDurSec = 120;
+		String fp = "test-";
+		int testID = 1;
 
+		StringBuilder params = new StringBuilder();
 		for (String iArg : args) {
 			System.out.println(iArg);
 			String[] arg = iArg.split("=");
+			params.append(iArg).append("\n");
 			switch(arg[0]) {
 				case "cid": cid = Integer.parseInt(arg[1]); break;
 				case "sip": sip = arg[1]; break;
@@ -61,9 +74,13 @@ public class ClientMain {
 				case "bs": bs = Integer.parseInt(arg[1]); break;
 				case "rs": rs = Integer.parseInt(arg[1]); break;
 				case "nf": nf = Integer.parseInt(arg[1]); break;
+				case "fp": fp = arg[1]; break;
+				case "typ": type = arg[1]; break;
+				case "tc": tc = Integer.parseInt(arg[1]); break;
 				default: System.out.printf("Invalid argument %s.\n%s",iArg,usage); return;
 			}
 		}
+		params.append("Twup=").append(warmupsec).append("\ntdur=").append(testDurSec);
 
 		Record recGen;
 		if (rs == 16) {
@@ -80,51 +97,63 @@ public class ClientMain {
 			GCMonitor.initialize();
 		}
 
-		pr = new Printer(cid);
+		pr = new Printer();
 		pr.print("Starting client " + cid);
 
-		if (wtMs > 0) {
-			initWait(wtMs);
-		}
+		Accumulator[] accms = runTest(testID, cid, testDurSec, nc, nf, sip, sport, bs, recGen, warmupsec, type, tc, mid, mip, mport, wtMs, fp);
 
-		//Result result = runTest(10, cid, nf, sip, sport, mip, mport, pr);
-		//System.out.println(result.toJson(false));
-
-		TestRunner at = new TestRunner();
-		Accumulator[] accms = at.runTest(testDurSec, nc, cid, nf, sip, sport, bs, recGen, pr, warmupsec, TestRunner.TestType.APPEND);
-		//Accumulator[] accms = at.runTest(testDurSec, nc, cid, nf, sip, sport, bs, recGen, pr, warmupsec, TestRunner.TestType.NOOP);
-		Accumulator accm = merge(accms);
-		Result result = prepareResult(accm, testDurSec, recGen.size(), nc, nf, bs);
-
-		System.out.println(result.toJson(false));
-		System.out.println(result.csvHeader());
-		System.out.println(result.csv());
+		saveResults(cid, accms, fp, testDurSec, recGen.size(), nc, nf, bs);
+		ClientUtils.writeToFile(params.toString(), fp+"/params.txt");
 
 		pr.print("Finished client " + cid);
 	}
 
-	private Accumulator merge(Accumulator[] accms) {
-		Accumulator accm = accms[0];
+	private Accumulator[] runTest(int testID, int cid, int testDurSec, int numCients, int filesPerClient,
+								  String svrIP, int sport, int batchSize, Record recGen, int warmupsec, String type,
+								  int totalClients, int mid, String mip, int mport, int initWaitMs, String filePrefix) throws InterruptedException, KawkabException {
+		TestRunner at = new TestRunner();
 
-		for (int i=1; i<accms.length; i++) {
-			accm.merge(accms[i]);
+		if (cid == mid) {
+			at.startServer(totalClients, mport);
 		}
 
-		return accm;
+		if (initWaitMs > 0) {
+			initWait(initWaitMs);
+		}
+
+		TestType ttype = type.equals("apnd") ? TestType.APPEND : type.equals("noop")? TestType.NOOP : null;
+		if (ttype == null) {
+			System.out.println("Invalid test type " + type);
+			return null;
+		}
+
+		String fp = filePrefix+"/results";
+
+		Accumulator[] accms = at.runTest(testID, testDurSec, numCients, cid, filesPerClient, svrIP, sport, batchSize, recGen, pr, warmupsec, ttype,
+				totalClients, mid, mip, mport, fp);
+
+		if (cid == mid) {
+			at.stopServer();
+		}
+
+		return accms;
 	}
 
-	private Result prepareResult(Accumulator accm, int testDurSec, int recSize, int nc, int nf, int batchSize) {
-		long cnt = accm.count()*batchSize;
-		double sizeMB = recSize*cnt / (1024.0 * 1024.0);
-		double thr = sizeMB / testDurSec;
-		int opThr = (int)(cnt / testDurSec);
+	private void saveResults(int cidOffset, Accumulator[] accms, String filePrefix, int testDurSec, int recSize, int nc, int nf, int bs) {
+		for (int i=0; i<accms.length; i++) {
+			Result res = ClientUtils.prepareResult(accms[i], testDurSec, recSize, nc, nf, bs, false);
+			String fp = filePrefix+"/clients/client-"+(cidOffset+i);
+			ClientUtils.saveResult(res, fp);
+		}
 
-		pr.print(String.format("Agg: dur=%d sec, batch=%d, clnts=%d, files=%d, size=%.2f MB, thr=%,.2f MB/s, opThr=%,d, Lat(us): %s\n",
-				testDurSec, batchSize, nc, nf*nc, sizeMB, thr, opThr, accm));
+		Accumulator accm = ClientUtils.merge(accms);
+		Result result = ClientUtils.prepareResult(accm, testDurSec, recSize, nc, nf, bs, true);
 
-		double[] lats = accm.getLatencies();
-		return new Result(cnt, opThr, thr, lats[0], lats[1], lats[2], accm.min(), accm.max(), accm.mean(),
-				0, lats[0], 0, accm.mean(), 0, accm.max(), new long[]{}, accm.histogram());
+		/*System.out.println(result.toJson(false));
+		System.out.println(result.csvHeader());
+		System.out.println(result.csv());*/
+
+		ClientUtils.saveResult(result, filePrefix+"/results-"+cidOffset);
 	}
 
 	private void initWait(int waitTime) {

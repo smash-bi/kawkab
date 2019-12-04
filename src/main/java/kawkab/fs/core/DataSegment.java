@@ -27,7 +27,7 @@ public final class DataSegment extends Block {
 	private ByteBuffer dataBuf; // Buffer to hold actual segment data
 	private int segmentInBlock;
 	private volatile boolean isSegFull;  // Sets to true only when the block becomes full in an append operation.
-	private long lastFetchTimeMs = 0; // Clock time in ms when the block was last loaded. This must be initialized
+	private long lastFetchTimeMs = 0; // ApproximateClock time in ms when the block was last loaded. This must be initialized
 	// to zero when the block is first created in memory.
 	
 	private AtomicInteger writePos; // Keeps track of the next byte offset where data is appended
@@ -398,8 +398,8 @@ public final class DataSegment extends Block {
 		dirtyOffset += bytesRead;
 		isSegFull = pos+recordSize > segmentSizeBytes;
 
-		System.out.printf("[DS] After loading %s from channel: bytesRead=%d, writePos=%d, datBufPos=%d\n",
-				id, bytesRead, pos, dataBuf.position());
+		//System.out.printf("[DS] After loading %s from channel: bytesRead=%d, writePos=%d, datBufPos=%d\n",
+		//		id, bytesRead, pos, dataBuf.position());
 
 		return bytesRead;
 	}
@@ -459,7 +459,7 @@ public final class DataSegment extends Block {
 	}
 	
 	private synchronized void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
-		System.out.printf("[DS] Fetch %s from primary. writePos=%d, dirtyOffset=%d, dataBufPost=%d\n", id, writePos.get(), dirtyOffset, dataBuf.position());
+		//System.out.printf("[DS] Fetch %s from primary. writePos=%d, dirtyOffset=%d, dataBufPost=%d\n", id, writePos.get(), dirtyOffset, dataBuf.position());
 		loadFrom(primaryNodeService.getSegment((DataSegmentID)id, writePos.get()));
 	}
 	
@@ -536,7 +536,7 @@ public final class DataSegment extends Block {
 		 */
 
 		if (isSegFull) { // Never load an already loaded block if the segment is full.
-			System.out.printf("[DS] Segment %s is full. Not loading the segment again.\n", id);
+			//System.out.printf("[DS] Segment %s is full. Not loading the segment again.\n", id);
 			return;
 		}
 
@@ -544,10 +544,10 @@ public final class DataSegment extends Block {
 
 		if (lastFetchTimeMs < now - conf.dataSegmentFetchExpiryTimeoutMs) { // If the last fetch from the global store has expired
 			int pos = writePos.get();
-			int offset = writePos.get() + segmentInBlock*segmentSizeBytes;
+			int offset = pos + segmentInBlock*segmentSizeBytes;
 			int length = segmentSizeBytes - pos;
 			try {
-				System.out.println("[DS] Load from the global: " + id());
+				//System.out.println("[DS] Load from the global: " + id());
 
 				loadFromGlobal(offset, length); // First try loading data from the global store
 				lastFetchTimeMs = Long.MAX_VALUE; // Never expire data fetched from the global store.
@@ -555,14 +555,14 @@ public final class DataSegment extends Block {
 
 				//TODO: If this block cannot be further modified, never expire the loaded data. For example, if it was the last segment of the block.
 			} catch (FileNotExistException e) { //If the block is not in the global store yet
-				System.out.println("[B] Not found in the global: " + id());
+				//System.out.println("[DS] Not found in the global: " + id());
 				lastFetchTimeMs = 0; // Failed to fetch from the global store
 			}
 
-			System.out.println("[B] Primary fetch expired or not found from the global: " + id());
+			//System.out.println("[DS] Primary fetch expired or not found from the global: " + id());
 
 			try {
-				System.out.println("[B] Loading from the primary: " + id());
+				//System.out.println("[DS] Loading from the primary: " + id());
 				loadBlockFromPrimary(); // Fetch data from the primary node
 				//lastPrimaryFetchTimeMs = now;
 				if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed
@@ -570,12 +570,12 @@ public final class DataSegment extends Block {
 			} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
 				// Check again from the global store because the primary may have deleted the
 				// block after copying to the global store
-				System.out.println("[B] Not found on the primary, trying again from the global: " + id());
+				//System.out.println("[DS] Not found on the primary, trying again from the global: " + id());
 				loadFromGlobal(offset, length);
 				lastFetchTimeMs = now;
 				//lastPrimaryFetchTimeMs = 0;
 			} catch (IOException ioe) {
-				System.out.println("[B] Not found in the global and the primary: " + id());
+				//System.out.println("[DS] Not found in the global and the primary: " + id());
 				throw new KawkabException(ioe);
 			}
 		}

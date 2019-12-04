@@ -92,7 +92,7 @@ public final class Configuration {
 	// Filesystem RPC service for the filesystem clients
 	public final int fsServerListenPort; // = 33433;
 	public final int maxBufferLen; // = 16*1024; //in bytes
-	
+
 	public final Map<Integer, NodeInfo> nodesMap;
 	
 	public static Configuration instance() {

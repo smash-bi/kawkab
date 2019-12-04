@@ -19,8 +19,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class PrimaryNodeServiceClient {
-	private static final Object initLock = new Object();
-
 	private Map<Integer, PrimaryNodeService.Client> clients;
 	private Map<Integer, TTransport> transports;
 	private static PrimaryNodeServiceClient instance;
@@ -33,9 +31,7 @@ public class PrimaryNodeServiceClient {
 
 	public static PrimaryNodeServiceClient instance() {
 		if (instance == null) {
-			synchronized(initLock) {
-				instance = new PrimaryNodeServiceClient();
-			}
+			instance = new PrimaryNodeServiceClient();
 		}
 
 		return instance;

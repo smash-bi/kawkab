@@ -1,7 +1,7 @@
 package kawkab.fs.core.timerqueue;
 
 import kawkab.fs.core.AbstractTransferItem;
-import kawkab.fs.core.Clock;
+import kawkab.fs.core.ApproximateClock;
 import kawkab.fs.core.exceptions.KawkabException;
 
 /**
@@ -32,7 +32,7 @@ import kawkab.fs.core.exceptions.KawkabException;
  * Note 2: When a new item is created, the timer is in disabled state. Therefore, the timer must be enabled after
  * creating a new TimerQueueItem object.
  *
- * Note 3: This class uses kawkab.fs.core.Clock for timings, which is an approximate clock. The clock time may be
+ * Note 3: This class uses kawkab.fs.core.ApproximateClock for timings, which is an approximate clock. The clock time may be
  * staled as compared to the wall clock. The granularity of the clock is in milliseconds.
  *
  * Usage example:
@@ -54,12 +54,10 @@ import kawkab.fs.core.exceptions.KawkabException;
 
 public class TimerQueueItem<T> extends AbstractTransferItem {
 	private final ItemTimer timer;
-	private static final Clock clock = Clock.instance();
+	private static final ApproximateClock clock = ApproximateClock.instance();
 	
 	private T item;
 	private DeferredWorkReceiver<T> receiver;
-
-	private int acquireCount;
 
 	public TimerQueueItem(T item, DeferredWorkReceiver<T> receiver) {
 		assert item != null;
@@ -137,17 +135,5 @@ public class TimerQueueItem<T> extends AbstractTransferItem {
 		}
 		
 		return item.toString(); //FIXME: This is not thread safe. This should only be used for debuggin purposes.
-	}
-
-	public int incrementAndGet() {
-		return ++acquireCount;
-	}
-
-	public int decrementAndGet() {
-		return --acquireCount;
-	}
-
-	public int count() {
-		return acquireCount;
 	}
 }

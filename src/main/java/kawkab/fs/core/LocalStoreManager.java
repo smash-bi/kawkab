@@ -96,7 +96,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			Block block = reqs.poll();
 			if (block == null) {
 				try {
-					Thread.sleep(1); //1ms is arbitrary
+					Thread.sleep(3); //1ms is arbitrary
 				} catch (InterruptedException e1) {}
 				continue;
 			}

@@ -16,10 +16,10 @@ import java.nio.file.StandardOpenOption;
 public final class InodesBlock extends Block {
 	private static boolean bootstraped; //Not saved persistently
 	private Inode[] inodes; //Should be initialized in the bootstrap function only.
-	private long lastFetchTimeMs; 	// Clock time in ms when the block was last loaded. This must be initialized 
+	private long lastFetchTimeMs; 	// ApproximateClock time in ms when the block was last loaded. This must be initialized
 									// to zero when the block is first created in memory.
 
-	private static Clock clock = Clock.instance();
+	private static ApproximateClock clock = ApproximateClock.instance();
 	private long lastGlobalStoreTimeMs;
 	private int globalStoreTimeGapMs = 3000;
 	//private int version; //Inodes-block's current version number.

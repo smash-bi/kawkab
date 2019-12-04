@@ -56,7 +56,7 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 	
 	private static final int timeoutMillis = 5000; //5 seconds selected arbitrarily
 	private final TimerQueue tq;
-	private final Clock clock = Clock.instance();
+	private final ApproximateClock clock = ApproximateClock.instance();
 	private long hitCount;
 	private long missCount;
 	private final String name; //For debugging and tracing

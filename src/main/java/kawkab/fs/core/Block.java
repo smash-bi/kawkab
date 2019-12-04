@@ -223,7 +223,8 @@ public abstract class Block extends AbstractTransferItem {
 	public void waitUntilSynced() throws InterruptedException {
 		if (isLocalDirty || inTransferQueue()) {
 			synchronized(localStoreSyncLock) {
-				while (isLocalDirty || inTransferQueue()) { // It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
+				// It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
+				while (isLocalDirty || inTransferQueue()) {
 					//System.out.println("[B] swait: " + id + ", dty: " +
 					//			isLocalDirty + ", inLQ="+inTransferQueue());
 					localStoreSyncLock.wait();
@@ -239,7 +240,7 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws KawkabException
 	 */
 	protected void loadFromGlobal(int offset, int length) throws FileNotExistException, KawkabException {
-		System.out.printf("[PN] Loading %s from GS\n",id);
+		//System.out.printf("[B] Loading %s from GS\n",id);
 
 		globalStoreManager.load(this, offset, length);
 	}

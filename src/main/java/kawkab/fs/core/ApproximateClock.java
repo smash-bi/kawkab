@@ -2,24 +2,24 @@ package kawkab.fs.core;
 
 import java.util.concurrent.atomic.AtomicLong;
 
-public class Clock implements Runnable {
-	private static Clock instance;
+public class ApproximateClock implements Runnable {
+	private static ApproximateClock instance;
 	
 	private final AtomicLong time;
 	private final Thread timer;
 	private volatile boolean working;
 	
-	private Clock() {
+	private ApproximateClock() {
 		working = true;
 		time = new AtomicLong(System.currentTimeMillis());
 		timer = new Thread(this);
-		timer.setName("Clock");
+		timer.setName("ApproximateClock");
 		timer.start();
 	}
 	
-	public static synchronized Clock instance() {
+	public static synchronized ApproximateClock instance() {
 		if (instance == null) {
-			instance = new Clock();
+			instance = new ApproximateClock();
 		}
 		
 		return instance;

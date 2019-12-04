@@ -1,25 +1,30 @@
 package kawkab.fs.testclient;
 
-public class Result {
-	long reqsCount; //Total requests
-	int opsThr; //ops per second
-	double lat50;
-	double lat95;
-	double lat99;
-	double latMin;
-	double latMax;
-	double latAvg;
-	double dataThr; // Data throughput
-	double readMedLat;
-	double writeMedLat;
-	double readAvgLat;
-	double writeAvgLat;
-	double readMaxLat;
-	double writeMaxLat;
-	long[] readHistogram;
-	long[] writeHistogram;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 
-	public Result(long reqsCount_, int opsThr_, double myThr_,
+public class Result {
+	private double reqsCount; //Total requests
+	private double opsThr; //ops per second
+	private double lat50;
+	private double lat95;
+	private double lat99;
+	private double latMin;
+	private double latMax;
+	private double latAvg;
+	private double dataThr; // Data throughput
+	private double readMedLat;
+	private double writeMedLat;
+	private double readAvgLat;
+	private double writeAvgLat;
+	private double readMaxLat;
+	private double writeMaxLat;
+	private long[] readHistogram;
+	private long[] writeHistogram;
+
+	public Result(long reqsCount_, double opsThr_, double myThr_,
 		   double l50, double l95, double l99, double lMin, double lMax, double lAvg,
 		   double readMedLat_, double writeMedLat_,
 		   double readAvgLat_, double writeAvgLat_,
@@ -43,11 +48,16 @@ public class Result {
 	}
 
 	public String toJson(boolean exportHists){
+		return toJsonSB(exportHists).toString();
+	}
+
+	private StringBuilder toJsonSB(boolean exportHists){
 		StringBuilder json = new StringBuilder();
-		json.append(String.format("  \"reqs\":%d,\n", reqsCount));
-		json.append(String.format("  \"opsPs\":%d,\n", opsThr));
-		json.append(String.format("  \"thrMBps)\":%.2f,\n", dataThr));
-		json.append(String.format("  \"mean-lat\":%.2f,\n", latAvg));
+		json.append("{\n");
+		json.append(String.format("  \"reqs\":%,.0f,\n", reqsCount));
+		json.append(String.format("  \"opsPs\":%,.0f,\n", opsThr));
+		json.append(String.format("  \"thrMBps\":%.2f,\n", dataThr));
+		json.append(String.format("  \"meanLat\":%.2f,\n", latAvg));
 		json.append(String.format("  \"50%%Lat\":%.2f,\n", lat50));
 		json.append(String.format("  \"95%%Lat\":%.2f,\n", lat95));
 		json.append(String.format("  \"99%%Lat\":%.2f,\n", lat99));
@@ -62,13 +72,12 @@ public class Result {
 
 		if (exportHists) {
 			long[][] hists = {readHistogram,     writeHistogram};
-			String[] types = {"Reads histogram", "Writes histogram"};
 
 			for (int k=0; k<hists.length; k++){
 				long[] hist = hists[k];
-				String type = types[k];
+				String type = "Histogram-"+(k+1);
 
-				if (hist != null) {
+				if (hist != null && hist.length > 0) {
 					StringBuilder lats = new StringBuilder();
 					StringBuilder counts = new StringBuilder();
 					int i=0;
@@ -88,10 +97,11 @@ public class Result {
 					json.append("}\n");
 				}
 			}
-
 		}
 
-		return json.toString();
+		json.append("}");
+
+		return json;
 	}
 
 	public String csvHeader() {
@@ -119,8 +129,8 @@ public class Result {
 
 	public String csv() {
 		StringBuilder csv = new StringBuilder();
-		csv.append(String.format("%d, ", reqsCount));
-		csv.append(String.format("%d, ", opsThr));
+		csv.append(String.format("%.0f, ", reqsCount));
+		csv.append(String.format("%.0f, ", opsThr));
 		csv.append(String.format("%.2f, ", dataThr));
 		csv.append(String.format("%.0f, ", latAvg));
 		csv.append(String.format("%.0f, ", lat50));
@@ -136,5 +146,35 @@ public class Result {
 		csv.append(String.format("%.0f\n", writeAvgLat));
 
 		return csv.toString();
+	}
+
+	public synchronized void exportCsv(String outFile) {
+		StringBuilder csv = new StringBuilder();
+		csv.append(csvHeader());
+		csv.append("\n");
+		csv.append(csv());
+		writeToFile(csv.toString(), outFile);
+	}
+
+	public synchronized void exportJson(String outFile, boolean exportHists) {
+		StringBuilder json = new StringBuilder();
+		json.append("[\n");
+		json.append(toJsonSB(exportHists));
+		json.append("\n]");
+
+		writeToFile(json.toString(), outFile);
+	}
+
+	private synchronized void writeToFile(String lines, String outFile) {
+		File file = new File(outFile).getParentFile();
+		if (!file.exists()) {
+			file.mkdirs();
+		}
+
+		try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile));) {
+			writer.write(lines);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 }

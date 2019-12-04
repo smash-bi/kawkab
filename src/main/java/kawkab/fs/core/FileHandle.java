@@ -31,7 +31,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	private TimerQueueItem<InodesBlock> inbAcquired;
 
 	private final static Cache cache;
-	private final static Clock clock = Clock.instance();
+	private final static ApproximateClock clock = ApproximateClock.instance();
 	private final static int inodesPerBlock;	// Used in accessing the inode of this file when on the non-primary node
 	private final static LocalStoreManager localStore;	// FIXME: Isn't it a bad design to access localStore from a file handle?
 	private final static int bufferTimeLimitMs = 5000;
@@ -64,8 +64,8 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		if (mode == FileMode.APPEND) //Pre-fetch the last block for writes
 			inode.loadLastBlock();
 
-		rLog = new TimeLog(TimeUnit.NANOSECONDS, "R-"+inumber, 1);
-		wLog = new TimeLog(TimeUnit.NANOSECONDS, "W-"+inumber, 1);
+		rLog = new TimeLog(TimeUnit.MICROSECONDS, "R-"+inumber, 10);
+		wLog = new TimeLog(TimeUnit.MICROSECONDS, "W-"+inumber, 10);
 	}
 
 	/**
@@ -116,9 +116,10 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
 			}
+
+			rLog.end();
 		}
 
-		rLog.end();
 		return bytesRead;
 	}
 
@@ -151,12 +152,13 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				inode = inb.getInode(inumber);
 			}
 
-			rLog.end();
 			return inode.readRecords(minTS, maxTS, recSize);
 		} finally {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
 			}
+
+			rLog.end();
 		}
 	}
 
@@ -180,12 +182,13 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				inode = inb.getInode(inumber);
 			}
 
-			rLog.end();
 			return inode.readAll(minTS, maxTS, recFactory);
 		} finally {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
 			}
+
+			rLog.end();
 		}
 	}
 	
@@ -223,12 +226,13 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				inode = inb.getInode(inumber);
 			}
 
-			rLog.end();
 			return inode.readAt(dstBuf, timestamp, recSize);
 		} finally {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
 			}
+
+			rLog.end();
 		}
 	}
 	
@@ -271,12 +275,13 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				inode = inb.getInode(inumber);
 			}
 
-			rLog.end();
 			return inode.readRecordN(dstBuf, recordNum, recSize);
 		} finally {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
 			}
+
+			rLog.end();
 		}
 	}
 
@@ -481,6 +486,18 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	}
 
 	public void printStats() throws KawkabException {
+		System.out.println("File: " + inumber);
+
+		if (rLog.sampled() > 0) {
+			System.out.print("File "+inumber+" read stats: ");
+			rLog.printStats();
+		}
+
+		if (wLog.sampled() > 0) {
+			System.out.print("File "+inumber+" append stats: ");
+			wLog.printStats();
+		}
+
 		if (onPrimaryNode) {
 			if (inodesBlock == null) {
 				throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");

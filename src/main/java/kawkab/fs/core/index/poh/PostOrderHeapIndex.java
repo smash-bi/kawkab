@@ -1,8 +1,7 @@
 package kawkab.fs.core.index.poh;
 
-import kawkab.fs.commons.Commons;
+import kawkab.fs.core.ApproximateClock;
 import kawkab.fs.core.Cache;
-import kawkab.fs.core.Clock;
 import kawkab.fs.core.IndexNodeID;
 import kawkab.fs.core.LocalStoreManager;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
@@ -10,11 +9,13 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
+import kawkab.fs.utils.TimeLog;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Nodes in a post-order heap are created in the post-order, i.e., the parent node is created after the children. It is
@@ -29,8 +30,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	private final LocalStoreManager localStore = LocalStoreManager.instance();
 	private final TimerQueueIface timerQ;
 	private volatile TimerQueueItem<POHNode> acquiredNode;
-	private static final Clock clock = Clock.instance();
-	private static final int bufferTimeOffsetMs = 5; //Giving some time for buffering
+	private static final ApproximateClock clock = ApproximateClock.instance();
+	private static final int bufferTimeOffsetMs = 1; //Giving some time for buffering
 
 	private final double logBase;
 	private ConcurrentHashMap<Integer, POHNode> nodes;	//This is an append-only list. The readers should read but not modify the list. Only a single writer should append new nodes.
@@ -54,7 +55,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 	private int nodeSizeBytes;
 
-	private final boolean isOnPrimary;
+	private TimeLog loadLog;
 
 	/**
 	 *
@@ -82,7 +83,6 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		this.logBase = Math.log(childrenPerNode);
 		this.cache = cache;
 		this.timerQ = tq;
-		this.isOnPrimary = Commons.onPrimaryNode(inumber);
 
 		//System.out.printf("Index entries per node:  %d\n", entriesPerNode);
 		//System.out.printf("Index pointers per node: %d\n", childrenPerNode);
@@ -98,7 +98,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 			nodesCountTable[i] = totalNodesKAryTree(i);
 		}
 
-
+		loadLog = new TimeLog(TimeUnit.MILLISECONDS, "IndexNode load", 50);
 	}
 
 	/**
@@ -136,7 +136,9 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 			}
 		}
 
+		loadLog.start();
 		node.loadBlock();
+		loadLog.end();
 
 		return node;
 	}
@@ -668,6 +670,10 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		}
 
 		nodes.clear();
+	}
+
+	public void printStats() {
+		loadLog.printStats();
 	}
 
 	@Override

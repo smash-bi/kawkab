@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.util.List;
 import java.util.Random;
@@ -27,11 +28,12 @@ import com.amazonaws.services.s3.model.S3ObjectInputStream;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
+import org.apache.zookeeper.server.ByteBufferInputStream;
 
 public final class S3Backend implements GlobalBackend{
 	private AmazonS3 client;
 	private static final String rootBucket = "kawkab-blocks"; //Cannot contain uppercase letters.
-	private byte[] buffer;
+	private ByteBuffer buffer;
 	//private ByteBuffer bufferWrap;
 	private FileLocks fileLocks;
 	private static final String contentType = "application/octet-stream";
@@ -43,7 +45,7 @@ public final class S3Backend implements GlobalBackend{
 		fileLocks = FileLocks.instance();
 		
 		Configuration conf = Configuration.instance();
-		buffer = new byte[(Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes))];
+		buffer = ByteBuffer.allocateDirect((Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes)));
 		//bufferWrap = ByteBuffer.wrap(buffer);
 	}
 	
@@ -54,16 +56,16 @@ public final class S3Backend implements GlobalBackend{
 		long rangeStart = offset;
 		long rangeEnd = offset + length - 1; //end range is inclusive
 		
-		BlockID id = dstBlock.id();
+		//BlockID id = dstBlock.id();
 		/*if (id.type() == BlockType.DATA_SEGMENT) { //If it's dataSegment, it can be any segment in the block. GlobalStore has complete blocks.
 			int segmentInBlock = ((DataSegmentID)id).segmentInBlock();
 			rangeStart = segmentInBlock * dstBlock.sizeWhenSerialized();
 			rangeEnd = rangeStart + dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
 		}*/
 		
-		System.out.printf("\t\t[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n", id, rangeStart, rangeEnd, length, id.localPath());
+		//System.out.printf("\t\t[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n", id, rangeStart, rangeEnd, length, id.localPath());
 		
-		String path = id.localPath();
+		String path = dstBlock.id().localPath();
 		GetObjectRequest getReq = new GetObjectRequest(rootBucket, path);
 		getReq.setRange(rangeStart, rangeEnd);
 		
@@ -80,7 +82,6 @@ public final class S3Backend implements GlobalBackend{
 				break;
 			} catch (SdkBaseException | IOException ae) { // If the block does not exist in S3, it throws NoSucKey error code
 				if (ae instanceof AmazonS3Exception) {
-					
 					if (((AmazonS3Exception)ae).getErrorCode().equals("NoSuchKey")) {
 						throw new FileNotExistException("S3 NoSuckKey: " + path);
 					}
@@ -91,8 +92,8 @@ public final class S3Backend implements GlobalBackend{
 				
 				try {
 					long sleepMs = (100+(Math.abs(rand.nextLong())%400));
-					// System.out.println(String.format("[S3] Load from the global store failed for %s, retyring in %d ms...",
-					//		dstBlock.id().toString(),sleepMs));
+					 System.out.println(String.format("[S3] Load from the global store failed for %s, retrying in %d ms...",
+							dstBlock.id().toString(),sleepMs));
 					Thread.sleep(sleepMs);
 				} catch (InterruptedException e) {
 					throw new KawkabException(e);
@@ -110,6 +111,7 @@ public final class S3Backend implements GlobalBackend{
 		int length = 0;
 		try(
 				RandomAccessFile raf = new RandomAccessFile(id.localPath(), "r");
+				FileChannel chan = raf.getChannel();
             ) {
 			
 			length = (int)raf.length(); //Block size in Kawkab is an integer
@@ -117,10 +119,14 @@ public final class S3Backend implements GlobalBackend{
 			Lock lock = fileLocks.grabLock(id);
 			try {
 				lock.lock();
-
 				//System.out.printf("\t\t[S3] Reading %d bytes from %s for storing in global: path=%s\n",length, srcBlock.id(), srcBlock.id().localPath());
+				//raf.readFully(buffer, 0, length);
 
-				raf.readFully(buffer, 0, length);
+
+				chan.position(0);
+				buffer.clear();
+				chan.read(buffer);
+				buffer.flip();
 			} finally {
 				lock.unlock();
 			}
@@ -129,7 +135,7 @@ public final class S3Backend implements GlobalBackend{
 			throw new KawkabException(e);
 		}
 		
-		try (InputStream istream = new ByteArrayInputStream(buffer, 0, length)) {
+		try (InputStream istream = new ByteBufferInputStream(buffer)) {
 			ObjectMetadata metadata = new ObjectMetadata();
 			metadata.setContentLength(length);
 			metadata.setContentType(contentType);

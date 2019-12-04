@@ -4,7 +4,7 @@ public class DataIndex {
 	private final long offsetInFile; //Offset in the file
 	private final int length; //Length of data
 	
-	//Clock when the data was appended; used for indexing within the filesystem
+	//ApproximateClock when the data was appended; used for indexing within the filesystem
 	//Clients can use this time to access the data
 	private final long timestamp;
 	

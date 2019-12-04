@@ -70,40 +70,46 @@ struct TAppendResponse {
 }
 
 service FilesystemService {
-	i64 open (1: string filename, 2: TFileMode fileMode, 3: i32 recordSize) throws
+	i32 open (1: string filename, 2: TFileMode fileMode, 3: i32 recordSize) throws
 		(1: TRequestFailedException rfe);
 	
 	// Returns data read from the given offset in the file
-	binary read (1: i64 sessionID, 2: i64 offset, 3: i32 length) throws
+	binary read (1: i32 sessionID, 2: i64 offset, 3: i32 length) throws
 		(1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TInvalidArgumentException iae, 4: TOutOfMemoryException ome);
 
-	binary recordNum(1: i64 sessionID, 2: i64 recordNum, 3: i32 recSize) throws
+	binary recordNum(1: i32 sessionID, 2: i64 recordNum, 3: i32 recSize) throws
 	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
-	binary recordAt(1: i64 sessionID, 2: i64 timestamp, 3: i32 recSize) throws
+	binary recordAt(1: i32 sessionID, 2: i64 timestamp, 3: i32 recSize) throws
 	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
-	list<binary> readRecords(1: i64 sessionID, 2: i64 minTS, 3: i64 maxTS, 4: i32 recSize) throws
+	list<binary> readRecords(1: i32 sessionID, 2: i64 minTS, 3: i64 maxTS, 4: i32 recSize) throws
 	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
-	i32 appendRecord (1: i64 sessionID, 2: binary data, 3: i32 recSize) throws
+	i32 appendRecord (1: i32 sessionID, 2: binary data, 3: i32 recSize) throws
 	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
-	i32 appendRecordBatched (1: i64 sessionID, 2: list<binary> data, 3: i32 recSize) throws
+    /*Batching individual ByteBuffers*/
+	i32 appendRecordBatched (1: i32 sessionID, 2: list<binary> data, 3: i32 recSize) throws
     	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
-    i32 appendRecordBuffered (1: i64 sessionID, 2: binary data, 3: i32 recSize) throws
+    /*Batching records of a single file in a buffer*/
+    i32 appendRecordBuffered (1: i32 sessionID, 2: binary data, 3: i32 recSize) throws
         	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
+    /*Batching records of multiple files in a buffer*/
+    i32 appendRecords (1: binary data) throws
+            	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
+
 	// Returns ths number of bytes appended
-	i32 append (1: i64 sessionID, 2: binary data) throws 
+	i32 append (1: i32 sessionID, 2: binary data) throws
 		(1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
-	i64 size(1: i64 sessionID) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
+	i64 size(1: i32 sessionID) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
 
-	i32 recordSize(1: i64 sessionID) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
+	i32 recordSize(1: i32 sessionID) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
 	
-	oneway void close (1: i64 sessionID);
+	oneway void close (1: i32 sessionID);
 
 	i32 flush();
 

@@ -2,7 +2,7 @@ package kawkab.fs.core.index.poh;
 
 import kawkab.fs.commons.Commons;
 import kawkab.fs.core.Block;
-import kawkab.fs.core.Clock;
+import kawkab.fs.core.ApproximateClock;
 import kawkab.fs.core.IndexNodeID;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
@@ -48,7 +48,7 @@ public class POHNode extends Block {
 	private boolean isLastNodeInBlock;
 	private boolean inited;
 
-	private static Clock clock = Clock.instance();
+	private static ApproximateClock clock = ApproximateClock.instance();
 	private long lastFetchTimeMs;
 	private int fetchTimeLimitMs = 5;
 
@@ -572,13 +572,13 @@ public class POHNode extends Block {
 		assert nodeNum == nodeNumber : String.format("Node number mismatch: loaded %d, should be %d",nodeNum, nodeNumber);
 		assert ht == height : String.format("Node height mismatch: loaded %d, should be %d",ht, height);
 
-		System.out.printf(" Loaded header: nodenum=%d, height=%d, padding=%d\n", nodeNum, ht, padding);
+		//System.out.printf("[IN] Loaded header: nodenum=%d, height=%d, padding=%d\n", nodeNum, ht, padding);
 
 		return padding + Integer.BYTES*2;
 	}
 
 	private int loadChildrenFrom(ByteBuffer buffer, boolean withPadding) {
-		System.out.printf("Before load children: rem=%d\n", buffer.remaining());
+		//System.out.printf("[IN] Before load children: rem=%d\n", buffer.remaining());
 
 		int count = 0;
 		if (height > 0) { //This is not a leaf node. Therefore, this node must have min/max value of the children
@@ -593,7 +593,7 @@ public class POHNode extends Block {
 			count += bytesToSkip;
 		}
 
-		System.out.printf("After load children: rem=%d\n", buffer.remaining());
+		//System.out.printf("[IN] After load children: rem=%d\n", buffer.remaining());
 
 		return count;
 	}
@@ -614,7 +614,7 @@ public class POHNode extends Block {
 		boolean hasFirstMin = atTSOffset % 2 == 0;
 		int count = hasFirstMin ? 0 : -1;
 
-		System.out.printf("\t[IN] Load entries from: rem=%d, fromIdx=%d, atTSOffset=%d, hasFirstMin=%b\n", buffer.remaining(), idxOffset, atTSOffset, hasFirstMin);
+		//System.out.printf("\t[IN] Load entries from: rem=%d, fromIdx=%d, atTSOffset=%d, hasFirstMin=%b\n", buffer.remaining(), idxOffset, atTSOffset, hasFirstMin);
 
 		while (buffer.hasRemaining()) {
 			POHEntry entry = entries[idxOffset];
@@ -683,7 +683,8 @@ public class POHNode extends Block {
 	 * @return Number of timestamps stored in the buffer.
 	 */
 	private int storeEntriesTo(ByteBuffer buffer, int tsIdxOffset) {
-		//System.out.printf("\t  [IN] pos=%d, rem=%d, entriesCount=%d, lastIdx=%d, dirtyIdx=%d\n", storeBuffer.position(), storeBuffer.remaining(), numEntries, lastIdx, dirtyIdx);
+		//System.out.printf("\t  [IN] pos=%d, rem=%d, entriesCount=%d, lastIdx=%d, dirtyIdx=%d\n", storeBuffer.position(),
+		// storeBuffer.remaining(), numEntries, lastIdx, dirtyIdx);
 
 		int numTS = tsCount.get();
 		int entryIdx = (numTS+1)/2;
@@ -814,12 +815,12 @@ public class POHNode extends Block {
 		ByteBuffer buffer = primaryNodeService.getIndexNode(id, dirtyOffsetStart);
 
 		if (buffer.remaining() == 0) {
-			System.out.println("No new entries retrieved.");
+			//System.out.println("[PN] No new entries retrieved.");
 			return;
 		}
 
-		System.out.printf("Before loading the node: pos=%d, rem=%d, dirtyOffset=%d, entryIdx=%d, txCount=%d\n",
-				buffer.position(), buffer.remaining(), dirtyOffsetStart, entryIdx, tsCount.get());
+		//System.out.printf("Before loading the node: pos=%d, rem=%d, dirtyOffset=%d, entryIdx=%d, txCount=%d\n",
+		//		buffer.position(), buffer.remaining(), dirtyOffsetStart, entryIdx, tsCount.get());
 
 		int numTSLoaded = loadFrom(buffer, dirtyOffsetStart);
 
@@ -832,8 +833,8 @@ public class POHNode extends Block {
 		tsCount.addAndGet(dirtyOffsetStart);
 		entryIdx = (dirtyOffsetStart+1)/2;
 
-		System.out.printf("After loading the node: pos=%d, rem=%d, dirtyOffset=%d, entryIdx=%d, txCount=%d\n",
-				buffer.position(), buffer.remaining(), dirtyOffsetStart, entryIdx, tsCount.get());
+		//System.out.printf("[IN] After loading the node: pos=%d, rem=%d, dirtyOffset=%d, entryIdx=%d, txCount=%d\n",
+		//		buffer.position(), buffer.remaining(), dirtyOffsetStart, entryIdx, tsCount.get());
 
 
 		//if (loadedLastMax) { // Last entry's maxTS is not loaded
@@ -853,30 +854,32 @@ public class POHNode extends Block {
 		// Otherwise, the node is most likely not in the global store. Therefore, fetch from the primary node.
 
 		if (isFull()) {
-			System.out.printf("[IN] Node %s is full. Not loading.\n",id);
+			//System.out.printf("[IN] Node %s is full. Not loading.\n",id);
 			return;
 		}
 
-		/*if (entryIdx != entries.length) {
+		if (clock.currentTime() - lastFetchTimeMs <= fetchTimeLimitMs) {
+			//System.out.printf("[IN] Fetch time is not expired. Not loading %s\n",id);
+			return;
+		}
+
+		// If the node is not full
+		if (entryIdx != entries.length) {
 			loadBlockFromPrimary();
-			return;
-		}*/
-
-		long now = clock.currentTime();
-
-		if (now - lastFetchTimeMs <= fetchTimeLimitMs) {
-			System.out.printf("[IN] Fetch time is not expired. Not loading %s\n",id);
+			lastFetchTimeMs = clock.currentTime();
 			return;
 		}
+
+		//loadBlockFromPrimary();
 
 		try {
 			loadFromGlobal(id.numNodeInIndexBlock()*nodeSizeBytes+dirtyOffsetStart, nodeSizeBytes-dirtyOffsetStart);
 		} catch (FileNotExistException e) {
-			System.out.println("[IN] Node not found in the global: " + id());
+			//System.out.println("[IN] Node not found in the global: " + id());
 			loadBlockFromPrimary();
 		}
 
-		lastFetchTimeMs = now;
+		lastFetchTimeMs = clock.currentTime();
 	}
 
 	@Override

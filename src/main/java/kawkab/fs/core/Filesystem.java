@@ -26,7 +26,7 @@ public final class Filesystem {
 	private static PrimaryNodeServiceServer pns;
 	private static Cache cache;
 
-	private static Map<Long, FileHandle> openFiles;
+	private static Map<Long, FileHandle> openFiles; //FIXME: We should pass on a unique number to the FileHandle and use that as the key
 
 	private TimerQueue fsQ;
 	private TimerQueue segsQ;
@@ -156,7 +156,7 @@ public final class Filesystem {
 		segsQ.shutdown();
 		fsQ.shutdown();
 		Cache.instance().shutdown();
-		Clock.instance().shutdown();
+		ApproximateClock.instance().shutdown();
 
 		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
 		System.out.println("Closed FileSystem");
@@ -197,5 +197,7 @@ public final class Filesystem {
 		for (FileHandle file : openFiles.values()) {
 			file.printStats();
 		}
+
+		pns.printStats();
 	}
 }

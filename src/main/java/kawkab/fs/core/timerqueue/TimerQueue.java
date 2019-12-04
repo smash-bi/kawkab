@@ -12,13 +12,11 @@ public class TimerQueue implements TimerQueueIface {
 	private final Thread processorThr;
 	private TransferQueue<TimerQueueItem> trnsfrQ;
 	private volatile boolean working = true;
-	private final String name;
-	
+
 	/**
 	 * @param name Name of the queue for debugging and tracing purposes.
 	 */
 	public TimerQueue(String name) {
-		this.name = name;
 		trnsfrQ = new TransferQueue<>(name+"-TrnsfrQ");
 		processorThr = new Thread(name+"Thread") {
 			public void run() {
@@ -60,13 +58,13 @@ public class TimerQueue implements TimerQueueIface {
 	 * Takes items from the queue,
 	 */
 	private void processSegments() {
-		TimerQueueItem next = null;
+		TimerQueueItem next;
 		
 		while(working) {
 			next = trnsfrQ.poll();
 			if (next == null) {
 				try { //Sleeping because the trnsfrQ is non-blocking
-					Thread.sleep(1); //1ms is chosen randomly. It doesn't impact the performance, but a large value may result in slower expiry of the segments
+					Thread.sleep(3); //1ms is chosen randomly. It doesn't impact the performance, but a large value may result in slower expiry of the segments
 				} catch (InterruptedException e) {}
 				continue;
 			}

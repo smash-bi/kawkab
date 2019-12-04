@@ -77,7 +77,7 @@ public final class DataSegmentID extends BlockID {
 			path.append(File.separator).append(uuid, rootLen+i*wordSize, rootLen+i*wordSize+wordSize);
 		}
 		
-		localPath = path.toString(); //TODO: Should we intern() this string?
+		localPath = path.toString().intern(); //TODO: Should we intern() this string?
 		
 		return localPath;
 	}

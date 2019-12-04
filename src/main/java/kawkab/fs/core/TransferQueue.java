@@ -13,14 +13,14 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * Consumer: removeFromQueue -> process object
  *
  * The producer and consumer need an external synchronization to agree on the updates. For example, the producer
- * updates the dirty count after each update while the consumer substracts the dirty count by the amount it has
+ * updates the dirty count after each update while the consumer subtracts the dirty count by the amount it has
  * processed.
  */
 public class TransferQueue <T extends AbstractTransferItem> {
 	private Queue<T> unifiedQueue;
 	
-	private long inQCountAgg = 0; //For debugging only
-	private long inTriesAgg = 0; //For debugging only
+	//private long inQCountAgg = 0; //For debugging only
+	//private long inTriesAgg = 0; //For debugging only
 	private final String name;
 	
 	public TransferQueue(String name) {
@@ -33,12 +33,12 @@ public class TransferQueue <T extends AbstractTransferItem> {
 	 * @param item
 	 */
 	public void add(T item) {
-		item.inTries++;
+		//item.inTries++;
 		if (item.getAndSetInQueue(true)) { // The item is already in the queue
 			return;
 		}
 		
-		item.inQCount++;
+		//item.inQCount++;
 		
 		unifiedQueue.add(item);
 	}
@@ -72,10 +72,10 @@ public class TransferQueue <T extends AbstractTransferItem> {
 		
 		item.getAndSetInQueue(false);
 		
-		inTriesAgg += item.inTries;
-		inQCountAgg += item.inQCount;
-		item.inTries = 0;
-		item.inQCount = 0;
+		//inTriesAgg += item.inTries;
+		//inQCountAgg += item.inQCount;
+		//item.inTries = 0;
+		//item.inQCount = 0;
 		
 		return item;
 	}
@@ -85,7 +85,7 @@ public class TransferQueue <T extends AbstractTransferItem> {
 	}
 	
 	public void shutdown() {
-		System.out.printf("\t"+name+"] Total tries = %d, Total added in Q = %d, ratio = %.2f%%\n", inTriesAgg, inQCountAgg, 100.0*inQCountAgg/inTriesAgg);
+		//System.out.printf("\t"+name+"] Total tries = %d, Total added in Q = %d, ratio = %.2f%%\n", inTriesAgg, inQCountAgg, 100.0*inQCountAgg/inTriesAgg);
 	}
 }
 

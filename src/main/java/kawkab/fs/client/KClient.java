@@ -42,14 +42,14 @@ public class KClient {
 		System.out.printf("[KC] Connected to %s:%d\n", ip, port);
 	}
 
-	public long open(String fn, Filesystem.FileMode mode, int recSize) throws KawkabException {
+	public int open(String fn, Filesystem.FileMode mode, int recSize) throws KawkabException {
 		assert client != null;
 
 		if (sessions.containsKey(fn)){
 			throw new KawkabException(String.format("File %s is already opened",fn));
 		}
 
-		long id = client.open(fn, mode, recSize);
+		int id = client.open(fn, mode, recSize);
 
 		Session session = new Session(id, mode);
 		sessions.put(fn, session);
@@ -57,14 +57,14 @@ public class KClient {
 		return id;
 	}
 
-	public long open(String fn, Filesystem.FileMode mode) throws KawkabException {
+	public int open(String fn, Filesystem.FileMode mode) throws KawkabException {
 		assert client != null;
 
 		if (sessions.containsKey(fn)){
 			throw new KawkabException(String.format("File %s is already opened",fn));
 		}
 
-		long id = client.open(fn, mode, 1);
+		int id = client.open(fn, mode, 1);
 
 		Session session = new Session(id, mode);
 		sessions.put(fn, session);
@@ -155,6 +155,26 @@ public class KClient {
 
 		buffer.flip();
 		return client.appendBuffered(session.id, buffer, recSize);
+	}
+
+	public int appendRecords(String[] fnames, Record[] records) throws OutOfMemoryException, KawkabException {
+		assert client != null;
+		assert fnames.length == records.length;
+
+		buffer.clear();
+		for(int i=0; i<fnames.length; i++) {
+			String fn = fnames[i];
+			Record rec = records[i];
+			Session session = sessions.get(fn);
+			if (session == null)
+				throw new KawkabException(String.format("File %s is not opened",fn));
+
+			buffer.putInt(session.id);
+			buffer.put(rec.copyOutSrcBuffer());
+		}
+
+		buffer.flip();
+		return client.appendRecords(buffer);
 	}
 
 	public Record recordNum(String fn, long recNum, Record recFactory) throws KawkabException {
@@ -294,10 +314,10 @@ public class KClient {
 	}
 
 	private class Session {
-		private final long id;
+		private final int id;
 		private final Filesystem.FileMode mode;
 
-		private Session(long id, Filesystem.FileMode mode) throws KawkabException {
+		private Session(int id, Filesystem.FileMode mode) {
 			this.id = id;
 			this.mode = mode;
 		}

@@ -294,7 +294,7 @@ public final class CLI {
 
 				Stopwatch sw = Stopwatch.createStarted();
 				recgen = client.recordNum(fname, recNum, recgen);
-				long elapsed = sw.stop().elapsed(TimeUnit.NANOSECONDS);
+				long elapsed = sw.stop().elapsed(TimeUnit.MICROSECONDS);
 
 				System.out.println(recgen);
 				System.out.printf("Latency (ns): %,d\n", elapsed);
@@ -310,7 +310,7 @@ public final class CLI {
 
 				Stopwatch sw = Stopwatch.createStarted();
 				recgen = client.recordAt(fname, atTS, recgen);
-				long elapsed = sw.stop().elapsed(TimeUnit.NANOSECONDS);
+				long elapsed = sw.stop().elapsed(TimeUnit.MICROSECONDS);
 
 				if (recgen != null)
 					System.out.println(recgen);
@@ -332,7 +332,7 @@ public final class CLI {
 
 				Stopwatch sw = Stopwatch.createStarted();
 				List<Record> recs = client.readRecords(fname, t1, t2, recgen);
-				long elapsed = sw.stop().elapsed(TimeUnit.NANOSECONDS);
+				long elapsed = sw.stop().elapsed(TimeUnit.MICROSECONDS);
 
 				if (recs == null) {
 					System.out.printf("Records not found b/w %d and %d\n", t1, t2);
@@ -378,7 +378,7 @@ public final class CLI {
 	private void readNoops(String fname, int count) throws KawkabException {
 		int recSize = client.recordSize(fname);
 
-		TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "NoOPRead latency", 100);
+		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "NoOPRead latency", 100);
 		System.out.printf("Reading %,d noops, recSize %d\n", count, recSize);
 
 		long startTime = System.currentTimeMillis();
@@ -401,7 +401,7 @@ public final class CLI {
 									 boolean byRecNum, boolean withFlush) throws KawkabException {
 		Random rand = new Random();
 
-		TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "Read latency", 100);
+		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "Read latency", 100);
 
 		System.out.printf("Reading %,d records from %s using %s, recSize %d, in range %d and %d\n", numRecs, fname,
 				byRecNum?"rec nums":"exact time", recSize, t1, t2);
@@ -588,7 +588,7 @@ public final class CLI {
 	}
 	
 	private void parseAppendTest(String[] args) throws KawkabException, IOException {
-		String usage = "Usage: apndTest [<num writers> <req size> <data size MB>]";
+		String usage = "Usage: at [<num writers> <req size> <data size MB>]";
 		if (args.length != 1 && args.length != 4) {
 			System.out.println(usage);
 			return;
