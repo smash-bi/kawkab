@@ -13,11 +13,13 @@ public class Accumulator {
         reset();
     }
 
-    public Accumulator(long[] histogram, long totalCnt, double min, double max) {
+    public Accumulator(long[] histogram, long totalCnt, double min, double max, double dataTput, double opsTput) {
         this.buckets = histogram;
         this.totalCnt = totalCnt;
         this.minValue = min;
         this.maxValue = max;
+        this.dataTput = dataTput;
+        this.opsTput = opsTput;
     }
     
     public synchronized void reset(){
@@ -168,7 +170,7 @@ public class Accumulator {
         System.out.println();
     }
     
-    synchronized void print(){
+    public synchronized void print(){
         for (int i=0; i<buckets.length; i++){
             if (buckets[i] > 0)
                 System.out.print((i+1)+":"+buckets[i]+", ");

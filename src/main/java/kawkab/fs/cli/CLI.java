@@ -437,14 +437,13 @@ public final class CLI {
 		long cnt = tlog.sampled()*batchSize;
 		double sizeMB = recSize*cnt / (1024.0 * 1024.0);
 		double thr = sizeMB / durSec;
-		int opThr = (int)(cnt / durSec);
+		double opThr = cnt / durSec;
 
-		System.out.printf("%s: recSize=%d, numRecs=%d, rTput=%,.0f MB/s, opsTput=%,d OPS, Lat %s\n",
+		System.out.printf("%s: recSize=%d, numRecs=%d, rTput=%,.0f MB/s, opsTput=%,.0f OPS, Lat %s\n",
 				tag, recSize, numRecs, thr, opThr, tlog.getStats());
 
 		double[] lats = tlog.stats();
-		return new Result(tlog.sampled(), (int)opThr, thr, lats[0], lats[1], lats[2], tlog.min(), tlog.max(), tlog.mean(),
-				lats[0], 0, tlog.mean(), 0, tlog.max(), 0, new long[]{}, new long[]{});
+		return new Result(tlog.sampled(), opThr, thr, tlog.min(), tlog.max(), null, null);
 	}
 
 	private void parseReadRecord(String[] args) throws IOException, KawkabException {

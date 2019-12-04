@@ -142,7 +142,7 @@
 				<configuration>
 					<executable>java</executable>
 					<arguments>
-						<argument>--add-opens=java.base/jdk.internal.ref=ALL-UNNAMED</argument>
+						<!--<argument> - -add-opens=java.base/jdk.internal.ref=ALL-UNNAMED</argument>-->
 						<argument>-ea</argument>
 						<argument>-Xms${Xms}</argument>
 						<argument>-Xmx${Xmx}</argument>
@@ -155,7 +155,7 @@
 						<!--						<argument>-XX:CMSInitiatingOccupancyFraction=92</argument>-->
 						<!--						<argument>-XX:+UseCMSInitiatingOccupancyOnly</argument>-->
 
-						<!--						<argument>-XX:+UseConcMarkSweepGC</argument>-->
+												<argument>-XX:+UseConcMarkSweepGC</argument>
 						<!--						<argument>-XX:+UseSerialGC</argument>-->
 						<!--						<argument>-XX:+UseParallelGC</argument>-->
 						<!--						<argument>-XX:ParallelCMSThreads=2</argument>-->
@@ -164,8 +164,8 @@
 						<!--						<argument>XX:+UseDynamicNumberOfCompilerThreads</argument>-->
 
 						<!-- ZGC requires JDK 11 -->
-						<argument>-XX:+UnlockExperimentalVMOptions</argument>
-						<argument>-XX:+UseZGC</argument>
+						<!--argument>-XX:+UnlockExperimentalVMOptions</argument>
+						<argument>-XX:+UseZGC</argument-->
 
 						<!-- EpsilonGC, a no-op GC, requires JDK11 -->
 						<!--						<argument>-XX:+UnlockExperimentalVMOptions</argument>-->
@@ -193,8 +193,8 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.8.1</version>
 				<configuration>
-					<source>13</source>
-					<target>13</target>
+					<source>11</source>
+					<target>11</target>
 					<!--release>13</release-->
 					<!-- excludes>
 				      <exclude>**/thrift/*.java</exclude>

@@ -3,6 +3,7 @@ package kawkab.fs.testclient;
 import com.google.common.base.Stopwatch;
 import kawkab.fs.api.Record;
 import kawkab.fs.client.KClient;
+import kawkab.fs.core.ApproximateClock;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
@@ -36,17 +37,21 @@ public class TestClient {
 		cls = String.format("[%d] ",id);
 	}
 
-	public Accumulator runTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
+	public Result runTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
 		pr.print(cls+"Starting append test...");
 		
 		if (client == null || !client.isConnected()) {
 			throw new KawkabException("Client is not connected");
 		}
 
-		return appendTest(testDurSec, nTestFiles, warmupSecs, batchSize);
+		if (batchSize > 1) {
+			return appendTest(testDurSec, nTestFiles, warmupSecs, batchSize);
+		}
+
+		return appendTest(testDurSec, nTestFiles, warmupSecs);
 	}
 
-	public Accumulator runNoopTest(int testDurSec, int warmupSecs) throws KawkabException {
+	public Result runNoopTest(int testDurSec, int warmupSecs) throws KawkabException {
 		pr.print(cls+"Starting NoOp test...");
 
 		if (client == null || !client.isConnected()) {
@@ -56,45 +61,52 @@ public class TestClient {
 		return noopTest(testDurSec, warmupSecs);
 	}
 
-	private Accumulator appendTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
+	private Result appendTest(int testDurSec, int nTestFiles, int warmupSecs) throws KawkabException {
 		String[] fnames = openFiles(nTestFiles, "append", Filesystem.FileMode.APPEND);
 
-		Accumulator accm = null;
+		Result res = null;
 		try {
-			if (batchSize == 1) {
-
 				pr.print(String.format("%s Ramp-up for %d seconds...", cls, warmupSecs));
 				appendRecs(fnames, warmupSecs, recGen.newRecord());
 
-				pr.print(cls+"Appending records...");
-				accm = appendRecs(fnames, testDurSec, recGen.newRecord());
+				pr.print(cls+"Appending record (no batching)...");
+				res = appendRecs(fnames, testDurSec, recGen.newRecord());
 
 				pr.print(String.format("%s Ramp-down for %d seconds...", cls, 5));
 				appendRecs(fnames, 5, recGen.newRecord());
 
-				closeFiles(fnames);
+		}catch (OutOfMemoryException e) {
+			e.printStackTrace();
+		} finally {
+			closeFiles(fnames);
+		}
 
-				return accm;
-			}
+		return res;
+	}
 
+	private Result appendTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
+		String[] fnames = openFiles(nTestFiles, "append", Filesystem.FileMode.APPEND);
+
+		Result result = null;
+		try {
 			pr.print(String.format("%s Ramp-up for %d seconds...", cls, warmupSecs));
 			appendRecords(fnames, warmupSecs, recGen.newRecord(), batchSize);
 
-			pr.print(cls+"Appending records...");
-			accm = appendRecords(fnames, testDurSec, recGen.newRecord(), batchSize);
+			pr.print(String.format("%s Appending records for %d secs (with batching)...", cls, testDurSec));
+			result = appendRecords(fnames, testDurSec, recGen.newRecord(), batchSize);
 
 			pr.print(String.format("%s Ramp-down for %d seconds...", cls, 5));
 			appendRecords(fnames, 5, recGen.newRecord(), batchSize);
 		}catch (OutOfMemoryException e) {
 			e.printStackTrace();
+		} finally {
+			closeFiles(fnames);
 		}
 
-		closeFiles(fnames);
-
-		return accm;
+		return result;
 	}
 
-	private Accumulator appendRecsBuffered(String[] fnames, int durSec, Record recGen, int batchSize) throws OutOfMemoryException, KawkabException {
+	private Result appendRecsBuffered(String[] fnames, int durSec, Record recGen, int batchSize) throws OutOfMemoryException, KawkabException {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
@@ -105,6 +117,9 @@ public class TestClient {
 
 		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "Append records buffered", 100);
 		Stopwatch sw = Stopwatch.createStarted();
+		Accumulator tputLog = new Accumulator();
+		ApproximateClock clock = ApproximateClock.instance();
+		long startT = clock.currentTime();
 		while((now = System.currentTimeMillis()) < et) {
 			String fname = fnames[rand.nextInt(fnames.length)];
 			for (int i=0; i<batchSize; i++) {
@@ -114,6 +129,8 @@ public class TestClient {
 			tlog.start();
 			client.appendBuffered(fname, batch, recGen.size());
 			tlog.end();
+
+			tputLog.put((int)((clock.currentTime()-startT)/1000.0));
 		}
 
 		sw.stop();
@@ -122,10 +139,10 @@ public class TestClient {
 		long msec = sw.elapsed(TimeUnit.MILLISECONDS);
 		setTput(accm, msec, batchSize, recGen.size());
 
-		return accm;
+		return new Result(accm.count(), accm.opsTput(), accm.dataTput(), accm.min(), accm.max(), accm.histogram(), tputLog.histogram());
 	}
 
-	private Accumulator appendRecords(String[] fnames, int durSec, Record recGen, int batchSize) throws OutOfMemoryException, KawkabException {
+	private Result appendRecords(String[] fnames, int durSec, Record recGen, int batchSize) throws OutOfMemoryException, KawkabException {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
@@ -140,7 +157,8 @@ public class TestClient {
 		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "Append records buffered", 100);
 		Stopwatch sw = Stopwatch.createStarted();
 		Accumulator tputLog = new Accumulator();
-
+		ApproximateClock clock = ApproximateClock.instance();
+		long startT = clock.currentTime();
 		while((now = System.currentTimeMillis()) < et) {
 			for (int i=0; i<batchSize; i++) {
 				batch[i].timestamp(now);
@@ -149,6 +167,8 @@ public class TestClient {
 			tlog.start();
 			client.appendRecords(files, batch);
 			tlog.end();
+
+			tputLog.put((int)((clock.currentTime()-startT)/1000.0));
 		}
 		sw.stop();
 
@@ -156,10 +176,10 @@ public class TestClient {
 		long msec = sw.elapsed(TimeUnit.MILLISECONDS);
 		setTput(accm, msec, 1, recGen.size());
 
-		return accm;
+		return new Result(accm.count(), accm.opsTput(), accm.dataTput(), accm.min(), accm.max(), accm.histogram(), tputLog.histogram());
 	}
 
-	private Accumulator appendRecs(String[] fnames, int durSec, Record recGen) throws KawkabException {
+	private Result appendRecs(String[] fnames, int durSec, Record recGen) throws KawkabException {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
@@ -167,6 +187,9 @@ public class TestClient {
 
 		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "Append records", 100);
 		Stopwatch sw = Stopwatch.createStarted();
+		Accumulator tputLog = new Accumulator();
+		ApproximateClock clock = ApproximateClock.instance();
+		long startT = clock.currentTime();
 		while((now = System.currentTimeMillis()) < et) {
 			rec.timestamp(now);
 			String fname = fnames[rand.nextInt(fnames.length)];
@@ -174,6 +197,8 @@ public class TestClient {
 			tlog.start();
 			client.append(fname, rec);
 			tlog.end();
+
+			tputLog.put((int)((clock.currentTime()-startT)/1000.0));
 		}
 		sw.stop();
 
@@ -181,31 +206,36 @@ public class TestClient {
 		long msec = sw.elapsed(TimeUnit.MILLISECONDS);
 		setTput(accm, msec, 1, recGen.size());
 
-		return accm;
+		return new Result(accm.count(), accm.opsTput(), accm.dataTput(), accm.min(), accm.max(), accm.histogram(), tputLog.histogram());
 	}
 
-	private Accumulator noopTest(int testDurSec, int warmupSecs) throws KawkabException {
+	private Result noopTest(int testDurSec, int warmupSecs) throws KawkabException {
 		pr.print(String.format("%s Ramp-up for %d seconds...", cls, warmupSecs));
 		sendNoops(warmupSecs);
 
 		pr.print(cls+"Sending noops ...");
-		Accumulator accm = sendNoops(testDurSec);
+		Result res = sendNoops(testDurSec);
 
 		pr.print(String.format("%s Ramp-down for %d seconds...", cls, warmupSecs));
 		sendNoops(warmupSecs);
 
-		return accm;
+		return res;
 	}
 
-	private Accumulator sendNoops(int durSec) throws KawkabException {
+	private Result sendNoops(int durSec) throws KawkabException {
 		long et = System.currentTimeMillis() + durSec*1000;
 
 		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "NoOPs test", 100);
 		Stopwatch sw = Stopwatch.createStarted();
+		Accumulator tputLog = new Accumulator();
+		ApproximateClock clock = ApproximateClock.instance();
+		long startT = clock.currentTime();
 		while (System.currentTimeMillis() < et) {
 			tlog.start();
 			client.noopWrite(0);
 			tlog.end();
+
+			tputLog.put((int)((clock.currentTime()-startT)/1000.0));
 		}
 
 		sw.stop();
@@ -214,7 +244,7 @@ public class TestClient {
 		long msec = sw.elapsed(TimeUnit.MILLISECONDS);
 		setTput(accm, msec, 1, recGen.size());
 
-		return accm;
+		return new Result(accm.count(), accm.opsTput(), accm.dataTput(), accm.min(), accm.max(), accm.histogram(), tputLog.histogram());
 	}
 
 	private String[] openFiles(int numFiles, String prefix, Filesystem.FileMode mode) throws KawkabException {

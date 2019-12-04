@@ -51,8 +51,8 @@ public class ClientMain {
 		int rs		= 0; // record size in bytes
 		int nf		= 0; //Number of files to read/write
 		String type = "apnd";
-		int warmupsec = 30;
-		int testDurSec = 120;
+		int warmupsec = 5;
+		int testDurSec = 10;
 		String fp = "test-";
 		int testID = 1;
 
@@ -100,15 +100,14 @@ public class ClientMain {
 		pr = new Printer();
 		pr.print("Starting client " + cid);
 
-		Accumulator[] accms = runTest(testID, cid, testDurSec, nc, nf, sip, sport, bs, recGen, warmupsec, type, tc, mid, mip, mport, wtMs, fp);
+		runTest(testID, cid, testDurSec, nc, nf, sip, sport, bs, recGen, warmupsec, type, tc, mid, mip, mport, wtMs, fp);
 
-		saveResults(cid, accms, fp, testDurSec, recGen.size(), nc, nf, bs);
 		ClientUtils.writeToFile(params.toString(), fp+"/params.txt");
 
 		pr.print("Finished client " + cid);
 	}
 
-	private Accumulator[] runTest(int testID, int cid, int testDurSec, int numCients, int filesPerClient,
+	private Result[] runTest(int testID, int cid, int testDurSec, int numCients, int filesPerClient,
 								  String svrIP, int sport, int batchSize, Record recGen, int warmupsec, String type,
 								  int totalClients, int mid, String mip, int mport, int initWaitMs, String filePrefix) throws InterruptedException, KawkabException {
 		TestRunner at = new TestRunner();
@@ -127,33 +126,14 @@ public class ClientMain {
 			return null;
 		}
 
-		String fp = filePrefix+"/results";
-
-		Accumulator[] accms = at.runTest(testID, testDurSec, numCients, cid, filesPerClient, svrIP, sport, batchSize, recGen, pr, warmupsec, ttype,
-				totalClients, mid, mip, mport, fp);
+		Result[] results = at.runTest(testID, testDurSec, numCients, cid, filesPerClient, svrIP, sport, batchSize, recGen, pr, warmupsec, ttype,
+				totalClients, mid, mip, mport, filePrefix);
 
 		if (cid == mid) {
 			at.stopServer();
 		}
 
-		return accms;
-	}
-
-	private void saveResults(int cidOffset, Accumulator[] accms, String filePrefix, int testDurSec, int recSize, int nc, int nf, int bs) {
-		for (int i=0; i<accms.length; i++) {
-			Result res = ClientUtils.prepareResult(accms[i], testDurSec, recSize, nc, nf, bs, false);
-			String fp = filePrefix+"/clients/client-"+(cidOffset+i);
-			ClientUtils.saveResult(res, fp);
-		}
-
-		Accumulator accm = ClientUtils.merge(accms);
-		Result result = ClientUtils.prepareResult(accm, testDurSec, recSize, nc, nf, bs, true);
-
-		/*System.out.println(result.toJson(false));
-		System.out.println(result.csvHeader());
-		System.out.println(result.csv());*/
-
-		ClientUtils.saveResult(result, filePrefix+"/results-"+cidOffset);
+		return results;
 	}
 
 	private void initWait(int waitTime) {

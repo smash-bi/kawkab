@@ -1,14 +1,13 @@
 package kawkab.fs.testclient;
 
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.testclient.thrift.TAccumulator;
+import kawkab.fs.testclient.thrift.TResult;
 import kawkab.fs.testclient.thrift.TSyncResponse;
 import kawkab.fs.testclient.thrift.TestClientService;
-import kawkab.fs.utils.Accumulator;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.transport.TFastFramedTransport;
+import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
@@ -24,7 +23,7 @@ public class TestClientServiceClient {
 		System.out.printf("[TCSC] Connecting to %s:%d\n",serverIP,port);
 		int maxBufferLen = 16 * 1024;
 		try {
-			transport = new TFastFramedTransport(new TSocket(serverIP, port));
+			transport = new TFramedTransport(new TSocket(serverIP, port));
 			transport.open();
 
 			TProtocol protocol = new TBinaryProtocol(transport);
@@ -35,16 +34,21 @@ public class TestClientServiceClient {
 		}
 	}
 
-	public SyncResponse sync(int clid, int testID, boolean stopAll, double tput, double opsTput, Accumulator accm) {
+	public Result sync(int clid, int testID, boolean stopAll, Result result) {
 		assert client != null;
 
-		List<Long> histogram = Arrays.stream(accm.histogram()).boxed().collect(Collectors.toUnmodifiableList());
-		TAccumulator taccm = new TAccumulator(histogram, accm.count(), accm.min(), accm.max());
+		List<Long> histogram = Arrays.stream(result.latHist()).boxed().collect(Collectors.toUnmodifiableList());
+		List<Long> tputTimeLog = Arrays.stream(result.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
+		TResult taccm = new TResult(histogram, result.count(), result.latMin(), result.latMax(),
+				result.dataTput(), result.opsTput(), tputTimeLog);
 
 		try {
-			TSyncResponse resp = client.sync(clid, testID, stopAll, tput, opsTput, taccm);
-			return new SyncResponse(resp.reqsCount, resp.opsTput, resp.tput, resp.lat50, resp.lat95, resp.lat99,
-					resp.latMin, resp.latMax, resp.latMean, resp.stopAll);
+			TSyncResponse resp = client.sync(clid, testID, stopAll, taccm);
+			TResult res = resp.aggResult;
+
+			long[] latHist = res.latHistogram.stream().mapToLong(i->i).toArray();
+			long[] tputLog = res.tputLog.stream().mapToLong(i->i).toArray();
+			return new Result(res.totalCount, res.opsTput, res.dataTput, res.minVal, res.maxVal, latHist, tputLog);
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 		}

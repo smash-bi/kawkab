@@ -40,6 +40,8 @@ public class TimeLog {
 		}
 
 		started = false;
+
+		sw = Stopwatch.createUnstarted();
 	}
 	
 	
@@ -54,8 +56,9 @@ public class TimeLog {
 			return;
 		
 		started = true;
-		
-		sw = Stopwatch.createStarted();
+
+		sw.reset();
+		sw.start();
 	}
 	
 	public void end() {

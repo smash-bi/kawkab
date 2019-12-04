@@ -1,30 +1,32 @@
 package kawkab.fs.testclient;
 
-import kawkab.fs.testclient.thrift.TAccumulator;
+import kawkab.fs.testclient.thrift.TResult;
 import kawkab.fs.testclient.thrift.TSyncResponse;
 import kawkab.fs.testclient.thrift.TestClientService;
-import kawkab.fs.utils.Accumulator;
 import org.apache.thrift.TException;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class TestClientServiceImpl implements TestClientService.Iface {
 	private int received = 0;
 	private final int numClients;
-	private Accumulator aggAccm;
+	private Result aggResult;
 	private boolean halt;
-	private double aggTput;
-	private double aggOpsTput;
 	private long testID;
 	private boolean ready;
+	private TSyncResponse resp;
 
-	private Object syncMutex = new Object();
-	private Object barMutex = new Object();
+	private final Object syncMutex = new Object();
+	private final Object barMutex = new Object();
 
 	public TestClientServiceImpl(int numClients) {
 		this.numClients = numClients;
 	}
 
 	@Override
-	public TSyncResponse sync(int clid, int testID, boolean stopAll, double tput, double opsTput, TAccumulator accm) throws TException {
+	public TSyncResponse sync(int clid, int testID, boolean stopAll, TResult result) throws TException {
 		synchronized (syncMutex) {
 			try {
 				if (this.testID != testID)
@@ -37,11 +39,9 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 
 				System.out.printf("Client sync: rcvd=%d, total=%d, clid=%d\n", received, numClients, clid);
 
-				merge(aggAccm, accm);
-				accm = null;
-				aggTput += tput;
-				aggOpsTput += opsTput;
+				merge(aggResult, result);
 				halt = halt || stopAll;
+				result = null;
 
 				if (received != numClients) {
 					try {
@@ -50,27 +50,36 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 						e.printStackTrace();
 						throw new TException(e);
 					}
+				} else {
+					assert resp == null;
+					resp = response(aggResult, halt);
 				}
+
+				TSyncResponse ret = resp;
 
 				received--;
 
-				double[] lats = aggAccm.getLatencies();
-				TSyncResponse resp = new TSyncResponse(aggAccm.count(), aggOpsTput, aggTput, lats[0], lats[1], lats[2],
-						aggAccm.min(), aggAccm.max(), aggAccm.mean(), halt);
-
 				if (received == 0) {
 					ready = false;
-					printResults(aggAccm, aggTput, aggOpsTput);
+					resp = null;
+					printResults(aggResult);
 					System.out.println("[TCSI] Releasing the sync-barrier");
 				}
 
 				syncMutex.notify();
-				return resp;
+				return ret;
 			} catch (Exception | AssertionError e) {
 				e.printStackTrace();
 				throw new TException(e.getMessage());
 			}
 		}
+	}
+
+	private TSyncResponse response(Result aggRes, boolean stopAll) {
+		List<Long> latHist = Arrays.stream(aggRes.latHist()).boxed().collect(Collectors.toUnmodifiableList());
+		List<Long> tputLog = Arrays.stream(aggRes.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
+		return new TSyncResponse(new TResult(latHist, aggRes.count(), aggRes.latMin(), aggRes.latMax(),
+				aggRes.dataTput(), aggRes.opsTput(), tputLog), stopAll);
 	}
 
 	@Override
@@ -79,11 +88,9 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 		this.testID = testID;
 
 		received = 0;
-		aggAccm = new Accumulator();
+		aggResult = new Result();
+		resp = null;
 		halt = false;
-		aggTput = 0;
-		aggOpsTput = 0;
-
 		ready = true;
 	}
 
@@ -125,19 +132,16 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 		}
 	}
 
-	private void merge(Accumulator dstAccm, TAccumulator taccm) {
-		long[] histogram = taccm.histogram.stream().mapToLong(i->i).toArray();
-		dstAccm.merge(new Accumulator(histogram, taccm.totalCount, taccm.minVal, taccm.maxVal));
+	private void merge(Result dstResult, TResult tres) {
+		long[] latHist = tres.latHistogram.stream().mapToLong(i->i).toArray();
+		long[] tputLog = tres.tputLog.stream().mapToLong(i->i).toArray();
+
+		dstResult.merge(new Result(tres.totalCount, tres.opsTput, tres.dataTput, tres.minVal, tres.maxVal, latHist, tputLog));
 	}
 
-	private void printResults(Accumulator accm, double thr, double opThr) {
-		double[] lats = accm.getLatencies();
-
-		Result result = new Result(accm.count(), opThr, thr, lats[0], lats[1], lats[2], accm.min(), accm.max(), accm.mean(),
-				0, 0, 0,0, 0, 0, accm.histogram(), new long[]{});
-
+	private void printResults(Result result) {
 		System.out.println("======== Aggregate Result =========");
-		System.out.println(result.toJson(false));
+		System.out.println(result.toJson(false, true));
 		System.out.println(result.csvHeader());
 		System.out.println(result.csv());
 		System.out.println("====================================");

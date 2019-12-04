@@ -13,9 +13,9 @@ public class TestRunner {
 		READ
 	}
 
-	Accumulator[] runTest(int testID, int testDurSec, int nc, int cidOffset, int nf, String sip, int sport, int batchSize, Record recGen,
-						  Printer pr, int warmupSecs, final TestType type, int totalClients, int mid, String mip, int mport, String outFile) {
-		final Accumulator[] accms = new Accumulator[nc];
+	Result[] runTest(int testID, int testDurSec, int nc, int cidOffset, int nf, String sip, int sport, int batchSize, Record recGen,
+						  Printer pr, int warmupSecs, final TestType type, int totalClients, int mid, String mip, int mport, String outFolder) {
+		final Result[] results = new Result[nc];
 		Thread[] threads = new Thread[nc];
 		for (int i=0; i<nc; i++) {
 			final int clid = cidOffset+i;
@@ -29,37 +29,40 @@ public class TestRunner {
 
 					client.barrier(clid);
 
-					Accumulator accm = null;
+					Result res = null;
 
 					switch (type) {
 						case APPEND:
-							accm = runAppendTest(testDurSec, clid, nf, sip, sport, batchSize, recGen.newRecord(), pr, warmupSecs);
+							res = runAppendTest(testDurSec, clid, nf, sip, sport, batchSize, recGen.newRecord(), pr, warmupSecs);
 							break;
 						case NOOP:
-							accm = runNoopTest(testDurSec, clid, sip, sport, recGen.newRecord(), pr, warmupSecs);
+							res = runNoopTest(testDurSec, clid, sip, sport, recGen.newRecord(), pr, warmupSecs);
 							break;
 						case READ:
 						default:
 							throw new KawkabException("Test not implemented " + type);
 					}
 
-					synchronized (accms) {
-						accms[idx] = accm;
+					synchronized (results) {
+						results[idx] = res;
 					}
 
 					System.out.printf("Client %d finished\n", clid);
 					//printStats(clid, accm, batchSize, recGen.size());
 
-					client.barrier(clid);
-
-					Result result = sync(client, clid, testID, true, accm);
+					Result aggRes = client.sync(clid, testID, true, res);
 
 					if (clid == 1) {
-						System.out.println("Saving results to " + outFile);
-						result.exportJson(outFile+".json", false);
-						result.exportJson(outFile+"-hists.json", true);
-						result.exportCsv(outFile+".csv");
+						System.out.println("Saving results to " + outFolder);
+						aggRes.exportJson(outFolder+"results.json", false, false);
+						aggRes.exportJson(outFolder+"results-hists.json", true, true);
+						aggRes.exportCsv(outFolder+"results.csv");
 					}
+
+					String fp = outFolder+"/clients/client-"+(clid);
+					ClientUtils.saveResult(res, fp);
+
+					client.barrier(clid);
 
 					disconnectFromMaster(client);
 				} catch (KawkabException e) {
@@ -70,7 +73,7 @@ public class TestRunner {
 			threads[i].start();
 		}
 
-		for(int i=0; i<nc; i++){
+		for(int i=0; i<nc; i++) {
 			try {
 				threads[i].join();
 			} catch (InterruptedException e) {
@@ -78,27 +81,27 @@ public class TestRunner {
 			}
 		}
 
-		return accms;
+		return results;
 	}
 
-	private Accumulator runAppendTest(final int durSec, final int cid, int nTestFiles, final String sip, final int sport,
+	private Result runAppendTest(final int durSec, final int cid, int nTestFiles, final String sip, final int sport,
 									  int batchSize, Record recGen, final Printer pr, int warmupSecs) throws KawkabException {
 		TestClient client = new TestClient(cid, sip, sport, recGen, pr);
 		client.connect();
-		Accumulator accm = client.runTest(durSec, nTestFiles, warmupSecs, batchSize);
+		Result res = client.runTest(durSec, nTestFiles, warmupSecs, batchSize);
 		client.disconnect();
 
-		return accm;
+		return res;
 	}
 
-	private Accumulator runNoopTest(final int durSec, final int cid, final String sip, final int sport,
+	private Result runNoopTest(final int durSec, final int cid, final String sip, final int sport,
 									Record recGen, final Printer pr, int warmupSecs) throws KawkabException {
 		TestClient client = new TestClient(cid, sip, sport, recGen, pr);
 		client.connect();
-		Accumulator accm = client.runNoopTest(durSec, warmupSecs);
+		Result res = client.runNoopTest(durSec, warmupSecs);
 		client.disconnect();
 
-		return accm;
+		return res;
 	}
 
 	private TestClientServiceClient connectToMaster(String mip, int mport) throws KawkabException {
@@ -107,12 +110,6 @@ public class TestRunner {
 
 	private void disconnectFromMaster(TestClientServiceClient client) {
 		client.disconnect();
-	}
-
-	private Result sync(TestClientServiceClient client, int clid, int testID, boolean stopAll, Accumulator accm) {
-		SyncResponse r = client.sync(clid, testID, stopAll, accm.dataTput(), accm.opsTput(), accm);
-		return new Result(r.count, r.opsTput, r.tput, r.lat50, r.lat95, r.lat99, r.latMin, r.latMax, r.latMean,
-				0, 0, 0, 0, 0, 0, new long[]{}, new long[]{});
 	}
 
 	public void startServer(int numClients, int svrPort) throws KawkabException {

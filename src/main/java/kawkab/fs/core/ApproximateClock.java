@@ -14,6 +14,7 @@ public class ApproximateClock implements Runnable {
 		time = new AtomicLong(System.currentTimeMillis());
 		timer = new Thread(this);
 		timer.setName("ApproximateClock");
+		timer.setDaemon(true);
 		timer.start();
 	}
 	
@@ -24,7 +25,10 @@ public class ApproximateClock implements Runnable {
 		
 		return instance;
 	}
-	
+
+	/**
+	 * Returns an approximate current time in millis.
+	 */
 	public long currentTime() {
 		return time.get();
 	}

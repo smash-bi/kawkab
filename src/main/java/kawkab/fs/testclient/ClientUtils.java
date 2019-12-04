@@ -8,7 +8,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 public class ClientUtils {
-	public static Result prepareResult(Accumulator accm, int testDurSec, int recSize, int nc, int nf, int batchSize, boolean print) {
+	/*public static Result prepareResult(Accumulator accm, int testDurSec, int recSize, int nc, int nf, int batchSize, boolean print) {
 		long cnt = accm.count()*batchSize;
 		double sizeMB = recSize*cnt / (1024.0 * 1024.0);
 
@@ -20,7 +20,7 @@ public class ClientUtils {
 		double[] lats = accm.getLatencies();
 		return new Result(cnt, accm.opsTput(), accm.dataTput(), lats[0], lats[1], lats[2], accm.min(), accm.max(), accm.mean(),
 				0, lats[0], 0, accm.mean(), 0, accm.max(), new long[]{}, accm.histogram());
-	}
+	}*/
 
 	public static void writeToFile(String lines, String outFile) {
 		File file = new File(outFile).getParentFile();
@@ -35,7 +35,7 @@ public class ClientUtils {
 		}
 	}
 
-	public static Accumulator merge(Accumulator[] accms) {
+	/*public static Accumulator merge(Accumulator[] accms) {
 		Accumulator accm = new Accumulator();
 
 		for (int i=0; i<accms.length; i++) {
@@ -43,11 +43,11 @@ public class ClientUtils {
 		}
 
 		return accm;
-	}
+	}*/
 
 	public static void saveResult(Result res, String filePrefix) {
-		res.exportJson(filePrefix+".json", false);
-		res.exportJson(filePrefix+"-hists.json", true);
+		res.exportJson(filePrefix+".json", false, false);
+		res.exportJson(filePrefix+"-hists.json", true, true);
 		res.exportCsv(filePrefix+".csv");
 	}
 
