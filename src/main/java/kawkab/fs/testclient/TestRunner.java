@@ -59,7 +59,7 @@ public class TestRunner {
 						aggRes.exportCsv(outFolder+"results.csv");
 					}
 
-					String fp = outFolder+"/clients/client-"+(clid);
+					String fp = String.format("%s/clients/client-%02d", outFolder, clid);
 					ClientUtils.saveResult(res, fp);
 
 					client.barrier(clid);

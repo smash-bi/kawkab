@@ -51,8 +51,8 @@ public class ClientMain {
 		int rs		= 0; // record size in bytes
 		int nf		= 0; //Number of files to read/write
 		String type = "apnd";
-		int warmupsec = 5;
-		int testDurSec = 10;
+		int warmupsec = 0;
+		int testDurSec = 180;
 		String fp = "test-";
 		int testID = 1;
 

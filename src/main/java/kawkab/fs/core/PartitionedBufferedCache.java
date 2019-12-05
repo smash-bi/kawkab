@@ -43,7 +43,7 @@ public class PartitionedBufferedCache extends Cache {
 		
 		cache = new BufferedCache[numPartitions];
 		for (int i=0; i<numPartitions; i++) {
-			cache[i] = new BufferedCache(numSegmentsPerPart);
+			cache[i] = new BufferedCache(numSegmentsPerPart, i+1);
 		}
 
 		pinnedMap = new ConcurrentHashMap<>();
@@ -141,10 +141,10 @@ public class PartitionedBufferedCache extends Cache {
 
 	private Block acquirePinned(BlockID blockID) {
 		CachedItem ci = pinnedMap.get(blockID);
-
+		int hc = blockID.hashCode();
 		if (ci == null) {
 			//A lock is required to prevent concurrent additions of different memory blocks for the same blockID
-			pinLock.lock(blockID.hashCode());  // Lock based on the blockID
+			pinLock.lock(hc);  // Lock based on the blockID
 
 			try{
 				if ((ci = pinnedMap.get(blockID)) == null) {
@@ -152,7 +152,7 @@ public class PartitionedBufferedCache extends Cache {
 					pinnedMap.put(blockID, ci);
 				}
 			} finally {
-				pinLock.unlock(blockID.hashCode());
+				pinLock.unlock(hc);
 			}
 		}
 
@@ -166,7 +166,9 @@ public class PartitionedBufferedCache extends Cache {
 
 		assert ci != null : "Releasing non-cached item: " + blockID;
 
+		int hc = blockID.hashCode();
 		ci.decrementRefCnt();
+
 		Block block = ci.block();
 		if (blockID.onPrimaryNode() && block.isLocalDirty()) {
 			localStore.store(block);
@@ -241,7 +243,6 @@ public class PartitionedBufferedCache extends Cache {
 		long evicted = 0;
 		long missed = 0;
 		long accessed = 0;
-		long waited = 0;
 		long size = 0;
 
 		StringBuilder stats = new StringBuilder();
@@ -250,13 +251,13 @@ public class PartitionedBufferedCache extends Cache {
 			evicted += cache[i].evictCount();
 			missed += cache[i].missCount();
 			accessed += cache[i].accessCount();
-			waited += cache[i].waitCount();
+			//waited += cache[i].waitCount();
 			size += cache[i].size();
 		}
 
 		if (accessed > 0)
-			stats.append(String.format("size=%d, accessed=%d, missed=%d, evicted=%d, waited=%d, hitRatio=%.02f\n",
-					size, accessed, missed, evicted, waited, 100.0*(accessed-missed)/accessed));
+			stats.append(String.format("Cache agg: size=%d, accessed=%d, missed=%d, evicted=%d, hitRatio=%.02f\n",
+					size, accessed, missed, evicted, 100.0*(accessed-missed)/accessed));
 
 		return stats.toString();
 	}

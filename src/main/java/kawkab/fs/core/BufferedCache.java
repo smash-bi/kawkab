@@ -9,8 +9,6 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static kawkab.fs.core.BlockID.BlockType;
@@ -28,9 +26,9 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 
 	private ReentrantLock cacheLock; // Cache level locking
 
-	private Condition acqLockCond;
-	private Boolean canAcquireBlock = true;
-	private Block syncWaitBlock;
+	//private Condition acqLockCond;
+	//private Boolean canAcquireBlock = true;
+	//private Block syncWaitBlock;
 
 	private LocalStoreManager localStore;
 	private final int MAX_BLOCKS_IN_CACHE;
@@ -39,23 +37,26 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	private long evicted;
 	private long accessed;
 	private long missed;
-	private long waited;
+	//private long waited;
 	private TimeLog acqLog;
 	private TimeLog relLog;
 	private final int lowMark;
 	private final int highMark;
+	private final int midMark;
+	private final int id;
 
 	private BufferedCache() {
-		this((int)((Configuration.instance().cacheSizeMiB * 1048576L)/Configuration.instance().segmentSizeBytes));
+		this((int)((Configuration.instance().cacheSizeMiB * 1048576L)/Configuration.instance().segmentSizeBytes), 0);
 	}
 
-	public BufferedCache(int numSegmentsInCache) {
+	public BufferedCache(int numSegmentsInCache, int id) {
 		System.out.println("Initializing BufferedCache cache..." );
 
 		conf = Configuration.instance();
+		this.id = id;
 
 		cacheLock = new ReentrantLock();
-		acqLockCond = cacheLock.newCondition();
+		//acqLockCond = cacheLock.newCondition();
 
 		localStore = LocalStoreManager.instance();
 
@@ -70,8 +71,13 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		acqLog = new TimeLog(TimeUnit.MICROSECONDS, "Cache acquire", 1);
 		relLog = new TimeLog(TimeUnit.MICROSECONDS, "Cache release", 1);
 
-		highMark = numSegmentsInCache;
-		lowMark = (int) (numSegmentsInCache*0.5);
+		highMark = (int)(numSegmentsInCache*0.95);
+		midMark = (int)(numSegmentsInCache*0.8);
+		lowMark = (int) (numSegmentsInCache*0.7);
+
+		System.out.printf("HM=%d, MM=%d, LM=%d\n", highMark, midMark, lowMark);
+
+		//runEvictor();
 	}
 	
 	public static BufferedCache instance() {
@@ -139,11 +145,8 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 
 		assert blockID != null;
 
-		CachedItem cachedItem = null;
-
 		cacheLock.lock();	// Lock the whole cache. This is necessary to prevent from creating multiple references to the
 							// same block when the block is not already cached.
-
 		acqLog.start();
 
 		// A block cannot be acquired if the cache has not free blocks. This can happen during peak workloads
@@ -151,20 +154,21 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		// block can be acquired or not. If not, (1) we should release the lock, (2) let the threads to succeed in
 		// the releaseBlock function, and (3) let the thread in waitUntilSynced() to awake the threads waiting on the
 		// lock condition acqLockCond.
-		while (!canAcquireBlock) { // Cannot acquire block as the cache is full and the last evicted block is being synced to the localStore
+		/*while (!canAcquireBlock) { // Cannot acquire block as the cache is full and the last evicted block is being synced to the localStore
 			waited++;
 			acqLockCond.awaitUninterruptibly();
-		}
+		}*/
 
 		accessed++;
 
+		Block cachedBlock;
 		try { // To unlock the cache
-			cachedItem = cache.get(blockID); // Try acquiring the block from the memory
+			CachedItem cachedItem = cache.get(blockID); // Try acquiring the block from the memory
 			
 			if (cachedItem == null) { // If the block is not cached
 				missed++;
 
-				evictIfNeeded();
+				//evictIfNeeded();
 
 				//long t = System.nanoTime();
 				Block block;
@@ -178,12 +182,13 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 				}
 
 				cachedItem = new CachedItem(block); // Wrap the object in a cached item
+				cachedBlock = block;
 
 				cachedItem.incrementRefCnt(); //Increment the reference count before adding in the cache so that the cache cannot evict the new entry
 				CachedItem prev = cache.put(blockID, cachedItem);
 				assert prev == null;
 
-				if (!canAcquireBlock) { // Cannot acquire the block yet as the block is evicted from the cache. We have to wait until
+				/*if (!canAcquireBlock) { // Cannot acquire the block yet as the block is evicted from the cache. We have to wait until
 										// the block is synced to the local store. Otherwise, we will be overly using the memory
 
 					assert !syncWaitBlock.id().equals(blockID);
@@ -194,12 +199,13 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 					syncWaitBlock = null;
 					canAcquireBlock = true;
 					acqLockCond.signalAll();
-				}
+				}*/
 
 				assert cachedItem.block().id() != null;
 			} else {
 				assert cachedItem.block().id() != null;
 				cachedItem.incrementRefCnt();
+				cachedBlock = cachedItem.block();
 			}
 			
 			assert cache.size() <= MAX_BLOCKS_IN_CACHE;
@@ -209,9 +215,9 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		    					// the case of an exception.
 		}
 
-		assert cachedItem.block().id() != null;
+		assert cachedBlock.id() != null;
 
-		return cachedItem.block();
+		return cachedBlock;
 	}
 
 	/**
@@ -224,9 +230,9 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	 */
 	@Override
 	public void releaseBlock(BlockID blockID) throws KawkabException {
-		// System.out.println("[C] Release block: " + blockID);
+		//System.out.println("[C] Release block: " + blockID);
 		CachedItem cachedItem = null;
-		
+
 		cacheLock.lock(); // TODO: Do we need this lock? We may not need this lock if we change the reference counting to an AtomicInteger
 		relLog.start();
 		try { // For cacheLock.lock()
@@ -235,6 +241,8 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 			assert cachedItem != null : String.format("[BC] Releasing non-existing block: %s", blockID);
 			
 			cachedItem.decrementRefCnt();
+
+			evictIfNeeded();
 		} finally {
 			relLog.end();
 			cacheLock.unlock();
@@ -248,9 +256,14 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	}
 
 	private void evictIfNeeded() throws OutOfMemoryException {
-		if (cache.size() >= highMark-100) {
-			cache.bulkRemove(cache.size() - lowMark);
-		}
+		//int toEvict = (int)(0.025 * MAX_BLOCKS_IN_CACHE);
+		int size = cache.size();
+		if (size >= highMark) {
+			System.out.println("To evict: " + (size-lowMark));
+			cache.bulkRemove(size - lowMark);
+		} /*else if (size >= midMark) {
+			cache.bulkRemove(10000);
+		}*/
 
 		if (cache.size() == MAX_BLOCKS_IN_CACHE)
 			throw new OutOfMemoryException("Cache is full. Current cache size: " + cache.size());
@@ -265,19 +278,22 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	public void beforeEviction(CachedItem cachedItem) {
 		//System.out.println("Before eviction: " + cachedItem.block().id());
 
-		assert cacheLock.isHeldByCurrentThread();
+		/*assert cacheLock.isHeldByCurrentThread();
 		assert cachedItem.refCount() == 0;
 
 		syncWaitBlock = cachedItem.block();
-		canAcquireBlock = false;
+		canAcquireBlock = false;*/
+
+		assert false;
 	}
 
 	// Perform the necessary actions to evict the block
+	@Override
 	public void onEvictBlock(Block block) {
-		evicted++;
-
 		assert cacheLock.isHeldByCurrentThread();
 		assert !block.isLocalDirty();
+
+		evicted++;
 
 		block.onMemoryEviction();
 		try {
@@ -298,7 +314,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	 * The caller already has the cacheLock acquired when this function is called.
 	 * @param block THe block for which the current thread to wait until the block is synced to the localStore
 	 */
-	private void waitUntilSynced(Block block, Lock lock) {
+	/*private void waitUntilSynced(Block block, Lock lock) {
 		// The caller has acquired the cacheLock in the acquireBlock function. We should (1) set canAcquire to
 		// false to prevent further blocks from
 
@@ -312,7 +328,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		} finally {
 			lock.lock(); // We must acquire the lock again before returning
 		}
-	}
+	}*/
 	
 	/**
 	 * Flushes the block in the persistent store. This should be used only for system shutdown.
@@ -323,7 +339,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	public void flush() throws KawkabException {
 		int count = 0;
 		cacheLock.lock();
-		
+
 		try {
 			Iterator<Map.Entry<BlockID, CachedItem>> itr = cache.entrySet().iterator();
 			while (itr.hasNext()) {
@@ -338,7 +354,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 				}
 				
 				assert cachedItem.refCount() == 0 : String.format("refCount is %d for node %s while flushing", cachedItem.refCount(), block.id());
-				
+
 				if (block.id().onPrimaryNode() && block.isLocalDirty()) {
 					localStore.store(block);
 					try {
@@ -385,8 +401,8 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		if (accessed == 0)
 			return "No stats";
 
-		return String.format("size=%d, accessed=%d, missed=%d, evicted=%d, waited=%d, hitRatio=%.02f\nacqLog: %s\nrelLog: %s\n",
-				size(), accessed, missed, evicted, waited, 100.0*(accessed-missed)/accessed, acqLog.getStats(), relLog.getStats());
+		return String.format("size=%d, accessed=%d, missed=%d, evicted=%d, hitRatio=%.02f\nacqLog: %s\nrelLog: %s\n%s\n",
+				size(), accessed, missed, evicted, 100.0*(accessed-missed)/accessed, acqLog.getStats(), relLog.getStats(), cache.getStats());
 
 	}
 
@@ -402,7 +418,34 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		return accessed;
 	}
 
-	long waitCount() {
-		return waited;
+	private void runEvictor() {
+		Thread evictor = new Thread(()->{
+			while(true) {
+				if (cache.size() > midMark) {
+					int size;
+					while((size = cache.size()) > lowMark) {
+						cacheLock.lock();
+						try {
+							int toEvict = size > highMark ? size - lowMark : 50000;
+							cache.bulkRemove(toEvict);
+						} finally {
+							cacheLock.unlock();
+						}
+					}
+				}
+
+				try {
+					Thread.sleep(250);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+					break;
+				}
+			}
+		});
+
+		evictor.setName("BufCacheEvictor-"+id);
+		evictor.setDaemon(true);
+		evictor.start();
 	}
+
 }

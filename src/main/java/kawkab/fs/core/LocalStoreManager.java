@@ -281,7 +281,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	}
 	
 	public void notifyEvictedFromCache(Block block) throws KawkabException {
-		block.unsetInCache();
+		//block.unsetInCache();
 		
 		//if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
 		/*if (block.evictLocallyOnMemoryEviction()) {

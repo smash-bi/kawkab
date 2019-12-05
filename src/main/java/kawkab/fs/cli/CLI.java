@@ -19,6 +19,7 @@ import kawkab.fs.utils.GCMonitor;
 import kawkab.fs.utils.TimeLog;
 
 import java.io.*;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -162,6 +163,7 @@ public final class CLI {
 	}
 
 	private void parseStats(String[] args) throws KawkabException {
+		System.out.println("Current Time: " + Instant.now());
 		System.out.printf("GC stats (ms): %s\n", GCMonitor.getStats());
 		System.out.printf("Cache stats:\n%s", Cache.instance().getStats());
 		System.out.println("File stats:");

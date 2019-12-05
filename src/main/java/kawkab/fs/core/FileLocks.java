@@ -9,7 +9,7 @@ public class FileLocks {
 	private Striped<Lock> locks;
 	
 	private FileLocks() {
-		locks = Striped.lazyWeakLock(1000); //1000 is a sufficiently large number because usually the number of cores and concurrent threads is small
+		locks = Striped.lazyWeakLock(1500);
 	}
 	
 	public static synchronized FileLocks instance() {
@@ -27,7 +27,7 @@ public class FileLocks {
 	 * @return
 	 * @throws InterruptedException 
 	 */
-	public Lock grabLock(BlockID blockID) { //FIXME: This is not a good approach. We should not give away the lock
+	public Lock grabLock(BlockID blockID) { //FIXME: This is not a good approach. We should not give the lock to the caller
 		return locks.get(blockID.perBlockTypeKey());
 	}
 }

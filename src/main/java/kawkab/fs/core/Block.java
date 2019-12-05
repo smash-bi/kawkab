@@ -47,7 +47,7 @@ public abstract class Block extends AbstractTransferItem {
 	//private volatile boolean inLocalQueue;  // The block is in a queue for local persistence
 	//private AtomicBoolean inGlobalQueue; // The block is in a queue for global persistence
 	private AtomicBoolean inLocalStore; // The blocks is currently in the local store (can be in more places as well)
-	private AtomicBoolean inCache;      // The block is in cache
+	//private AtomicBoolean inCache;      // The block is in cache
 	
 	private boolean isLoaded; //If the block bytes are already loaded; used only on the primary node
 
@@ -67,7 +67,7 @@ public abstract class Block extends AbstractTransferItem {
 		//globalDirtyCnt = new AtomicInteger(0);
 		//inGlobalQueue  = new AtomicBoolean(false);
 		inLocalStore   = new AtomicBoolean(false);
-		inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and 
+		//inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and
 		                                          // the newly created blocks are always cached.
 	}
 	
@@ -77,7 +77,7 @@ public abstract class Block extends AbstractTransferItem {
 		//globalDirtyCnt.set(0);
 		//inGlobalQueue.set(false);
 		inLocalStore.set(false);
-		inCache.set(false);
+		//inCache.set(false);
 		isLoaded = false;
 		isOnPrimary = id != null && id.onPrimaryNode();
 	}
@@ -322,13 +322,13 @@ public abstract class Block extends AbstractTransferItem {
 		return inLocalStore.get();
 	}*/
 	
-	void unsetInCache() {
+	/*void unsetInCache() {
 		inCache.set(false);
 	}
 	
 	boolean isInCache() {
 		return inCache.get();
-	}
+	}*/
 	
 	protected abstract void onMemoryEviction();
 
