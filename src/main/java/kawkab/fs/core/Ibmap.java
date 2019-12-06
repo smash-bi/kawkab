@@ -218,7 +218,4 @@ public final class Ibmap extends Block{
 		System.out.println("Closing Ibmaps");
 		//TODO: stop new requests
 	}
-	
-	@Override
-	protected void onMemoryEviction() {}
 }

@@ -154,11 +154,6 @@ public final class InodesBlock extends Block {
 	}
 	
 	@Override
-	protected void onMemoryEviction() {
-		// Do nothing
-	}
-	
-	@Override
 	protected synchronized void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
 		/* If never fetched or the last global-fetch has timed out, fetch from the global store.
 		 * Otherwise, if the last primary-fetch has timed out, fetch from the primary node.

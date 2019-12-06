@@ -9,7 +9,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
-import kawkab.fs.utils.TimeLog;
+import kawkab.fs.utils.LatHistogram;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,7 +55,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 	private int nodeSizeBytes;
 
-	private TimeLog loadLog;
+	private LatHistogram loadLog;
 
 	/**
 	 *
@@ -98,7 +98,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 			nodesCountTable[i] = totalNodesKAryTree(i);
 		}
 
-		loadLog = new TimeLog(TimeUnit.MILLISECONDS, "IndexNode load", 50);
+		loadLog = new LatHistogram(TimeUnit.MILLISECONDS, "IndexNode load", 50, 500);
 	}
 
 	/**

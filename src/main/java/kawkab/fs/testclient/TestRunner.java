@@ -31,16 +31,20 @@ public class TestRunner {
 
 					Result res = null;
 
-					switch (type) {
-						case APPEND:
-							res = runAppendTest(testDurSec, clid, nf, sip, sport, batchSize, recGen.newRecord(), pr, warmupSecs);
-							break;
-						case NOOP:
-							res = runNoopTest(testDurSec, clid, sip, sport, recGen.newRecord(), pr, warmupSecs);
-							break;
-						case READ:
-						default:
-							throw new KawkabException("Test not implemented " + type);
+					try {
+						switch (type) {
+							case APPEND:
+								res = runAppendTest(testDurSec, clid, nf, sip, sport, batchSize, recGen.newRecord(), pr, warmupSecs);
+								break;
+							case NOOP:
+								res = runNoopTest(testDurSec, clid, sip, sport, recGen.newRecord(), pr, warmupSecs);
+								break;
+							case READ:
+							default:
+								throw new KawkabException("Test not implemented " + type);
+						}
+					} catch (Exception e) {
+						e.printStackTrace();
 					}
 
 					synchronized (results) {
@@ -70,6 +74,7 @@ public class TestRunner {
 				}
 			});
 
+			threads[i].setName("TestClient-"+clid);
 			threads[i].start();
 		}
 

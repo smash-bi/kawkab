@@ -4,7 +4,7 @@ import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.*;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.index.poh.POHNode;
-import kawkab.fs.utils.TimeLog;
+import kawkab.fs.utils.LatHistogram;
 import org.apache.thrift.TException;
 
 import java.io.IOException;
@@ -19,7 +19,7 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 	//private static int indexNodeSizeBytes = Configuration.instance().indexNodeSizeBytes;
 	private ConcurrentLinkedQueue<ByteBuffer> buffers;
 
-	private TimeLog segLog;
+	private LatHistogram segLog;
 
 	public PrimaryNodeServiceImpl(int numWorkers) {
 		int segmentSizeBytes = Configuration.instance().segmentSizeBytes;
@@ -29,7 +29,7 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 			buffers.add(buffer);
 		}
 
-		segLog = new TimeLog(TimeUnit.MICROSECONDS, "PN segLog", 100);
+		segLog = new LatHistogram(TimeUnit.MICROSECONDS, "PrimNodeSrvc segLog", 100, 100000);
 	}
 
 	@Override

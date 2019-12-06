@@ -330,8 +330,6 @@ public abstract class Block extends AbstractTransferItem {
 		return inCache.get();
 	}*/
 	
-	protected abstract void onMemoryEviction();
-
 	protected void setIsLoaded() {
 		//System.out.printf("[B] Setting %s is loaded\n",id);
 		isLoaded = true;

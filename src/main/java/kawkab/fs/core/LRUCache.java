@@ -1,12 +1,9 @@
 package kawkab.fs.core;
 
-import kawkab.fs.utils.Accumulator;
-import kawkab.fs.utils.TimeLog;
+import kawkab.fs.utils.LatHistogram;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
@@ -14,27 +11,33 @@ import java.util.concurrent.TimeUnit;
 public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 	private BlockEvictionListener evictListener;
 	private final int maxBlocksInCache;
-	private TimeLog evLog;
-	private int maxTimeMS = 5000;
+	private LatHistogram evLog;
+	private int maxTimeMS = 60000;
 	private ApproximateClock clock = ApproximateClock.instance();
-	//private Accumulator evTimes = new Accumulator();
+	private final long stTime = System.currentTimeMillis();
+	private final int highMark;
+	private boolean evicting = false;
 
 	public LRUCache(int maxBlocksInCache, BlockEvictionListener evictListener) {
 		//super((int)((maxBlocksInCache/0.75)+1), 0.75f, true);
 		super(maxBlocksInCache*2, 0.75f, true);
 		this.maxBlocksInCache = maxBlocksInCache;
 		this.evictListener = evictListener;
-		evLog = new TimeLog(TimeUnit.MILLISECONDS, "EvictLog", 100);
+		evLog = new LatHistogram(TimeUnit.MICROSECONDS, "EvictLog", 100, 100000);
+		highMark = (int)(0.95*maxBlocksInCache);
 	}
 
 	@Override
 	protected boolean removeEldestEntry(Entry<BlockID, CachedItem> eldest) {
+		if (size() < highMark)
+			return false;
+
 		CachedItem toEvict = eldest.getValue();
 		if (toEvict.refCount() > 0 || toEvict.block().isLocalDirty())
 			return false;
 
-		if (clock.currentTime() - toEvict.accessTime() < maxTimeMS)
-			return false;
+		//if (clock.currentTime() - toEvict.accessTime() < maxTimeMS)
+		//	return false;
 
 		evictListener.onEvictBlock(toEvict.block());
 
@@ -86,8 +89,8 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 	void bulkRemove(int toEvict) {
 		//System.out.println("[LC] To evict = "+toEvict);
 
-		int evicted = 0;
-		int skipped = 0;
+		//int evicted = 0;
+		//int skipped = 0;
 		evLog.start();
 		Iterator<Entry<BlockID, CachedItem>> itr = super.entrySet().iterator();
 		//while(evicted < toEvict && itr.hasNext()) {
@@ -98,15 +101,16 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 			Entry<BlockID, CachedItem> e = itr.next();
 			CachedItem ci = e.getValue();
 
-			if (ci.refCount() != 0 || ci.block().isLocalDirty()) {
-				skipped++;
+			Block block = ci.block();
+			if (ci.refCount() != 0 || block.isLocalDirty()) {
+				//skipped++;
 				continue;
 			}
 
-			evictListener.onEvictBlock(ci.block());
+			evictListener.onEvictBlock(block);
 
 			itr.remove();
-			evicted++;
+			//evicted++;
 
 			//assert dbgCI.equals(ci) : String.format("CachedItems not equal, eci.hc=%d, dbgCI.hc=%d, eci.id=%s, dbgCI.id=%s, eci.id.hc=%d, dbgCI.id.hc=%d\n",
 			//		ci.hashCode(), dbgCI.hashCode(), ci.block().id(), dbgCI.block().id(), ci.block().id().hashCode(), dbgCI.block().id().hashCode());

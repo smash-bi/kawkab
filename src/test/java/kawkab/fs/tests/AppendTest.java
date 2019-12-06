@@ -12,7 +12,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.records.BytesRecord;
 import kawkab.fs.records.SampleRecord;
 import kawkab.fs.records.SixteenRecord;
-import kawkab.fs.utils.TimeLog;
+import kawkab.fs.utils.LatHistogram;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
@@ -117,7 +117,7 @@ public class AppendTest {
 
 		Record rec = recFactory.newRandomRecord(rand, 1);
 		long startTime = System.currentTimeMillis();
-		TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "RecAppend", 5);
+		LatHistogram tlog = new LatHistogram(TimeUnit.NANOSECONDS, "RecAppend", 5);
 		for (int i=0; i<numRecords; i++) {
 			rec.timestamp(i+1);
 			tlog.start();
@@ -173,7 +173,7 @@ public class AppendTest {
 						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
 						
-						TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "Main append", 5);
+						LatHistogram tlog = new LatHistogram(TimeUnit.NANOSECONDS, "Main append", 5);
 						long startTime = System.currentTimeMillis();
 						int toWrite = bufSize;
 						long ops = 0;

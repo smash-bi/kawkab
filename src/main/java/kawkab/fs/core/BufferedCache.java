@@ -3,7 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
-import kawkab.fs.utils.TimeLog;
+import kawkab.fs.utils.LatHistogram;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -38,8 +38,8 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	private long accessed;
 	private long missed;
 	//private long waited;
-	private TimeLog acqLog;
-	private TimeLog relLog;
+	private LatHistogram acqLog;
+	private LatHistogram relLog;
 	private final int lowMark;
 	private final int highMark;
 	private final int midMark;
@@ -66,14 +66,14 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		cache = new LRUCache(numSegmentsInCache, this);
 
 		//FIXME: The size of cache is not what is reflected from the configuration
-		MAX_BLOCKS_IN_CACHE = numSegmentsInCache + conf.inodeBlocksPerMachine + conf.ibmapsPerMachine;
+		MAX_BLOCKS_IN_CACHE = numSegmentsInCache; // + conf.inodeBlocksPerMachine + conf.ibmapsPerMachine;
 
-		acqLog = new TimeLog(TimeUnit.MICROSECONDS, "Cache acquire", 1);
-		relLog = new TimeLog(TimeUnit.MICROSECONDS, "Cache release", 1);
+		acqLog = new LatHistogram(TimeUnit.MICROSECONDS, "Cache acquire", 1, 100);
+		relLog = new LatHistogram(TimeUnit.MICROSECONDS, "Cache release", 1, 100);
 
 		highMark = (int)(numSegmentsInCache*0.95);
 		midMark = (int)(numSegmentsInCache*0.8);
-		lowMark = (int) (numSegmentsInCache*0.7);
+		lowMark = (int) (numSegmentsInCache*0.6);
 
 		System.out.printf("HM=%d, MM=%d, LM=%d\n", highMark, midMark, lowMark);
 
@@ -166,6 +166,9 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 			CachedItem cachedItem = cache.get(blockID); // Try acquiring the block from the memory
 			
 			if (cachedItem == null) { // If the block is not cached
+				if (cache.size() == MAX_BLOCKS_IN_CACHE)
+					throw new OutOfMemoryException("Cache is full. Current cache size: " + cache.size());
+
 				missed++;
 
 				//evictIfNeeded();
@@ -242,7 +245,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 			
 			cachedItem.decrementRefCnt();
 
-			evictIfNeeded();
+			//evictIfNeeded();
 		} finally {
 			relLog.end();
 			cacheLock.unlock();
@@ -255,18 +258,27 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		}
 	}
 
-	private void evictIfNeeded() throws OutOfMemoryException {
+	private void evictIfNeeded() {
 		//int toEvict = (int)(0.025 * MAX_BLOCKS_IN_CACHE);
 		int size = cache.size();
 		if (size >= highMark) {
-			System.out.println("To evict: " + (size-lowMark));
 			cache.bulkRemove(size - lowMark);
 		} /*else if (size >= midMark) {
 			cache.bulkRemove(10000);
 		}*/
+	}
 
-		if (cache.size() == MAX_BLOCKS_IN_CACHE)
-			throw new OutOfMemoryException("Cache is full. Current cache size: " + cache.size());
+	void evictEntries() {
+		int size = cache.size();
+		if (size > lowMark) {
+			int toRemove = size > highMark ? 100 : size > midMark ? 50 : 10;
+			cacheLock.lock();
+			try{
+				cache.bulkRemove(toRemove);
+			} finally {
+				cacheLock.unlock();
+			}
+		}
 	}
 
 	/**
@@ -290,21 +302,20 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	// Perform the necessary actions to evict the block
 	@Override
 	public void onEvictBlock(Block block) {
-		assert cacheLock.isHeldByCurrentThread();
-		assert !block.isLocalDirty();
+		//assert cacheLock.isHeldByCurrentThread();
+		//assert !block.isLocalDirty();
 
 		evicted++;
 
-		block.onMemoryEviction();
-		try {
-			localStore.notifyEvictedFromCache(block);
+		//try {
+			//localStore.notifyEvictedFromCache(block);
 
 			if (block.id().type() == BlockType.DATA_SEGMENT) {
 				dsp.release((DataSegment) block);
 			}
-		} catch (KawkabException e) {
-			e.printStackTrace();
-		}
+		//catch (KawkabException e) {
+		//	e.printStackTrace();
+		//}
 	}
 
 	/**
@@ -359,7 +370,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 					localStore.store(block);
 					try {
 						block.waitUntilSynced();
-						localStore.notifyEvictedFromCache(block);
+						//localStore.notifyEvictedFromCache(block);
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
@@ -418,15 +429,27 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		return accessed;
 	}
 
-	private void runEvictor() {
-		Thread evictor = new Thread(()->{
+	/*private void runEvictor() {
+		Thread evictor = new Thread(new Evictor());
+		evictor.setName("BufCacheEvictor-"+id);
+		evictor.setDaemon(true);
+		evictor.start();
+	}
+
+	private class Evictor implements Runnable {
+		@Override
+		public void run() {
+			midMarkPolicy3();
+		}
+
+		private void midMarkPolicy1() {
 			while(true) {
 				if (cache.size() > midMark) {
 					int size;
 					while((size = cache.size()) > lowMark) {
 						cacheLock.lock();
 						try {
-							int toEvict = size > highMark ? size - lowMark : 50000;
+							int toEvict = size > highMark ? size - lowMark : 1000;
 							cache.bulkRemove(toEvict);
 						} finally {
 							cacheLock.unlock();
@@ -441,11 +464,60 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 					break;
 				}
 			}
-		});
+		}
 
-		evictor.setName("BufCacheEvictor-"+id);
-		evictor.setDaemon(true);
-		evictor.start();
-	}
+		private void midMarkPolicy2() {
+			while(true) {
+				if (cache.size() > midMark) {
+					int size;
+					while((size = cache.size()) > lowMark) {
+						cacheLock.lock();
+						try {
+							int toEvict = size > highMark ? size - lowMark : 10;
+							cache.bulkRemove(toEvict);
+						} finally {
+							cacheLock.unlock();
+						}
+					}
+				}
 
+				try {
+					Thread.sleep(250);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+					break;
+				}
+			}
+		}
+
+		private void midMarkPolicy3() {
+			while(true) {
+				if (cache.size() > midMark) {
+					int size;
+					while((size = cache.size()) > lowMark) {
+						cacheLock.lock();
+						try {
+							int toEvict = size > highMark ? size - lowMark : 10;
+							cache.bulkRemove(toEvict);
+						} finally {
+							cacheLock.unlock();
+						}
+
+						try {
+							Thread.sleep(250);
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+					}
+				}
+
+				try {
+					Thread.sleep(250);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+					break;
+				}
+			}
+		}
+	}*/
 }

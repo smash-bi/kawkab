@@ -8,7 +8,7 @@ import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
-import kawkab.fs.utils.TimeLog;
+import kawkab.fs.utils.LatHistogram;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -35,8 +35,8 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	private final static int inodesPerBlock;	// Used in accessing the inode of this file when on the non-primary node
 	private final static LocalStoreManager localStore;	// FIXME: Isn't it a bad design to access localStore from a file handle?
 	private final static int bufferTimeLimitMs = 5000;
-	private final TimeLog rLog;
-	private final TimeLog wLog;
+	private final LatHistogram rLog;
+	private final LatHistogram wLog;
 
 	static {
 		Configuration conf = Configuration.instance();
@@ -64,8 +64,8 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		if (mode == FileMode.APPEND) //Pre-fetch the last block for writes
 			inode.loadLastBlock();
 
-		rLog = new TimeLog(TimeUnit.MICROSECONDS, "R-"+inumber, 10);
-		wLog = new TimeLog(TimeUnit.MICROSECONDS, "W-"+inumber, 10);
+		rLog = new LatHistogram(TimeUnit.MICROSECONDS, "R-"+inumber, 10, 10000);
+		wLog = new LatHistogram(TimeUnit.MICROSECONDS, "W-"+inumber, 10, 10000);
 	}
 
 	/**

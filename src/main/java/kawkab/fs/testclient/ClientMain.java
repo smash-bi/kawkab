@@ -52,7 +52,7 @@ public class ClientMain {
 		int nf		= 0; //Number of files to read/write
 		String type = "apnd";
 		int warmupsec = 0;
-		int testDurSec = 180;
+		int testDurSec = 300;
 		String fp = "test-";
 		int testID = 1;
 

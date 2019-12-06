@@ -6,15 +6,15 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
- * TimeLog measures latency of an operation p.
+ * LatHistogram measures latency of an operation p.
  * Usage semantics: timeLog.start(); p(); timeLog.end();
  *
- * TimeLog takes measurements based on the given sample rate. If the rate is 100%, all the start/end pairs are included
+ * LatHistogram takes measurements based on the given sample rate. If the rate is 100%, all the start/end pairs are included
  * in the measurements. Otherwise, the start/end pair is included by following a uniform distribution.
  *
  * This class is not thread safe.
  */
-public class TimeLog {
+public class LatHistogram {
 	private TimeUnit unit;
 	private Accumulator stats;
 	private boolean started;
@@ -25,12 +25,12 @@ public class TimeLog {
 	private int samplePercent;
 	private Stopwatch sw;
 
-	public TimeLog(TimeUnit unit, String tag, int samplePercent) {
+	public LatHistogram(TimeUnit unit, String tag, int samplePercent, int numBuckets) {
 		assert 0 <= samplePercent && samplePercent <= 100 : "Sample percent must be between 0 and 100";
 		this.unit = unit;
 		this.tag = tag;
 		this.samplePercent = samplePercent;
-		stats = new Accumulator();
+		stats = new Accumulator(numBuckets);
 
 		int numRands = 100000;
 		rand = new int[numRands];
@@ -123,7 +123,7 @@ public class TimeLog {
 	}
 	
 	public void reset() {
-		stats = new Accumulator();
+		stats.reset();
 		tCount = 0;
 	}
 

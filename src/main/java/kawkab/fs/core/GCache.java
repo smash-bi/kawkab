@@ -124,15 +124,15 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 		
 		//System.out.println("Evicting from cache: "+block.id());
 		
-		try {
+		//try {
 			//block.waitUntilSynced();  // FIXME: This is a blocking call and the cacheLock is locked. This may
 	                                  // lead to performance problems because the thread sleeps while holding
 	                                  // the cacheLock. The lock cannot be released because otherwise another
 	                                  // thread can come and may acquire the block.
-			localStore.notifyEvictedFromCache(block);
-		} catch (KawkabException e) {
-			e.printStackTrace();
-		}
+			//localStore.notifyEvictedFromCache(block);
+		//} catch (KawkabException e) {
+		//	e.printStackTrace();
+		//}
 	}
 	
 	//FIXME: Currently a cache entry can be evicted from the cache even if the block is dirty.

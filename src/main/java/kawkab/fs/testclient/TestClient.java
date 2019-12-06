@@ -8,7 +8,7 @@ import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.utils.Accumulator;
-import kawkab.fs.utils.TimeLog;
+import kawkab.fs.utils.LatHistogram;
 
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -115,9 +115,9 @@ public class TestClient {
 			batch[i] = recGen.newRecord();
 		}
 
-		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "Append records buffered", 100);
+		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Append records buffered", 100, 1000000);
 		Stopwatch sw = Stopwatch.createStarted();
-		Accumulator tputLog = new Accumulator();
+		Accumulator tputLog = new Accumulator(durSec+1);
 		ApproximateClock clock = ApproximateClock.instance();
 		long startT = clock.currentTime();
 		while((now = System.currentTimeMillis()) < et) {
@@ -154,9 +154,9 @@ public class TestClient {
 			files[i] = fnames[rand.nextInt(fnames.length)];
 		}
 
-		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "Append records buffered", 100);
+		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Append records buffered", 100, 1000000);
 		Stopwatch sw = Stopwatch.createStarted();
-		Accumulator tputLog = new Accumulator();
+		Accumulator tputLog = new Accumulator(durSec+1);
 		ApproximateClock clock = ApproximateClock.instance();
 		long startT = clock.currentTime();
 		while((now = System.currentTimeMillis()) < et) {
@@ -185,9 +185,9 @@ public class TestClient {
 
 		Record rec = recGen.newRandomRecord(rand, now);
 
-		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "Append records", 100);
+		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Append records", 100, 1000000);
 		Stopwatch sw = Stopwatch.createStarted();
-		Accumulator tputLog = new Accumulator();
+		Accumulator tputLog = new Accumulator(durSec+1);
 		ApproximateClock clock = ApproximateClock.instance();
 		long startT = clock.currentTime();
 		while((now = System.currentTimeMillis()) < et) {
@@ -225,9 +225,9 @@ public class TestClient {
 	private Result sendNoops(int durSec) throws KawkabException {
 		long et = System.currentTimeMillis() + durSec*1000;
 
-		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "NoOPs test", 100);
+		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "NoOPs test", 100, 1000000);
 		Stopwatch sw = Stopwatch.createStarted();
-		Accumulator tputLog = new Accumulator();
+		Accumulator tputLog = new Accumulator(durSec+1);
 		ApproximateClock clock = ApproximateClock.instance();
 		long startT = clock.currentTime();
 		while (System.currentTimeMillis() < et) {
@@ -253,7 +253,7 @@ public class TestClient {
 		String[] files = new String[numFiles];
 
 		for (int i=0; i<files.length; i++) {
-			files[i] = String.format("%s-c%d-%d-%d",prefix,id,i+1,rand.nextInt(10000000));
+			files[i] = String.format("%s-c%d-%d-%d",prefix,id,i+1,rand.nextInt(1000000));
 			client.open(files[i], mode, recGen.size());
 		}
 

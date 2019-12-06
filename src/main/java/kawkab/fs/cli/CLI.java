@@ -16,7 +16,7 @@ import kawkab.fs.records.SampleRecord;
 import kawkab.fs.records.SixteenRecord;
 import kawkab.fs.testclient.Result;
 import kawkab.fs.utils.GCMonitor;
-import kawkab.fs.utils.TimeLog;
+import kawkab.fs.utils.LatHistogram;
 
 import java.io.*;
 import java.time.Instant;
@@ -380,7 +380,7 @@ public final class CLI {
 	private void readNoops(String fname, int count) throws KawkabException {
 		int recSize = client.recordSize(fname);
 
-		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "NoOPRead latency", 100);
+		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "NoOPRead latency", 100, 1000);
 		System.out.printf("Reading %,d noops, recSize %d\n", count, recSize);
 
 		long startTime = System.currentTimeMillis();
@@ -403,7 +403,7 @@ public final class CLI {
 									 boolean byRecNum, boolean withFlush) throws KawkabException {
 		Random rand = new Random();
 
-		TimeLog tlog = new TimeLog(TimeUnit.MICROSECONDS, "Read latency", 100);
+		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Read latency", 100, 100000);
 
 		System.out.printf("Reading %,d records from %s using %s, recSize %d, in range %d and %d\n", numRecs, fname,
 				byRecNum?"rec nums":"exact time", recSize, t1, t2);
@@ -435,7 +435,7 @@ public final class CLI {
 		System.out.println(res.csv());
 	}
 
-	private Result getResults(TimeLog tlog, double durSec, int numRecs, int recSize, int batchSize, String tag) {
+	private Result getResults(LatHistogram tlog, double durSec, int numRecs, int recSize, int batchSize, String tag) {
 		long cnt = tlog.sampled()*batchSize;
 		double sizeMB = recSize*cnt / (1024.0 * 1024.0);
 		double thr = sizeMB / durSec;
@@ -488,7 +488,7 @@ public final class CLI {
 
 				int recNum = Integer.parseInt(args[3]);
 
-				TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "read-lat", 100);
+				LatHistogram tlog = new LatHistogram(TimeUnit.NANOSECONDS, "read-lat", 100, 100000);
 				tlog.start();
 				file.recordNum(recgen.copyInDstBuffer(), recNum, recgen.size());
 				tlog.end();
@@ -641,7 +641,7 @@ public final class CLI {
 						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
 						
-						TimeLog tlog = new TimeLog(TimeUnit.NANOSECONDS, "Main append", 5);
+						LatHistogram tlog = new LatHistogram(TimeUnit.NANOSECONDS, "Main append", 5, 100000);
 						long startTime = System.currentTimeMillis();
 						int toWrite = bufSize;
 						long ops = 0;

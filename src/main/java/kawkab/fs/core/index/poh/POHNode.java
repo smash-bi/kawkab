@@ -899,10 +899,5 @@ public class POHNode extends Block {
 	public boolean evictLocallyOnMemoryEviction() {
 		return false;
 	}
-
-	@Override
-	protected void onMemoryEviction() {
-		// Do nothing
-	}
 }
 

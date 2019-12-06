@@ -9,7 +9,7 @@ import kawkab.fs.core.index.poh.PostOrderHeapIndex;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
-import kawkab.fs.utils.TimeLog;
+import kawkab.fs.utils.LatHistogram;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -51,8 +51,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		this.recordSize = recordSize;
 	}
 
-	private TimeLog idxLog;
-	private TimeLog segLoadLog;
+	private LatHistogram idxLog;
+	private LatHistogram segLoadLog;
 
 	/**
 	 * Prepare after opening the file.
@@ -72,9 +72,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (recordSize > 1)
 			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, fsQ);
 
-
-		idxLog = new TimeLog(TimeUnit.MICROSECONDS, "Index search", 10);
-		segLoadLog = new TimeLog(TimeUnit.MICROSECONDS, "DS load", 10);
+		idxLog = new LatHistogram(TimeUnit.MICROSECONDS, "Index search", 10, 1000);
+		segLoadLog = new LatHistogram(TimeUnit.MICROSECONDS, "DS load", 10, 1000);
 
 		/*try {
 			index.loadAndInit(indexLength(fileSize.get()));
@@ -475,7 +474,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		return appended;
 	}
 
-	//public static TimeLog tlog1 = new TimeLog(TimeLog.TimeLogUnit.NANOS, "ab all");
+	//public static LatHistogram tlog1 = new LatHistogram(LatHistogram.TimeLogUnit.NANOS, "ab all");
 	public synchronized int appendBuffered(final byte[] data, int offset, final int length) //Syncrhonized with close() due to acquiredSeg
 			throws OutOfMemoryException, MaxFileSizeExceededException, IOException, InterruptedException, KawkabException {
 

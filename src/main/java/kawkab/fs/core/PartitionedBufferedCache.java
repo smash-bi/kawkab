@@ -48,6 +48,8 @@ public class PartitionedBufferedCache extends Cache {
 
 		pinnedMap = new ConcurrentHashMap<>();
 		pinLock = new KeyedLock<>();
+
+		runEvictor();
 	}
 	
 	public static PartitionedBufferedCache instance() {
@@ -196,7 +198,7 @@ public class PartitionedBufferedCache extends Cache {
 				localStore.store(block);
 				try {
 					block.waitUntilSynced();
-					localStore.notifyEvictedFromCache(block);
+					//localStore.notifyEvictedFromCache(block);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -260,5 +262,24 @@ public class PartitionedBufferedCache extends Cache {
 					size, accessed, missed, evicted, 100.0*(accessed-missed)/accessed));
 
 		return stats.toString();
+	}
+
+	private void runEvictor() {
+		Thread evictor = new Thread(() -> {
+			while(true) {
+				for (int i = 0; i < cache.length; i++) {
+					cache[i].evictEntries();
+				}
+
+				try {
+					Thread.sleep(10);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		});
+		evictor.setName("CacheEvictor");
+		evictor.setDaemon(true);
+		evictor.start();
 	}
 }

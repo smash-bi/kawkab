@@ -192,8 +192,8 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	                                  // lead to performance problems because the thread sleeps while holding
 	                                  // the cacheLock. The lock cannot be released because otherwise another
 	                                  // thread can come and may acquire the block.
-			localStore.notifyEvictedFromCache(cachedItem.block());
-		} catch (InterruptedException | KawkabException e) {
+			//localStore.notifyEvictedFromCache(cachedItem.block());
+		} catch (InterruptedException  e) {
 			e.printStackTrace();
 		}
 	}
@@ -223,7 +223,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 					localStore.store(block);
 					try {
 						block.waitUntilSynced();
-						localStore.notifyEvictedFromCache(block);
+						//localStore.notifyEvictedFromCache(block);
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}

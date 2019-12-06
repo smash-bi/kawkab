@@ -280,7 +280,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 	}
 	
-	public void notifyEvictedFromCache(Block block) throws KawkabException {
+	//public void notifyEvictedFromCache(Block block) throws KawkabException {
 		//block.unsetInCache();
 		
 		//if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
@@ -290,7 +290,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}*/
 
 		//TODO: Add in canBeEvicted list. Also, remove from the canBeEvicted list if the block becomes dirty again
-	}
+	//}
 	
 	private void evictFromLocal(BlockID id) throws KawkabException {
 		if (id.onPrimaryNode())
