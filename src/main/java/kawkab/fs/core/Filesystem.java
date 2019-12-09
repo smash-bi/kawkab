@@ -16,7 +16,7 @@ import java.util.Properties;
 public final class Filesystem {
 	private static volatile boolean initialized;
 	private static volatile boolean closed;
-	
+
 	public enum FileMode { READ, APPEND }
 	
 	private static Filesystem instance;
@@ -183,7 +183,11 @@ public final class Filesystem {
 		segsQ.waitUntilEmpty();
 
 		for(FileHandle fh : openFiles.values()) {
-			fh.flush();
+			try {
+				fh.flush();
+			} catch (FileHandleClosedException e) {
+				//Ignore
+			}
 		}
 
 		cache.flush();
@@ -199,5 +203,13 @@ public final class Filesystem {
 		}
 
 		pns.printStats();
+	}
+
+	public void resetStats() throws KawkabException {
+		for (FileHandle file : openFiles.values()) {
+			file.resetStats();
+		}
+
+		pns.resetStats();
 	}
 }

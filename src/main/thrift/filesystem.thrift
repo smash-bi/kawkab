@@ -101,6 +101,10 @@ service FilesystemService {
     i32 appendRecords (1: binary data) throws
             	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
+    //NoOP equivalent of appendRecords
+    i32 appendNoops (1: binary data) throws
+                	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
+
 	// Returns ths number of bytes appended
 	i32 append (1: i32 sessionID, 2: binary data) throws
 		(1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);

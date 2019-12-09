@@ -146,4 +146,11 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 	public String getStats() {
 		return null;
 	}
+
+	@Override
+	public void printStats() {
+	}
+
+	@Override
+	public void resetStats(){}
 }

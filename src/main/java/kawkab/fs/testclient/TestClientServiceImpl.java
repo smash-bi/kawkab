@@ -16,7 +16,6 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	private boolean halt;
 	private long testID;
 	private boolean ready;
-	private TSyncResponse resp;
 
 	private final Object syncMutex = new Object();
 	private final Object barMutex = new Object();
@@ -26,7 +25,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	}
 
 	@Override
-	public TSyncResponse sync(int clid, int testID, boolean stopAll, TResult result) throws TException {
+	public TSyncResponse sync(int clid, int testID, boolean stopAll, TResult result, int masterID) throws TException {
 		synchronized (syncMutex) {
 			try {
 				if (this.testID != testID)
@@ -43,31 +42,23 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 				halt = halt || stopAll;
 				result = null;
 
-				if (received != numClients) {
-					try {
+				if (clid == masterID) {
+					if (received != numClients) {
 						syncMutex.wait();
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-						throw new TException(e);
 					}
-				} else {
-					assert resp == null;
-					resp = response(aggResult, halt);
+				} else if (received == numClients) {
+					syncMutex.notify();
 				}
 
-				TSyncResponse ret = resp;
+				TSyncResponse resp = response(aggResult, halt);
 
-				received--;
-
-				if (received == 0) {
+				if (clid == masterID) {
+					assert received == numClients;
 					ready = false;
-					resp = null;
+					received = 0;
 					printResults(aggResult);
-					System.out.println("[TCSI] Releasing the sync-barrier");
 				}
-
-				syncMutex.notify();
-				return ret;
+				return resp;
 			} catch (Exception | AssertionError e) {
 				e.printStackTrace();
 				throw new TException(e.getMessage());
@@ -79,7 +70,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 		List<Long> latHist = Arrays.stream(aggRes.latHist()).boxed().collect(Collectors.toUnmodifiableList());
 		List<Long> tputLog = Arrays.stream(aggRes.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
 		return new TSyncResponse(new TResult(latHist, aggRes.count(), aggRes.latMin(), aggRes.latMax(),
-				aggRes.dataTput(), aggRes.opsTput(), tputLog), stopAll);
+				aggRes.dataTput(), aggRes.opsTput(), tputLog, aggRes.batchSize()), stopAll);
 	}
 
 	@Override
@@ -89,7 +80,6 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 
 		received = 0;
 		aggResult = new Result();
-		resp = null;
 		halt = false;
 		ready = true;
 	}
@@ -136,7 +126,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 		long[] latHist = tres.latHistogram.stream().mapToLong(i->i).toArray();
 		long[] tputLog = tres.tputLog.stream().mapToLong(i->i).toArray();
 
-		dstResult.merge(new Result(tres.totalCount, tres.opsTput, tres.dataTput, tres.minVal, tres.maxVal, latHist, tputLog));
+		dstResult.merge(new Result(tres.totalCount, tres.opsTput, tres.dataTput, tres.minVal, tres.maxVal, latHist, tputLog, tres.batchSize));
 	}
 
 	private void printResults(Result result) {

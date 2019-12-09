@@ -135,4 +135,12 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 	public String getStats() {
 		return evLog.getStats();
 	}
+
+	public void printStats() {
+		System.out.println(getStats());
+	}
+
+	public void resetStats() {
+		evLog.reset();
+	}
 }

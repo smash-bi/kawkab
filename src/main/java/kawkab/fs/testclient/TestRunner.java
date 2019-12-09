@@ -37,7 +37,7 @@ public class TestRunner {
 								res = runAppendTest(testDurSec, clid, nf, sip, sport, batchSize, recGen.newRecord(), pr, warmupSecs);
 								break;
 							case NOOP:
-								res = runNoopTest(testDurSec, clid, sip, sport, recGen.newRecord(), pr, warmupSecs);
+								res = runNoopTest(testDurSec, clid, nf, sip, sport, batchSize, recGen.newRecord(), pr, warmupSecs);
 								break;
 							case READ:
 							default:
@@ -54,9 +54,11 @@ public class TestRunner {
 					System.out.printf("Client %d finished\n", clid);
 					//printStats(clid, accm, batchSize, recGen.size());
 
-					Result aggRes = client.sync(clid, testID, true, res);
+					Result aggRes = client.sync(clid, testID, true, batchSize, res, mid);
 
-					if (clid == 1) {
+					client.barrier(clid);
+
+					if (clid == mid) {
 						System.out.println("Saving results to " + outFolder);
 						aggRes.exportJson(outFolder+"results.json", false, false);
 						aggRes.exportJson(outFolder+"results-hists.json", true, true);
@@ -65,8 +67,6 @@ public class TestRunner {
 
 					String fp = String.format("%s/clients/client-%02d", outFolder, clid);
 					ClientUtils.saveResult(res, fp);
-
-					client.barrier(clid);
 
 					disconnectFromMaster(client);
 				} catch (KawkabException e) {
@@ -99,11 +99,11 @@ public class TestRunner {
 		return res;
 	}
 
-	private Result runNoopTest(final int durSec, final int cid, final String sip, final int sport,
-									Record recGen, final Printer pr, int warmupSecs) throws KawkabException {
+	private Result runNoopTest(final int durSec, final int cid, int nTestFiles, final String sip, final int sport,
+							   int batchSize, Record recGen, final Printer pr, int warmupSecs) throws KawkabException {
 		TestClient client = new TestClient(cid, sip, sport, recGen, pr);
 		client.connect();
-		Result res = client.runNoopTest(durSec, warmupSecs);
+		Result res = client.runNoopWritesTest(durSec, nTestFiles, warmupSecs, batchSize);
 		client.disconnect();
 
 		return res;
@@ -133,11 +133,10 @@ public class TestRunner {
 		tserver.stopServer();
 	}
 
-	private void printStats(int cid, Accumulator accm, int batchSize, int recSize) {
-		long cnt = accm.count()*batchSize;
-		double sizeMB = recSize*cnt / (1024.0 * 1024.0);
+	private void printStats(int cid, Result res, int recSize) {
+		double sizeMB = recSize*res.count() / (1024.0 * 1024.0);
 
-		System.out.println(String.format("TestClient %d: size=%,.2f MB, thr=%,.2f MB/s, opThr=%,.0f, Latency (us): %s.\n",
-				cid, sizeMB, accm.dataTput(), accm.opsTput(), accm));
+		System.out.println(String.format("TestClient %d: size=%,.2f MB, %s\n",
+				cid, sizeMB, res.toJson(false, false)));
 	}
 }

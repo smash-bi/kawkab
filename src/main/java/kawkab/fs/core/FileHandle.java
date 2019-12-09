@@ -92,7 +92,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		try {
 			if (onPrimaryNode) {
 				if (inodesBlock == null) {
-					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+					throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 				}
 				inb = this.inodesBlock;
 				inode = this.inode;
@@ -140,7 +140,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		try {
 			if (onPrimaryNode) {
 				if (inodesBlock == null) {
-					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+					throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 				}
 				inb = this.inodesBlock;
 				inode = this.inode;
@@ -170,7 +170,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		try {
 			if (onPrimaryNode) {
 				if (inodesBlock == null) {
-					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+					throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 				}
 				inb = this.inodesBlock;
 				inode = this.inode;
@@ -214,7 +214,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		try {
 			if (onPrimaryNode) {
 				if (inodesBlock == null) {
-					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+					throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 				}
 				inb = this.inodesBlock;
 				inode = this.inode;
@@ -263,7 +263,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		try {
 			if (onPrimaryNode) {
 				if (inodesBlock == null) {
-					throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+					throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 				}
 				inb = this.inodesBlock;
 				inode = this.inode;
@@ -308,7 +308,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		}
 
 		if (inodesBlock == null) {
-			throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+			throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 		}
 
 		int appendedBytes = inode.appendBuffered(data, offset, length);
@@ -345,7 +345,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		}
 
 		if (inodesBlock == null) {
-			throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+			throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 		}
 
 		wLog.start();
@@ -371,7 +371,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	public synchronized long size() throws KawkabException {
 		if (onPrimaryNode) {
 			if (inodesBlock == null) {
-				throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+				throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 			}
 
 			return inode.fileSize();
@@ -400,7 +400,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	public synchronized int recordSize() throws KawkabException {
 		if (onPrimaryNode) {
 			if (inodesBlock == null) {
-				throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+				throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 			}
 
 			return inode.recordSize();
@@ -427,7 +427,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	public synchronized long recordsInFile() throws KawkabException {
 		if (onPrimaryNode) {
 			if (inodesBlock == null) {
-				throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+				throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 			}
 
 			return inode.recordsInFile();
@@ -486,8 +486,6 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	}
 
 	public void printStats() throws KawkabException {
-		System.out.println("File: " + inumber);
-
 		if (rLog.sampled() > 0) {
 			System.out.print("File "+inumber+" read stats: ");
 			rLog.printStats();
@@ -499,9 +497,8 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		}
 
 		if (onPrimaryNode) {
-			if (inodesBlock == null) {
-				throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
-			}
+			if (inodesBlock == null)
+				return;
 
 			inode.printStats();
 			return;
@@ -525,10 +522,40 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		}
 	}
 
-	public void flush() throws KawkabException {
+	public void resetStats() throws KawkabException {
+		rLog.reset();
+		wLog.reset();
+
+		if (onPrimaryNode) {
+			if (inodesBlock == null)
+				return;
+
+			inode.resetStats();
+			return;
+		}
+
+		int inodesBlockIdx = (int)(inumber / inodesPerBlock);
+		BlockID id = new InodesBlockID(inodesBlockIdx);
+
+		InodesBlock block = null;
+		try {
+			block = (InodesBlock) cache.acquireBlock(id);
+			block.loadBlock();
+			block.getInode(inumber).resetStats();
+		} catch (IOException e) {
+			e.printStackTrace();
+			throw new KawkabException(e);
+		} finally {
+			if (block != null) {
+				cache.releaseBlock(block.id());
+			}
+		}
+	}
+
+	public void flush() throws FileHandleClosedException, KawkabException {
 		if (onPrimaryNode) {
 			if (inodesBlock == null) {
-				throw new KawkabException("The file handle is closed. Open the file again to get the new handle.");
+				throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 			}
 
 			inode.flush();

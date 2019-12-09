@@ -87,4 +87,8 @@ public abstract class Cache {
 	public abstract long size();
 
 	public abstract String getStats();
+
+	public abstract void printStats();
+
+	public abstract void resetStats();
 }

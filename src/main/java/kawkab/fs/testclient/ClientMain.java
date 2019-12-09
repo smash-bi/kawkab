@@ -26,7 +26,7 @@ public class ClientMain {
 	private void init(String[] args) throws KawkabException, InterruptedException {
 		String usage = "Usage: TestClient cid=clientID sip=svrIP sport=svrPort wt=waitTimeMs " +
 				"mid=masterID mip=masterIP mport=masterPort mgc=true|false nc=numClients" +
-				"bs=batchSize rs=16|42 fp=filePrefix type=apnd|noop tc=totalClients";
+				"bs=batchSize rs=16|50 fp=filePrefix type=apnd|noop tc=totalClients";
 
 		if (args.length == 1) {
 			args = args[0].split(" ");
@@ -51,8 +51,8 @@ public class ClientMain {
 		int rs		= 0; // record size in bytes
 		int nf		= 0; //Number of files to read/write
 		String type = "apnd";
-		int warmupsec = 0;
-		int testDurSec = 300;
+		int warmupsec = 10;
+		int testDurSec = 60;
 		String fp = "test-";
 		int testID = 1;
 

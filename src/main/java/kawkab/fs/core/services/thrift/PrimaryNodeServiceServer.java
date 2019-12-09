@@ -124,4 +124,8 @@ public class PrimaryNodeServiceServer {
 	public void printStats() {
 		handler.printStats();
 	}
+
+	public void resetStats() {
+		handler.resetStats();
+	}
 }

@@ -252,6 +252,11 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
+	public int appendNoops(ByteBuffer data) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException, TException {
+		return 0;
+	}
+
+	@Override
 	public int appendRecordBatched(int sessionID, List<ByteBuffer> data, int recSize) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
 		Session s = sessions.get(sessionID);
 		if (s == null) {

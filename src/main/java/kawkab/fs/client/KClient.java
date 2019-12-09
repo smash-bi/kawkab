@@ -177,6 +177,26 @@ public class KClient {
 		return client.appendRecords(buffer);
 	}
 
+	public int appendNoops(String[] fnames, Record[] records) throws OutOfMemoryException, KawkabException {
+		assert client != null;
+		assert fnames.length == records.length;
+
+		buffer.clear();
+		for(int i=0; i<fnames.length; i++) {
+			String fn = fnames[i];
+			Record rec = records[i];
+			Session session = sessions.get(fn);
+			if (session == null)
+				throw new KawkabException(String.format("File %s is not opened",fn));
+
+			buffer.putInt(session.id);
+			buffer.put(rec.copyOutSrcBuffer());
+		}
+
+		buffer.flip();
+		return client.appendNoops(buffer);
+	}
+
 	public Record recordNum(String fn, long recNum, Record recFactory) throws KawkabException {
 		assert client != null;
 		Session session = sessions.get(fn);

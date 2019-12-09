@@ -21,13 +21,13 @@ public class TestClientServiceServer {
 
 	public TestClientServiceServer(int numClients, int svrPort) throws KawkabException {
 		int numWorkers = numClients;
-		int ioThreads = 2;
+		int ioThreads = 8;
 
 		TestClientService.Iface handler = new TestClientServiceImpl(numClients);
 
 		//server = hsHaServer(svrPort, handler, numWorkers, numWorkers*2);
 		//server = threadedSelectorServer(svrPort, handler, numWorkers*2, ioThreads);
-		server = threadPoolServer(svrPort, handler, numWorkers, (int)(numWorkers*1.25));
+		server = threadPoolServer(svrPort, handler, numWorkers, (int)(numWorkers*1.5));
 	}
 
 	private TServer threadedSelectorServer(int port, TestClientService.Iface handler, int workerThreads, int ioThreads) throws KawkabException {

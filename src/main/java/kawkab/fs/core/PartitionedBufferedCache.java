@@ -264,6 +264,20 @@ public class PartitionedBufferedCache extends Cache {
 		return stats.toString();
 	}
 
+	@Override
+	public void printStats(){
+		for (int i=0; i<numPartitions; i++) {
+			cache[i].printStats();
+		}
+	}
+
+	@Override
+	public void resetStats() {
+		for (int i=0; i<numPartitions; i++) {
+			cache[i].resetStats();
+		}
+	}
+
 	private void runEvictor() {
 		Thread evictor = new Thread(() -> {
 			while(true) {

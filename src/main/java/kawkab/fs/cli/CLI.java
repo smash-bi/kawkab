@@ -53,7 +53,7 @@ public final class CLI {
 	}
 
 	private void cmd() throws IOException {
-		String cmds = "Commands: cc, co, ca, cr, cd, cf, open, read, rr, apnd, ar, at, size, stats, flush, gc, exit";
+		String cmds = "Commands: cc, co, ca, cr, cd, cf, open, read, rr, apnd, ar, at, size, stats, clear, flush, gc, exit";
 		
 		try (BufferedReader ir = new BufferedReader(new InputStreamReader(System.in))) {
 			System.out.println("--------------------------------");
@@ -128,6 +128,9 @@ public final class CLI {
 						case "flush":
 							flushCache();
 							continue;
+						case "clear":
+							clearStats();
+							continue;
 						case "exit":
 							next = false;
 							break;
@@ -147,6 +150,12 @@ public final class CLI {
 				}
 			}
 		}
+	}
+
+	private void clearStats() throws KawkabException {
+		GCMonitor.resetStats();
+		fs.resetStats();
+		Cache.instance().resetStats();
 	}
 
 	private void pareseClientFlush() {
@@ -445,7 +454,7 @@ public final class CLI {
 				tag, recSize, numRecs, thr, opThr, tlog.getStats());
 
 		double[] lats = tlog.stats();
-		return new Result(tlog.sampled(), opThr, thr, tlog.min(), tlog.max(), null, null);
+		return new Result(tlog.sampled(), opThr, thr, tlog.min(), tlog.max(), null, null, batchSize);
 	}
 
 	private void parseReadRecord(String[] args) throws IOException, KawkabException {

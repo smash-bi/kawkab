@@ -417,6 +417,20 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 
 	}
 
+	@Override
+	public void printStats() {
+		System.out.println(getStats());
+	}
+
+	@Override
+	public void resetStats() {
+		accessed = missed = evicted = 0;
+		acqLog.reset();
+		relLog.reset();
+		cache.resetStats();
+	}
+
+
 	long evictCount() {
 		return evicted;
 	}

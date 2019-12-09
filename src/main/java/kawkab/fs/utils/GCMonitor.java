@@ -109,7 +109,11 @@ public class GCMonitor implements NotificationListener {
     }
     
     public static void printStats() {
-    	System.out.println(durationStats);
+        System.out.println(durationStats);
+    }
+
+    public static void resetStats() {
+        durationStats.clear();
     }
 
     public static String getStats() {

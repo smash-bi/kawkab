@@ -114,6 +114,21 @@ public class FilesystemServiceClient {
 		throw new OutOfMemoryException(String.format("Request failed after %d tries", tries));
 	}
 
+	public int appendNoops(ByteBuffer buffer) throws OutOfMemoryException, KawkabException {
+		int tries = 0;
+		while(++tries < MAX_TRIES) {
+			try {
+				return client.appendNoops(buffer);
+			} catch (TOutOfMemoryException e) {
+				// Retry if the memory was full
+			} catch (TException e) {
+				throw new KawkabException(e);
+			}
+		}
+
+		throw new OutOfMemoryException(String.format("Request failed after %d tries", tries));
+	}
+
 	public int appendBuffered(int sessionID, ByteBuffer srcBuf, int recSize) throws OutOfMemoryException, KawkabException {
 		int tries = 0;
 		while(++tries < MAX_TRIES) {

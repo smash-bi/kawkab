@@ -17,7 +17,8 @@ public class SampleRecord implements Record {
 	private static final int ASK_PRICE;
 	private static final int ASK_QUANTITY;
 	private static final int ASK_EXECUTABLE;
-	
+	private static final int RESERVED_BYTES;
+
 	private static byte TRUE  = 1;
 	private static byte FALSE = 0;
 	
@@ -32,8 +33,9 @@ public class SampleRecord implements Record {
 		ASK_PRICE		= BID_EXECUTABLE + Byte.BYTES;
 		ASK_QUANTITY	= ASK_PRICE + Double.BYTES;
 		ASK_EXECUTABLE	= ASK_QUANTITY + Double.BYTES;
+		RESERVED_BYTES	= ASK_EXECUTABLE + Long.BYTES; //These bytes are added to make the message size 50.
 		
-		SIZE = ASK_EXECUTABLE + Byte.BYTES;
+		SIZE = RESERVED_BYTES + Byte.BYTES;
 	}
 	
 	public SampleRecord () {

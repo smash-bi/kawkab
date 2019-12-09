@@ -8,21 +8,16 @@ public class Accumulator {
     private double maxValue;
     private double minValue = Double.MAX_VALUE;
 
-    private double dataTput;
-    private double opsTput;
-
     public Accumulator(int numBuckets) {
         buckets = new long[numBuckets];
         reset();
     }
 
-    public Accumulator(long[] histogram, long totalCnt, double min, double max, double dataTput, double opsTput) {
+    public Accumulator(long[] histogram, long totalCnt, double min, double max) {
         this.buckets = histogram;
         this.totalCnt = totalCnt;
         this.minValue = min;
         this.maxValue = max;
-        this.dataTput = dataTput;
-        this.opsTput = opsTput;
     }
     
     public synchronized void reset() {
@@ -33,8 +28,26 @@ public class Accumulator {
         totalCnt = 0;
         this.minValue = Double.MAX_VALUE;
     }
+
+    public synchronized void put(int bucket, int count) {
+        assert count >= 0 : "Count is negative: " + count;
+        assert bucket >= 0 : "Bucket number is negative: " + count;
+
+        if (bucket >= buckets.length){
+            bucket = buckets.length-1;
+        }
+
+        buckets[bucket] += count;
+        totalCnt += count;
+
+        if (maxValue < bucket)
+            maxValue = bucket;
+
+        if (minValue > bucket)
+            minValue = bucket;
+    }
     
-    public synchronized void put(int value) {
+    /*public synchronized void put(int value) {
         assert value >= 0 : "Value is negative: " + value;
 
         int bucket = value;
@@ -46,15 +59,6 @@ public class Accumulator {
         buckets[bucket]++;
         //totalSum += value;
         totalCnt += 1;
-
-        //long prod = value*value;
-
-        //assert prodSum + prod > 0: String.format("prodSum is rolled over: old=%,.2f, new=%d, sum=%,.2f, value=%d", prodSum, prod, (prodSum+prod), value);
-
-        //prodSum += prod;
-        
-        //if (buckets[maxCntBucket] < buckets[bucket])
-        //   maxCntBucket = bucket;
 
         if (maxValue < value)
             maxValue = value;
@@ -68,7 +72,7 @@ public class Accumulator {
         //aggMean += delta / totalCnt;
         //double delta2 = value - aggMean;
         //m2 += delta * delta2;
-    }
+    }*/
     
     public synchronized double mean(){
         /*if (totalCnt > 0)
@@ -221,9 +225,6 @@ public class Accumulator {
 
         if (minValue > from.minValue)
             minValue = from.minValue;
-
-        opsTput += from.opsTput;
-        dataTput += from.dataTput;
     }
 
     private double mean(long[] hist) {
@@ -236,21 +237,5 @@ public class Accumulator {
             }
         }
         return avg;
-    }
-
-    public void setDataTput(double tput) {
-        dataTput = tput;
-    }
-
-    public void setOpsTput(double tput) {
-        opsTput = tput;
-    }
-
-    public double dataTput() {
-        return dataTput;
-    }
-
-    public double opsTput() {
-        return opsTput;
     }
 }

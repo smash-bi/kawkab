@@ -34,21 +34,21 @@ public class TestClientServiceClient {
 		}
 	}
 
-	public Result sync(int clid, int testID, boolean stopAll, Result result) {
+	public Result sync(int clid, int testID, boolean stopAll, int batchSize, Result result, int masterID) {
 		assert client != null;
 
 		List<Long> histogram = Arrays.stream(result.latHist()).boxed().collect(Collectors.toUnmodifiableList());
 		List<Long> tputTimeLog = Arrays.stream(result.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
 		TResult taccm = new TResult(histogram, result.count(), result.latMin(), result.latMax(),
-				result.dataTput(), result.opsTput(), tputTimeLog);
+				result.dataTput(), result.opsTput(), tputTimeLog, batchSize);
 
 		try {
-			TSyncResponse resp = client.sync(clid, testID, stopAll, taccm);
+			TSyncResponse resp = client.sync(clid, testID, stopAll, taccm, masterID);
 			TResult res = resp.aggResult;
 
 			long[] latHist = res.latHistogram.stream().mapToLong(i->i).toArray();
 			long[] tputLog = res.tputLog.stream().mapToLong(i->i).toArray();
-			return new Result(res.totalCount, res.opsTput, res.dataTput, res.minVal, res.maxVal, latHist, tputLog);
+			return new Result(res.totalCount, res.opsTput, res.dataTput, res.minVal, res.maxVal, latHist, tputLog, res.batchSize);
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 		}

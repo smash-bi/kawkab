@@ -224,9 +224,12 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		//if (block.subtractAndGetLocalDirty(0) > 0) {
 		if (block.isLocalDirty()) {
 			if (bid.type() != BlockID.BlockType.INODES_BLOCK)
-			store(block);
+				store(block);
 		} else {
+			//The race b/w checking the localDirty() and the writer marking it localDirty() is safe. The localStore will
+			// eventually get the block.
 			block.notifyLocalSyncComplete();
+
 
 			if (block.shouldStoreGlobally()) { // If this block is the last data segment or an ibmap or an inodesBlock
 				globalProc.store(block.id(), this); // Add the block in the queue to be transferred to the globalStore

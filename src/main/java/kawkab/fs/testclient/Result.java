@@ -8,6 +8,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 public class Result {
+	private int batchSize;
 	private long reqsCount; //Total requests
 	private double opsThr; //ops per second
 	private double dataThr; // Data throughput
@@ -18,15 +19,17 @@ public class Result {
 
 	public Result() {
 		latMin = Double.MAX_VALUE;
+		batchSize = -1;
 	}
 
 	public Result(long reqsCount_, double opsThr_, double myThr_,
 		   double lMin, double lMax,
-		   long[] latHist_, long[] tputLog_){
+		   long[] latHist_, long[] tputLog_, int batchSize_){
 		reqsCount=reqsCount_; opsThr =opsThr_; dataThr =myThr_;
 		latMin=lMin; latMax=lMax;
 		latHist = latHist_;
 		tputLog = tputLog_;
+		batchSize = batchSize_;
 	}
 
 	public Result(Result res) {
@@ -34,6 +37,7 @@ public class Result {
 		latMin=res.latMin; latMax=res.latMax;
 		latHist=res.latHist;
 		tputLog=res.tputLog;
+		batchSize=res.batchSize;
 	}
 
 	/*public Result(Accumulator latHistAccm, long[] tputLog) {
@@ -74,7 +78,7 @@ public class Result {
 	}
 
 	public Accumulator latAccumulator() {
-		return new Accumulator(latHist, reqsCount, latMin, latMax, dataThr, opsThr);
+		return new Accumulator(latHist, reqsCount, latMin, latMax);
 	}
 
 	public void merge(Result from) {
@@ -84,8 +88,12 @@ public class Result {
 		if (tputLog == null || tputLog.length == 0)
 			tputLog = new long[from.tputLog.length];
 
+		if (batchSize == -1)
+			batchSize = from.batchSize;
+
 		assert latHist.length == from.latHist.length;
 		assert tputLog.length == from.tputLog.length;
+		assert batchSize == from.batchSize : String.format("Batch sizes do not match, %d != %d", batchSize, from.batchSize);
 
 		reqsCount += from.reqsCount;
 		opsThr += from.opsThr;
@@ -111,19 +119,20 @@ public class Result {
 	}
 
 	private StringBuilder toJsonSB(boolean exportHists, boolean exportTputLog){
-		Accumulator accm = new Accumulator(latHist, reqsCount, latMin, latMax, dataThr, opsThr);
+		Accumulator accm = new Accumulator(latHist, reqsCount, latMin, latMax);
 		double[] lats = accm.getLatencies();
 		StringBuilder json = new StringBuilder();
-		json.append("{\n");
-		json.append(String.format("  \"reqs\":%,d,\n", reqsCount));
-		json.append(String.format("  \"opsPs\":%,.0f,\n", opsThr));
-		json.append(String.format("  \"thrMBps\":%.2f,\n", dataThr));
-		json.append(String.format("  \"meanLat\":%.2f,\n", accm.mean()));
-		json.append(String.format("  \"50%%Lat\":%.2f,\n", lats[0]));
-		json.append(String.format("  \"95%%Lat\":%.2f,\n", lats[1]));
-		json.append(String.format("  \"99%%Lat\":%.2f,\n", lats[2]));
-		json.append(String.format("  \"minLat\":%.2f,\n", latMin));
-		json.append(String.format("  \"maxLat\":%.2f\n", latMax));
+		json.append("{ ");
+		json.append(String.format("  \"reqs\":%,d, ", reqsCount));
+		json.append(String.format("  \"opsPs\":%,.0f, ", opsThr));
+		json.append(String.format("  \"thrMBps\":%.2f, ", dataThr));
+		json.append(String.format("  \"meanLat\":%.2f, ", accm.mean()));
+		json.append(String.format("  \"50%%Lat\":%.2f, ", lats[0]));
+		json.append(String.format("  \"95%%Lat\":%.2f, ", lats[1]));
+		json.append(String.format("  \"99%%Lat\":%.2f, ", lats[2]));
+		json.append(String.format("  \"minLat\":%.2f, ", latMin));
+		json.append(String.format("  \"maxLat\":%.2f, ", latMax));
+		json.append(String.format("  \"batchSize\":%d ", batchSize));
 
 		if (exportHists) {
 			appendHists(json);
@@ -199,19 +208,14 @@ public class Result {
 		header.append("\"99%% latency\", ");
 		header.append("\"Min latency\", ");
 		header.append("\"Max latency\", ");
-		header.append("\"Median read latency\", ");
-		header.append("\"Median write latency\", ");
-		header.append("\"Max read latency\", ");
-		header.append("\"Max write latency\", ");
-		header.append("\"Average read latency\", ");
-		header.append("\"Average write latency\"");
+		header.append("\"batch size\"");
 
 		return header.toString();
 	}
 
 
 	public String csv() {
-		Accumulator accm = new Accumulator(latHist, reqsCount, latMin, latMax, dataThr, opsThr);
+		Accumulator accm = new Accumulator(latHist, reqsCount, latMin, latMax);
 		double[] lats = accm.getLatencies();
 
 		StringBuilder csv = new StringBuilder();
@@ -223,7 +227,8 @@ public class Result {
 		csv.append(String.format("%.0f, ", lats[1]));
 		csv.append(String.format("%.0f, ", lats[2]));
 		csv.append(String.format("%.0f, ", latMin));
-		csv.append(String.format("%.0f\n", latMax));
+		csv.append(String.format("%.0f, ", latMax));
+		csv.append(String.format("%d\n", batchSize));
 
 		return csv.toString();
 	}
@@ -256,5 +261,9 @@ public class Result {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	public int batchSize() {
+		return batchSize;
 	}
 }

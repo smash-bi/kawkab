@@ -672,10 +672,16 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	public void printStats() {
 		idxLog.printStats();
-		if (index != null) {
+		if (index != null)
 			index.printStats();
-		}
 		segLoadLog.printStats();
+	}
+
+	public void resetStats() {
+		idxLog.reset();
+		segLoadLog.reset();
+		if (index != null)
+			index.resetStats();
 	}
 
 	@Override

@@ -676,6 +676,10 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		loadLog.printStats();
 	}
 
+	public void resetStats() {
+		loadLog.reset();
+	}
+
 	@Override
 	public void deferredWork(POHNode node) {
 		try {

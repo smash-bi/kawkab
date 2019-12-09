@@ -260,4 +260,13 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	public String getStats() {
 		return null;
 	}
+
+	@Override
+	public void printStats() {
+	}
+
+	@Override
+	public void resetStats() {
+
+	}
 }

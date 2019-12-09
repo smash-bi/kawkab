@@ -133,4 +133,8 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 	public void printStats() {
 		segLog.printStats();
 	}
+
+	public void resetStats() {
+		segLog.reset();
+	}
 }

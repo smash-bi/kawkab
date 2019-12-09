@@ -8,6 +8,7 @@ struct TResult {
     5: required double dataTput;
     6: required double opsTput;
     7: required list<i64> tputLog; //Throughput timeline log
+    8: required i32 batchSize;
 }
 
 struct TSyncResponse {
@@ -16,7 +17,7 @@ struct TSyncResponse {
 }
 
 service TestClientService {
-	TSyncResponse sync (1: i32 clid, 2: i32 testID, 3: bool stopAll, 4:TResult result);
+	TSyncResponse sync (1: i32 clid, 2: i32 testID, 3: bool stopAll, 4:TResult result, 5:i32 masterID);
 
 	void setup(1: i32 testID);
 
