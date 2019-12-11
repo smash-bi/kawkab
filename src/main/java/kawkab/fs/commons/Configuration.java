@@ -59,7 +59,7 @@ public final class Configuration {
 	public final int inodesBlockFetchExpiryTimeoutMs; //  = 2000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	//public final int primaryFetchExpiryTimeoutMs = 5000; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
-	public final int syncThreadsPerDevice; // = 1;
+	public final int numLocalDevices; // = 1;
 	public final int numWorkersStoreToGlobal; // = 8;
 	//public final int numWorkersLoadFromGlobal = 5;
 	
@@ -139,7 +139,7 @@ public final class Configuration {
 		percentIndexEntriesPerNode = Integer.parseInt(props.getProperty("percentIndexEntriesPerNode", "70"));
 		nodesPerBlockPOH = indexBlockSizeBytes/indexNodeSizeBytes;
 
-		syncThreadsPerDevice	= Integer.parseInt(props.getProperty("syncThreadsPerDevice", "1"));
+		numLocalDevices = Integer.parseInt(props.getProperty("numLocalDevices", "1"));
 		numWorkersStoreToGlobal	= Integer.parseInt(props.getProperty("numWorkersStoreToGlobal", "4"));
 			
 		// Folders in the underlying filesystem
@@ -219,6 +219,7 @@ public final class Configuration {
 		System.out.println(String.format("Max blocks per local device= %d", maxBlocksPerLocalDevice));
 		System.out.println(String.format("Index node size bytes= %d", indexNodeSizeBytes));
 		System.out.println(String.format("Cache size (MiB) ......... = %d", cacheSizeMiB));
+		System.out.println(String.format("Num local devices......... = %d", numLocalDevices));
 	}
 	
 	private void verify() {

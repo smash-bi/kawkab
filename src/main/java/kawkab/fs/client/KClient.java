@@ -72,6 +72,28 @@ public class KClient {
 		return id;
 	}
 
+	public int bulkOpen(String[] fnames, Filesystem.FileMode[] modes, int[] recSizes) throws KawkabException {
+		assert client != null;
+		assert fnames.length == modes.length;
+		assert modes.length == recSizes.length;
+
+		for (int i=0; i<fnames.length; i++) {
+			if (sessions.containsKey(fnames[i])){
+				throw new KawkabException(String.format("File %s is already opened",fnames[i]));
+			}
+		}
+
+		List<Integer> ids = client.bulkOpen(fnames, modes, recSizes);
+
+		assert ids.size() == fnames.length;
+
+		for (int i=0; i<fnames.length; i++) {
+			sessions.put(fnames[i], new Session(ids.get(i), modes[i]));
+		}
+
+		return ids.size();
+	}
+
 	public long size(String fn) throws KawkabException {
 		assert client != null;
 
@@ -304,6 +326,25 @@ public class KClient {
 
 		client.close(session.id);
 		sessions.remove(fn);
+	}
+
+	public void bulkClose(String[] fnames) throws KawkabException {
+		assert client != null;
+
+		int[] ids = new int[fnames.length];
+		for (int i=0; i<fnames.length; i++) {
+			Session session = sessions.get(fnames[i]);
+			if (session == null)
+				throw new KawkabException(String.format("File %s is not opened",fnames[i]));
+
+			ids[i] = session.id;
+		}
+
+		client.bulkClose(ids);
+
+		for (int i=0; i<fnames.length; i++) {
+			sessions.remove(fnames[i]);
+		}
 	}
 
 	public synchronized void disconnect() throws KawkabException {

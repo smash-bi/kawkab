@@ -51,8 +51,8 @@ public class ClientMain {
 		int rs		= 0; // record size in bytes
 		int nf		= 0; //Number of files to read/write
 		String type = "apnd";
-		int warmupsec = 10;
-		int testDurSec = 60;
+		int warmupsec = 30;
+		int testDurSec = 40;
 		String fp = "test-";
 		int testID = 1;
 
@@ -90,6 +90,8 @@ public class ClientMain {
 		} else {
 			recGen = new BytesRecord(rs);
 		}
+
+		assert recGen.size() == rs;
 
 		System.out.printf("Warmup sec=%d, test sec=%d, record size=%d\n", warmupsec, testDurSec, recGen.size());
 

@@ -117,7 +117,7 @@ public class AppendTest {
 
 		Record rec = recFactory.newRandomRecord(rand, 1);
 		long startTime = System.currentTimeMillis();
-		LatHistogram tlog = new LatHistogram(TimeUnit.NANOSECONDS, "RecAppend", 5);
+		LatHistogram tlog = new LatHistogram(TimeUnit.NANOSECONDS, "RecAppend", 5, 100000);
 		for (int i=0; i<numRecords; i++) {
 			rec.timestamp(i+1);
 			tlog.start();
@@ -173,7 +173,7 @@ public class AppendTest {
 						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
 						
-						LatHistogram tlog = new LatHistogram(TimeUnit.NANOSECONDS, "Main append", 5);
+						LatHistogram tlog = new LatHistogram(TimeUnit.NANOSECONDS, "Main append", 5, 100000);
 						long startTime = System.currentTimeMillis();
 						int toWrite = bufSize;
 						long ops = 0;

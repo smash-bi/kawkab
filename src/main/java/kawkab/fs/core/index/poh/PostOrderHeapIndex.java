@@ -425,7 +425,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		// Starting from the node K, add K.findAll(minTS, maxTS), and keep moving to the lower node numbers until
 		// the node has maxEntryTS less than minTS.
 
-		assert minTS <= maxTS;
+		assert minTS <= maxTS : String.format("minTS (%d) is not <= maxTs (%d)", minTS, maxTS);
 
 		//System.out.printf("[POH] findAll b/w %d and %d, index len %d, num nodes %d\n", minTS, maxTS, indexLength, nodes.size());
 

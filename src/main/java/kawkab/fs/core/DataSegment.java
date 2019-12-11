@@ -318,7 +318,7 @@ public final class DataSegment extends Block {
 			recIndex--;
 			pos = recIndex*recordSize;
 
-			System.out.printf("[DS] Rec found in %s; %s\n",id, rec);
+			//System.out.printf("[DS] Rec found in %s; %s\n",id, rec);
 		}
 
 		return cnt;
@@ -373,6 +373,7 @@ public final class DataSegment extends Block {
 	
 	@Override
 	public synchronized int loadFromFile() throws IOException {
+		//System.out.println("[DS] Loading form the local file: " + id);
 		/*if (initedForAppends && initialAppendPos == 0) { // The DS is already loaded by the appender
 			return 0;
 		}*/

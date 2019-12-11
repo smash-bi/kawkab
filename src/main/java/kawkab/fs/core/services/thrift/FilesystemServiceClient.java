@@ -11,6 +11,8 @@ import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class FilesystemServiceClient {
@@ -48,6 +50,23 @@ public class FilesystemServiceClient {
 	public int open(String filename, Filesystem.FileMode mode, int recordSize) throws KawkabException {
 		try {
 			return client.open(filename, convertFileMode(mode), recordSize);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
+	public List<Integer> bulkOpen(String[] fnames, Filesystem.FileMode[] modes, int[] recordSizes) throws KawkabException {
+		assert fnames.length == modes.length;
+		assert modes.length == recordSizes.length;
+
+		List<TFileOpenRequest> reqs = new ArrayList<>(fnames.length);
+
+		for (int i=0; i<fnames.length; i++) {
+			reqs.add(new TFileOpenRequest(fnames[i], convertFileMode(modes[i]), recordSizes[i]));
+		}
+
+		try {
+			return client.bulkOpen(reqs);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -172,6 +191,19 @@ public class FilesystemServiceClient {
 	public void close(int sessionID) throws KawkabException {
 		try {
 			client.close(sessionID);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
+	public void bulkClose(int[] ids) throws KawkabException {
+		List<Integer> idsList = new ArrayList<>(ids.length);
+		for (int i=0; i<ids.length; i++) {
+			idsList.add(ids[i]);
+		}
+
+		try {
+			client.bulkClose(idsList);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}

@@ -34,10 +34,10 @@ public class TestRunner {
 					try {
 						switch (type) {
 							case APPEND:
-								res = runAppendTest(testDurSec, clid, nf, sip, sport, batchSize, recGen.newRecord(), pr, warmupSecs);
+								res = runAppendTest(testDurSec, clid, nf, sip, sport, batchSize, recGen.newRecord(), pr, warmupSecs, client);
 								break;
 							case NOOP:
-								res = runNoopTest(testDurSec, clid, nf, sip, sport, batchSize, recGen.newRecord(), pr, warmupSecs);
+								res = runNoopTest(testDurSec, clid, nf, sip, sport, batchSize, recGen.newRecord(), pr, warmupSecs, client);
 								break;
 							case READ:
 							default:
@@ -90,20 +90,20 @@ public class TestRunner {
 	}
 
 	private Result runAppendTest(final int durSec, final int cid, int nTestFiles, final String sip, final int sport,
-									  int batchSize, Record recGen, final Printer pr, int warmupSecs) throws KawkabException {
+									  int batchSize, Record recGen, final Printer pr, int warmupSecs, TestClientServiceClient rpcClient) throws KawkabException {
 		TestClient client = new TestClient(cid, sip, sport, recGen, pr);
 		client.connect();
-		Result res = client.runTest(durSec, nTestFiles, warmupSecs, batchSize);
+		Result res = client.runTest(durSec, nTestFiles, warmupSecs, batchSize, rpcClient);
 		client.disconnect();
 
 		return res;
 	}
 
 	private Result runNoopTest(final int durSec, final int cid, int nTestFiles, final String sip, final int sport,
-							   int batchSize, Record recGen, final Printer pr, int warmupSecs) throws KawkabException {
+							   int batchSize, Record recGen, final Printer pr, int warmupSecs, TestClientServiceClient rpcClient) throws KawkabException {
 		TestClient client = new TestClient(cid, sip, sport, recGen, pr);
 		client.connect();
-		Result res = client.runNoopWritesTest(durSec, nTestFiles, warmupSecs, batchSize);
+		Result res = client.runNoopWritesTest(durSec, nTestFiles, warmupSecs, batchSize, rpcClient);
 		client.disconnect();
 
 		return res;

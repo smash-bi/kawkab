@@ -9,6 +9,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.LatHistogram;
+import org.apache.log4j.pattern.BridgePatternConverter;
 
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -23,6 +24,8 @@ public class TestClient {
 	private Printer pr;
 	private Record recGen;
 	private String cls;
+	
+	private static int rampDownSec = 2;
 
 	public TestClient(int id, String sip, int sport, Record recGen, Printer printer) {
 		this.id = id;
@@ -37,7 +40,7 @@ public class TestClient {
 		cls = String.format("[%d] ",id);
 	}
 
-	public Result runTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
+	public Result runTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize, TestClientServiceClient rpcClient) throws KawkabException {
 		pr.print(cls+"Starting append test...");
 		
 		if (client == null || !client.isConnected()) {
@@ -45,24 +48,26 @@ public class TestClient {
 		}
 
 		if (batchSize > 1) {
-			return appendTest(testDurSec, nTestFiles, warmupSecs, batchSize);
+			return appendTest(testDurSec, nTestFiles, warmupSecs, batchSize, rpcClient);
 		}
 
-		return appendTest(testDurSec, nTestFiles, warmupSecs);
+		return appendTest(testDurSec, nTestFiles, warmupSecs, rpcClient);
 	}
 
-	public Result runNoopWritesTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
+	public Result runNoopWritesTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize, TestClientServiceClient rpcClient) throws KawkabException {
 		pr.print(cls+"Starting NoOp test...");
 
 		if (client == null || !client.isConnected()) {
 			throw new KawkabException(cls+"Client is not connected");
 		}
 
-		return noopWriteTest(testDurSec, nTestFiles, warmupSecs, batchSize);
+		return noopWriteTest(testDurSec, nTestFiles, warmupSecs, batchSize, rpcClient);
 	}
 
-	private Result appendTest(int testDurSec, int nTestFiles, int warmupSecs) throws KawkabException {
+	private Result appendTest(int testDurSec, int nTestFiles, int warmupSecs, TestClientServiceClient rpcClient) throws KawkabException {
 		String[] fnames = openFiles(nTestFiles, "append", Filesystem.FileMode.APPEND);
+
+		rpcClient.barrier(id);
 
 		Result res = null;
 		try {
@@ -72,8 +77,8 @@ public class TestClient {
 				pr.print(cls+"Appending record (no batching)...");
 				res = appendRecs(fnames, testDurSec, recGen.newRecord());
 
-				pr.print(String.format("%s Ramp-down for %d seconds...", cls, 5));
-				appendRecs(fnames, 5, recGen.newRecord());
+				pr.print(String.format("%s Ramp-down for %d seconds...", cls, rampDownSec));
+				appendRecs(fnames, rampDownSec, recGen.newRecord());
 
 		}catch (OutOfMemoryException e) {
 			e.printStackTrace();
@@ -84,19 +89,24 @@ public class TestClient {
 		return res;
 	}
 
-	private Result appendTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
+	private Result appendTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize, TestClientServiceClient rpcClient) throws KawkabException {
 		String[] fnames = openFiles(nTestFiles, "append", Filesystem.FileMode.APPEND);
+
+		rpcClient.barrier(id);
 
 		Result result = null;
 		try {
 			pr.print(String.format("%s Ramp-up for %d seconds...", cls, warmupSecs));
-			appendRecords(fnames, warmupSecs, recGen.newRecord(), batchSize);
+			//appendRecords(fnames, warmupSecs, recGen.newRecord(), batchSize);
+			appendRecsBuffered(fnames, warmupSecs, recGen.newRecord(), batchSize);
 
 			pr.print(String.format("%s Appending records for %d secs (with batching)...", cls, testDurSec));
-			result = appendRecords(fnames, testDurSec, recGen.newRecord(), batchSize);
+			//result = appendRecords(fnames, testDurSec, recGen.newRecord(), batchSize);
+			result = appendRecsBuffered(fnames, testDurSec, recGen.newRecord(), batchSize);
 
-			pr.print(String.format("%s Ramp-down for %d seconds...", cls, 5));
-			appendRecords(fnames, 5, recGen.newRecord(), batchSize);
+			pr.print(String.format("%s Ramp-down for %d seconds...", cls, rampDownSec));
+			//appendRecords(fnames, rampDownSec, recGen.newRecord(), batchSize);
+			appendRecsBuffered(fnames, rampDownSec, recGen.newRecord(), batchSize);
 		}catch (OutOfMemoryException e) {
 			e.printStackTrace();
 		} finally {
@@ -199,8 +209,10 @@ public class TestClient {
 		return prepareResult(tlog.accumulator(), sw.elapsed(TimeUnit.MILLISECONDS), 1, recGen.size(), tputLog.histogram());
 	}
 
-	private Result noopWriteTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize) throws KawkabException {
+	private Result noopWriteTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize, TestClientServiceClient rpcClient) throws KawkabException {
 		String[] fnames = openFiles(nTestFiles, "append", Filesystem.FileMode.APPEND);
+
+		rpcClient.barrier(id);
 
 		Result result = null;
 		try {
@@ -210,8 +222,8 @@ public class TestClient {
 			pr.print(String.format("%s NoOP appends for %d secs (with batching)...", cls, testDurSec));
 			result = appendNoops(fnames, testDurSec, recGen.newRecord(), batchSize);
 
-			pr.print(String.format("%s Ramp-down for %d seconds...", cls, 5));
-			appendNoops(fnames, 5, recGen.newRecord(), batchSize);
+			pr.print(String.format("%s Ramp-down for %d seconds...", cls, rampDownSec));
+			appendNoops(fnames, rampDownSec, recGen.newRecord(), batchSize);
 		}catch (OutOfMemoryException e) {
 			e.printStackTrace();
 		} finally {
@@ -279,11 +291,19 @@ public class TestClient {
 		assert client.isConnected();
 
 		String[] files = new String[numFiles];
+		Filesystem.FileMode[] modes = new Filesystem.FileMode[numFiles];
+		int[] recSizes = new int[numFiles];
 
 		for (int i=0; i<files.length; i++) {
 			files[i] = String.format("%s-c%d-%d-%d",prefix,id,i+1,rand.nextInt(1000000));
-			client.open(files[i], mode, recGen.size());
+			modes[i] = mode;
+			recSizes[i] = recGen.size();
+			//client.open(files[i], mode, recGen.size());
 		}
+
+		int n = client.bulkOpen(files, modes, recSizes);
+
+		assert n == numFiles;
 
 		return files;
 	}
@@ -291,9 +311,11 @@ public class TestClient {
 	private void closeFiles(String[] files) throws KawkabException {
 		assert client.isConnected();
 
-		for(String fname : files) {
+		/*for(String fname : files) {
 			client.close(fname);
-		}
+		}*/
+
+		client.bulkClose(files);
 	}
 
 	public void connect() throws KawkabException {

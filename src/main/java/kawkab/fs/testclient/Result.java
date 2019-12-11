@@ -159,8 +159,8 @@ public class Result {
 
 		int i;
 		for (i=0; i<lastIdx; i++) {
-			index.append(i+",");
-			counts.append(tputLog[i]+",");
+			index.append(i+", ");
+			counts.append(tputLog[i]+", ");
 		}
 
 		index.append(i);
@@ -176,7 +176,6 @@ public class Result {
 		if (latHist == null || latHist.length == 0)
 			return;
 
-		String type = "Latency Histogram";
 		StringBuilder lats = new StringBuilder();
 		StringBuilder counts = new StringBuilder();
 		int i=0;

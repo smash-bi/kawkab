@@ -137,7 +137,7 @@ public final class CLI {
 						default:
 							System.out.println(cmds);
 					}
-				} catch (Exception e) {
+				} catch (Exception | AssertionError e) {
 					e.printStackTrace();
 				}
 			}
@@ -233,7 +233,7 @@ public final class CLI {
 
 		String fn = args[1];
 		String fm = args[2];
-		int recSize = args.length == 4 ? Integer.parseInt(args[3]) : 42;
+		int recSize = args.length == 4 ? Integer.parseInt(args[3]) : 50;
 		FileMode mode = parseMode(fm);
 		client.open(fn, mode, recSize);
 	}
@@ -263,8 +263,8 @@ public final class CLI {
 		System.out.printf("Appended %d records of %d bytes. New file size is %d records.\n",numRecs, recSize, client.size(fname)/recSize);
 	}
 
-	private void parseClientRead(String[] args) throws KawkabException {
-		String usage = "Usage: cr <filename> [<n num> | <t ts> | <r ts1 ts2> [p] | <rn|rt ts1 ts2 numrecs [f]> | <np [count]>] ";
+	private void parseClientRead(String[] args) throws KawkabException, IOException, InterruptedException {
+		String usage = "Usage: cr <filename> [ <n num> | <t ts> | <r ts1 ts2> [p] | <rn|rt ts1 ts2 count> [f] | <np [count]> | <rr tsMin tsMax tsIval count> [f] ] ";
 		if (args.length < 2) {
 			System.out.println(usage);
 			return;
@@ -376,6 +376,27 @@ public final class CLI {
 
 				break;
 			}
+			case "rr":{
+				if (args.length < 7) {
+					System.out.println("Range query requires five args\n" + usage);
+					break;
+				}
+
+				long t1 = Long.parseLong(args[3]);
+				long t2 = Long.parseLong(args[4]);
+				int ival = Integer.parseInt(args[5]);
+				int count = Integer.parseInt(args[6]);
+				String flush = args.length == 8 ? args[7] : null;
+
+				if (flush != null && !flush.equals("f")) {
+					System.out.println("Invalid flush param, could be f only");
+					break;
+				}
+
+				clientRangeQueryTest(fname, recSize, t1, t2, ival, count, recgen, flush);
+
+				break;
+			}
 			case "np": {
 				int count = args.length == 4 ? Integer.parseInt(args[3]) : 1000000;
 				readNoops(fname, count);
@@ -404,6 +425,61 @@ public final class CLI {
 		double durSec = (System.currentTimeMillis() - startTime) / 1000.0;
 
 		Result res = getResults(tlog, durSec, count, recSize, 1, "NoOP reads");
+		System.out.println(res.csvHeader());
+		System.out.println(res.csv());
+	}
+
+	private void clientRangeQueryTest(String fname, int recSize, long t1, long t2, int interval, int count, Record recgen,
+									  String withFlush) throws KawkabException, IOException, InterruptedException {
+		Random rand = new Random();
+
+		LatHistogram latHist = new LatHistogram(TimeUnit.MICROSECONDS, "Range query latency", 100, 100000);
+
+		System.out.printf("Reading records %,d times from %s randomly b/w %d and %d with interval %d, recSize %d, flush is %s\n",
+				count, fname, t1, t2, interval, recSize, withFlush);
+
+		long diff = t2 - t1;
+		long[] tsMin = new long[count];
+		long[] tsMax = new long[count];
+		for (int i=0; i<count; i++) {
+			long minVal = Math.abs(rand.nextLong() % diff);
+			if (t1+minVal+interval-1 > t2) {
+				i--;
+				continue;
+			}
+
+			tsMin[i] = t1 + minVal;
+			tsMax[i] = tsMin[i] + interval - 1;
+		}
+
+		long startTime = System.currentTimeMillis();
+
+		int numRecs = 0;
+		for (int i=0; i<count; i++) {
+			assert tsMin[i] >= 0;
+			assert tsMax[i] >= 0;
+
+			latHist.start();
+			List<Record> recs = client.readRecords(fname, tsMin[i], tsMax[i], recgen);
+			latHist.end();
+
+			//To ensure that we have same number of results for the correct results
+			assert recs.size() == interval : String.format("Expected %d results, got %d", interval, recs.size());
+
+			numRecs += recs.size();
+
+			if (withFlush != null) {
+				if (withFlush.equals("f")) {
+					client.flush();
+				} else {
+					assert false;
+				}
+			}
+		}
+
+		double durSec = (System.currentTimeMillis() - startTime) / 1000.0;
+
+		Result res = getResults(latHist, durSec, numRecs, recSize, interval, "Range query test");
 		System.out.println(res.csvHeader());
 		System.out.println(res.csv());
 	}
@@ -444,17 +520,16 @@ public final class CLI {
 		System.out.println(res.csv());
 	}
 
-	private Result getResults(LatHistogram tlog, double durSec, int numRecs, int recSize, int batchSize, String tag) {
-		long cnt = tlog.sampled()*batchSize;
+	private Result getResults(LatHistogram latHist, double durSec, int numRecs, int recSize, int batchSize, String tag) {
+		long cnt = latHist.sampled()*batchSize;
 		double sizeMB = recSize*cnt / (1024.0 * 1024.0);
 		double thr = sizeMB / durSec;
 		double opThr = cnt / durSec;
 
 		System.out.printf("%s: recSize=%d, numRecs=%d, rTput=%,.0f MB/s, opsTput=%,.0f OPS, Lat %s\n",
-				tag, recSize, numRecs, thr, opThr, tlog.getStats());
+				tag, recSize, numRecs, thr, opThr, latHist.getStats());
 
-		double[] lats = tlog.stats();
-		return new Result(tlog.sampled(), opThr, thr, tlog.min(), tlog.max(), null, null, batchSize);
+		return new Result(latHist.sampled(), opThr, thr, latHist.min(), latHist.max(), latHist.accumulator().histogram(), null, batchSize);
 	}
 
 	private void parseReadRecord(String[] args) throws IOException, KawkabException {
@@ -497,7 +572,7 @@ public final class CLI {
 
 				int recNum = Integer.parseInt(args[3]);
 
-				LatHistogram tlog = new LatHistogram(TimeUnit.NANOSECONDS, "read-lat", 100, 100000);
+				LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "read-lat", 100, 100000);
 				tlog.start();
 				file.recordNum(recgen.copyInDstBuffer(), recNum, recgen.size());
 				tlog.end();
@@ -568,15 +643,23 @@ public final class CLI {
 			Record rec = recgen.newRandomRecord(rand, i+tsOffset);
 			file.append(rec.copyOutSrcBuffer(), rec.size());
 		}
-		long elapsed = sw.stop().elapsed(TimeUnit.NANOSECONDS);
+		long elapsed = sw.stop().elapsed(TimeUnit.MICROSECONDS);
 
 		System.out.printf("Appended %d records of %d bytes. New file size is %d records.\n",numRecs, recSize, file.size()/recSize);
 
 		System.out.printf("Elapsed time (ns): %,d\n",elapsed);
 	}
 
-	private void flushCache() throws KawkabException {
+	private void flushCache() throws KawkabException, IOException, InterruptedException {
 		fs.flush();
+		flushOSCache();
+	}
+
+	private void flushOSCache() throws InterruptedException, IOException {
+		Runtime run = Runtime.getRuntime(); // get OS Runtime
+		// execute a system command and give back the process
+		Process pr = run.exec("sudo sync; sudo echo 1 > /proc/sys/vm/drop_caches");
+		pr.waitFor();
 	}
 	
 	private void parseSize(String[] args) throws IOException, KawkabException {
@@ -650,7 +733,7 @@ public final class CLI {
 						final byte[] writeBuf = new byte[bufSize];
 						rand.nextBytes(writeBuf);
 						
-						LatHistogram tlog = new LatHistogram(TimeUnit.NANOSECONDS, "Main append", 5, 100000);
+						LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Main append", 5, 100000);
 						long startTime = System.currentTimeMillis();
 						int toWrite = bufSize;
 						long ops = 0;
@@ -879,7 +962,7 @@ public final class CLI {
 		String fn = args[1];
 		String mode = args[2];
 		String type = args[3];
-		int recSize = args.length == 5 ? Integer.parseInt(args[4]) : 42;
+		int recSize = args.length == 5 ? Integer.parseInt(args[4]) : 50;
 		FileHandle fh = openFile(fn, mode, type, recSize);
 		openedFiles.put(fn, fh);
 	}
@@ -938,7 +1021,7 @@ public final class CLI {
 			case 16: {
 				return new SixteenRecord();
 			}
-			case 42: {
+			case 50: {
 				return new SampleRecord();
 			}
 			default: {

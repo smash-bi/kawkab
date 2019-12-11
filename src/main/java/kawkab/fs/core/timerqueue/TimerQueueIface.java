@@ -12,6 +12,6 @@ public interface TimerQueueIface {
 	 */
 	boolean tryDisable(TimerQueueItem item);
 	void waitUntilEmpty();
-	public void shutdown();
+	void shutdown();
 }
 

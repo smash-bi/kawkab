@@ -33,9 +33,9 @@ public class SampleRecord implements Record {
 		ASK_PRICE		= BID_EXECUTABLE + Byte.BYTES;
 		ASK_QUANTITY	= ASK_PRICE + Double.BYTES;
 		ASK_EXECUTABLE	= ASK_QUANTITY + Double.BYTES;
-		RESERVED_BYTES	= ASK_EXECUTABLE + Long.BYTES; //These bytes are added to make the message size 50.
+		RESERVED_BYTES	= ASK_EXECUTABLE + Byte.BYTES; //These bytes are added to make the message size 50.
 		
-		SIZE = RESERVED_BYTES + Byte.BYTES;
+		SIZE = RESERVED_BYTES + Long.BYTES;
 	}
 	
 	public SampleRecord () {
@@ -52,6 +52,7 @@ public class SampleRecord implements Record {
 		buffer.putDouble(rand.nextDouble() % 100);
 		buffer.putDouble(rand.nextDouble() % 100);
 		buffer.put(rand.nextBoolean()?TRUE:FALSE);
+		buffer.putLong(rand.nextLong() % 100);
 
 		assert buffer.remaining() == 0;
 		buffer.rewind();
@@ -67,6 +68,7 @@ public class SampleRecord implements Record {
 		buffer.putDouble(askPrice);
 		buffer.putDouble(askQuantity);
 		buffer.put(askExecutable?TRUE:FALSE);
+		buffer.putLong(0);
 		
 		assert buffer.remaining() == 0;
 		buffer.rewind();

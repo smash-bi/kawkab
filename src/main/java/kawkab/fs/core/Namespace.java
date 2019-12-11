@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Commons;
@@ -103,6 +104,36 @@ public class Namespace {
 				
 				break;
 			}
+
+			// TODO: update openFilesTable
+
+			// if the file is opened in append mode and this node is not the primary file writer
+			if (appendMode && !Commons.onPrimaryNode(inumber)) {
+				throw new InvalidFileModeException(
+						String.format("Cannot open file in the append mode. Inumber of the file is out of range of this node's range. NodeID=%d, PrimaryWriter=%d",
+								thisNodeID,
+								Commons.primaryWriterID(inumber)));
+			}
+
+			if (appendMode) {
+				openAppendFile(inumber, filename);
+			}
+		} finally {
+			locks.unlock(filename);
+		}
+
+		return inumber;
+	}
+
+	public long openFileDbg(String filename, boolean appendMode, FileOptions opts) throws IbmapsFullException, IOException,
+			InvalidFileModeException, FileAlreadyOpenedException, FileNotExistException, KawkabException, InterruptedException {
+		long inumber;
+
+		// Lock namespace for the given filename
+		locks.lock(filename);
+
+		try {
+				inumber = createNewFile(opts.recordSize());
 
 			// TODO: update openFilesTable
 

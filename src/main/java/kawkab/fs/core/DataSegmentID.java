@@ -17,7 +17,7 @@ public final class DataSegmentID extends BlockID {
 	private final int recordSize;
 	private String localPath;
 	private int hash;
-	
+	private static int numDevices = Configuration.instance().numLocalDevices;
 	private static final String blocksPath = Configuration.instance().blocksPath;
 	
 	/**
@@ -67,8 +67,8 @@ public final class DataSegmentID extends BlockID {
 		
 		assert wordSize * levels < uuidLen-1;
 		
-		StringBuilder path = new StringBuilder(blocksPath.length()+uuidLen+levels+2); //2 for extra head-room
-		path.append(blocksPath + File.separator);
+		StringBuilder path = new StringBuilder(blocksPath.length()+uuidLen+levels+4); //4 for extra head-room
+		path.append("fs").append(perBlockTypeKey() % numDevices).append(File.separator).append(blocksPath).append(File.separator);
 		
 		int rootLen = uuidLen - levels*wordSize; // The root folder can have more characters than wordSize
 		path.append(uuid, 0, rootLen);
@@ -78,7 +78,7 @@ public final class DataSegmentID extends BlockID {
 		}
 		
 		localPath = path.toString().intern(); //TODO: Should we intern() this string?
-		
+
 		return localPath;
 	}
 
@@ -111,10 +111,10 @@ public final class DataSegmentID extends BlockID {
 	
 	@Override
 	public int hashCode() {
-		/*if (hash == 0)
+		if (hash == 0)
 			hash = Objects.hash(inumber, blockInFile, segmentInBlock);
-		return hash;*/
-		return Objects.hash(inumber, blockInFile, segmentInBlock);
+		return hash;
+		//return Objects.hash(inumber, blockInFile, segmentInBlock);
 	}
 
 	@Override

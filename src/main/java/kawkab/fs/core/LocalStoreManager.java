@@ -3,6 +3,8 @@ package kawkab.fs.core;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.timerqueue.TimerQueue;
+import kawkab.fs.core.timerqueue.TimerQueueIface;
 
 import java.io.File;
 import java.io.IOException;
@@ -14,7 +16,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private GlobalStoreManager globalProc;
 	
 	private static final int maxBlocks = Configuration.instance().maxBlocksPerLocalDevice; // Number of blocks that can be created locally
-	private static final int numWorkers = Configuration.instance().syncThreadsPerDevice; // Number of worker threads and number of reqsQs
+	private static final int numWorkers = Configuration.instance().numLocalDevices; // Number of worker threads and number of reqsQs
 	
 	private TransferQueue<Block> storeQs[]; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks locally
@@ -25,7 +27,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private final FileLocks fileLocks;
 	
 	private static LocalStoreManager instance;
-	
+
 	public synchronized static LocalStoreManager instance() {
 		if (instance == null) {
 			instance = new LocalStoreManager();
@@ -51,7 +53,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			e.printStackTrace();
 		}
 		
-		System.out.println("Initializing local store manager");
+		System.out.println("Initializing local store manager. Workers = " + numWorkers);
 		
 		startWorkers();
 	}
@@ -301,7 +303,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		//System.out.println("[LSM] Evict locally: " + id);
 		
-		if (storedFilesMap.removeEntry(id) == null) { //The cache and the global store race to evictFromLocal this block.
+		if (storedFilesMap.removeEntry(id) == null) {
 			return;
 		}
 		

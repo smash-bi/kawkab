@@ -293,7 +293,7 @@ public abstract class Block extends AbstractTransferItem {
 				dataLoadLock.lock(); // Disable loading from concurrent threads
 				//Load only if it is not already loaded
 				if (!isLoaded) { // Prevent subsequent loads from other threads
-					System.out.println(" [B] **** LOAD BLOCK ON PRIMARY: " + id);
+					//System.out.println(" [B] **** LOAD BLOCK ON PRIMARY: " + id);
 					//System.out.println("[B] On primary. Load from the LOCAL store: " + id);
 					
 					if (!localStoreManager.load(this)) { // Load data from the local store

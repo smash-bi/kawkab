@@ -11,7 +11,9 @@ import kawkab.fs.core.services.thrift.FilesystemService.Iface;
 import kawkab.fs.records.SampleRecord;
 import org.apache.thrift.TException;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,6 +25,8 @@ public class FilesystemServiceImpl implements Iface {
 	private AtomicInteger counter = new AtomicInteger();	//To assigns unique sessionsIDs for each file open request from the clients
 
 	private static Configuration conf = Configuration.instance();
+
+	private static ThreadLocal<ByteBuffer> thrLocalBuf = ThreadLocal.withInitial(() -> ByteBuffer.allocate(conf.maxBufferLen));
 
 	public FilesystemServiceImpl(Filesystem fs) {
 		this.fs = fs;
@@ -62,6 +66,16 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
+	public List<Integer> bulkOpen(List<TFileOpenRequest> fopenReqs) throws TRequestFailedException, TException {
+		List<Integer> retVals = new ArrayList<>(fopenReqs.size());
+		for (TFileOpenRequest req : fopenReqs) {
+			retVals.add(open(req.filename, req.fileMode, req.recordSize));
+		}
+
+		return retVals;
+	}
+
+	@Override
 	public ByteBuffer recordNum(int sessionID, long recNum, int recSize) throws TInvalidSessionException, TRequestFailedException, TOutOfMemoryException {
 		Session s = sessions.get(sessionID);
 		if (s == null) {
@@ -69,7 +83,8 @@ public class FilesystemServiceImpl implements Iface {
 		}
 		FileHandle fh = s.fh;
 
-		ByteBuffer dstBuf = ByteBuffer.allocate(recSize);
+		ByteBuffer dstBuf = thrLocalBuf.get();
+		dstBuf.clear();
 		try {
 			fh.recordNum(dstBuf, recNum, recSize);
 			return dstBuf;
@@ -90,7 +105,9 @@ public class FilesystemServiceImpl implements Iface {
 		}
 		FileHandle fh = s.fh;
 
-		ByteBuffer dstBuf = ByteBuffer.allocate(recSize);
+		ByteBuffer dstBuf = thrLocalBuf.get();
+		dstBuf.clear();
+
 		try {
 			if (!fh.recordAt(dstBuf, timestamp, recSize)) {
 				throw new TRequestFailedException("Record not found");
@@ -253,6 +270,9 @@ public class FilesystemServiceImpl implements Iface {
 
 	@Override
 	public int appendNoops(ByteBuffer data) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException, TException {
+		ByteBuffer buffer = thrLocalBuf.get();
+		buffer.clear();
+		buffer.put(data);
 		return 0;
 	}
 
@@ -397,14 +417,29 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
+	public void bulkClose(List<Integer> ids) throws TException {
+		for (int id : ids) {
+			close(id);
+		}
+	}
+
+	@Override
 	public int flush() throws TException {
 		try {
 			fs.flush();
-		} catch (KawkabException e) {
+			flushOSCache();
+		} catch (KawkabException | InterruptedException | IOException e) {
 			e.printStackTrace();
 		}
 
 		return 0;
+	}
+
+	private void flushOSCache() throws InterruptedException, IOException {
+		Runtime run = Runtime.getRuntime(); // get OS Runtime
+		// execute a system command and give back the process
+		Process pr = run.exec("sudo sync; sudo echo 1 > /proc/sys/vm/drop_caches");
+		pr.waitFor();
 	}
 
 	@Override

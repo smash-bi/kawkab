@@ -229,6 +229,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		return true;
 	}
 
+	private static ThreadLocal<ByteBuffer> thrLocalBuf = ThreadLocal.withInitial(() -> ByteBuffer.allocate(conf.maxBufferLen));
+
 	public List<ByteBuffer> readRecords(final long minTS, final long maxTS, final int recSize) throws KawkabException, IOException {
 		if (minTS < 0 || maxTS < 0) {
 			throw new KawkabException(String.format("Invalid minTS (%d) or maxTS (%d) is given", minTS, maxTS));
@@ -244,6 +246,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 		if (offsets == null)
 			return null;
+
+		ByteBuffer dstBuf = thrLocalBuf.get();
+		dstBuf.clear();
 
 		int length = offsets.size();
 		List<ByteBuffer> results = new ArrayList<>(); //The lists contains offsets to unique segments.
@@ -263,12 +268,12 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 					curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
 					segLoadLog.end();
 
-					ByteBuffer dstBuf = ByteBuffer.allocate(conf.segmentSizeBytes);
+					//ByteBuffer dstBuf = ByteBuffer.allocate(conf.segmentSizeBytes);
 					int cnt = curSegment.readRecords(minTS, maxTS, dstBuf);
-					dstBuf.flip();
+					//dstBuf.flip();
 
-					if (cnt > 0)
-						results.add(dstBuf);
+					//if (cnt > 0)
+					//	results.add(dstBuf);
 					//System.out.printf("  seg=%d, cnt=%d\n", segInFile, cnt);
 				} finally {
 					if (curSegment != null) {
@@ -276,6 +281,11 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 					}
 				}
 			}
+		}
+
+		if (dstBuf.position() > 0) {
+			results.add(dstBuf);
+			dstBuf.flip();
 		}
 
 		if (results.size() == 0)

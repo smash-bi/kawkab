@@ -88,37 +88,42 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	private boolean entering=true;
 	@Override
 	public void barrier(int clid) throws TException {
-		synchronized (barMutex) {
-			if (!entering) {
-				throw new TException("Invalid barrier state, should be entering.");
-			}
-
-			barInCnt++;
-
-			System.out.printf("Client %d at barrier, total %d\n", clid, barInCnt);
-
-			if (barInCnt != numClients) {
-				try {
-					barMutex.wait();
-				} catch (InterruptedException e) {
-					throw new TException(e);
+		try {
+			synchronized (barMutex) {
+				if (!entering) {
+					throw new TException("Invalid barrier state, should be entering.");
 				}
-			} else {
-				entering = false;
-				System.out.printf("Client %d releasing barrier\n", clid);
+
+				barInCnt++;
+
+				System.out.printf("Client %d at barrier, total %d\n", clid, barInCnt);
+
+				if (barInCnt != numClients) {
+					try {
+						barMutex.wait();
+					} catch (InterruptedException e) {
+						throw new TException(e);
+					}
+				} else {
+					entering = false;
+					System.out.printf("Client %d releasing barrier\n", clid);
+				}
+
+				barInCnt--;
+
+				if (entering) {
+					throw new TException("Invalid barrier state, should not be entering.");
+				}
+
+				if (barInCnt == 0) {
+					entering = true;
+				}
+
+				barMutex.notify();
 			}
-
-			barInCnt--;
-
-			if (entering) {
-				throw new TException("Invalid barrier state, should not be entering.");
-			}
-
-			if (barInCnt == 0) {
-				entering = true;
-			}
-
-			barMutex.notify();
+		} catch (Exception | AssertionError e) {
+			e.printStackTrace();
+			throw new TException(e.getMessage());
 		}
 	}
 

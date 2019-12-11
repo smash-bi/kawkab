@@ -69,9 +69,16 @@ struct TAppendResponse {
 	2: required i64 latency
 }
 
+struct TFileOpenRequest {
+    1: required string filename;
+    2: required TFileMode fileMode;
+    3: required i32 recordSize;
+}
+
 service FilesystemService {
-	i32 open (1: string filename, 2: TFileMode fileMode, 3: i32 recordSize) throws
-		(1: TRequestFailedException rfe);
+	i32 open (1: string filename, 2: TFileMode fileMode, 3: i32 recordSize) throws (1: TRequestFailedException rfe);
+
+	list<i32> bulkOpen (1: list<TFileOpenRequest> fopenReqs) throws (1: TRequestFailedException rfe);
 	
 	// Returns data read from the given offset in the file
 	binary read (1: i32 sessionID, 2: i64 offset, 3: i32 length) throws
@@ -114,6 +121,8 @@ service FilesystemService {
 	i32 recordSize(1: i32 sessionID) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
 	
 	oneway void close (1: i32 sessionID);
+
+	oneway void bulkClose (1: list<i32> sessionID);
 
 	i32 flush();
 
