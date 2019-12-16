@@ -67,16 +67,19 @@ public class LatHistogram {
 		sw.start();
 	}
 	
-	public void end() {
+	public int end() {
 		if (!started)
-			return;
+			return -1;
 
-		int diff = (int)(sw.stop().elapsed(unit)); //Diff can be negative due to using nanoTime() in multi-cpu hardware
-		if (diff >= 0)
-			stats.put(diff, batchSize);
+		int lastDur = (int)(sw.stop().elapsed(unit)); //Diff can be negative due to using nanoTime() in multi-cpu hardware
+		if (lastDur >= 0)
+			stats.put(lastDur, batchSize);
 
 		started = false;
+
+		return lastDur;
 	}
+
 	
 	public void printStats() {
 		System.out.printf("\t%s\n", getStats());

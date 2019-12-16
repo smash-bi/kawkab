@@ -6,10 +6,10 @@ import java.nio.ByteBuffer;
  * This class is not thread-safe. There can be a race while reading and writing maxTS and isMaxSet.
  */
 class POHEntry implements TimeRange{
-	private long segmentInFile;
-	private long minTS;
-	private long maxTS;
-	private boolean isMaxSet;
+	private long segmentInFile; //persistent
+	private long minTS; //persistent
+	private long maxTS; //persistent
+	private boolean isMaxSet; //Not saved persistently
 
 	POHEntry() {
 		segmentInFile = -1;

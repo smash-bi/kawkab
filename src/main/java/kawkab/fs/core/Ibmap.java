@@ -129,7 +129,7 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	protected void loadBlockOnNonPrimary() {
+	protected void loadBlockOnNonPrimary(boolean loadFromPrimary) {
 		assert false; //Loading ibmaps on a non-primary node is not allowed as each node has the ownership of a set of ibmaps
 	}
 	

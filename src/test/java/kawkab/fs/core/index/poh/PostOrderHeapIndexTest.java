@@ -96,7 +96,8 @@ public class PostOrderHeapIndexTest {
 
 		int len = 0;
 		for (int i=1; i<30; i++) {
-			poh.appendIndexEntry(i, i, i, len++);
+			poh.appendIndexEntry(i, i, i, len);
+			len += 2;
 		}
 
 		assertEquals(0, heightOfNode(poh, 1));
@@ -108,9 +109,9 @@ public class PostOrderHeapIndexTest {
 	}
 
 	private int heightOfNode(PostOrderHeapIndex poh, int nodeNumber) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-		Method method = PostOrderHeapIndex.class.getDeclaredMethod("heightOfNode", int.class);
+		Method method = PostOrderHeapIndex.class.getDeclaredMethod("heightOfNode", int.class, boolean.class);
 		method.setAccessible(true);
-		return (int) method.invoke(poh, nodeNumber);
+		return (int) method.invoke(poh, nodeNumber, false);
 	}
 
 	@Test
@@ -124,14 +125,15 @@ public class PostOrderHeapIndexTest {
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(6, nodeSize, nodesPerBlock, 25, new NullCache(), new NullTimerQueue());
 		int indexLen = 0;
 		for (int i=1; i<30; i++) {
-			poh.appendIndexEntry(i, i, i, indexLen++);
+			poh.appendIndexEntry(i, i, i, indexLen);
+			indexLen += 2;
 		}
-		assertEquals(25, poh.findHighest(25, indexLen));
-		assertEquals(19, poh.findHighest(19, indexLen));
-		assertEquals(1, poh.findHighest(1, indexLen));
+		assertEquals(25, poh.findHighest(25, indexLen, true));
+		assertEquals(19, poh.findHighest(19, indexLen, true));
+		assertEquals(1, poh.findHighest(1, indexLen, true));
 
-		assertEquals(29, poh.findHighest(30, indexLen));
-		assertEquals(-1, poh.findHighest(0, indexLen));
+		assertEquals(29, poh.findHighest(30, indexLen, true));
+		assertEquals(-1, poh.findHighest(0, indexLen, true));
 	}
 
 	@Test
@@ -145,14 +147,15 @@ public class PostOrderHeapIndexTest {
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(7, nodeSize, nodesPerBlock, 62, new NullCache(), new NullTimerQueue());
 		int len = 0;
 		for (int i=1; i<=100; i++) {
-			poh.appendIndexEntry(i, i, i, len++);
+			poh.appendIndexEntry(i, i, i, len);
+			len += 2;
 		}
 
-		assertEquals(2, poh.findHighest(2, len));
-		assertEquals(3, poh.findHighest(3, len));
+		assertEquals(2, poh.findHighest(2, len, true));
+		assertEquals(3, poh.findHighest(3, len, true));
 
-		assertEquals(100, poh.findHighest(102, len));
-		assertEquals(-1, poh.findHighest(0, len));
+		assertEquals(100, poh.findHighest(102, len, true));
+		assertEquals(-1, poh.findHighest(0, len, true));
 	}
 
 	@Test
@@ -212,24 +215,24 @@ public class PostOrderHeapIndexTest {
 
 		long[][] resType = new long[][]{{}};
 
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9, 8, 7}, {6, 5, 4}, {3, 2, 1}}, poh.findAllMinBased(3, 77, len).toArray(resType));
-		assertArrayEquals(new long[][]{{6, 5, 4}}, poh.findAllMinBased(20, 25, len).toArray(resType));
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9, 8, 7}, {6, 5, 4}, {3, 2, 1}}, poh.findAllMinBased(3, 77,len, true).toArray(resType));
+		assertArrayEquals(new long[][]{{6, 5, 4}}, poh.findAllMinBased(20, 25,len, true).toArray(resType));
 
-		assertArrayEquals(new long[][]{{9, 8, 7}, {6, 5, 4}}, poh.findAllMinBased(20, 30, len).toArray(resType));
+		assertArrayEquals(new long[][]{{9, 8, 7}, {6, 5, 4}}, poh.findAllMinBased(20, 30,len, true).toArray(resType));
 
-		assertEquals(null, poh.findAllMinBased(1, 2, len)); //Out of lower limit
-		assertArrayEquals(new long[][]{{19}}, poh.findAllMinBased(111, 112, len).toArray(resType)); //Out of upper limit
-		assertArrayEquals(new long[][]{{13}}, poh.findAllMinBased(61, 63, len).toArray(resType)); //Out of range but b/w entries
+		assertEquals(null, poh.findAllMinBased(1, 2,len, true)); //Out of lower limit
+		assertArrayEquals(new long[][]{{19}}, poh.findAllMinBased(111, 112,len, true).toArray(resType)); //Out of upper limit
+		assertArrayEquals(new long[][]{{13}}, poh.findAllMinBased(61, 63,len, true).toArray(resType)); //Out of range but b/w entries
 
-		assertArrayEquals(new long[][]{{2, 1}}, poh.findAllMinBased(1, 8, len).toArray(resType)); // partially cover lower limit
-		assertArrayEquals(new long[][]{{19}, {18, 17}}, poh.findAllMinBased(95, 111, len).toArray(resType)); // partially cover upper limit
+		assertArrayEquals(new long[][]{{2, 1}}, poh.findAllMinBased(1, 8,len, true).toArray(resType)); // partially cover lower limit
+		assertArrayEquals(new long[][]{{19}, {18, 17}}, poh.findAllMinBased(95, 111,len, true).toArray(resType)); // partially cover upper limit
 
-		assertArrayEquals(new long[][]{{10}, {9, 8, 7}, {6, 5}}, poh.findAllMinBased(22, 42, len).toArray(resType)); // cover entries but fall across entries' ranges
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9}}, poh.findAllMinBased(32, 81, len).toArray(resType)); // cover entries but fall across entries' ranges and nodes
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11}}, poh.findAllMinBased(47, 82, len).toArray(resType)); // cover entries from lower part
-		assertArrayEquals(new long[][]{{17, 16}, {15}}, poh.findAllMinBased(82, 98, len).toArray(resType)); // cover entries from upper part
+		assertArrayEquals(new long[][]{{10}, {9, 8, 7}, {6, 5}}, poh.findAllMinBased(22, 42,len, true).toArray(resType)); // cover entries but fall across entries' ranges
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9}}, poh.findAllMinBased(32, 81,len, true).toArray(resType)); // cover entries but fall across entries' ranges and nodes
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11}}, poh.findAllMinBased(47, 82,len, true).toArray(resType)); // cover entries from lower part
+		assertArrayEquals(new long[][]{{17, 16}, {15}}, poh.findAllMinBased(82, 98,len, true).toArray(resType)); // cover entries from upper part
 
-		assertArrayEquals(new long[][]{{9, 8, 7}, {6}}, poh.findAllMinBased(30, 30, len).toArray(resType)); // find all with same ts
+		assertArrayEquals(new long[][]{{9, 8, 7}, {6}}, poh.findAllMinBased(30, 30,len, true).toArray(resType)); // find all with same ts
 	}
 
 	@Test
@@ -246,12 +249,12 @@ public class PostOrderHeapIndexTest {
 
 		long[][] resType = new long[][]{{}};
 
-		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(1, 6, len).toArray(resType));
- 		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(1, 3, len).toArray(resType));
-		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(3, 3, len).toArray(resType));
-		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(3, 5, len).toArray(resType));
-		assertNull(poh.findAllMinBased(1, 2, len));
-		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(6, 7, len).toArray(resType));
+		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(1, 6,len, true).toArray(resType));
+ 		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(1, 3,len, true).toArray(resType));
+		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(3, 3,len, true).toArray(resType));
+		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(3, 5,len, true).toArray(resType));
+		assertNull(poh.findAllMinBased(1, 2,len, true));
+		assertArrayEquals(new long[][]{{1}}, poh.findAllMinBased(6, 7,len, true).toArray(resType));
 	}
 
 	@Test
@@ -264,37 +267,37 @@ public class PostOrderHeapIndexTest {
 		int nodesPerBlock = Configuration.instance().nodesPerBlockPOH;
 		PostOrderHeapIndex poh = new PostOrderHeapIndex(10, nodeSize, nodesPerBlock, 50, new NullCache(), new NullTimerQueue());
 		int len = 0;
-		poh.appendIndexEntry(3, 3, 1, len++);
-		poh.appendIndexEntry(5, 5, 2, len++);
-		poh.appendIndexEntry(11, 11, 3, len++);
+		poh.appendIndexEntry(3, 3, 1, len); len += 2;
+		poh.appendIndexEntry(5, 5, 2, len); len += 2;
+		poh.appendIndexEntry(11, 11, 3, len); len += 2;
 
-		poh.appendIndexEntry(18, 18, 4, len++);
-		poh.appendIndexEntry(20, 20, 5, len++);
-		poh.appendIndexEntry(25, 25, 6, len++);
+		poh.appendIndexEntry(18, 18, 4, len); len += 2;
+		poh.appendIndexEntry(20, 20, 5, len); len += 2;
+		poh.appendIndexEntry(25, 25, 6, len); len += 2;
 
-		poh.appendIndexEntry(30, 30, 7, len++);
-		poh.appendIndexEntry(30, 30, 8, len++);
-		poh.appendIndexEntry(30, 30, 9, len++);
+		poh.appendIndexEntry(30, 30, 7, len); len += 2;
+		poh.appendIndexEntry(30, 30, 8, len); len += 2;
+		poh.appendIndexEntry(30, 30, 9, len); len += 2;
 
-		poh.appendIndexEntry(35, 35, 10, len++);
-		poh.appendIndexEntry(45, 45, 11, len++);
-		poh.appendIndexEntry(50, 50, 12, len++);
+		poh.appendIndexEntry(35, 35, 10, len); len += 2;
+		poh.appendIndexEntry(45, 45, 11, len); len += 2;
+		poh.appendIndexEntry(50, 50, 12, len); len += 2;
 
-		poh.appendIndexEntry(55, 55, 13, len++);
-		poh.appendIndexEntry(65, 65, 14, len++);
-		poh.appendIndexEntry(75, 75, 15, len++);
+		poh.appendIndexEntry(55, 55, 13, len); len += 2;
+		poh.appendIndexEntry(65, 65, 14, len); len += 2;
+		poh.appendIndexEntry(75, 75, 15, len); len += 2;
 
-		poh.appendIndexEntry(85, 85, 16, len++);
-		poh.appendIndexEntry(93, 93, 17, len++);
-		poh.appendIndexEntry(99, 99, 18, len++);
+		poh.appendIndexEntry(85, 85, 16, len); len += 2;
+		poh.appendIndexEntry(93, 93, 17, len); len += 2;
+		poh.appendIndexEntry(99, 99, 18, len); len += 2;
 
-		poh.appendIndexEntry(105, 105, 19, len++);
+		poh.appendIndexEntry(105, 105, 19, len); len += 2;
 
-		assertEquals(-1, poh.findHighest(1, len)); //Out of lower limit
+		assertEquals(-1, poh.findHighest(1,len, true)); //Out of lower limit
 
-		assertEquals(9, poh.findHighest(30, len));
+		assertEquals(9, poh.findHighest(30,len, true));
 
-		assertEquals(12, poh.findHighest(50, len)); //Finding in an internal node
+		assertEquals(12, poh.findHighest(50,len, true)); //Finding in an internal node
 	}
 
 	@Test
@@ -314,48 +317,48 @@ public class PostOrderHeapIndexTest {
 		poh.appendMinTS(11, 3, len++);
 		poh.appendMaxTS(11, 3, len++);
 
-		poh.appendIndexEntry(18, 18, 4, len++);
-		poh.appendIndexEntry(20, 20, 5, len++);
-		poh.appendIndexEntry(25, 25, 6, len++);
+		poh.appendIndexEntry(18, 18, 4, len); len += 2;
+		poh.appendIndexEntry(20, 20, 5, len); len += 2;
+		poh.appendIndexEntry(25, 25, 6, len); len += 2;
 
-		poh.appendIndexEntry(30, 30, 7, len++);
-		poh.appendIndexEntry(30, 30, 8, len++);
-		poh.appendIndexEntry(30, 30, 9, len++);
+		poh.appendIndexEntry(30, 30, 7, len); len += 2;
+		poh.appendIndexEntry(30, 30, 8, len); len += 2;
+		poh.appendIndexEntry(30, 30, 9, len); len += 2;
 
-		poh.appendIndexEntry(35, 35, 10, len++);
-		poh.appendIndexEntry(45, 45, 11, len++);
-		poh.appendIndexEntry(50, 50, 12, len++);
+		poh.appendIndexEntry(35, 35, 10, len); len += 2;
+		poh.appendIndexEntry(45, 45, 11, len); len += 2;
+		poh.appendIndexEntry(50, 50, 12, len); len += 2;
 
-		poh.appendIndexEntry(55, 55, 13, len++);
-		poh.appendIndexEntry(65, 65, 14, len++);
-		poh.appendIndexEntry(75, 75, 15, len++);
+		poh.appendIndexEntry(55, 55, 13, len); len += 2;
+		poh.appendIndexEntry(65, 65, 14, len); len += 2;
+		poh.appendIndexEntry(75, 75, 15, len); len += 2;
 
-		poh.appendIndexEntry(85, 85, 16, len++);
-		poh.appendIndexEntry(93, 93, 17, len++);
-		poh.appendIndexEntry(99, 99, 18, len++);
+		poh.appendIndexEntry(85, 85, 16, len); len += 2;
+		poh.appendIndexEntry(93, 93, 17, len); len += 2;
+		poh.appendIndexEntry(99, 99, 18, len); len += 2;
 
-		poh.appendIndexEntry(105, 105, 19, len++);
+		poh.appendIndexEntry(105, 105, 19, len); len += 2;
 
 		long[][] resType = new long[][]{{}};
 
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9, 8, 7}, {6, 5, 4}, {3, 2, 1}}, poh.findAllMinBased(3, 77, len).toArray(resType));
-		assertArrayEquals(new long[][]{{6, 5, 4}}, poh.findAllMinBased(20, 25, len).toArray(resType));
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9, 8, 7}, {6, 5, 4}, {3, 2, 1}}, poh.findAllMinBased(3, 77,len, true).toArray(resType));
+		assertArrayEquals(new long[][]{{6, 5, 4}}, poh.findAllMinBased(20, 25,len, true).toArray(resType));
 
-		assertArrayEquals(new long[][]{{9, 8, 7}, {6, 5, 4}}, poh.findAllMinBased(20, 30, len).toArray(resType));
+		assertArrayEquals(new long[][]{{9, 8, 7}, {6, 5, 4}}, poh.findAllMinBased(20, 30,len, true).toArray(resType));
 
-		assertNull(poh.findAllMinBased(1, 2, len)); //Out of lower limit
-		assertArrayEquals(new long[][]{{19}}, poh.findAllMinBased(111, 112, len).toArray(resType)); //Out of upper limit
-		assertArrayEquals(new long[][]{{13}}, poh.findAllMinBased(61, 63, len).toArray(resType)); //Out of range but b/w entries
+		assertNull(poh.findAllMinBased(1, 2,len, true)); //Out of lower limit
+		assertArrayEquals(new long[][]{{19}}, poh.findAllMinBased(111, 112,len, true).toArray(resType)); //Out of upper limit
+		assertArrayEquals(new long[][]{{13}}, poh.findAllMinBased(61, 63,len, true).toArray(resType)); //Out of range but b/w entries
 
-		assertArrayEquals(new long[][]{{2, 1}}, poh.findAllMinBased(1, 8, len).toArray(resType)); // partially cover lower limit
-		assertArrayEquals(new long[][]{{19}, {18, 17}}, poh.findAllMinBased(95, 111, len).toArray(resType)); // partially cover upper limit
+		assertArrayEquals(new long[][]{{2, 1}}, poh.findAllMinBased(1, 8,len, true).toArray(resType)); // partially cover lower limit
+		assertArrayEquals(new long[][]{{19}, {18, 17}}, poh.findAllMinBased(95, 111,len, true).toArray(resType)); // partially cover upper limit
 
-		assertArrayEquals(new long[][]{{10}, {9, 8, 7}, {6, 5}}, poh.findAllMinBased(22, 42, len).toArray(resType)); // cover entries but fall across entries' ranges
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9}}, poh.findAllMinBased(32, 81, len).toArray(resType)); // cover entries but fall across entries' ranges and nodes
-		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11}}, poh.findAllMinBased(47, 82, len).toArray(resType)); // cover entries from lower part
-		assertArrayEquals(new long[][]{{17, 16}, {15}}, poh.findAllMinBased(82, 98, len).toArray(resType)); // cover entries from upper part
+		assertArrayEquals(new long[][]{{10}, {9, 8, 7}, {6, 5}}, poh.findAllMinBased(22, 42,len, true).toArray(resType)); // cover entries but fall across entries' ranges
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11, 10}, {9}}, poh.findAllMinBased(32, 81,len, true).toArray(resType)); // cover entries but fall across entries' ranges and nodes
+		assertArrayEquals(new long[][]{{15, 14, 13}, {12, 11}}, poh.findAllMinBased(47, 82,len, true).toArray(resType)); // cover entries from lower part
+		assertArrayEquals(new long[][]{{17, 16}, {15}}, poh.findAllMinBased(82, 98,len, true).toArray(resType)); // cover entries from upper part
 
-		assertArrayEquals(new long[][]{{9, 8, 7}, {6}}, poh.findAllMinBased(30, 30, len).toArray(resType)); // find all with same ts
+		assertArrayEquals(new long[][]{{9, 8, 7}, {6}}, poh.findAllMinBased(30, 30,len, true).toArray(resType)); // find all with same ts
 	}
 
 	@Test
@@ -397,10 +400,10 @@ public class PostOrderHeapIndexTest {
 
 		long[][] resType = new long[][]{{}};
 
-		assertNull(poh.findAll(1, 2, len));
-		assertNull(poh.findAll(102, 103, len));
-		assertNull(poh.findAll(56, 58, len));
-		assertArrayEquals(new long[][]{{19}}, poh.findAll(111, 112, len).toArray(resType));
+		assertNull(poh.findAll(1, 2,len, true));
+		assertNull(poh.findAll(102, 103,len, true));
+		assertNull(poh.findAll(56, 58,len, true));
+		assertArrayEquals(new long[][]{{19}}, poh.findAll(111, 112,len, true).toArray(resType));
 	}
 
 	@Test
@@ -431,7 +434,8 @@ public class PostOrderHeapIndexTest {
 		int count = nodesPerBlock * 5;
 		int len = 0;
 		for (int i=1; i<=count; i++) {
-			poh.appendIndexEntry(i, i, i, len++);
+			poh.appendIndexEntry(i, i, i, len);
+			len += 2;
 		}
 	}
 }

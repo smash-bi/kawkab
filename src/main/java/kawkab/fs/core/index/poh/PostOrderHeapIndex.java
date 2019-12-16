@@ -50,6 +50,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	// nodesCountTable: A lookup table that contains the number of nodes in the perfect k-ary tree of height i, i>=0.
 	// We use this table to avoid the complex math functions. Array index is the key, which is the node number.
 	private int[] nodesCountTable; //TODO: This table should be final and static
+	private int[] nodeHeightsTable;
 
 	private final Cache cache;
 
@@ -84,8 +85,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		this.cache = cache;
 		this.timerQ = tq;
 
-		//System.out.printf("Index entries per node:  %d\n", entriesPerNode);
-		//System.out.printf("Index pointers per node: %d\n", childrenPerNode);
+		System.out.printf("Per node index entries %d, pointers %d\n", entriesPerNode, childrenPerNode);
 
 		nodes = new ConcurrentHashMap<>();
 		//nodes.add(null); // Add a dummy value to match the node number with the array index. We do this to simplify the calculation of the index of the children of a node
@@ -93,12 +93,21 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		//nodes.add(currentNode);
 
 		//TODO: Use a systematic way to get a good table size
-		nodesCountTable = new int[51]; // We don't expect the height to grow large because of the large branching factor
+		int count = 1000000;
+		nodesCountTable = new int[count]; // We don't expect the height to grow large because of the large branching factor
 		for (int i=0; i<nodesCountTable.length; i++) {
 			nodesCountTable[i] = totalNodesKAryTree(i);
 		}
 
-		loadLog = new LatHistogram(TimeUnit.MILLISECONDS, "IndexNode load", 50, 500);
+		nodeHeightsTable = new int[count];
+		for (int i=0; i<nodeHeightsTable.length; i++) {
+			nodeHeightsTable[i] = -1;
+		}
+		for (int i=count-1; i>=0; i--) {
+			nodeHeightsTable[i] = heightOfNode(i);
+		}
+
+		loadLog = new LatHistogram(TimeUnit.MICROSECONDS, "IndexNode load", 1, 5000);
 	}
 
 	/**
@@ -113,13 +122,16 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		//System.out.printf("[POHI] Loading %d nodes, index length %d\n",nodesCount, len);
 
 		for (int i=1; i<=nodesCount; i++) {
-			acquireNode(i);
+			acquireNode(i, true);
 			//POHNode node = loadIndexNode(i);
 			//nodes.put(i, node);
 		}
 	}
 
-	private POHNode acquireNode(final int nodeNum) throws IOException, KawkabException {
+	private POHNode acquireNode(final int nodeNum, boolean loadFromPrimary) throws IOException, KawkabException {
+		if (nodeNum == 0)
+			return null;
+
 		//System.out.printf("[POH] Acquire node %d\n", nodeNum);
 		POHNode node = nodes.get(nodeNum);
 		if (node == null) {
@@ -137,7 +149,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		}
 
 		loadLog.start();
-		node.loadBlock();
+		node.loadBlock(loadFromPrimary);
 		loadLog.end();
 
 		return node;
@@ -163,7 +175,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		POHNode node = (POHNode) cache.acquireBlock(nodeID);
 		node.init(nodeNumber, heightOfNode(nodeNumber), entriesPerNode, childrenPerNode, nodeSizeBytes, nodesPerBlock);
 		node.initForAppend();
-		setChildren(node);
+		setChildren(node, false);
 		POHNode prev = nodes.put(nodeNumber, node); //No other thread (readers) can concurrently access this node because the filesize is not updated yet
 
 		assert prev == null;
@@ -183,10 +195,10 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		return node;
 	}*/
 
-	private void setChildren(final POHNode node) throws IOException, KawkabException {
+	private void setChildren(final POHNode node, boolean loadFromPrimary) throws IOException, KawkabException {
 		if (node.height() > 0) {
 			for (int i = 1; i <= childrenPerNode; i++) {
-				POHNode child = acquireNode(nthChild(node.nodeNumber(), node.height(), i));
+				POHNode child = acquireNode(nthChild(node.nodeNumber(), node.height(), i, loadFromPrimary), loadFromPrimary);
 				try {
 					node.appendChild(child);
 				} catch (IndexBlockFullException e) {
@@ -245,7 +257,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
 			// FIXME: Note the variable overflow in curIndexLen+1
 			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode)); //ceil(entriesInIndex)/(entriesPerNode) gives the ceil value;
-			POHNode node = acquireNode(lastNode);
+			POHNode node = acquireNode(lastNode, false);
 			acquiredNode = new TimerQueueItem<>(node, this);
 		}
 
@@ -279,11 +291,11 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		//System.out.printf("[POH] appendMaxTS: segInFile=%d, indexLen=%d\n", segmentInFile, curIndexLen);
 
-		assert curIndexLen % 2 == 1;
+		assert curIndexLen % 2 == 1 : "Index length is incorrect: " + curIndexLen;
 
 		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
 			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
-			POHNode node = acquireNode(lastNode);
+			POHNode node = acquireNode(lastNode, false);
 			acquiredNode = new TimerQueueItem<>(node, this);
 		}
 
@@ -303,11 +315,11 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	public void appendIndexEntry(final long minTS, final long maxTS, final long segmentInFile, final long curIndexLen) throws IOException, KawkabException {
 		assert minTS <= maxTS;
 
-		assert (curIndexLen % 2) == 0;
+		assert (curIndexLen % 2) == 0 : "Index length is incorrect: " + curIndexLen;
 
 		//long curLength = length.get();
 
-		System.out.printf("[POH] appendIndexEntry: segInFile=%d, indexLen=%d\n", segmentInFile, curIndexLen);
+		//System.out.printf("[POH] appendIndexEntry: segInFile=%d, indexLen=%d\n", segmentInFile, curIndexLen);
 
 		if ((curIndexLen % (entriesPerNode*2)) == 0) { //If last node is full
 			try {
@@ -322,7 +334,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
 			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
-			POHNode node = acquireNode(lastNode);
+			POHNode node = acquireNode(lastNode, false);
 			acquiredNode = new TimerQueueItem<>(node, this);
 		}
 
@@ -348,19 +360,20 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 *
 	 * @return the segment number in file that contains ts, or -1 if no entry found
 	 */
-	public long findHighest(final long ts, final long indexLength) throws IOException, KawkabException {
-		//System.out.printf("[POH] findHighest %d, index len %d, num nodes %d\n", ts, indexLength, nodes.size());
+	public long findHighest(final long ts, final long indexLength, boolean loadFromPrimary) throws IOException, KawkabException {
 		//long curLen = length.get();
 		int lastNodeIdx = lastNodeIndex(indexLength, entriesPerNode);
 
+		System.out.printf("[POH] findHighest %d, index len %d, num nodes %d, lastNodeIdx=%d\n", ts, indexLength, nodes.size(), lastNodeIdx);
+
 		//System.out.println();
 
-		int curNode = findNode(ts, true, lastNodeIdx);
+		POHNode curNode = findNode(ts, true, lastNodeIdx, loadFromPrimary);
 
-		if (curNode == -1)
+		if (curNode == null)
 			return -1;
 
-		return acquireNode(curNode).findLastEntry(ts);
+		return curNode.findLastEntry(ts);
 	}
 
 	/**
@@ -376,7 +389,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param maxTS largest timestamp
 	 * @return null if no records are found, other returns the list of the lists of timestamps
 	 */
-	public List<long[]> findAllMinBased(final long minTS, final long maxTS, final long indexLen) throws IOException, KawkabException {
+	public List<long[]> findAllMinBased(final long minTS, final long maxTS, final long indexLen, final boolean loadFromPrimary) throws IOException, KawkabException {
 		// Find the right most node that has maxTS
 		// Traverse from that node to the left until the first value smaller than minTS is reached
 
@@ -386,26 +399,25 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		//long curLen = length.get();
 		int lastNodeIdx = lastNodeIndex(indexLen, entriesPerNode);
-		int curNode = findNode(maxTS, true, lastNodeIdx);
+		POHNode curNode = findNode(maxTS, true, lastNodeIdx, loadFromPrimary);
 
-		if (curNode == -1)
+		if (curNode == null)
 			return null;
 
 		List<long[]> results = new ArrayList<>();
 
-		while(curNode > 0) {
-			POHNode node = acquireNode(curNode);
-
-			long[] res = node.findAllEntriesMinBased(minTS, maxTS);
+		while(curNode != null) {
+			long[] res = curNode.findAllEntriesMinBased(minTS, maxTS);
 
 			assert res != null;
 
 			results.add(res);
 
-			if (node.entryMinTS() < minTS)
+			if (curNode.entryMinTS() < minTS)
 				break;
 
-			curNode--;
+			//curNode--;
+			curNode = acquireNode(curNode.nodeNumber()-1, loadFromPrimary);
 		}
 
 		return results;
@@ -418,7 +430,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param maxTS
 	 * @return
 	 */
-	public List<long[]> findAll(final long minTS, final long maxTS, final long indexLength) throws IOException, KawkabException {
+	public List<long[]> findAll(final long minTS, final long maxTS, final long indexLength, final boolean loadFromPrimary) throws IOException, KawkabException {
 		// Moving to the roots of the trees on the left, find the right-most root node N that has maxTS between minChildTS and maxEntryTS
 		// Traverse the tree rooted at N until the node K that has the maxTS between minEntryTS and maxEntryTS
 		// While traversing down the tree, select the right most child that has minChildTS less than or equal to maxTS
@@ -430,24 +442,26 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		//System.out.printf("[POH] findAll b/w %d and %d, index len %d, num nodes %d\n", minTS, maxTS, indexLength, nodes.size());
 
 		//long curLen = length.get();
-		int lastNodeIdx = lastNodeIndex(indexLength, entriesPerNode);
-		int curNode = findNode(maxTS, true, lastNodeIdx);
 
-		if (curNode <= 0) {
-			return checkLastNode(acquireNode(lastNodeIdx), minTS, indexLength);
+		int lastNodeIdx = lastNodeIndex(indexLength, entriesPerNode);
+
+		POHNode curNode = findNode(maxTS, true, lastNodeIdx, loadFromPrimary);
+
+		if (curNode == null) {
+			POHNode lastNode = acquireNode(lastNodeIdx, loadFromPrimary);
+			return checkLastNode(lastNode, minTS, indexLength);
 		}
 
 		List<long[]> results = new ArrayList<>();
-		if (curNode == lastNodeIdx) {
-			long[] res = checkLastEntry(acquireNode(lastNodeIdx), minTS, indexLength);
+		if (curNode.nodeNumber() == lastNodeIdx) {
+			//POHNode lastNode = acquireNode(lastNodeIdx, loadFromPrimary);
+			long[] res = checkLastEntry(curNode, minTS, indexLength);
 			if (res != null)
 				results.add(res);
 		}
 
-		while(curNode > 0) {
-			POHNode node = acquireNode(curNode);
-
-			long[] res = node.findAllEntries(minTS, maxTS);
+		while(curNode != null) {
+			long[] res = curNode.findAllEntries(minTS, maxTS);
 
 			if (res == null) { //This can happen if the given range is larger than the last index entry
 				break;
@@ -455,10 +469,10 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 			results.add(res);
 
-			if (node.entryMinTS() < minTS)
+			if (curNode.entryMinTS() < minTS)
 				break;
 
-			curNode--;
+			curNode = acquireNode(curNode.nodeNumber()-1, loadFromPrimary);
 		}
 
 
@@ -507,7 +521,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	int lastNodeIndex(final long curLen, final int entriesPerNode) {
 		//Length of one entry is 2. So ceil(curLen/2) gives the total number of entries, including the last half open entry
 		// ceil( ceil(curLen/2) / entriesPerNode)
-		return (int) ((((curLen+1)>>>1)+(entriesPerNode-1)) /entriesPerNode);
+		return (int) ((((curLen+1)>>>1)+(entriesPerNode-1)) / entriesPerNode);
 	}
 
 	/**
@@ -517,29 +531,47 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param findLast
 	 * @return
 	 */
-	private int findNode(long ts, boolean findLast, int lastNodeIdx) throws IOException, KawkabException {
-		if (ts < acquireNode(1).minTS()) //if the first index entry is larger than the ts, i.e., the given range is lower than data
-			return -1;
+	private POHNode findNode(long ts, boolean findLast, int lastNodeIdx, boolean loadFromPrimary) throws IOException, KawkabException {
+		//if (ts < acquireNode(1, loadFromPrimary).minTS()) //if the first index entry is larger than the ts, i.e., the given range is lower than data
+		//	return null;
 
-		int curNode = findRootNode(ts, lastNodeIdx);
+		//long t1 = System.currentTimeMillis();
+
+		int curNode = findRootNode(ts, lastNodeIdx, loadFromPrimary);
+
+		//long t2 = System.currentTimeMillis();
 
 		if (curNode <= 0) //No results found
-			return -1;
+			return null;
 
-		POHNode node = acquireNode(curNode);
+		//LatHistogram ls1 = new LatHistogram(TimeUnit.MICROSECONDS, "dbg1", 100, 100000);
+		//LatHistogram ls2 = new LatHistogram(TimeUnit.MICROSECONDS, "dbg2", 100, 100000);
+
+		POHNode node = acquireNode(curNode, loadFromPrimary);
 		while(node.height() > 0) {
 			if (node.entryMinTS() <= ts)
 				break;
 
-			if (findLast)
+			if (findLast) {
+				//ls1.start();
 				curNode = node.findLastChild(ts);
-			else
+				//ls1.end();
+			} else {
+				//ls2.start();
 				curNode = node.findFirstChild(ts);
+				//ls2.end();
+			}
 
-			node = acquireNode(curNode);
+			node = acquireNode(curNode, loadFromPrimary);
+			//ls1.printStats();
+			//ls2.printStats();
 		}
 
-		return curNode;
+		//long t3 = System.currentTimeMillis();
+
+		//System.out.printf("t1=%d, t2=%d\n", t2-t1, t3-t2);
+
+		return node;
 	}
 
 	/**
@@ -547,19 +579,20 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param ts
 	 * @return
 	 */
-	private int findRootNode(final long ts, final int lastNodeIdx) throws IOException, KawkabException {
-		if (ts < acquireNode(1).minTS()) //if the first index entry is larger than the ts, i.e., the given range is lower than data
-			return -1;
+	private int findRootNode(final long ts, final int lastNodeIdx, boolean loadFromPrimary) throws IOException, KawkabException {
+		//System.out.printf("[POH] findRootNode: ts=%d, lastMin=%d, lastMax=%d\n", ts, nodes.get(curNode).minTS(), nodes.get(curNode).maxTS());
+		//if (ts < acquireNode(1, loadFromPrimary).minTS()) //if the first index entry is larger than the ts, i.e., the given range is lower than data
+		//	return -1;
 
 		int curNode = lastNodeIdx; // Begin with the last node
-
-		// System.out.printf("ts=%d, lastMin=%d, lastMax=%d\n", ts, nodes.get(curNode).minTS(), nodes.get(curNode).maxTS());
 
 		// First traverse the root nodes up to the left-most tree
 		while(curNode > 0) { // until we have explored all the root nodes; nodes[0] is null.
 			// Move to the root of the tree on the left
 
-			POHNode node = acquireNode(curNode);
+			POHNode node = acquireNode(curNode, loadFromPrimary);
+
+			//System.out.printf("[POH] findRootNode: ts=%d, node=%s, minTS=%d, maxTS=%d\n", ts, node.nodeNumber(), node.minTS(), node.maxTS());
 
 			if (node.minTS() <= ts)
 				break;
@@ -576,14 +609,14 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param childNumber
 	 * @return
 	 */
-	private int nthChild(int parentNodeNum, int parentHeight, int childNumber) throws IOException, KawkabException {
+	private int nthChild(int parentNodeNum, int parentHeight, int childNumber, boolean loadFromPrimary) throws IOException, KawkabException {
 		assert parentHeight > 0 : "parentHeight must be greater than 0; parentHeight="+parentHeight;
 		assert childNumber > 0;
 
 		if (childNumber == childrenPerNode)
 			return parentNodeNum - 1;
 
-		return parentNodeNum - 1 - (childrenPerNode - childNumber)*(nodesCountTable[acquireNode(parentNodeNum-1).height()]);
+		return parentNodeNum - 1 - (childrenPerNode - childNumber)*(nodesCountTable[acquireNode(parentNodeNum-1, loadFromPrimary).height()]);
 	}
 
 	/**
@@ -591,14 +624,25 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param nodeNumber
 	 * @return
 	 */
-	private int heightOfNode(int nodeNumber) throws IOException, KawkabException {
+	private int heightOfNode(int nodeNumber) {
+		if (nodeHeightsTable[nodeNumber] >= 0)
+			return nodeHeightsTable[nodeNumber];
+
+		if (nodeNumber <= childrenPerNode)
+			return 0;
+
 		int testHeight = heightOfRoot(nodeNumber);
 		int totalNodesSubTree = nodesCountTable[testHeight];
 
 		if (nodeNumber == totalNodesSubTree)
 			return testHeight;
 
-		return acquireNode(nodeNumber - totalNodesSubTree).height();
+		int prevNode = nodeNumber - totalNodesSubTree;
+		int prevNodeHeight = heightOfNode(prevNode);
+		nodeHeightsTable[prevNode] = prevNodeHeight;
+		return prevNodeHeight;
+
+		//return acquireNode(nodeNumber - totalNodesSubTree, loadFromPrimary).height();
 	}
 
 	/**
@@ -615,7 +659,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * Height of the root node in a perfect k-ary tree that has total numNodes nodes in the tree.
 	 *
 	 * Depending on the number of nodes given and the branching factor, the returned height can be
-	 * correct or wrong.
+	 * correct or incorrect. This function is for internal use to find the height of a given node. See
+	 * the heigtOfNode() function.
 	 *
 	 * @param numNodes
 	 * @return
@@ -629,8 +674,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	/**
 	 * @return Number of nodes in the index
 	 */
-	public int size() {
-		return nodes.size()-1; //As we added a dummy value in the nodes array
+	public int size(long indexLen) {
+		return lastNodeIndex(indexLen, entriesPerNode) + 1;
 	}
 
 	public void print() {
@@ -674,6 +719,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 	public void printStats() {
 		loadLog.printStats();
+
 	}
 
 	public void resetStats() {

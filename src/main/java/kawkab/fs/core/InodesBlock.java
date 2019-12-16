@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.utils.LatHistogram;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,6 +13,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.StandardOpenOption;
+import java.util.concurrent.TimeUnit;
 
 public final class InodesBlock extends Block {
 	private static boolean bootstraped; //Not saved persistently
@@ -21,7 +23,7 @@ public final class InodesBlock extends Block {
 
 	private static ApproximateClock clock = ApproximateClock.instance();
 	private long lastGlobalStoreTimeMs;
-	private int globalStoreTimeGapMs = 3000;
+	private int globalStoreTimeGapMs = 5000;
 	//private int version; //Inodes-block's current version number.
 	
 	private static Configuration conf = Configuration.instance();
@@ -148,19 +150,22 @@ public final class InodesBlock extends Block {
 			inode.storeTo(dstBuffer);
 		}
 	}
-	
+
+	public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "IB load", 100, 100000);
 	private void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException {
+		dbgHist.start();
 		loadFrom(primaryNodeService.getInodesBlock((InodesBlockID)id()));
+		dbgHist.end();
 	}
-	
+
 	@Override
-	protected synchronized void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
+	protected synchronized void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, KawkabException, IOException {
 		/* If never fetched or the last global-fetch has timed out, fetch from the global store.
 		 * Otherwise, if the last primary-fetch has timed out, fetch from the primary node.
 		 * Otherwise, don't fetch, data is still fresh. 
 		 */
 		
-		long now = System.currentTimeMillis();
+		long now = clock.currentTime();
 
 		//System.out.printf("[IB] loadOnNonPrimary: lastFetchMS=%d, now-timeout=%d\n", lastFetchTimeMs, now-conf.inodesBlockFetchExpiryTimeoutMs);
 		
@@ -183,11 +188,15 @@ public final class InodesBlock extends Block {
 				//System.out.println("[IB] Loading from the primary: " + id());
 				loadBlockFromPrimary(); // Fetch data from the primary node
 				//lastPrimaryFetchTimeMs = now;
-				if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed
-					lastFetchTimeMs = now;
+				//if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed
+				lastFetchTimeMs = now;
 			} catch (FileNotExistException ke) { // If the file is not on the primary node, check again from the global store
 				// Check again from the global store because the primary may have deleted the
 				// block after copying to the global store
+
+				if (loadFromPrimary)
+					throw ke;
+
 				System.out.println("[B] Not found on the primary, trying again from the global: " + id());
 				loadFromGlobal(0, conf.inodesBlockSizeBytes);
 				lastFetchTimeMs = now;

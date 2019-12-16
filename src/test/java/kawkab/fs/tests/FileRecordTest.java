@@ -54,7 +54,7 @@ public class FileRecordTest {
 		
 		Record recordOut = new SampleRecord();
 		
-		file.recordNum(recordOut.copyInDstBuffer(), file.size()/rec.size(), rec.size());
+		file.recordNum(recordOut.copyInDstBuffer(), file.size()/rec.size(), rec.size(), true);
 		
 		fs.close(file);
 		
@@ -88,7 +88,7 @@ public class FileRecordTest {
 		
 		Record actual = new SampleRecord();
 		for (Record expected : recs) {
-			file.recordNum(actual.copyInDstBuffer(), nextIndex++, SampleRecord.length());
+			file.recordNum(actual.copyInDstBuffer(), nextIndex++, SampleRecord.length(), true);
 			assertEquals(expected, actual);
 		}
 		
@@ -112,8 +112,8 @@ public class FileRecordTest {
 		Record recordOutNum = new SampleRecord();
 		Record recordOutAt = new SampleRecord();
 		
-		file.recordNum(recordOutNum.copyInDstBuffer(), file.size()/rec.size(), rec.size());
-		file.recordAt(recordOutAt.copyInDstBuffer(), rec.timestamp(), rec.size());
+		file.recordNum(recordOutNum.copyInDstBuffer(), file.size()/rec.size(), rec.size(), true);
+		file.recordAt(recordOutAt.copyInDstBuffer(), rec.timestamp(), rec.size(), true);
 		
 		fs.close(file);
 		
@@ -143,29 +143,29 @@ public class FileRecordTest {
 		}
 
 		List<Record> results = null;
-		results = file.readRecords(1, 13, new SampleRecord()); //Lower limit
+		results = file.readRecords(1, 13, new SampleRecord(), true); //Lower limit
 		assertEquals(records[0], results.get(0));
 
 		System.out.println();
 
-		results = file.readRecords(95, 105, new SampleRecord()); //Upper limit
+		results = file.readRecords(95, 105, new SampleRecord(), true); //Upper limit
 		assertEquals(records[9], results.get(0));
 
-		results = file.readRecords(1, 115, new SampleRecord()); //All range covered
+		results = file.readRecords(1, 115, new SampleRecord(), true); //All range covered
 		for(int i=0; i<numRecs; i++) {
 			assertEquals(records[i], results.get(numRecs-i-1));
 		}
 
-		results = file.readRecords(1, 9, new SampleRecord()); //lower out of range
+		results = file.readRecords(1, 9, new SampleRecord(), true); //lower out of range
 		assertEquals(null, results);
 
-		results = file.readRecords(115, 120, new SampleRecord()); //upper out of range
+		results = file.readRecords(115, 120, new SampleRecord(), true); //upper out of range
 		assertEquals(null, results);
 
-		results = file.readRecords(11, 19, new SampleRecord()); //middle out of range
+		results = file.readRecords(11, 19, new SampleRecord(), true); //middle out of range
 		assertEquals(null, results);
 
-		results = file.readRecords(15, 35, new SampleRecord()); //middle covered
+		results = file.readRecords(15, 35, new SampleRecord(), true); //middle covered
 		assertEquals(2, results.size());
 		assertEquals(records[2], results.get(0));
 		assertEquals(records[1], results.get(1));
@@ -195,7 +195,7 @@ public class FileRecordTest {
 		}
 
 		// Reading the records from the start
-		List<Record> results = file.readRecords(1, 1000, new SampleRecord());
+		List<Record> results = file.readRecords(1, 1000, new SampleRecord(), true);
 		int expectedLen = 1000/tsOffset;
 		for (int i=0; i<expectedLen; i++) {
 			assertEquals(records[i], results.get(expectedLen-i-1));
@@ -205,7 +205,7 @@ public class FileRecordTest {
 		int minRecIdx = 9000;
 		int lowerTS = minRecIdx*tsOffset+tsOffset;
 		int largeMaxTS = numRecs*tsOffset+2*tsOffset; //Should be larger than the ts of the last record
-		results = file.readRecords(lowerTS, largeMaxTS, new SampleRecord()); //keeping maxTS larger than the last rec's ts
+		results = file.readRecords(lowerTS, largeMaxTS, new SampleRecord(), true); //keeping maxTS larger than the last rec's ts
 		expectedLen = numRecs-minRecIdx;
 		for (int i=0; i<expectedLen; i++) {
 			assertEquals(records[minRecIdx+i], results.get(expectedLen-i-1));
@@ -213,12 +213,12 @@ public class FileRecordTest {
 
 		// Reading the last record
 		lowerTS = (numRecs-1)*tsOffset+tsOffset - 1;
-		results = file.readRecords(lowerTS, largeMaxTS, new SampleRecord());
+		results = file.readRecords(lowerTS, largeMaxTS, new SampleRecord(), true);
 		assertEquals(1, results.size());
 		assertEquals(records[numRecs-1], results.get(0));
 
 		// Reading out of range in the middle
-		results = file.readRecords(1*tsOffset+tsOffset+1, 2*tsOffset+tsOffset-1, new SampleRecord());
+		results = file.readRecords(1*tsOffset+tsOffset+1, 2*tsOffset+tsOffset-1, new SampleRecord(), true);
 		assertNull(results);
 
 		// Reading records from a middle range
@@ -228,7 +228,7 @@ public class FileRecordTest {
 		int higherTS = maxRecIdx*tsOffset+tsOffset + 1;
 
 		long t = System.currentTimeMillis();
-		results = file.readRecords(lowerTS, higherTS, new SampleRecord()); //keeping maxTS larger than the last rec's ts
+		results = file.readRecords(lowerTS, higherTS, new SampleRecord(), true); //keeping maxTS larger than the last rec's ts
 
 		long diff = System.currentTimeMillis() - t;
 

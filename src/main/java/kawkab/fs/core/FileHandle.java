@@ -56,7 +56,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		BlockID id = new InodesBlockID(inodesBlockIdx);
 		
 		InodesBlock inb = (InodesBlock) cache.acquireBlock(id);
-		inb.loadBlock();
+		inb.loadBlock(true);
 
 		inodesBlock = inb;
 		inode = inb.getInode(inumber);
@@ -77,7 +77,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	public synchronized int read(byte[] buffer, long readOffsetInFile, int length) throws OutOfMemoryException,
+	public synchronized int read(byte[] buffer, long readOffsetInFile, int length, boolean loadFromPrimary) throws OutOfMemoryException,
 			IOException, IllegalArgumentException, KawkabException, InvalidFileOffsetException {
 		if (length > buffer.length || length < 0)
 			throw new IllegalArgumentException("Read length is negative or greater than the given buffer size.");
@@ -100,7 +100,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				int blockIndex = (int) (inumber / inodesPerBlock);
 				BlockID id = new InodesBlockID(blockIndex);
 				inb = (InodesBlock) cache.acquireBlock(id);
-				inb.loadBlock();
+				inb.loadBlock(loadFromPrimary);
 				inode = inb.getInode(inumber);
 			}
 
@@ -111,7 +111,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 						"Read length exceeds file length: Read offset=%d, read length=%d, file size=%d.",
 						readOffsetInFile, length, fileSize));
 
-			bytesRead = inode.read(buffer, length, readOffsetInFile);
+			bytesRead = inode.read(buffer, length, readOffsetInFile, loadFromPrimary);
 		} finally {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
@@ -131,7 +131,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	 * @throws KawkabException
 	 * @throws IOException
 	 */
-	public synchronized List<ByteBuffer> readRecords(final long minTS, final long maxTS, final int recSize)
+	public synchronized List<ByteBuffer> readRecords(final long minTS, final long maxTS, final int recSize, boolean loadFromPrimary)
 			throws OutOfMemoryException, KawkabException, IOException {
 		rLog.start();
 		InodesBlock inb = null;
@@ -148,11 +148,11 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				int blockIndex = (int) (inumber / inodesPerBlock);
 				BlockID id = new InodesBlockID(blockIndex);
 				inb = (InodesBlock) cache.acquireBlock(id);
-				inb.loadBlock();
+				inb.loadBlock(loadFromPrimary);
 				inode = inb.getInode(inumber);
 			}
 
-			return inode.readRecords(minTS, maxTS, recSize);
+			return inode.readRecords(minTS, maxTS, recSize, loadFromPrimary);
 		} finally {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
@@ -162,7 +162,8 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		}
 	}
 
-	public synchronized List<Record> readRecords(final long minTS, final long maxTS, final Record recFactory) throws OutOfMemoryException, KawkabException, IOException {
+	public synchronized List<Record> readRecords(final long minTS, final long maxTS, final Record recFactory, boolean loadFromPrimary)
+			throws OutOfMemoryException, KawkabException, IOException {
 		rLog.start();
 		InodesBlock inb = null;
 		Inode inode;
@@ -178,11 +179,11 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				int blockIndex = (int) (inumber / inodesPerBlock);
 				BlockID id = new InodesBlockID(blockIndex);
 				inb = (InodesBlock) cache.acquireBlock(id);
-				inb.loadBlock();
+				inb.loadBlock(loadFromPrimary);
 				inode = inb.getInode(inumber);
 			}
 
-			return inode.readAll(minTS, maxTS, recFactory);
+			return inode.readAll(minTS, maxTS, recFactory, loadFromPrimary);
 		} finally {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
@@ -204,7 +205,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	public synchronized boolean recordAt(final ByteBuffer dstBuf, final long timestamp, final int recSize) throws
+	public synchronized boolean recordAt(final ByteBuffer dstBuf, final long timestamp, final int recSize, final boolean loadFromPrimary) throws
 			OutOfMemoryException, IOException, RecordNotFoundException, KawkabException {
 
 		rLog.start();
@@ -222,11 +223,11 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				int blockIndex = (int) (inumber / inodesPerBlock);
 				BlockID id = new InodesBlockID(blockIndex);
 				inb = (InodesBlock) cache.acquireBlock(id);
-				inb.loadBlock();
+				inb.loadBlock(loadFromPrimary);
 				inode = inb.getInode(inumber);
 			}
 
-			return inode.readAt(dstBuf, timestamp, recSize);
+			return inode.readAt(dstBuf, timestamp, recSize, loadFromPrimary);
 		} finally {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
@@ -250,7 +251,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	 * @throws RecordNotFoundException if the record does not exist in the file
 	 * @throws InvalidFileOffsetException if the recordNum is less than 1
 	 */
-	public synchronized boolean recordNum(final ByteBuffer dstBuf, final long recordNum, final int recSize) throws
+	public synchronized boolean recordNum(final ByteBuffer dstBuf, final long recordNum, final int recSize, final boolean loadFromPrimary) throws
 			OutOfMemoryException, IOException, KawkabException, RecordNotFoundException, InvalidFileOffsetException {
 		rLog.start();
 
@@ -271,11 +272,11 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				int blockIndex = (int) (inumber / inodesPerBlock);
 				BlockID id = new InodesBlockID(blockIndex);
 				inb = (InodesBlock) cache.acquireBlock(id);
-				inb.loadBlock();
+				inb.loadBlock(loadFromPrimary);
 				inode = inb.getInode(inumber);
 			}
 
-			return inode.readRecordN(dstBuf, recordNum, recSize);
+			return inode.readRecordN(dstBuf, recordNum, recSize, loadFromPrimary);
 		} finally {
 			if (!onPrimaryNode && inb != null) {
 				cache.releaseBlock(inb.id());
@@ -384,7 +385,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		InodesBlock block = null;
 		try {
 			block = (InodesBlock) cache.acquireBlock(id);
-			block.loadBlock();
+			block.loadBlock(true);
 			size = block.fileSize(inumber);
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -412,7 +413,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		InodesBlock block = null;
 		try {
 			block = (InodesBlock) cache.acquireBlock(id);
-			block.loadBlock();
+			block.loadBlock(true);
 			return block.getInode(inumber).recordSize();
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -439,7 +440,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		InodesBlock block = null;
 		try {
 			block = (InodesBlock) cache.acquireBlock(id);
-			block.loadBlock();
+			block.loadBlock(true);
 			return block.getInode(inumber).recordsInFile();
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -510,7 +511,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		InodesBlock block = null;
 		try {
 			block = (InodesBlock) cache.acquireBlock(id);
-			block.loadBlock();
+			block.loadBlock(true);
 			block.getInode(inumber).printStats();
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -540,7 +541,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		InodesBlock block = null;
 		try {
 			block = (InodesBlock) cache.acquireBlock(id);
-			block.loadBlock();
+			block.loadBlock(true);
 			block.getInode(inumber).resetStats();
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -568,7 +569,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		InodesBlock block = null;
 		try {
 			block = (InodesBlock) cache.acquireBlock(id);
-			block.loadBlock();
+			block.loadBlock(true);
 			block.getInode(inumber).flush();
 		} catch (IOException e) {
 			e.printStackTrace();

@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.*;
+import kawkab.fs.core.index.poh.POHNode;
 import kawkab.fs.core.services.thrift.FilesystemServiceServer;
 import kawkab.fs.core.services.thrift.PrimaryNodeServiceServer;
 import kawkab.fs.core.timerqueue.TimerQueue;
@@ -90,7 +91,7 @@ public final class Filesystem {
 		InodesBlock inb = null;
 		try {
 			inb = (InodesBlock) cache.acquireBlock(id);
-			inb.loadBlock();
+			inb.loadBlock(true);
 
 			Inode inode = inb.getInode(inumber);
 			if (inode.recordSize() != recSize) {
@@ -205,6 +206,10 @@ public final class Filesystem {
 		}
 
 		pns.printStats();
+
+		InodesBlock.dbgHist.printStats();
+		DataSegment.dbgHist.printStats();
+		POHNode.dbgHist.printStats();
 	}
 
 	public void resetStats() throws KawkabException {
@@ -213,5 +218,9 @@ public final class Filesystem {
 		}
 
 		pns.resetStats();
+
+		InodesBlock.dbgHist.reset();
+		DataSegment.dbgHist.reset();
+		POHNode.dbgHist.reset();
 	}
 }

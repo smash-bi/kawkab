@@ -72,8 +72,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (recordSize > 1)
 			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, fsQ);
 
-		idxLog = new LatHistogram(TimeUnit.MICROSECONDS, "Index search", 10, 1000);
-		segLoadLog = new LatHistogram(TimeUnit.MICROSECONDS, "DS load", 10, 1000);
+		idxLog = new LatHistogram(TimeUnit.MICROSECONDS, "Index search", 100, 1000000);
+		segLoadLog = new LatHistogram(TimeUnit.MICROSECONDS, "segLoadLog", 10, 1000);
 
 		/*try {
 			index.loadAndInit(indexLength(fileSize.get()));
@@ -94,7 +94,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 			System.out.printf("[I] Loading the last seg %s on file open\n", curSegId );
 
-			cache.acquireBlock(curSegId).loadBlock();
+			cache.acquireBlock(curSegId).loadBlock(false);
 			cache.releaseBlock(curSegId);
 		}
 	}
@@ -127,7 +127,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * @throws IOException
 	 * @throws KawkabException
 	 */
-	public boolean readAt(final ByteBuffer dstBuf, final long timestamp, final int recSize) throws IOException, KawkabException {
+	public boolean readAt(final ByteBuffer dstBuf, final long timestamp, final int recSize, boolean loadFromPrimary) throws IOException, KawkabException {
 		if (timestamp < 0) {
 			throw new KawkabException(String.format("Invalid timestamp %d", timestamp));
 		}
@@ -141,7 +141,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		}
 
 		idxLog.start();
-		long segInFile = index.findHighest(timestamp, indexLength(fileSize.get()));
+		long segInFile = index.findHighest(timestamp, indexLength(fileSize.get()), loadFromPrimary);
 		idxLog.end();
 
 		if (segInFile == -1)
@@ -156,7 +156,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		try {
 			curSegment = (DataSegment)cache.acquireBlock(curSegId);
 			segLoadLog.start();
-			curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
+			curSegment.loadBlock(loadFromPrimary); //The segment data might not be loaded when we get from the cache
 			segLoadLog.end();
 			boolean recFound = curSegment.readRecord(dstBuf, timestamp);
 			dstBuf.flip();
@@ -181,7 +181,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * @throws IOException
 	 * @throws KawkabException
 	 */
-	public boolean readRecordN(final ByteBuffer dstBuf, final long recNum, final int recSize) throws IOException, KawkabException {
+	public boolean readRecordN(final ByteBuffer dstBuf, final long recNum, final int recSize, boolean loadFromPrimary) throws IOException, KawkabException {
 		if (recNum <= 0) {
 			throw new KawkabException(String.format("Invalid record number %d", recNum));
 		}
@@ -213,7 +213,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			curSegment = (DataSegment)cache.acquireBlock(curSegId);
 
 			segLoadLog.start();
-			curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
+			curSegment.loadBlock(loadFromPrimary); //The segment data might not be loaded when we get from the cache
 			segLoadLog.end();
 
 			int bytesRead = curSegment.read(dstBuf, offsetInFile);
@@ -231,7 +231,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	private static ThreadLocal<ByteBuffer> thrLocalBuf = ThreadLocal.withInitial(() -> ByteBuffer.allocate(conf.maxBufferLen));
 
-	public List<ByteBuffer> readRecords(final long minTS, final long maxTS, final int recSize) throws KawkabException, IOException {
+	public List<ByteBuffer> readRecords(final long minTS, final long maxTS, final int recSize, boolean loadFromPrimary) throws KawkabException, IOException {
 		if (minTS < 0 || maxTS < 0) {
 			throw new KawkabException(String.format("Invalid minTS (%d) or maxTS (%d) is given", minTS, maxTS));
 		}
@@ -241,7 +241,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		}
 
 		idxLog.start();
-		List<long[]> offsets = index.findAll(minTS, maxTS, indexLength(fileSize.get())); //Get the offsets
+		List<long[]> offsets = index.findAll(minTS, maxTS, indexLength(fileSize.get()), loadFromPrimary); //Get the offsets
 		idxLog.end();
 
 		if (offsets == null)
@@ -265,7 +265,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 					curSegment = (DataSegment)cache.acquireBlock(curSegId);
 
 					segLoadLog.start();
-					curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
+					curSegment.loadBlock(loadFromPrimary); //The segment data might not be loaded when we get from the cache
 					segLoadLog.end();
 
 					//ByteBuffer dstBuf = ByteBuffer.allocate(conf.segmentSizeBytes);
@@ -295,13 +295,13 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	}
 
-	public List<Record> readAll(long minTS, long maxTS, final Record recFactory) throws IOException, KawkabException {
+	public List<Record> readAll(long minTS, long maxTS, final Record recFactory, boolean loadFromPrimary) throws IOException, KawkabException {
 		if (recFactory.size() != recordSize) {
 			throw new KawkabException(String.format("Record sizes do not match. Given %d, expected %d", recFactory.size(), recordSize));
 		}
 
 		idxLog.start();
-		List<long[]> offsets = index.findAll(minTS, maxTS, indexLength(fileSize.get())); //Get the offsets
+		List<long[]> offsets = index.findAll(minTS, maxTS, indexLength(fileSize.get()), loadFromPrimary); //Get the offsets
 		idxLog.end();
 
 		if (offsets == null)
@@ -322,7 +322,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 				DataSegment curSegment = null;
 				try {
 					curSegment = (DataSegment)cache.acquireBlock(curSegId);
-					curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
+					curSegment.loadBlock(loadFromPrimary); //The segment data might not be loaded when we get from the cache
 					int cnt = curSegment.readAll(minTS, maxTS, recFactory, results);
 					//System.out.printf("  seg=%d, cnt=%d\n", segInFile, cnt);
 				} finally {
@@ -350,7 +350,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * @throws IOException
 	 * @throws KawkabException
 	 */
-	public int read(final byte[] buffer, final int length, final long offsetInFile) throws
+	public int read(final byte[] buffer, final int length, final long offsetInFile, boolean loadFromPrimary) throws
 			IllegalArgumentException, InvalidFileOffsetException, IOException, KawkabException {
 		if (length <= 0)
 			throw new IllegalArgumentException("Given length is 0.");
@@ -382,7 +382,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			DataSegment curSegment = null;
 			try {
 				curSegment = (DataSegment)cache.acquireBlock(curSegId);
-				curSegment.loadBlock(); //The segment data might not be loaded when we get from the cache
+				curSegment.loadBlock(loadFromPrimary); //The segment data might not be loaded when we get from the cache
 				bytesRead = curSegment.read(buffer, bufferOffset, toRead, curOffsetInFile);
 			} finally {
 				if (curSegment != null) {
@@ -685,6 +685,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (index != null)
 			index.printStats();
 		segLoadLog.printStats();
+		long fs = fileSize();
+		System.out.printf("\tFile=%d, FileSize=%d, recsInFile=%d, segsInFile=%d, recsPerSeg=%d, indexLen=%d, numIdxNodes=%d\n",inumber, fs, recordsInFile(),
+				FixedLenRecordUtils.segmentInFile(fs, recordSize), recsPerSeg, indexLength(fs), index!=null?index.size(indexLength(fs)):0);
 	}
 
 	public void resetStats() {

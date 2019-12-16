@@ -7,6 +7,7 @@ import kawkab.fs.core.IndexNodeID;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.utils.LatHistogram;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,6 +17,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.StandardOpenOption;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -809,10 +811,15 @@ public class POHNode extends Block {
 		return loadEntriesFrom(buffer, atTSOffset);
 	}
 
+	public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "IN load", 100, 100000);
 	private void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
 		//System.out.printf("[IN] Loading %s from the primary at offset %d\n",id, dirtyOffsetStart);
 
+		dbgHist.start();
+
 		ByteBuffer buffer = primaryNodeService.getIndexNode(id, dirtyOffsetStart);
+
+		dbgHist.end();
 
 		if (buffer.remaining() == 0) {
 			//System.out.println("[PN] No new entries retrieved.");
@@ -849,7 +856,7 @@ public class POHNode extends Block {
 	}
 
 	@Override
-	protected synchronized void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException {
+	protected synchronized void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, KawkabException, IOException {
 		// If the node is full, try fetching from the global store. If fails, load from the primary node.
 		// Otherwise, the node is most likely not in the global store. Therefore, fetch from the primary node.
 
@@ -870,7 +877,11 @@ public class POHNode extends Block {
 			return;
 		}
 
-		//loadBlockFromPrimary();
+		if (loadFromPrimary) {
+			loadBlockFromPrimary();
+			lastFetchTimeMs = clock.currentTime();
+			return;
+		}
 
 		try {
 			loadFromGlobal(id.numNodeInIndexBlock()*nodeSizeBytes+dirtyOffsetStart, nodeSizeBytes-dirtyOffsetStart);

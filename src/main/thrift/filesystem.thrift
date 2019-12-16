@@ -81,16 +81,19 @@ service FilesystemService {
 	list<i32> bulkOpen (1: list<TFileOpenRequest> fopenReqs) throws (1: TRequestFailedException rfe);
 	
 	// Returns data read from the given offset in the file
-	binary read (1: i32 sessionID, 2: i64 offset, 3: i32 length) throws
+	binary read (1: i32 sessionID, 2: i64 offset, 3: i32 length, 4: bool loadFromPrimary) throws
 		(1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TInvalidArgumentException iae, 4: TOutOfMemoryException ome);
 
-	binary recordNum(1: i32 sessionID, 2: i64 recordNum, 3: i32 recSize) throws
+    // Read a specific record number
+	binary recordNum(1: i32 sessionID, 2: i64 recordNum, 3: i32 recSize, 4: bool loadFromPrimary) throws
 	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
-	binary recordAt(1: i32 sessionID, 2: i64 timestamp, 3: i32 recSize) throws
+    // Read the record from a given timestamp, matching exactly
+	binary recordAt(1: i32 sessionID, 2: i64 timestamp, 3: i32 recSize, 4: bool loadFromPrimary) throws
 	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
-	list<binary> readRecords(1: i32 sessionID, 2: i64 minTS, 3: i64 maxTS, 4: i32 recSize) throws
+    // Read the records within the given time range, which is inclusive
+	list<binary> readRecords(1: i32 sessionID, 2: i64 minTS, 3: i64 maxTS, 4: i32 recSize, 5: bool loadFromPrimary) throws
 	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
 	i32 appendRecord (1: i32 sessionID, 2: binary data, 3: i32 recSize) throws

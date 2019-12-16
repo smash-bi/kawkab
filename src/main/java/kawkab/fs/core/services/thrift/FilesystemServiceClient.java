@@ -72,25 +72,25 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public ByteBuffer recordNum(int sessionID, long recNum, int recSize) throws KawkabException {
+	public ByteBuffer recordNum(int sessionID, long recNum, int recSize, boolean loadFromPrimary) throws KawkabException {
 		try {
-			return client.recordNum(sessionID, recNum, recSize);
+			return client.recordNum(sessionID, recNum, recSize, loadFromPrimary);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
 	}
 
-	public ByteBuffer recordAt(int sessionID, long timestamp, int recSize) throws KawkabException {
+	public ByteBuffer recordAt(int sessionID, long timestamp, int recSize, boolean loadFromPrimary) throws KawkabException {
 		try {
-			return client.recordAt(sessionID, timestamp, recSize);
+			return client.recordAt(sessionID, timestamp, recSize, loadFromPrimary);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
 	}
 
-	public List<ByteBuffer> readRecords(int sessionID, long minTS, long maxTS, int recSize) throws KawkabException {
+	public List<ByteBuffer> readRecords(int sessionID, long minTS, long maxTS, int recSize, boolean loadFromPrimary) throws KawkabException {
 		try {
-			return client.readRecords(sessionID, minTS, maxTS, recSize);
+			return client.readRecords(sessionID, minTS, maxTS, recSize, loadFromPrimary);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}

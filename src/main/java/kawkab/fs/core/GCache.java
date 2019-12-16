@@ -66,7 +66,7 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 		
 		assert block != null;
 		
-		block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock
+		//block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock
 									// function
 									// deals with concurrency. Therefore, we don't need to provide mutual exclusion
 									// here.

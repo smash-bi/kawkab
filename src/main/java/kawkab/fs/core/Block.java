@@ -254,24 +254,31 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws KawkabException
 	 * @throws IOException
 	 */
-	public void loadBlock() throws FileNotExistException, KawkabException, IOException {
+	public void loadBlock(boolean loadFromPrimary) throws FileNotExistException, KawkabException, IOException {
 		if (isOnPrimary) { // If this node is the primary writer of the file
 			if (!isLoaded)
 				loadBlockOnPrimary();
 			return;
 		}
 		
-		loadBlockOnNonPrimary();
+		loadBlockOnNonPrimary(loadFromPrimary);
 	}
 	
 	/**
 	 * Load block on the current non-primary node
-	 * 
+	 *
+	 * If this node is the primary node of this block, the block is first attempted to be loaded from the local store.
+	 * If this node is a non-primary node, the loadFromPrimary parameter indicates whether to load only from the primary
+	 * or follow another policy, e.g., first try to load from the global store.
+	 *
+	 * @param loadFromPrimary Whether to load the block only from the primary if this node is a non-primary node. This
+	 *                        flag is checked only on a non-primary node.
+	 *
 	 * @throws FileNotExistException
 	 * @throws KawkabException
 	 * @throws IOException
 	 */
-	protected abstract void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException;
+	protected abstract void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, KawkabException, IOException;
 	
 	/**
 	 * Helper function: Loads the block from the local or the global store. This code runs only on the primary node

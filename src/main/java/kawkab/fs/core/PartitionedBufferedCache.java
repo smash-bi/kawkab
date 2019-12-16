@@ -189,9 +189,11 @@ public class PartitionedBufferedCache extends Cache {
 		for (int i=0; i<numPartitions; i++) {
 			cache[i].flush();
 		}
+
+		flushPinned();
 	}
 
-	private void flushAll() throws KawkabException {
+	private void flushPinned() throws KawkabException {
 		for (CachedItem cachedItem : pinnedMap.values()) {
 			Block block = cachedItem.block();
 			if (block.id().onPrimaryNode() && block.isLocalDirty()) {
@@ -206,12 +208,14 @@ public class PartitionedBufferedCache extends Cache {
 
 			if (cachedItem.refCount() != 0) {
 				System.out.println("Ref count is not 0: id: " + block.id() + ", count: " + cachedItem.refCount());
+			} else {
+				pinnedMap.remove(block.id());
 			}
 
-			assert cachedItem.refCount() == 0;
+			/*assert cachedItem.refCount() == 0;*/
 		}
 
-		pinnedMap.clear();
+		//pinnedMap.clear();
 	}
 	
 	@Override
@@ -227,7 +231,8 @@ public class PartitionedBufferedCache extends Cache {
 		//System.out.printf("ReleaseStats (us): %s\n", releaseStats);
 		//System.out.printf("LoadStats (us): %s\n", loadStats);
 		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
-		flushAll();
+		flush();
+		//flushPinned();
 		localStore.shutdown();
 	}
 	

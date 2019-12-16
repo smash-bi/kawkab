@@ -264,7 +264,8 @@ public final class CLI {
 	}
 
 	private void parseClientRead(String[] args) throws KawkabException, IOException, InterruptedException {
-		String usage = "Usage: cr <filename> [ <n num> | <t ts> | <r ts1 ts2> [p] | <rn|rt ts1 ts2 count> [f] | <np [count]> | <rr tsMin tsMax tsIval count> [f] ] ";
+		String usage = "Usage: cr <filename> [ <n num> | <t ts> | <r ts1 ts2> [p] | " +
+				"<rn|rt ts1 ts2 count> [f] [l] | <np [count]>  [l] | <rr tsMin tsMax tsIval count> [f] [l] ] ";
 		if (args.length < 2) {
 			System.out.println(usage);
 			return;
@@ -280,7 +281,7 @@ public final class CLI {
 		Record recgen = recGen(recSize);
 
 		if (args.length == 2) {
-			List<Record> recs = client.readRecords(fname, 1, Long.MAX_VALUE-1, recgen);
+			List<Record> recs = client.readRecords(fname, 1, Long.MAX_VALUE-1, recgen, true);
 
 			if (recs == null) {
 				System.out.printf("Records not found b/w %d and %d\n", 1, Long.MAX_VALUE-1);
@@ -304,7 +305,7 @@ public final class CLI {
 				int recNum = Integer.parseInt(args[3]);
 
 				Stopwatch sw = Stopwatch.createStarted();
-				recgen = client.recordNum(fname, recNum, recgen);
+				recgen = client.recordNum(fname, recNum, recgen, true);
 				long elapsed = sw.stop().elapsed(TimeUnit.MICROSECONDS);
 
 				System.out.println(recgen);
@@ -320,7 +321,7 @@ public final class CLI {
 				long atTS = Long.parseLong(args[3]);
 
 				Stopwatch sw = Stopwatch.createStarted();
-				recgen = client.recordAt(fname, atTS, recgen);
+				recgen = client.recordAt(fname, atTS, recgen, true);
 				long elapsed = sw.stop().elapsed(TimeUnit.MICROSECONDS);
 
 				if (recgen != null)
@@ -342,7 +343,7 @@ public final class CLI {
 				long t2 = Long.parseLong(args[4]);
 
 				Stopwatch sw = Stopwatch.createStarted();
-				List<Record> recs = client.readRecords(fname, t1, t2, recgen);
+				List<Record> recs = client.readRecords(fname, t1, t2, recgen, true);
 				long elapsed = sw.stop().elapsed(TimeUnit.MICROSECONDS);
 
 				if (recs == null) {
@@ -372,7 +373,30 @@ public final class CLI {
 				long t2 = Long.parseLong(args[4]);
 				int numRecs = Integer.parseInt(args[5]);
 
-				clientExactReadTest(fname, recSize, t1, t2, numRecs, recgen, type.equals("rn"), args.length == 7);
+				boolean withFlush = false;
+				boolean loadFromPrimary = false;
+
+				switch(args.length) {
+					case 8: {
+						if (args[7].equals("l"))
+							loadFromPrimary = true;
+					}
+					case 7: {
+						if (args[6].equals("f"))
+							withFlush = true;
+						else if (args[6].equals("l"))
+							loadFromPrimary = true;
+					} break;
+					case 6:
+						withFlush = loadFromPrimary = false;
+						break;
+					default: {
+						System.out.println(usage);
+						return;
+					}
+				}
+
+				clientExactReadTest(fname, recSize, t1, t2, numRecs, recgen, type.equals("rn"), withFlush, loadFromPrimary);
 
 				break;
 			}
@@ -386,14 +410,31 @@ public final class CLI {
 				long t2 = Long.parseLong(args[4]);
 				int ival = Integer.parseInt(args[5]);
 				int count = Integer.parseInt(args[6]);
-				String flush = args.length == 8 ? args[7] : null;
 
-				if (flush != null && !flush.equals("f")) {
-					System.out.println("Invalid flush param, could be f only");
-					break;
+				boolean withFlush = false;
+				boolean loadFromPrimary = false;
+
+				switch(args.length) {
+					case 9: {
+						if (args[8].equals("l"))
+							loadFromPrimary = true;
+					}
+					case 8: {
+						if (args[7].equals("f"))
+							withFlush = true;
+						else if (args[7].equals("l"))
+							loadFromPrimary = true;
+					} break;
+					case 7:
+						withFlush = loadFromPrimary = false;
+						break;
+					default: {
+						System.out.println(usage);
+						return;
+					}
 				}
 
-				clientRangeQueryTest(fname, recSize, t1, t2, ival, count, recgen, flush);
+				clientRangeQueryTest(fname, recSize, t1, t2, ival, count, recgen, withFlush, loadFromPrimary);
 
 				break;
 			}
@@ -430,54 +471,54 @@ public final class CLI {
 	}
 
 	private void clientRangeQueryTest(String fname, int recSize, long t1, long t2, int interval, int count, Record recgen,
-									  String withFlush) throws KawkabException, IOException, InterruptedException {
+									  boolean withFlush, boolean loadFromPrimary) throws KawkabException, IOException, InterruptedException {
 		Random rand = new Random();
+		TimeUnit unit = TimeUnit.MICROSECONDS;
+		LatHistogram latHist = new LatHistogram(unit, "Range query latency", 100, 1000000);
 
-		LatHistogram latHist = new LatHistogram(TimeUnit.MICROSECONDS, "Range query latency", 100, 100000);
-
-		System.out.printf("Reading records %,d times from %s randomly b/w %d and %d with interval %d, recSize %d, flush is %s\n",
-				count, fname, t1, t2, interval, recSize, withFlush);
+		System.out.printf("Reading records %,d times from %s randomly b/w %d and %d with interval %d, recSize %d, flush is %s, loadFromPrimary is %s\n",
+				count, fname, t1, t2, interval, recSize, withFlush, loadFromPrimary);
 
 		long diff = t2 - t1;
 		long[] tsMin = new long[count];
 		long[] tsMax = new long[count];
 		for (int i=0; i<count; i++) {
 			long minVal = Math.abs(rand.nextLong() % diff);
-			if (t1+minVal+interval-1 > t2) {
-				i--;
-				continue;
-			}
+			if (diff > 0 ) {
+				if (t1 + minVal + interval - 1 > t2) {
+					i--;
+					continue;
+				}
 
-			tsMin[i] = t1 + minVal;
-			tsMax[i] = tsMin[i] + interval - 1;
+				tsMin[i] = t1 + minVal;
+				tsMax[i] = tsMin[i] + interval - 1;
+			} else {
+				tsMin[i] = t1;
+				tsMax[i] = t2;
+			}
 		}
 
-		long startTime = System.currentTimeMillis();
-
+		long dur = 0;
 		int numRecs = 0;
 		for (int i=0; i<count; i++) {
 			assert tsMin[i] >= 0;
 			assert tsMax[i] >= 0;
 
+			if (withFlush ) {
+				client.flush();
+			}
+
 			latHist.start();
-			List<Record> recs = client.readRecords(fname, tsMin[i], tsMax[i], recgen);
-			latHist.end();
+			List<Record> recs = client.readRecords(fname, tsMin[i], tsMax[i], recgen, loadFromPrimary);
+			dur += latHist.end();
 
 			//To ensure that we have same number of results for the correct results
 			assert recs.size() == interval : String.format("Expected %d results, got %d", interval, recs.size());
 
 			numRecs += recs.size();
-
-			if (withFlush != null) {
-				if (withFlush.equals("f")) {
-					client.flush();
-				} else {
-					assert false;
-				}
-			}
 		}
 
-		double durSec = (System.currentTimeMillis() - startTime) / 1000.0;
+		double durSec = unit.toSeconds(dur);
 
 		Result res = getResults(latHist, durSec, numRecs, recSize, interval, "Range query test");
 		System.out.println(res.csvHeader());
@@ -485,35 +526,38 @@ public final class CLI {
 	}
 
 	private void clientExactReadTest(String fname, int recSize, long t1, long t2, int numRecs, Record recgen,
-									 boolean byRecNum, boolean withFlush) throws KawkabException {
+									 boolean byRecNum, boolean withFlush, boolean loadFromPrimary) throws KawkabException {
 		Random rand = new Random();
 
-		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Read latency", 100, 100000);
+		TimeUnit unit = TimeUnit.MICROSECONDS;
+		LatHistogram tlog = new LatHistogram(unit, "Read latency", 100, 1000000);
 
 		System.out.printf("Reading %,d records from %s using %s, recSize %d, in range %d and %d\n", numRecs, fname,
 				byRecNum?"rec nums":"exact time", recSize, t1, t2);
 
-		long startTime = System.currentTimeMillis();
+		long dur = 0;
 
 		for (int i=0; i<numRecs; i++) {
-			tlog.start();
-			if (byRecNum) {
-				int recNum = (int) (t1 + rand.nextInt((int) (t2 - t1)));
-				recgen = client.recordNum(fname, recNum, recgen);
-			} else {
-				int recTime = (int) (t1 + rand.nextInt((int) (t2 - t1)));
-				recgen = client.recordAt(fname, recTime, recgen);
-			}
-			tlog.end();
-
 			if (withFlush) {
 				client.flush();
+			}
+
+			if (byRecNum) {
+				int recNum = (int) (t1 + rand.nextInt((int) (t2 - t1)));
+				tlog.start();
+				recgen = client.recordNum(fname, recNum, recgen, loadFromPrimary);
+				dur += tlog.end();
+			} else {
+				int recTime = (int) (t1 + rand.nextInt((int) (t2 - t1)));
+				tlog.start();
+				recgen = client.recordAt(fname, recTime, recgen, loadFromPrimary);
+				dur += tlog.end();
 			}
 		}
 
 		assert numRecs == tlog.sampled();
 
-		double durSec = (System.currentTimeMillis() - startTime) / 1000.0;
+		double durSec = unit.toSeconds(dur);
 
 		Result res = getResults(tlog, durSec, numRecs, recSize, 1, "Read test");
 		System.out.println(res.csvHeader());
@@ -549,7 +593,7 @@ public final class CLI {
 		Record recgen = recGen(recSize);
 
 		if (args.length == 2) {
-			List<Record> recs = file.readRecords(1, Long.MAX_VALUE-1, recgen.newRecord());
+			List<Record> recs = file.readRecords(1, Long.MAX_VALUE-1, recgen.newRecord(), true);
 
 			if (recs == null) {
 				System.out.printf("Records not found b/w %d and %d\n", 1, Long.MAX_VALUE-1);
@@ -574,7 +618,7 @@ public final class CLI {
 
 				LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "read-lat", 100, 100000);
 				tlog.start();
-				file.recordNum(recgen.copyInDstBuffer(), recNum, recgen.size());
+				file.recordNum(recgen.copyInDstBuffer(), recNum, recgen.size(), true);
 				tlog.end();
 
 				System.out.println(recgen);
@@ -588,7 +632,7 @@ public final class CLI {
 				}
 
 				long atTS = Long.parseLong(args[3]);
-				if (file.recordAt(recgen.copyInDstBuffer(), atTS, recgen.size()))
+				if (file.recordAt(recgen.copyInDstBuffer(), atTS, recgen.size(), true))
 					System.out.println(recgen);
 				else
 					System.out.println("Record not found at " + atTS);
@@ -602,7 +646,7 @@ public final class CLI {
 
 				long t1 = Long.parseLong(args[3]);
 				long t2 = Long.parseLong(args[4]);
-				List<Record> recs = file.readRecords(t1, t2, recgen);
+				List<Record> recs = file.readRecords(t1, t2, recgen, true);
 
 				if (recs == null) {
 					System.out.printf("Records not found b/w %d and %d\n", t1, t2);
@@ -637,8 +681,8 @@ public final class CLI {
 		int recSize = file.recordSize();
 		long tsOffset = file.size()/recSize + 1;
 
-		Stopwatch sw = Stopwatch.createStarted();
 		Record recgen = recGen(recSize);
+		Stopwatch sw = Stopwatch.createStarted();
 		for (int i=0; i<numRecs; i++) {
 			Record rec = recgen.newRandomRecord(rand, i+tsOffset);
 			file.append(rec.copyOutSrcBuffer(), rec.size());
@@ -677,7 +721,8 @@ public final class CLI {
 
 		long fs = file.size();
 		long fsMib = fs / 2048576;
-		System.out.printf("File size = %d MiB, %d B", fsMib, fs);
+
+		System.out.printf("File size = %d MiB, %d B, recsInFile=%d\n", fsMib, fs, file.recordsInFile());
 	}
 	
 	private void parseAppendTest(String[] args) throws KawkabException, IOException {
@@ -859,7 +904,7 @@ public final class CLI {
 
 	private void parseRead(String[] args)
 			throws NumberFormatException, IOException, KawkabException {
-		String usage = "Usage: read filename offset intLength <dstFile>";
+		String usage = "Usage: read <filename> [<offset> [<numBytes> [<dstFile>]]]";
 		
 		String fn;
 		String dstFile = null;
@@ -891,7 +936,7 @@ public final class CLI {
 			return;
 		}
 		
-		readFile(fn, offset, len, dstFile);
+		readFile(fn, offset, len, dstFile, true);
 		
 		
 		/*if (args.length > 4) {
@@ -912,7 +957,7 @@ public final class CLI {
 		
 	}
 
-	private void readFile(String fn, long byteStart, long readLen, String dst)
+	private void readFile(String fn, long byteStart, long readLen, String dst, boolean loadFromPrimary)
 			throws IOException, KawkabException {
 		FileHandle file = openedFiles.get(fn);
 		if (file == null) {
@@ -935,7 +980,7 @@ public final class CLI {
 			System.out.println("[CLI] read len bytes: " + readLen);
 			while (read < readLen) {
 				int toRead = (int) (readLen - read >= buf.length ? buf.length : readLen - read);
-				int len = file.read(buf, byteStart+read, toRead);
+				int len = file.read(buf, byteStart+read, toRead, loadFromPrimary);
 				System.out.println("Read length = " + len);
 				if (out != null) {
 					out.write(new String(buf, 0, len));

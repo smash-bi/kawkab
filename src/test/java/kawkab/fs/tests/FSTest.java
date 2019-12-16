@@ -121,7 +121,7 @@ public final class FSTest {
 		System.out.println(String.format("readOffset %d, file size %d, appended now %d", readOffset, file.size(), appended));
 
 		byte[] readBuf = new byte[dataBuffer.length];
-		int read = file.read(readBuf, readOffset, readBuf.length);
+		int read = file.read(readBuf, readOffset, readBuf.length, true);
 
 		fs.close(file);
 
@@ -159,7 +159,7 @@ public final class FSTest {
 		long read = 0;
 		while (read != fileSize) {
 			int len = fileSize-read > readBuf.length ? readBuf.length : (int)(fileSize-read);
-			read += file.read(readBuf, 0, len);
+			read += file.read(readBuf, 0, len, true);
 		}
 
 		System.out.println(String.format("file size %d, read bytes %d", file.size(), read));
@@ -198,7 +198,7 @@ public final class FSTest {
 		System.out.println(String.format("readOffset %d, file size %d, appended now %d", readOffset, file.size(), appended));
 
 		byte[] readBuf = new byte[dataBuffer.length];
-		int read = file.read(readBuf, readOffset, readBuf.length);
+		int read = file.read(readBuf, readOffset, readBuf.length, true);
 
 		System.out.println("File " + filename + " size " + file.size());
 
@@ -265,7 +265,7 @@ public final class FSTest {
 					int toRead = (int) (read + bufSize < dataSize ? bufSize : dataSize - read);
 					int bytes;
 					try {
-						bytes = file1.read(readBuf, nextOffset, toRead);
+						bytes = file1.read(readBuf, nextOffset, toRead, true);
 						nextOffset += bytes;
 					} catch (IOException | IllegalArgumentException | KawkabException e) {
 						e.printStackTrace();
@@ -351,7 +351,7 @@ public final class FSTest {
 					long read = 0;
 					while (read < dataSize) {
 						int toRead = (int) (read + bufSize < dataSize ? bufSize : dataSize - read);
-						int bytes = file.read(readBuf, readOffset, toRead);
+						int bytes = file.read(readBuf, readOffset, toRead, true);
 						read += bytes;
 						readOffset += bytes;
 
@@ -521,7 +521,7 @@ public final class FSTest {
 		long read = 0;
 		while (read < dataSize) {
 			int toRead = (int) (read + bufSize < dataSize ? bufSize : dataSize - read);
-			int bytes = file.read(buffer, read, toRead);
+			int bytes = file.read(buffer, read, toRead, true);
 			read += bytes;
 		}
 
@@ -589,7 +589,7 @@ public final class FSTest {
 					int toRead = (int) (read + bufSize < dataSize ? bufSize : dataSize - read);
 					int bytes;
 					try {
-						bytes = file1.read(readBuf, read, toRead);
+						bytes = file1.read(readBuf, read, toRead, true);
 					} catch (IOException | IllegalArgumentException | KawkabException e) {
 						e.printStackTrace();
 						break;
@@ -685,7 +685,7 @@ public final class FSTest {
 									int toRead = (int) (read + bufferSize < dataSize ? bufferSize : dataSize - read);
 									int bytes;
 									try {
-										bytes = file.read(buffer, read, toRead);
+										bytes = file.read(buffer, read, toRead, true);
 									} catch (IOException | IllegalArgumentException | KawkabException e) {
 										e.printStackTrace();
 										break;
@@ -773,7 +773,7 @@ public final class FSTest {
 									int toRead = (int) (read + bufferSize < dataSize ? bufferSize : dataSize - read);
 									int bytes = 0;
 									try {
-										bytes = file.read(buffer, readOffset, toRead);
+										bytes = file.read(buffer, readOffset, toRead, true);
 									} catch (IOException | IllegalArgumentException | KawkabException e) {
 										e.printStackTrace();
 										break;

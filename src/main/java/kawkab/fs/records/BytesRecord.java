@@ -66,8 +66,9 @@ public class BytesRecord implements Record {
 		return new BytesRecord(size());
 	}
 
+	@Override
 	public Record newRandomRecord(Random rand, long timestamp) {
-		return new BytesRecord(timestamp, DEFAULT_SIZE);
+		return new BytesRecord(timestamp, sizeBytes);
 	}
 
 	public Record newRandomRecord(long timestamp, int sizeBytes) {
@@ -85,5 +86,10 @@ public class BytesRecord implements Record {
 	@Override
 	public int hashCode() {
 		return Objects.hash(buffer);
+	}
+
+	@Override
+	public String toString() {
+		return String.format("ts=%d, len=%d\n", timestamp(), sizeBytes);
 	}
 }

@@ -74,8 +74,8 @@ public class PartialReadTest {
 		byte[] readData = new byte[beforeFlushData.length];
 		byte[] allData = new byte[beforeFlushData.length + afterFlushData.length];
 
-		file.read(readData, initialOffset, beforeFlushData.length);
-		file.read(allData, initialOffset, allData.length);
+		file.read(readData, initialOffset, beforeFlushData.length, true);
+		file.read(allData, initialOffset, allData.length, true);
 
 		/*System.out.println(Arrays.toString(beforeFlushData));
 		System.out.println(Arrays.toString(readData));

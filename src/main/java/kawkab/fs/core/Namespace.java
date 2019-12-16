@@ -196,7 +196,7 @@ public class Namespace {
 			try {
 				// System.out.println("[NS] Map number: " + mapNum);
 				ibmap = (Ibmap) (cache.acquireBlock(id));
-				ibmap.loadBlock();
+				ibmap.loadBlock(false);
 				inumber = ibmap.useNextInumber();
 				if (inumber >= 0)
 					break;
@@ -240,7 +240,7 @@ public class Namespace {
 			// inumber + ", primary: " + Commons.primaryWriterID(inumber));
 
 			inodesBlock = (InodesBlock) cache.acquireBlock(id);
-			inodesBlock.loadBlock();
+			inodesBlock.loadBlock(false);
 			inodesBlock.initInode(inumber, recordSize);
 		} finally {
 			if (inodesBlock != null) {

@@ -219,39 +219,39 @@ public class KClient {
 		return client.appendNoops(buffer);
 	}
 
-	public Record recordNum(String fn, long recNum, Record recFactory) throws KawkabException {
+	public Record recordNum(String fn, long recNum, Record recFactory, boolean loadFromPrimary) throws KawkabException {
 		assert client != null;
 		Session session = sessions.get(fn);
 		if (session == null)
 			throw new KawkabException(String.format("File %s is not opened",fn));
 
-		ByteBuffer buffer = client.recordNum(session.id, recNum, recFactory.size());
+		ByteBuffer buffer = client.recordNum(session.id, recNum, recFactory.size(), loadFromPrimary);
 
 		Record rec = recFactory.newRecord();
 		rec.copyInDstBuffer().put(buffer);
 		return rec;
 	}
 
-	public Record recordAt(String fn, long timestamp, Record recFactory) throws KawkabException {
+	public Record recordAt(String fn, long timestamp, Record recFactory, boolean loadFromPrimary) throws KawkabException {
 		assert client != null;
 		Session session = sessions.get(fn);
 		if (session == null)
 			throw new KawkabException(String.format("File %s is not opened",fn));
 
-		ByteBuffer buffer = client.recordAt(session.id, timestamp, recFactory.size());
+		ByteBuffer buffer = client.recordAt(session.id, timestamp, recFactory.size(), loadFromPrimary);
 
 		Record rec = recFactory.newRecord();
 		rec.copyInDstBuffer().put(buffer);
 		return rec;
 	}
 
-	public List<Record> readRecords(String fn, long minTS, long maxTS, Record recFactory) throws KawkabException {
+	public List<Record> readRecords(String fn, long minTS, long maxTS, Record recFactory, boolean loadFromPrimary) throws KawkabException {
 		assert client != null;
 		Session session = sessions.get(fn);
 		if (session == null)
 			throw new KawkabException(String.format("File %s is not opened",fn));
 
-		List<ByteBuffer> results = client.readRecords(session.id, minTS, maxTS, recFactory.size());
+		List<ByteBuffer> results = client.readRecords(session.id, minTS, maxTS, recFactory.size(), loadFromPrimary);
 
 		//printBuffers(results, recFactory);
 

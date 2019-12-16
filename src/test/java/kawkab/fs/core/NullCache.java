@@ -31,4 +31,12 @@ public class NullCache extends Cache {
 	public String getStats() {
 		return null;
 	}
+
+	@Override
+	public void printStats() {
+	}
+
+	@Override
+	public void resetStats() {
+	}
 }
