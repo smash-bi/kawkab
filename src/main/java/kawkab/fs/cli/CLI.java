@@ -482,13 +482,16 @@ public final class CLI {
 		long diff = t2 - t1;
 		long[] tsMin = new long[count];
 		long[] tsMax = new long[count];
-		for (int i=0; i<count; i++) {
+		int tries = 100;
+		for (int i=0; i<count && tries>0; i++) {
 			long minVal = Math.abs(rand.nextLong() % diff);
 			if (diff > 0 ) {
 				if (t1 + minVal + interval - 1 > t2) {
 					i--;
+					tries--;
 					continue;
 				}
+				tries = 100;
 
 				tsMin[i] = t1 + minVal;
 				tsMax[i] = tsMin[i] + interval - 1;

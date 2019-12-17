@@ -811,15 +811,15 @@ public class POHNode extends Block {
 		return loadEntriesFrom(buffer, atTSOffset);
 	}
 
-	public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "IN load", 100, 100000);
+	//public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "IN load", 100, 100000);
 	private void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
 		//System.out.printf("[IN] Loading %s from the primary at offset %d\n",id, dirtyOffsetStart);
 
-		dbgHist.start();
+		//dbgHist.start();
 
 		ByteBuffer buffer = primaryNodeService.getIndexNode(id, dirtyOffsetStart);
 
-		dbgHist.end();
+		//dbgHist.end();
 
 		if (buffer.remaining() == 0) {
 			//System.out.println("[PN] No new entries retrieved.");

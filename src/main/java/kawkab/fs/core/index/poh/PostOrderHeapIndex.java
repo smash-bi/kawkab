@@ -49,14 +49,14 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 	// nodesCountTable: A lookup table that contains the number of nodes in the perfect k-ary tree of height i, i>=0.
 	// We use this table to avoid the complex math functions. Array index is the key, which is the node number.
-	private int[] nodesCountTable; //TODO: This table should be final and static
-	private int[] nodeHeightsTable;
+	private static int[] nodesCountTable; //TODO: This table should be final and static
+	private static int[] nodeHeightsTable; //FIXME: These are static for debugging purposes
 
 	private final Cache cache;
 
 	private int nodeSizeBytes;
 
-	private LatHistogram loadLog;
+	//private LatHistogram loadLog;
 
 	/**
 	 *
@@ -93,21 +93,30 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		//nodes.add(currentNode);
 
 		//TODO: Use a systematic way to get a good table size
-		int count = 1000000;
-		nodesCountTable = new int[count]; // We don't expect the height to grow large because of the large branching factor
-		for (int i=0; i<nodesCountTable.length; i++) {
-			nodesCountTable[i] = totalNodesKAryTree(i);
+		int count = 100000;
+		if (nodesCountTable == null) {
+			synchronized (this) {
+				nodesCountTable = new int[count]; // We don't expect the height to grow large because of the large branching factor
+				for (int i = 0; i < nodesCountTable.length; i++) {
+					nodesCountTable[i] = totalNodesKAryTree(i);
+				}
+			}
 		}
 
-		nodeHeightsTable = new int[count];
-		for (int i=0; i<nodeHeightsTable.length; i++) {
-			nodeHeightsTable[i] = -1;
-		}
-		for (int i=count-1; i>=0; i--) {
-			nodeHeightsTable[i] = heightOfNode(i);
+		if (nodeHeightsTable == null) {
+			synchronized (this) {
+				nodeHeightsTable = new int[count];
+				for (int i = 0; i < nodeHeightsTable.length; i++) {
+					nodeHeightsTable[i] = -1;
+				}
+
+				for (int i = count - 1; i >= 0; i--) {
+					nodeHeightsTable[i] = heightOfNode(i);
+				}
+			}
 		}
 
-		loadLog = new LatHistogram(TimeUnit.MICROSECONDS, "IndexNode load", 1, 5000);
+		//loadLog = new LatHistogram(TimeUnit.MICROSECONDS, "IndexNode load", 1, 5000);
 	}
 
 	/**
@@ -148,9 +157,9 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 			}
 		}
 
-		loadLog.start();
+		//loadLog.start();
 		node.loadBlock(loadFromPrimary);
-		loadLog.end();
+		//loadLog.end();
 
 		return node;
 	}
@@ -364,7 +373,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		//long curLen = length.get();
 		int lastNodeIdx = lastNodeIndex(indexLength, entriesPerNode);
 
-		System.out.printf("[POH] findHighest %d, index len %d, num nodes %d, lastNodeIdx=%d\n", ts, indexLength, nodes.size(), lastNodeIdx);
+		//System.out.printf("[POH] findHighest %d, index len %d, num nodes %d, lastNodeIdx=%d\n", ts, indexLength, nodes.size(), lastNodeIdx);
 
 		//System.out.println();
 
@@ -718,12 +727,12 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	}
 
 	public void printStats() {
-		loadLog.printStats();
+		//loadLog.printStats();
 
 	}
 
 	public void resetStats() {
-		loadLog.reset();
+		//loadLog.reset();
 	}
 
 	@Override

@@ -220,6 +220,7 @@ public final class Configuration {
 		System.out.println(String.format("Index node size bytes= %d", indexNodeSizeBytes));
 		System.out.println(String.format("Cache size (MiB) ......... = %d", cacheSizeMiB));
 		System.out.println(String.format("Num local devices......... = %d", numLocalDevices));
+		System.out.println(String.format("RPC buffer len............ = %d", maxBufferLen));
 	}
 	
 	private void verify() {

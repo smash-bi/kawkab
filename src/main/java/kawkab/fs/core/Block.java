@@ -9,8 +9,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * This is a parent class for Ibmap, InodeBlock, and DataSegment classes. It provides a common interface for the subclasses
@@ -34,10 +32,6 @@ public abstract class Block extends AbstractTransferItem {
 	private final static LocalStoreManager localStoreManager = LocalStoreManager.instance(); //FIXME: Handle exception properly;  // Local store such as local SSD
 	protected final static PrimaryNodeServiceClient primaryNodeService = PrimaryNodeServiceClient.instance(); // To load the block from the primary node
 	
-	private final Object localStoreSyncLock; // Lock to prevent cache eviction before syncing to the local store
-	
-	private final Lock dataLoadLock; //Lock for loading data in memory, disabling other threads from reading the block until data is loaded
-	
 	//private AtomicInteger globalDirtyCnt;
 	private volatile boolean isLocalDirty; // Keeps track of the number of times the block is udpated. It helps in keeping track of the
 	                        // updated bytes and flush only the updated bytes to the local/global store. 
@@ -53,15 +47,12 @@ public abstract class Block extends AbstractTransferItem {
 
 	protected boolean isOnPrimary;
 	
-	public long inQCount = 0; //For debug purposes
-	public long inTries = 0; //For debug purposes
+	//public long inQCount = 0; //For debug purposes
+	//public long inTries = 0; //For debug purposes
 	
 	public Block(BlockID id) {
 		this.id = id;
 		
-		localStoreSyncLock = new Object();
-		dataLoadLock = new ReentrantLock();
-
 		isOnPrimary    = id.onPrimaryNode();
 		isLocalDirty   = false;
 		//globalDirtyCnt = new AtomicInteger(0);
@@ -69,6 +60,7 @@ public abstract class Block extends AbstractTransferItem {
 		inLocalStore   = new AtomicBoolean(false);
 		//inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and
 		                                          // the newly created blocks are always cached.
+		isLoaded = false;
 	}
 	
 	protected void reset(BlockID id) {
@@ -170,8 +162,8 @@ public abstract class Block extends AbstractTransferItem {
 	}
 	
 	public void notifyLocalSyncComplete() {
-		synchronized (localStoreSyncLock) {
-			localStoreSyncLock.notifyAll(); // Wake up the threads if they are waiting to evict this block from the cache
+		synchronized (this) {
+			notifyAll(); // Wake up the threads if they are waiting to evict this block from the cache
 		}
 	}
 	
@@ -222,12 +214,12 @@ public abstract class Block extends AbstractTransferItem {
 	 */
 	public void waitUntilSynced() throws InterruptedException {
 		if (isLocalDirty || inTransferQueue()) {
-			synchronized(localStoreSyncLock) {
+			synchronized(this) {
 				// It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
 				while (isLocalDirty || inTransferQueue()) {
 					//System.out.println("[B] swait: " + id + ", dty: " +
 					//			isLocalDirty + ", inLQ="+inTransferQueue());
-					localStoreSyncLock.wait();
+					wait();
 				}
 				//System.out.println("[B] Block synced, now evicting: " + id);
 			}
@@ -296,23 +288,21 @@ public abstract class Block extends AbstractTransferItem {
 
 		//Load only if the block is not already loaded
 		if (!isLoaded) {
-			try {
-				dataLoadLock.lock(); // Disable loading from concurrent threads
+			//dataLoadLock.lock(); // Disable loading from concurrent threads
+			synchronized (this) {
 				//Load only if it is not already loaded
 				if (!isLoaded) { // Prevent subsequent loads from other threads
 					//System.out.println(" [B] **** LOAD BLOCK ON PRIMARY: " + id);
 					//System.out.println("[B] On primary. Load from the LOCAL store: " + id);
-					
+
 					if (!localStoreManager.load(this)) { // Load data from the local store
 						System.out.println("[B] On primary: Loading from the GLOBAL STORE: " + id);
 						loadFromGlobal(0, sizeWhenSerialized()); // Load from the global store if failed to load from the local store
 					}
-					
+
 					isLoaded = true; //Once data is loaded on the primary, it should not expired because
-				                     // the concurrent readers/writer read/modify the same block in the cache.
+					// the concurrent readers/writer read/modify the same block in the cache.
 				}
-			} finally {
-				dataLoadLock.unlock();
 			}
 		}
 	}
@@ -342,9 +332,9 @@ public abstract class Block extends AbstractTransferItem {
 		isLoaded = true;
 	}
 
-	public boolean isLoaded() {
+	/*public boolean isLoaded() {
 		return isLoaded;
-	}
+	}*/
 }
 
 /*

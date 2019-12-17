@@ -125,7 +125,7 @@ public class Namespace {
 		return inumber;
 	}
 
-	public long openFileDbg(String filename, boolean appendMode, FileOptions opts) throws IbmapsFullException, IOException,
+	public synchronized long openFileDbg(String filename, boolean appendMode, FileOptions opts) throws IbmapsFullException, IOException,
 			InvalidFileModeException, FileAlreadyOpenedException, FileNotExistException, KawkabException, InterruptedException {
 		long inumber;
 

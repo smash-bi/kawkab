@@ -77,7 +77,7 @@ public final class Filesystem {
 		assert opts.recordSize() > 0;
 		assert opts.recordSize() <= Configuration.instance().segmentSizeBytes;
 		
-		//long inumber = namespace.openFileDbg(filename, mode == FileMode.APPEND, opts);
+		//long inumber = namespace.openFileDbg(filename, mode == FileMode.APPEND, opts); //FIXME
 		long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber);
 		FileHandle file = new FileHandle(inumber, mode, fsQ, segsQ);
@@ -207,9 +207,9 @@ public final class Filesystem {
 
 		pns.printStats();
 
-		InodesBlock.dbgHist.printStats();
-		DataSegment.dbgHist.printStats();
-		POHNode.dbgHist.printStats();
+		//InodesBlock.dbgHist.printStats();
+		//DataSegment.dbgHist.printStats();
+		//POHNode.dbgHist.printStats();
 	}
 
 	public void resetStats() throws KawkabException {
@@ -219,8 +219,8 @@ public final class Filesystem {
 
 		pns.resetStats();
 
-		InodesBlock.dbgHist.reset();
-		DataSegment.dbgHist.reset();
-		POHNode.dbgHist.reset();
+		//InodesBlock.dbgHist.reset();
+		//DataSegment.dbgHist.reset();
+		//POHNode.dbgHist.reset();
 	}
 }

@@ -151,11 +151,11 @@ public final class InodesBlock extends Block {
 		}
 	}
 
-	public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "IB load", 100, 100000);
+	//public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "IB load", 100, 100000);
 	private void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException {
-		dbgHist.start();
+		//dbgHist.start();
 		loadFrom(primaryNodeService.getInodesBlock((InodesBlockID)id()));
-		dbgHist.end();
+		//dbgHist.end();
 	}
 
 	@Override

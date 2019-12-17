@@ -97,16 +97,16 @@ public class TestClient {
 		Result result = null;
 		try {
 			pr.print(String.format("%s Ramp-up for %d seconds...", cls, warmupSecs));
-			//appendRecords(fnames, warmupSecs, recGen.newRecord(), batchSize);
-			appendRecsBuffered(fnames, warmupSecs, recGen.newRecord(), batchSize);
+			appendRecords(fnames, warmupSecs, recGen.newRecord(), batchSize);
+			//appendRecsBuffered(fnames, warmupSecs, recGen.newRecord(), batchSize);
 
 			pr.print(String.format("%s Appending records for %d secs (with batching)...", cls, testDurSec));
-			//result = appendRecords(fnames, testDurSec, recGen.newRecord(), batchSize);
-			result = appendRecsBuffered(fnames, testDurSec, recGen.newRecord(), batchSize);
+			result = appendRecords(fnames, testDurSec, recGen.newRecord(), batchSize);
+			//result = appendRecsBuffered(fnames, testDurSec, recGen.newRecord(), batchSize);
 
 			pr.print(String.format("%s Ramp-down for %d seconds...", cls, rampDownSec));
-			//appendRecords(fnames, rampDownSec, recGen.newRecord(), batchSize);
-			appendRecsBuffered(fnames, rampDownSec, recGen.newRecord(), batchSize);
+			appendRecords(fnames, rampDownSec, recGen.newRecord(), batchSize);
+			//appendRecsBuffered(fnames, rampDownSec, recGen.newRecord(), batchSize);
 		}catch (OutOfMemoryException e) {
 			e.printStackTrace();
 		} finally {
