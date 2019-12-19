@@ -4,13 +4,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class DSPool {
 	private ConcurrentLinkedQueue<DataSegment> pool;
-	private static final DataSegmentID tempID = new DataSegmentID(-1,-1,-1, -1);
+	//private static final DataSegmentID tempID = new DataSegmentID(-1,-1,-1, -1);
 
 	public DSPool(int capacity) {
 		System.out.println("Initializing DataSegments pool of size " + capacity);
 		pool = new ConcurrentLinkedQueue<>();
 		for (int i=0; i<capacity; i++) {
-			pool.offer(new DataSegment(tempID));
+			pool.offer(new DataSegment(null));
 		}
 	}
 	

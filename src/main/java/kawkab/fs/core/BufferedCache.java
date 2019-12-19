@@ -303,7 +303,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 	@Override
 	public void onEvictBlock(Block block) {
 		//assert cacheLock.isHeldByCurrentThread();
-		//assert !block.isLocalDirty();
+		assert !block.isLocalDirty();
 
 		evicted++;
 
@@ -388,7 +388,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 			cacheLock.unlock();
 		}
 		
-		//System.out.printf("Flushed %d entries from the cache. Current DSPool size is %d, cache size is %d.\n", count, dsp.size(), cache.size());
+		System.out.printf("Flushed %d entries from the cache. Current cache size is %d.\n", count, cache.size());
 	}
 	
 	@Override

@@ -20,7 +20,7 @@ public class KClient {
 	private Map<String, Session> sessions;
 	private ByteBuffer buffer;
 
-	private static int BUFLEN_BYTES = 32 * 1024; // Maximum data size per RPC
+	private static int BUFLEN_BYTES = 1024 * 1024; // Maximum data size per RPC
 
 	public KClient (int id) {
 		this.id = id;

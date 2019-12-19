@@ -9,6 +9,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * This is a parent class for Ibmap, InodeBlock, and DataSegment classes. It provides a common interface for the subclasses
@@ -33,7 +34,7 @@ public abstract class Block extends AbstractTransferItem {
 	protected final static PrimaryNodeServiceClient primaryNodeService = PrimaryNodeServiceClient.instance(); // To load the block from the primary node
 	
 	//private AtomicInteger globalDirtyCnt;
-	private volatile boolean isLocalDirty; // Keeps track of the number of times the block is udpated. It helps in keeping track of the
+	private AtomicInteger localDirtyCnt; // Keeps track of the number of times the block is udpated. It helps in keeping track of the
 	                        // updated bytes and flush only the updated bytes to the local/global store. 
 	                        // TODO: Change this to a dirty bit. This can be achieved by an AtomicBoolean instead of
 	                        // an AtomicInteger
@@ -52,9 +53,8 @@ public abstract class Block extends AbstractTransferItem {
 	
 	public Block(BlockID id) {
 		this.id = id;
-		
-		isOnPrimary    = id.onPrimaryNode();
-		isLocalDirty   = false;
+		isOnPrimary    = id != null && id.onPrimaryNode();
+		localDirtyCnt = new AtomicInteger(0);
 		//globalDirtyCnt = new AtomicInteger(0);
 		//inGlobalQueue  = new AtomicBoolean(false);
 		inLocalStore   = new AtomicBoolean(false);
@@ -64,8 +64,10 @@ public abstract class Block extends AbstractTransferItem {
 	}
 	
 	protected void reset(BlockID id) {
+		assert (id==null && this.id!=null) || (id!= null && this.id==null) : String.format("id=%s, this.id=%s",id, this.id);
+
 		this.id = id;
-		isLocalDirty = false;
+		localDirtyCnt.set(0);
 		//globalDirtyCnt.set(0);
 		//inGlobalQueue.set(false);
 		inLocalStore.set(false);
@@ -138,7 +140,7 @@ public abstract class Block extends AbstractTransferItem {
 	 * Increment the local dirty counts.
 	 */
 	public void markLocalDirty() {
-		isLocalDirty = true;
+		localDirtyCnt.incrementAndGet();
 	}
 	
 	/**
@@ -152,13 +154,26 @@ public abstract class Block extends AbstractTransferItem {
 	 * @return Returns whether this block has been modified until now or not.
 	 */
 	public boolean isLocalDirty(){
-		return isLocalDirty;
+		return localDirtyCnt.get() > 0;
 	}
 
-	public boolean getAndClearLocalDirty() {
-		boolean isDirty = isLocalDirty;
-		isLocalDirty = false;
-		return isDirty;
+	/**
+	 * @return Returns the current value of the local dirty count
+	 */
+	public int localDirtyCount() {
+		return localDirtyCnt.get();
+	}
+
+	public int decAndGetLocalDirty(int delta) {
+		int cnt = localDirtyCnt.addAndGet(-delta);
+
+		assert cnt >= 0;
+
+		return cnt;
+
+		/*boolean isDirty = localDirtyCnt;
+		localDirtyCnt = false;
+		return isDirty;*/
 	}
 	
 	public void notifyLocalSyncComplete() {
@@ -213,10 +228,10 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws InterruptedException 
 	 */
 	public void waitUntilSynced() throws InterruptedException {
-		if (isLocalDirty || inTransferQueue()) {
+		if (localDirtyCnt.get() > 0 || inTransferQueue()) {
 			synchronized(this) {
 				// It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
-				while (isLocalDirty || inTransferQueue()) {
+				while (localDirtyCnt.get() > 0 || inTransferQueue()) {
 					//System.out.println("[B] swait: " + id + ", dty: " +
 					//			isLocalDirty + ", inLQ="+inTransferQueue());
 					wait();

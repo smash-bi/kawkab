@@ -216,10 +216,13 @@ public final class Configuration {
 		//System.out.println(String.format("Inode blocks total size MB = %.3f", inodeBlocksPerMachine*inodesBlockSizeBytes/1024.0/1024.0));
 		//System.out.println(String.format("Inode blocks range start . = %d", inodeBlocksRangeStart));
 		System.out.println();
-		System.out.println(String.format("Max blocks per local device= %d", maxBlocksPerLocalDevice));
-		System.out.println(String.format("Index node size bytes= %d", indexNodeSizeBytes));
 		System.out.println(String.format("Cache size (MiB) ......... = %d", cacheSizeMiB));
+		System.out.println();
 		System.out.println(String.format("Num local devices......... = %d", numLocalDevices));
+		System.out.println(String.format("Max blocks per local device= %d", maxBlocksPerLocalDevice));
+		System.out.println();
+		System.out.println(String.format("Global store workers...... = %d", numWorkersStoreToGlobal));
+		System.out.println(String.format("Index node size bytes= %d", indexNodeSizeBytes));
 		System.out.println(String.format("RPC buffer len............ = %d", maxBufferLen));
 	}
 	

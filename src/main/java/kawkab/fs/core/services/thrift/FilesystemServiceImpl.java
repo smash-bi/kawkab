@@ -50,7 +50,7 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			recSize = handle.recordSize();
 		} catch (OutOfMemoryException e) {
-			e.getMessage();
+			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		}  catch (Exception | AssertionError e) {
 			e.printStackTrace();
@@ -89,7 +89,7 @@ public class FilesystemServiceImpl implements Iface {
 			fh.recordNum(dstBuf, recNum, recSize, loadFromPrimary);
 			return dstBuf;
 		} catch (OutOfMemoryException e) {
-			e.getMessage();
+			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		}  catch (Exception | AssertionError e) {
 			e.printStackTrace();
@@ -115,7 +115,7 @@ public class FilesystemServiceImpl implements Iface {
 
 			return dstBuf;
 		} catch (OutOfMemoryException e) {
-			e.getMessage();
+			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
@@ -136,7 +136,7 @@ public class FilesystemServiceImpl implements Iface {
 			//printBuffers(results);
 			return results;
 		} catch (OutOfMemoryException e) {
-			e.getMessage();
+			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
@@ -179,7 +179,7 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			return fh.append(data, recSize);
 		} catch (OutOfMemoryException e) {
-			e.getMessage();
+			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
@@ -198,7 +198,7 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			return fh.append(srcBuf, recSize);
 		} catch (OutOfMemoryException e) {
-			e.getMessage();
+			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
@@ -254,7 +254,7 @@ public class FilesystemServiceImpl implements Iface {
 			try {
 				fh.append(data, s.recSize);
 			} catch (OutOfMemoryException e) {
-				e.getMessage();
+				//e.getMessage();
 				throw new TOutOfMemoryException(e.getMessage());
 			} catch (Exception | AssertionError e) {
 				e.printStackTrace();
@@ -290,7 +290,7 @@ public class FilesystemServiceImpl implements Iface {
 			try {
 				cnt += fh.append(srcBuf, recSize);
 			} catch (OutOfMemoryException e) {
-				e.getMessage();
+				//e.getMessage();
 				throw new TOutOfMemoryException(e.getMessage());
 			} catch (Exception | AssertionError e) {
 				e.printStackTrace();
@@ -330,7 +330,7 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			fh.read(buffer, offset, length, loadFromPrimary);
 		} catch (OutOfMemoryException e) {
-			e.getMessage();
+			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
@@ -353,7 +353,7 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			return fh.append(srcBuf.array(), offset, length);
 		} catch (OutOfMemoryException e) {
-			e.getMessage();
+			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
@@ -372,7 +372,7 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			return fh.size();
 		} catch (OutOfMemoryException e) {
-			e.getMessage();
+			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
@@ -391,7 +391,7 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			return fh.recordSize();
 		} catch (OutOfMemoryException e) {
-			e.getMessage();
+			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();

@@ -61,6 +61,8 @@ public final class CLI {
 			System.out.println("--------------------------------");
 			String line;
 			boolean next = true;
+
+			Thread.currentThread().setName("CLI-thread");
 			
 			while (next) {
 				System.out.print("\n$>");

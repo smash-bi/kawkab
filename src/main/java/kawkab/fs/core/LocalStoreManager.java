@@ -170,22 +170,27 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private int processStoreRequest(Block block, FileChannels channels) throws KawkabException {
 		int syncedCnt = 0;
 
+		if (block.id() == null)
+			return 0;
+
 		//System.out.printf("[LSM] Store block: %s\n",block.id());
 
 		// WARNING! This functions works correctly in combination with the store(block) function only if the same block
 		// is always assigned to the same worker thread.
 
-		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
+		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCnt can be zero.
 
 		// We must clear the dirty bit before syncing the block to the local store. Otherwise, the race with the
 		// block writer will not be safe.
-		if (!block.getAndClearLocalDirty()) {
+		//if (!block.getAndClearLocalDirty()) {
+		int dirtyCnt = block.localDirtyCount();
+		if (dirtyCnt == 0) {
 			block.notifyLocalSyncComplete();
-
 			return 0;
 		}
 
 		//System.out.println("[LS] Locking file: " + block.id());
+
 
 		BlockID bid = block.id();
 		Lock lock = fileLocks.grabLock(bid); // To prevent concurrent read from the GlobalStoreManager
@@ -196,10 +201,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 			assert channel.isOpen();
 
-			syncedCnt += block.storeTo(channel);
+			syncedCnt = block.storeTo(channel);
 
 			//block.markGlobalDirty();
-
 		} catch (IOException e) {
 			System.out.println("Unbale to store data for ID: " + bid);
 			//FIXME: What should we do here? Should we return?
@@ -212,19 +216,17 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			lock.unlock();
 		}
 
-
-
-
-		//System.out.println("dirtyCount=0, skipping submittingToGlobal: " + block.id());
-		//updateLocalDirty(block, dirtyCount);
-		//block.subtractAndGetLocalDirty(dirtyCount);
+		//System.out.println("dirtyCnt=0, skipping submittingToGlobal: " + block.id());
+		//updateLocalDirty(block, dirtyCnt);
+		//block.subtractAndGetLocalDirty(dirtyCnt);
 
 		// We clear the inLocalQueue flag when the global store has finished uploading. This is to mutually exclude updating
 		// the local file while concurrently uploading to the global store. If this happens, S3 API throws an exception
 		// that the MD5 hash of the file has changed. Now we update this flag in notifyStoreComplete() function.
 
 		//if (block.subtractAndGetLocalDirty(0) > 0) {
-		if (block.isLocalDirty()) {
+		if (block.decAndGetLocalDirty(dirtyCnt) > 0) {
+			assert block.id().equals(bid);
 			if (bid.type() != BlockID.BlockType.INODES_BLOCK)
 				store(block);
 		} else {
@@ -232,9 +234,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			// eventually get the block.
 			block.notifyLocalSyncComplete();
 
-
 			if (block.shouldStoreGlobally()) { // If this block is the last data segment or an ibmap or an inodesBlock
-				globalProc.store(block.id(), this); // Add the block in the queue to be transferred to the globalStore
+				globalProc.store(bid, this); // Add the block in the queue to be transferred to the globalStore
 			}
 		}
 

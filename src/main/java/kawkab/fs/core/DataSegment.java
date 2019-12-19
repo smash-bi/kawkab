@@ -58,16 +58,21 @@ public final class DataSegment extends Block {
 	 */
 	DataSegment(DataSegmentID segmentID) {
 		super(segmentID);
-		isLastSeg = segmentID.segmentInBlock()+1 == conf.segmentsPerBlock;
 		writePos = new AtomicInteger(0);
-		
+
 		dataBuf = ByteBuffer.allocateDirect(segmentSizeBytes);
 		storeBuffer = dataBuf.duplicate();
-		recordSize = segmentID.recordSize();
 		initedForAppends = false;
+		if (id == null)
+			return;
+
+		recordSize = segmentID.recordSize();
+		isLastSeg = segmentID.segmentInBlock()+1 == conf.segmentsPerBlock;
 	}
 
 	synchronized void reInit(DataSegmentID segmentID) {
+		assert segmentID != null;
+
 		super.reset(segmentID);
 		isLastSeg = segmentID.segmentInBlock()+1 == conf.segmentsPerBlock;
 		
