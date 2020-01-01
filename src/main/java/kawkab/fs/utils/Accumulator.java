@@ -195,7 +195,7 @@ public class Accumulator {
         return buckets;
     }
     
-    public synchronized long[] cdf(){
+    public synchronized long[] cdf() {
         long[] cdf = new long[101];
         long cnt = 0; 
         for(int i=0; i<buckets.length; i++){

@@ -1,6 +1,7 @@
 package kawkab.fs.cli;
 
 import com.google.common.base.Stopwatch;
+import com.google.common.math.Quantiles;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.api.Record;
 import kawkab.fs.client.KClient;
@@ -505,6 +506,7 @@ public final class CLI {
 
 		long dur = 0;
 		int numRecs = 0;
+		long[] lats = new long[count];
 		for (int i=0; i<count; i++) {
 			assert tsMin[i] >= 0;
 			assert tsMax[i] >= 0;
@@ -515,7 +517,15 @@ public final class CLI {
 
 			latHist.start();
 			List<Record> recs = client.readRecords(fname, tsMin[i], tsMax[i], recgen, loadFromPrimary);
-			dur += latHist.end();
+			long lat = latHist.end();
+
+			if (lat < 0) {
+				i--;
+				continue;
+			}
+
+			dur += lat;
+			lats[i] = lat;
 
 			//To ensure that we have same number of results for the correct results
 			assert recs.size() == interval : String.format("Expected %d results, got %d", interval, recs.size());
@@ -528,6 +538,8 @@ public final class CLI {
 		Result res = getResults(latHist, durSec, numRecs, recSize, interval, "Range query test");
 		System.out.println(res.csvHeader());
 		System.out.println(res.csv());
+
+		printResults(lats, recSize, interval, durSec);
 	}
 
 	private void clientExactReadTest(String fname, int recSize, long t1, long t2, int numRecs, Record recgen,
@@ -542,22 +554,34 @@ public final class CLI {
 
 		long dur = 0;
 
+		long[] lats = new long[numRecs];
+
 		for (int i=0; i<numRecs; i++) {
 			if (withFlush) {
 				client.flush();
 			}
 
+			long lat;
 			if (byRecNum) {
 				int recNum = (int) (t1 + rand.nextInt((int) (t2 - t1)));
 				tlog.start();
 				recgen = client.recordNum(fname, recNum, recgen, loadFromPrimary);
-				dur += tlog.end();
+				lat = tlog.end();
+
 			} else {
 				int recTime = (int) (t1 + rand.nextInt((int) (t2 - t1)));
 				tlog.start();
 				recgen = client.recordAt(fname, recTime, recgen, loadFromPrimary);
-				dur += tlog.end();
+				lat = tlog.end();
 			}
+
+			if (lat < 0) {
+				i--;
+				continue;
+			}
+
+			dur += lat;
+			lats[i] = lat;
 		}
 
 		assert numRecs == tlog.sampled();
@@ -567,6 +591,44 @@ public final class CLI {
 		Result res = getResults(tlog, durSec, numRecs, recSize, 1, "Read test");
 		System.out.println(res.csvHeader());
 		System.out.println(res.csv());
+
+		printResults(lats, recSize, 1, durSec);
+	}
+
+	private void printResults(long[] lats, int recSize, int batchSize, double durSec) {
+		com.google.common.math.Stats stats = com.google.common.math.Stats.of(lats);
+		Map<Integer, Double> quantiles =
+				Quantiles.scale(100).indexes(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+						21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+						41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
+						61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+						81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100).compute(lats);
+
+		long cnt = stats.count()*batchSize;
+		double sizeMB = recSize*cnt / (1024.0 * 1024.0);
+		double thr = sizeMB / durSec;
+		double opThr = cnt / durSec;
+
+		System.out.printf("recSize=%d, numRecs=%d, rTput=%,.0f MB/s, mean=%.2f, opsTput=%,.0f OPS, " +
+						"50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f, batchSize=%d, stdev=%.2f\n",
+				recSize, stats.count(), thr, opThr, stats.mean(), quantiles.get(50), quantiles.get(95), quantiles.get(99),
+				stats.min(), stats.max(), batchSize, stats.sampleStandardDeviation()
+				);
+
+		System.out.printf("%d, %d, %.0f, %.2f, %.0f, %.2f, %.2f, %.2f, %.2f, %.2f, %d, %.2f\n",
+				recSize, stats.count(), thr, opThr, stats.mean(), quantiles.get(50), quantiles.get(95), quantiles.get(99),
+				stats.min(), stats.max(), batchSize, stats.sampleStandardDeviation()
+		);
+
+		System.out.println("\nCDF %%ile:");
+		for(int i=1; i<=100; i++) {
+			System.out.print(i+", ");
+		}
+		System.out.println("\nCDF vals:\n");
+		for(int i=1; i<=100; i++) {
+			System.out.print(quantiles.get(i)+", ");
+		}
+		System.out.println();
 	}
 
 	private Result getResults(LatHistogram latHist, double durSec, int numRecs, int recSize, int batchSize, String tag) {
@@ -707,7 +769,7 @@ public final class CLI {
 	private void flushOSCache() throws InterruptedException, IOException {
 		Runtime run = Runtime.getRuntime(); // get OS Runtime
 		// execute a system command and give back the process
-		Process pr = run.exec("sudo sync; sudo echo 1 > /proc/sys/vm/drop_caches");
+		Process pr = run.exec("sudo sync; sudo echo 3 > /proc/sys/vm/drop_caches");
 		pr.waitFor();
 	}
 	

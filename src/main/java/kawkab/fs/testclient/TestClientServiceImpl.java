@@ -20,6 +20,9 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	private final Object syncMutex = new Object();
 	private final Object barMutex = new Object();
 
+	private int barInCnt;
+	private boolean entering=true;
+
 	public TestClientServiceImpl(int numClients) {
 		this.numClients = numClients;
 	}
@@ -84,8 +87,6 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 		ready = true;
 	}
 
-	private int barInCnt;
-	private boolean entering=true;
 	@Override
 	public void barrier(int clid) throws TException {
 		try {
