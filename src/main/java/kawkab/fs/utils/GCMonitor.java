@@ -66,20 +66,24 @@ public class GCMonitor implements NotificationListener {
             GcInfo info = gcInfo.getGcInfo();
             // get all the info and pretty print it
             long duration = info.getDuration();
-            System.out.printf("    GC: %dms ", duration);
+            System.out.printf("    GC: %dms\n", duration);
             Map<String, MemoryUsage> befMem = info.getMemoryUsageBeforeGc();
-            Map<String, MemoryUsage> aftMem = info.getMemoryUsageAfterGc();
-            System.out.printf("Eden: %dM->%dM, ",
-                    befMem.get("PS Eden Space").getUsed()/1048576,
-                    aftMem.get("PS Eden Space").getUsed()/1048576);
-            System.out.printf("Survivor: %dM->%dM, ",
-                    befMem.get("PS Survivor Space").getUsed()/1048576,
-                    aftMem.get("PS Survivor Space").getUsed()/1048576);
-            System.out.printf("Old: %dM->%dM",
-                    befMem.get("PS Old Gen").getUsed()/1048576,
-                    aftMem.get("PS Old Gen").getUsed()/1048576);
-            
-            System.out.println();
+
+            if (befMem.containsKey("PS Eden Space")) {
+                Map<String, MemoryUsage> aftMem = info.getMemoryUsageAfterGc();
+
+                System.out.printf("Eden: %dM->%dM, ",
+                        befMem.get("PS Eden Space").getUsed() / 1048576,
+                        aftMem.get("PS Eden Space").getUsed() / 1048576);
+                System.out.printf("Survivor: %dM->%dM, ",
+                        befMem.get("PS Survivor Space").getUsed() / 1048576,
+                        aftMem.get("PS Survivor Space").getUsed() / 1048576);
+                System.out.printf("Old: %dM->%dM",
+                        befMem.get("PS Old Gen").getUsed() / 1048576,
+                        aftMem.get("PS Old Gen").getUsed() / 1048576);
+
+                System.out.println();
+            }
             
             gcEvents.add(new GCEvent(info.getStartTime(), info.getEndTime(), duration));
             durationStats.putValue(duration);
@@ -105,6 +109,14 @@ public class GCMonitor implements NotificationListener {
     }
     
     public static void printStats() {
-    	System.out.println(durationStats);
+        System.out.println(durationStats);
+    }
+
+    public static void resetStats() {
+        durationStats.clear();
+    }
+
+    public static String getStats() {
+        return durationStats.toString();
     }
 }

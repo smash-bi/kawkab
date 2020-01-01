@@ -1,60 +1,88 @@
 package kawkab.fs.utils;
 
-public class Accumulator{
+import java.util.Arrays;
+
+public class Accumulator {
     private long[] buckets;
-    private long totalSum;
     private long totalCnt;
-    private double prodSum = 0;
-    private int maxCntBucket;
     private double maxValue;
     private double minValue = Double.MAX_VALUE;
-    
-    
-    public Accumulator(){
+
+    public Accumulator(int numBuckets) {
+        buckets = new long[numBuckets];
         reset();
     }
-    
-    public synchronized void reset(){
-        int maxValue = 2000000; //in microseconds
-        buckets = new long[maxValue];
-        maxCntBucket = 0;
-        this.maxValue = 0;
-        totalSum = 0;
-        totalCnt = 0;
-        prodSum = 0;
-        this.maxValue = 0;
-        this.minValue = Double.MAX_VALUE;
+
+    public Accumulator(long[] histogram, long totalCnt, double min, double max) {
+        this.buckets = histogram;
+        this.totalCnt = totalCnt;
+        this.minValue = min;
+        this.maxValue = max;
     }
     
-    public synchronized void put(int value){
-        int bucket = value;
+    public synchronized void reset() {
+        for (int i = 0, len = buckets.length; i < len; i++) {
+            buckets[i] = 0;
+        }
+        this.maxValue = 0;
+        totalCnt = 0;
+        this.minValue = Double.MAX_VALUE;
+    }
+
+    public synchronized void put(int bucket, int count) {
+        assert count >= 0 : "Count is negative: " + count;
+        assert bucket >= 0 : "Bucket number is negative: " + count;
+
         if (bucket >= buckets.length){
             bucket = buckets.length-1;
-        } else if (bucket < 0){
-            assert bucket >= 0;
-            return;
+        }
+
+        buckets[bucket] += count;
+        totalCnt += count;
+
+        if (maxValue < bucket)
+            maxValue = bucket;
+
+        if (minValue > bucket)
+            minValue = bucket;
+    }
+    
+    /*public synchronized void put(int value) {
+        assert value >= 0 : "Value is negative: " + value;
+
+        int bucket = value;
+
+        if (bucket >= buckets.length){
+            bucket = buckets.length-1;
         }
         
         buckets[bucket]++;
-        totalSum += value;
+        //totalSum += value;
         totalCnt += 1;
-        prodSum += (value*value);
-        
-        if (buckets[maxCntBucket] < buckets[bucket])
-            maxCntBucket = bucket;
 
         if (maxValue < value)
             maxValue = value;
         
         if (minValue > value)
             minValue = value;
-    }
+
+        // Welford's online algorithm
+        //https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
+        //double delta = value - aggMean;
+        //aggMean += delta / totalCnt;
+        //double delta2 = value - aggMean;
+        //m2 += delta * delta2;
+    }*/
     
     public synchronized double mean(){
-        if (totalCnt > 0)
+        /*if (totalCnt > 0)
             return 1.0*totalSum/totalCnt;
         else
-            return -1;
+            return -1;*/
+
+        //return aggMean;
+
+        return mean(buckets);
     }
     
     public synchronized double min(){
@@ -65,11 +93,13 @@ public class Accumulator{
         return maxValue;
     }
     
-    public double variance(){
-        if (totalCnt > 0)
-            return (prodSum - (totalSum*totalSum/totalCnt))/totalCnt;
+    /*public double variance(){
+        if (totalCnt > 2)
+            //return (prodSum - (1.0*totalSum*totalSum/totalCnt))/totalCnt;
+            return m2 /totalCnt;
         else
             return -1;
+
     }
     
     public synchronized double stdDev(){
@@ -77,7 +107,7 @@ public class Accumulator{
             return Math.sqrt(variance());
         else
             return -1;
-    }
+    }*/
     
     public synchronized long count() {
         return totalCnt;
@@ -87,14 +117,11 @@ public class Accumulator{
      * @return Returns [median lat, 95 %ile lat, 99 %ile lat]
      * */
     public synchronized double[] getLatencies() {
-        int medianBucket = buckets.length;
-        int perc95Bucket = buckets.length;
-        int perc99Bucket = buckets.length;
+        int medianBucket = -1;
+        int perc95Bucket = -1;
+        int perc99Bucket = -1;
         long sum = 0;
         for (int i = 0; i < buckets.length; i++) {
-            /*if (buckets[i].count <= 0)
-                continue;
-            sum += buckets[i].count;*/
             if (buckets[i] <= 0)
                 continue;
             sum += buckets[i];
@@ -104,6 +131,8 @@ public class Accumulator{
                 perc95Bucket = i;
             else if (sum <= 0.99 * totalCnt)
                 perc99Bucket = i;
+            else if (sum == buckets[i])
+                medianBucket = perc95Bucket = perc99Bucket = i;
         }
         
         return new double[]{ medianBucket, perc95Bucket, perc99Bucket };
@@ -131,9 +160,12 @@ public class Accumulator{
     
     @Override
     public synchronized String toString() {
+        if (totalCnt == 0)
+            return "No stats";
+
         double[] lats = getLatencies();
-        return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f,mean=%.2f,stdev=%.2f",
-                lats[0],lats[1],lats[2], min(), max(), mean(), stdDev());
+        return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f, mean=%.2f",
+                lats[0],lats[1],lats[2], min(), max(), mean());
     }
     
     public synchronized void printCDF() {
@@ -144,11 +176,18 @@ public class Accumulator{
         System.out.println();
     }
     
-    synchronized void print(){
+    public synchronized void print(){
         for (int i=0; i<buckets.length; i++){
             if (buckets[i] > 0)
-                System.out.print((i+1)+":"+buckets[i]+", ");
+                System.out.print((i+1)+",");
         }
+
+        System.out.println();
+        for (int i=0; i<buckets.length; i++){
+            if (buckets[i] > 0)
+                System.out.print(buckets[i]+", ");
+        }
+
         System.out.println();
     }
     
@@ -156,7 +195,7 @@ public class Accumulator{
         return buckets;
     }
     
-    public synchronized long[] cdf(){
+    public synchronized long[] cdf() {
         long[] cdf = new long[101];
         long cnt = 0; 
         for(int i=0; i<buckets.length; i++){
@@ -165,5 +204,38 @@ public class Accumulator{
         }
         
         return cdf;
+    }
+
+    public synchronized void merge(Accumulator from) {
+        assert buckets.length == from.buckets.length;
+
+        for (int i=0; i<buckets.length; i++) {
+            buckets[i] += from.buckets[i];
+        }
+
+        //totalSum += from.totalSum;
+        totalCnt += from.totalCnt;
+        //prodSum += from.prodSum;
+        //aggMean = (aggMean+from.aggMean)/2.0;
+        //aggMean = mean(buckets);
+        //m2 += this.m2;
+
+        if (maxValue < from.maxValue)
+            maxValue = from.maxValue;
+
+        if (minValue > from.minValue)
+            minValue = from.minValue;
+    }
+
+    private double mean(long[] hist) {
+        double avg = 0;
+        int n = 1;
+        for (int x=0; x<hist.length; x++) {
+            for (int j=0; j<hist[x]; j++) {
+                avg += (x - avg) / n;
+                ++n;
+            }
+        }
+        return avg;
     }
 }

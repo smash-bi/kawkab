@@ -38,13 +38,14 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class ItemTimer {
 	private final AtomicLong mState; //State of the timer, which can be DISABLED, EXPIRED, ALREADY_EXPIRED, or last timestamp
-	
+
+	protected final static int INIT = 1; // Must be zero
 	protected final static int DISABLED = 0; // Must be zero
 	protected final static int EXPIRED  = -1; // Must be a negative value
 	protected final static int ALREADY_EXPIRED = -2; //Must be a negative value. This is never set in mState variable.
 	
 	public ItemTimer() {
-		mState = new AtomicLong(DISABLED);
+		mState = new AtomicLong(INIT);
 	}
 	
 	/**
@@ -61,8 +62,7 @@ public class ItemTimer {
 		// to disabled. Moreover, the worker thread will not concurrently update the state variable.
 		long prev = mState.getAndSet(futureTime);
 		
-		//assert prev == DISABLED; // FIXME: Is it necessary???
-		assert prev != EXPIRED; // FIXME: Is it necessary???
+		assert prev == DISABLED || prev == INIT; // FIXME: Is it necessary???
 	}
 	
 	/**
@@ -74,10 +74,12 @@ public class ItemTimer {
 		do {
 			state = mState.get();
 			
-			//assert state != DISABLED; //FIXME: Should we allow calling disable multiple times???
+			assert state == INIT || state != DISABLED; //FIXME: Should we allow calling disable multiple times???
 			
-			if (state == DISABLED)
+			/*if (state == DISABLED) {
+				new Exception().printStackTrace();
 				return true;
+			}*/
 			
 			if (state == EXPIRED) // If the state is expired once, no thread updates it to any other state
 				return false;
@@ -99,6 +101,8 @@ public class ItemTimer {
 		long state;
 		do {
 			state = mState.get();
+
+			assert state != INIT;
 			
 			if (state == EXPIRED)		// This can happen when (1) the writer adds the timer in the queue, (2) the worker removes the item from the queue and then preemepts,  
 				return ALREADY_EXPIRED;	// (3) the writer thread comes again, disables the timer, updates the timer and puts the timer again in the queue, 
@@ -106,12 +110,12 @@ public class ItemTimer {
 										// is already expired
 			
 			if (state == DISABLED)	// If the state is disabled, return the caller. Note that the caller should not add 
-				return DISABLED;			// the timer again in the queue. Instead the writer thread has added again or will add again in the queue.
+				return DISABLED;	// the timer again in the queue. Instead the writer thread has added again or will add again in the queue.
 			
-			long diff = timeNow - state;	// The valid state contains the timestamp.
-			
+			long diff = timeNow - state; // The valid state contains the timestamp.
+
 			if (diff < 0)
-				return diff;
+				return -diff;
 			
 		} while(!mState.compareAndSet(state, EXPIRED)); // We may be looping here multiple times, but that is fine because the thread is not on the critical path
 
@@ -124,9 +128,5 @@ public class ItemTimer {
 	
 	public boolean isExpired() {
 		return mState.get() == EXPIRED;
-	}
-	
-	public long state() {
-		return mState.get();
 	}
 }

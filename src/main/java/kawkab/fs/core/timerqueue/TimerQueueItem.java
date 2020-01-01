@@ -1,7 +1,7 @@
 package kawkab.fs.core.timerqueue;
 
 import kawkab.fs.core.AbstractTransferItem;
-import kawkab.fs.core.Clock;
+import kawkab.fs.core.ApproximateClock;
 import kawkab.fs.core.exceptions.KawkabException;
 
 /**
@@ -20,7 +20,7 @@ import kawkab.fs.core.exceptions.KawkabException;
  * will be called after a fixed delay. Instead, either the user disables the timer and calls deferredWork itself, or
  * the TimerQueue eventually calls the deferredWork() function after an unknown delay passed the timer offset.
  *
- * After disableing the timer, the caller should either call the enable function so that deferredWork() can be called by
+ * After disabling the timer, the caller should either call the enable function so that deferredWork() can be called by
  * the TimerQueue, or the caller should itself call the deferredWork() function.
  * Once the object is disabled, the TimerQueue does not calls the deferredWork() function until the timer is enabled
  * again by calling the enable() function.
@@ -32,7 +32,7 @@ import kawkab.fs.core.exceptions.KawkabException;
  * Note 2: When a new item is created, the timer is in disabled state. Therefore, the timer must be enabled after
  * creating a new TimerQueueItem object.
  *
- * Note 3: This class uses kawkab.fs.core.Clock for timings, which is an approximate clock. The clock time may be
+ * Note 3: This class uses kawkab.fs.core.ApproximateClock for timings, which is an approximate clock. The clock time may be
  * staled as compared to the wall clock. The granularity of the clock is in milliseconds.
  *
  * Usage example:
@@ -52,13 +52,18 @@ import kawkab.fs.core.exceptions.KawkabException;
  * 		}
  */
 
-public abstract class TimerQueueItem extends AbstractTransferItem {
+public class TimerQueueItem<T> extends AbstractTransferItem {
 	private final ItemTimer timer;
-	private static final TimerQueue timerQ = TimerQueue.instance();
-	private static final Clock clock = Clock.instance();
+	private static final ApproximateClock clock = ApproximateClock.instance();
 	
-	
-	public TimerQueueItem() {
+	private T item;
+	private DeferredWorkReceiver<T> receiver;
+
+	public TimerQueueItem(T item, DeferredWorkReceiver<T> receiver) {
+		assert item != null;
+
+		this.item = item;
+		this.receiver = receiver;
 		timer = new ItemTimer();
 	}
 	
@@ -75,7 +80,7 @@ public abstract class TimerQueueItem extends AbstractTransferItem {
 	 * in which case the caller should create a new item and throw away the existing item to ensure that deferredWork()
 	 * is called only once.
 	 */
-	public final boolean disableIfNotExpired() {
+	protected final boolean disableIfNotExpired() {
 		return timer.disableIfNotExpired();
 	}
 	
@@ -88,13 +93,8 @@ public abstract class TimerQueueItem extends AbstractTransferItem {
 	 *
 	 * @param futureTimeInMillis Time offset in millis after which the deferredWork() function can be called.
 	 */
-	public final void enable(final long futureTimeInMillis) {
+	protected final void enable(final long futureTimeInMillis) {
 		timer.update(futureTimeInMillis);
-		timerQ.add(this);
-	}
-	
-	public void verifyDisabled() {
-		assert timer.isDisabled() : "[TQI] Error: Illegal state: you must first call freezeIfNotExpired() before updating the object.";
 	}
 	
 	/**
@@ -119,5 +119,21 @@ public abstract class TimerQueueItem extends AbstractTransferItem {
 	 *
 	 * @throws KawkabException
 	 */
-	protected abstract void deferredWork() throws KawkabException;
+	protected void deferredWork() {
+		receiver.deferredWork(item);
+		item = null;
+	}
+	
+	public T getItem() {
+		return item;
+	}
+	
+	@Override
+	public String toString() {
+		if (item == null) {
+			return "EXPIRED ITEM";
+		}
+		
+		return item.toString(); //FIXME: This is not thread safe. This should only be used for debuggin purposes.
+	}
 }

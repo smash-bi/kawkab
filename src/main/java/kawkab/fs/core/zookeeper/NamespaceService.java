@@ -50,7 +50,7 @@ public final class NamespaceService {
 		//System.out.println("[NSS] Adding file in the namespace: " + filename);
 		String path = fixPath(filename);
 		
-		System.out.println("[NSS] Adding file in namespace: " + filename + ", path: " + path);
+		// System.out.println("[NSS] Adding file in namespace: " + filename + ", path: " + path);
 		
 		try {
 			zkclient.addNode(zkcluster.id(), path, Commons.longToBytes(inumber));
@@ -80,7 +80,7 @@ public final class NamespaceService {
 			inumber = Commons.bytesToLong(res);
 		} catch (KeeperException e) {
 			if (e.code() == Code.NONODE) {
-				System.out.println("[NSS] File not exist in ZK: " + filename + ", path: " + path);
+				//System.out.println("[NSS] File not exist in ZK: " + filename + ", path: " + path);
 				throw new FileNotExistException(e.getMessage());
 			}
 			

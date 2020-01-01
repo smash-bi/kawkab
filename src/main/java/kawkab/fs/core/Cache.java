@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import java.io.IOException;
 
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 /**
  * An LRU cache for Block objects. The objects are acquired and released using BlockIDs. This class is singleton and
@@ -12,8 +13,8 @@ public abstract class Cache {
 	public static Cache instance() {
 		//return GCache.instance();
 		//return CustomCache.instance();
-		return BufferedCache.instance();
-		//return PartitionedBufferedCache.instance();
+		//return BufferedCache.instance();
+		return PartitionedBufferedCache.instance();
 	}
 	
 	/**
@@ -62,7 +63,7 @@ public abstract class Cache {
 	 * @throws KawkabException 
 	 * @throws InterruptedException 
 	 */
-	public abstract Block acquireBlock(BlockID blockID) throws IOException, KawkabException;
+	public abstract Block acquireBlock(BlockID blockID) throws OutOfMemoryException, KawkabException, IOException;
 	
 	/**
 	 * Releases the block and decrements its reference count. Blocks with reference count 0 are eligible for eviction.
@@ -84,4 +85,10 @@ public abstract class Cache {
 	public abstract void shutdown() throws KawkabException;
 	
 	public abstract long size();
+
+	public abstract String getStats();
+
+	public abstract void printStats();
+
+	public abstract void resetStats();
 }

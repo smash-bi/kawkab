@@ -5,11 +5,10 @@ import java.io.File;
 public final class FileOptions {
 	final int recordSize;
 	
-	public enum FileType {
+	/*public enum FileType {
 		BINARY,
 		FIXED_LEN_RECORDS
-		//public static final FileType values[] = values();
-	}
+	}*/
 	
 	public FileOptions() { this(1); }
 	

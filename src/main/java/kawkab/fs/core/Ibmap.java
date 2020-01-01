@@ -1,18 +1,15 @@
 package kawkab.fs.core;
 
-import com.google.protobuf.ByteString;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.InodeNumberOutOfRangeException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
-import kawkab.fs.core.exceptions.KawkabException;
 
-import javax.naming.OperationNotSupportedException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.WritableByteChannel;
 import java.nio.file.Files;
 import java.util.BitSet;
 
@@ -132,7 +129,7 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	protected void loadBlockOnNonPrimary() {
+	protected void loadBlockOnNonPrimary(boolean loadFromPrimary) {
 		assert false; //Loading ibmaps on a non-primary node is not allowed as each node has the ownership of a set of ibmaps
 	}
 	
@@ -144,10 +141,12 @@ public final class Ibmap extends Block{
 	}
 	
 	@Override
-	public synchronized int storeTo(WritableByteChannel channel) throws IOException {
+	public synchronized int storeTo(FileChannel channel) throws IOException {
 		ByteBuffer buffer = ByteBuffer.allocate(ibmapBlockSizeBytes);
 		buffer.put(bitset.toByteArray());
 		buffer.rewind();
+		
+		channel.position(0);
 		
 		int bytesWritten = Commons.writeTo(channel, buffer);
 		if (bytesWritten < buffer.capacity()) {
@@ -158,16 +157,6 @@ public final class Ibmap extends Block{
 		//System.out.printf("[I%d] Stored bytes %d\n", blockIndex, bytesWritten);
 		
 		return bytesWritten;
-	}
-
-	@Override
-	public synchronized ByteString byteString() {
-		return ByteString.copyFrom(bitset.toByteArray());
-	}
-	
-	@Override
-	protected void loadBlockFromPrimary()  throws KawkabException {
-		throw new KawkabException(new OperationNotSupportedException());
 	}
 
 	@Override
@@ -229,7 +218,4 @@ public final class Ibmap extends Block{
 		System.out.println("Closing Ibmaps");
 		//TODO: stop new requests
 	}
-	
-	@Override
-	void onMemoryEviction() {}
 }

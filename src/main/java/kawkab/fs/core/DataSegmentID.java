@@ -14,9 +14,10 @@ public final class DataSegmentID extends BlockID {
 	private final long inumber;
 	private final long blockInFile;
 	private final int segmentInBlock; //Zero based segment index
+	private final int recordSize;
 	private String localPath;
 	private int hash;
-	
+	private static int numDevices = Configuration.instance().numLocalDevices;
 	private static final String blocksPath = Configuration.instance().blocksPath;
 	
 	/**
@@ -24,11 +25,18 @@ public final class DataSegmentID extends BlockID {
 	 * @param blockInFile block number in the file
 	 * @param segmentInBlock segment number in the block
 	 */
-	public DataSegmentID(long inumber, long blockInFile, int segmentInBlock) {
+	public DataSegmentID(long inumber, long blockInFile, int segmentInBlock, int recordSize) {
+		//TODO: Remove recordSize as that is not part of the ID
+
 		super(BlockType.DATA_SEGMENT);
 		this.inumber = inumber;
 		this.blockInFile = blockInFile;
 		this.segmentInBlock = segmentInBlock;
+		this.recordSize = recordSize;
+	}
+
+	public int recordSize() {
+		return recordSize;
 	}
 	
 	@Override
@@ -51,7 +59,7 @@ public final class DataSegmentID extends BlockID {
 		if (localPath != null)
 			return localPath;
 		
-		String uuid = Commons.uuidToBase64String(inumber, blockInFile); //highBits=inumber, lowBits=BlockNumber
+		String uuid = Commons.uuidToBase64String(inumber, blockInFile);
 		int uuidLen = uuid.length();
 		int wordSize = 3; //Number of characters of the Base64 encoding that make a directory
 		int levels = 6; //Number of directory levels //FIXME: we will have 64^3 files in a directory, 
@@ -59,24 +67,29 @@ public final class DataSegmentID extends BlockID {
 		
 		assert wordSize * levels < uuidLen-1;
 		
-		StringBuilder path = new StringBuilder(blocksPath.length()+uuidLen+levels+2); //2 for extra head-room
-		path.append(blocksPath + File.separator);
+		StringBuilder path = new StringBuilder(blocksPath.length()+uuidLen+levels+4); //4 for extra head-room
+		path.append("fs").append(perBlockTypeKey() % numDevices).append(File.separator).append(blocksPath).append(File.separator);
 		
 		int rootLen = uuidLen - levels*wordSize; // The root folder can have more characters than wordSize
-		path.append(uuid.substring(0, rootLen));
+		path.append(uuid, 0, rootLen);
 		
 		for (int i=0; i<levels; i++){
-			path.append(File.separator).append(uuid.substring(rootLen+i*wordSize, rootLen+i*wordSize+wordSize));
+			path.append(File.separator).append(uuid, rootLen+i*wordSize, rootLen+i*wordSize+wordSize);
 		}
 		
-		localPath = path.toString(); //TODO: Should we intern() this string?
-		
+		localPath = path.toString().intern(); //TODO: Should we intern() this string?
+
 		return localPath;
 	}
-	
+
 	@Override
-	public int perBlockKey() {
-		return (int)((inumber<<16) | blockInFile); //FIXME: Use a hash function such as Murmur3_32
+	public int perBlockTypeKey() {
+		return Objects.hash(inumber, blockInFile);
+	}
+
+	@Override
+	public String fileID() {
+		return "D"+inumber+blockInFile;
 	}
 	
 	public long inumber() {
@@ -101,12 +114,16 @@ public final class DataSegmentID extends BlockID {
 		if (hash == 0)
 			hash = Objects.hash(inumber, blockInFile, segmentInBlock);
 		return hash;
+		//return Objects.hash(inumber, blockInFile, segmentInBlock);
 	}
-	
+
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
+		
+		//>> if this.hasCode == that.hashCode, return true << // https://norvig.com/java-iaq.html
+		
 		DataSegmentID that = (DataSegmentID) o;
 		return inumber == that.inumber &&
 				blockInFile == that.blockInFile &&

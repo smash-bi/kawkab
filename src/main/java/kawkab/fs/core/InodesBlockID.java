@@ -1,6 +1,7 @@
 package kawkab.fs.core;
 
 import java.io.File;
+import java.util.Objects;
 
 import kawkab.fs.commons.Configuration;
 
@@ -30,15 +31,6 @@ public final class InodesBlockID extends BlockID{
 	public Block newBlock() {
 		return new InodesBlock(this);
 	}
-	
-	/*public static String name(int blockIndex) {
-		return namePrefix+blockIndex;
-	}*/
-
-	/*@Override
-	public String name() {
-		return this.uniqueKey();
-	}*/
 
 	@Override
 	public String localPath() {
@@ -47,10 +39,15 @@ public final class InodesBlockID extends BlockID{
 		
 		return localPath;
 	}
+
+	@Override
+	public int perBlockTypeKey() {
+		return hashCode();
+	}
 	
 	@Override
-	public int perBlockKey() {
-		return blockIndex;
+	public String fileID() {
+		return "I"+blockIndex;
 	}
 	
 	@Override

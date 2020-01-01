@@ -1,29 +1,40 @@
 package kawkab.fs.core;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class CachedItem {
-	private int refCount; 	// It is not an atomic or volatile variable because this variable is only accessed from the 
+	//private static final ApproximateClock clock = ApproximateClock.instance();
+	private AtomicInteger refCount; 	// It is not an atomic or volatile variable because this variable is only accessed from the
 							// critical section in the CustomCache.acquireBlock() and releaseBlock() functions.
 	private final Block block;
-	
-	public CachedItem(Block block){
-		refCount = 0;
+	//private long accessTime;
+
+	CachedItem(Block block){
+		refCount = new AtomicInteger(0);
 		this.block = block;
 	}
 	
-	public void incrementRefCnt() {
-		refCount++;
+	void incrementRefCnt() {
+		int val = refCount.incrementAndGet();
+		//accessTime = clock.currentTime();
+		assert val > 0 : "val !> 0 : " + val;
 	}
 	
-	public void decrementRefCnt() {
-		refCount--;
-		assert refCount >= 0;
+	void decrementRefCnt() {
+		int val = refCount.getAndDecrement();
+		//accessTime = clock.currentTime();
+		assert val > 0 : "val !> 0 : " + val;
 	}
 	
-	public int refCount(){
-		return refCount;
+	int refCount() {
+		return refCount.get();
 	}
 	
-	public Block block(){
+	Block block(){
 		return block;
 	}
+
+	/*long accessTime() {
+		return accessTime;
+	}*/
 }

@@ -3,37 +3,34 @@ package kawkab.fs.core;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.timerqueue.TimerQueue;
+import kawkab.fs.core.timerqueue.TimerQueueIface;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.concurrent.ArrayBlockingQueue;
+import java.nio.channels.FileChannel;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
 
 public final class LocalStoreManager implements SyncCompleteListener {
-	private static final Object initLock = new Object();
-	
-	//private ExecutorService workers;
 	private GlobalStoreManager globalProc;
 	
 	private static final int maxBlocks = Configuration.instance().maxBlocksPerLocalDevice; // Number of blocks that can be created locally
-	private static final int numWorkers = Configuration.instance().syncThreadsPerDevice; // Number of worker threads and number of reqsQs
+	private static final int numWorkers = Configuration.instance().numLocalDevices; // Number of worker threads and number of reqsQs
 	
 	private TransferQueue<Block> storeQs[]; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks locally
+	private FileChannels[] fileChannels;
 	private final LocalStoreDB storedFilesMap;        // Contains the paths and IDs of the blocks that are currently stored locally
-	private final Semaphore storePermits;
+	private final Semaphore storePermits; // To limit the number of files in the local storage
 	private volatile boolean working = true;
 	private final FileLocks fileLocks;
 	
 	private static LocalStoreManager instance;
-	
-	public static LocalStoreManager instance() {
+
+	public synchronized static LocalStoreManager instance() {
 		if (instance == null) {
-			synchronized(initLock) {
-				if (instance == null)
-					instance = new LocalStoreManager();
-			}
+			instance = new LocalStoreManager();
 		}
 		
 		return instance;
@@ -56,7 +53,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			e.printStackTrace();
 		}
 		
-		System.out.println("Initializing local store manager");
+		System.out.println("Initializing local store manager. Workers = " + numWorkers);
 		
 		startWorkers();
 	}
@@ -70,7 +67,12 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private void startWorkers() {
 		storeQs = new TransferQueue[numWorkers];
 		for(int i=0; i<numWorkers; i++) {
-			storeQs[i] = new TransferQueue<>();
+			storeQs[i] = new TransferQueue<>("LSM-TrnsfrQ-"+i);
+		}
+		
+		fileChannels = new FileChannels[numWorkers];
+		for (int i=0; i<fileChannels.length; i++) {
+			fileChannels[i] = new FileChannels("LSM-Chnls-"+i);
 		}
 		
 		workers = new Thread[numWorkers];
@@ -78,145 +80,168 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			final int workerID = i;
 			workers[i] = new Thread("LocalStoreThread-"+i) {
 				public void run() {
-					runStoreWorker(storeQs[workerID]);
+					runStoreWorker(workerID);
 				}
 			};
 			
 			workers[i].start();
 		}
 	}
-	
+
 	/**
-	 * The workers poll the same queue 
+	 * The workers poll the same queue
 	 */
-	private void runStoreWorker(TransferQueue<Block> reqs) {
+	private void runStoreWorker(int workerID) {
+		TransferQueue<Block> reqs = storeQs[workerID];
+		FileChannels channels = fileChannels[workerID];
 		while(working) {
 			Block block = reqs.poll();
 			if (block == null) {
 				try {
-					Thread.sleep(1); //1ms is arbitrary
+					Thread.sleep(3); //1ms is arbitrary
 				} catch (InterruptedException e1) {}
 				continue;
 			}
-		
+
 			try {
-				processStoreRequest(block);
+				processStoreRequest(block, channels);
 			} catch (KawkabException e) {
 				e.printStackTrace();
 			}
 		}
-		
+
 		// Perform the remaining tasks in the queue
-		Block block = null;
+		Block block;
 		while( (block = reqs.poll()) != null) {
 			try {
-				processStoreRequest(block);
+				processStoreRequest(block, channels);
 			} catch (KawkabException e) {
 				e.printStackTrace();
 			}
 		}
-		
+
 		System.out.println("Closing thread: " + Thread.currentThread().getName());
 	}
-	
+
 	/**
 	 * This a non-blocking function. The block is added in a queue to be stored locally. Only the dirty bytes
 	 * are copied to the local store. If the block is needed to be stored globally, the block is added in the globalStore's
 	 * queue after local storage is completed.
-	 * 
+	 *
 	 * Repeated calls for the same block are coalesced by the block itself. See block.appendOffsetInBlock() function.
 	 * If the block is already in the queue, it is not added again. This works because (1) the worker checks that if
 	 * the dirty count is non-zero, it tries to add the block again in the queue, (2) the thread that has updated
 	 * the block first increments the dirty count and then tries to add in the queue. So the race between the worker
 	 * thread and the block-writer thread always result in adding at least one more job in the queue.
-	 * 
+	 *
 	 * It may happen that the block is added in the queue by the block-writer, but the competing worker has finished
 	 * syncing all the dirty bytes. In this case, there will be an extra job in the queue. However, the block will not
 	 * by updated redundantly because the worker checks the dirty count before performing the store operation. If the
 	 * dirty count is zero, it ignores the job.
-	 * 
+	 *
 	 * @param block The block to store locally, and potentially globally
 	 * @throws KawkabException if the localStore has already received the stop signal for shutting down.
 	 * @throws NullPointerException
 	 */
 	public void store(Block block) throws KawkabException {
-		// WARNING! This functions works correctly in combination with the processStoreRequest(block) function only if the 
+		// WARNING! This functions works correctly in combination with the processStoreRequest(block) function only if the
 		// same block is assigned always to the same worker thread.
-		
+
 		/*if (!working) {
 			throw new KawkabException("LocalProcessor has already received stop signal.");
 		}*/
-		
+
 		//Load balance between workers, but assign same worker to the same block.
-		int queueNum = Math.abs(block.id().perBlockKey()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
-		
+		int queueNum = Math.abs(block.id().perBlockTypeKey()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
+
 		storeQs[queueNum].add(block);
 	}
-	
+
 	/**
 	 * This function in combination with the store(block) function works correctly for concurrent (a) single worker per block
 	 * that syncs the block, and (b) multiple writers that modify/append the block (inodeBlocks are modified concurrently
 	 * by many threads, dataSegments are only appended). The writers can concurrently try to add the block in the queue.
 	 * If the block is already in the queue, the block is not added again in the queue. This is done through getAndSet(true) in the
 	 * block.markInLocalQueue() function.
-	 * 
+	 *
 	 * @param block
 	 * @throws KawkabException
 	 */
-	private int processStoreRequest(Block block) throws KawkabException {
+	private int processStoreRequest(Block block, FileChannels channels) throws KawkabException {
 		int syncedCnt = 0;
-		
-		// WARNING! This functions works correctly in combination with the store(block) function only if the same block 
+
+		if (block.id() == null)
+			return 0;
+
+		//System.out.printf("[LSM] Store block: %s\n",block.id());
+
+		// WARNING! This functions works correctly in combination with the store(block) function only if the same block
 		// is always assigned to the same worker thread.
-		
-		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCount can be zero.
-		
-		if (!block.getAndClearLocalDirty()) {
-			block.notifySyncComplete();
+
+		// See the GlobalStoreManager.storeToGlobal(Task) function for an example run where dirtyCnt can be zero.
+
+		// We must clear the dirty bit before syncing the block to the local store. Otherwise, the race with the
+		// block writer will not be safe.
+		//if (!block.getAndClearLocalDirty()) {
+		int dirtyCnt = block.localDirtyCount();
+		if (dirtyCnt == 0) {
+			block.notifyLocalSyncComplete();
 			return 0;
 		}
-		
+
+		//System.out.println("[LS] Locking file: " + block.id());
+
+
+		BlockID bid = block.id();
+		Lock lock = fileLocks.grabLock(bid); // To prevent concurrent read from the GlobalStoreManager
+		FileChannel channel = null;
 		try {
-			fileLocks.lockFile(block.id()); // To prevent concurrent read from the GlobalStoreManager
-		} catch (InterruptedException e1) {
-			throw new KawkabException(e1);
-		}
-		
-		try {
-			//syncLocally(block);
-			syncedCnt += block.storeToFile();
-			
-			block.markGlobalDirty();
-			
-			if (block.shouldStoreGlobally()) { // If it the block is the last data segment or an ibmap or an inodesBlock
-				globalProc.store(block, this); // Add the block in the queue to be transferred to the globalStore
-			}
+			lock.lock();
+			channel = channels.acquireChannel(bid);
+
+			assert channel.isOpen();
+
+			syncedCnt = block.storeTo(channel);
+
+			//block.markGlobalDirty();
 		} catch (IOException e) {
-			System.out.println("Unbale to store data for ID: " + block.id());
+			System.out.println("Unbale to store data for ID: " + bid);
 			//FIXME: What should we do here? Should we return?
 			throw new KawkabException(e);
 		} finally {
-			fileLocks.unlockFile(block.id());
+			if (channel != null) {
+				channels.releaseFileChannel(bid);
+			}
+
+			lock.unlock();
 		}
-		
-		//System.out.println("dirtyCount=0, skipping submittingToGlobal: " + block.id());
-		//updateLocalDirty(block, dirtyCount);
-		//block.subtractAndGetLocalDirty(dirtyCount);
-		
+
+		//System.out.println("dirtyCnt=0, skipping submittingToGlobal: " + block.id());
+		//updateLocalDirty(block, dirtyCnt);
+		//block.subtractAndGetLocalDirty(dirtyCnt);
+
 		// We clear the inLocalQueue flag when the global store has finished uploading. This is to mutually exclude updating
 		// the local file while concurrently uploading to the global store. If this happens, S3 API throws an exception
 		// that the MD5 hash of the file has changed. Now we update this flag in notifyStoreComplete() function.
-		
+
 		//if (block.subtractAndGetLocalDirty(0) > 0) {
-		if (block.isLocalDirty()) {
-			store(block);
+		if (block.decAndGetLocalDirty(dirtyCnt) > 0) {
+			assert block.id().equals(bid);
+			if (bid.type() != BlockID.BlockType.INODES_BLOCK)
+				store(block);
 		} else {
-			block.notifySyncComplete();
+			//The race b/w checking the localDirty() and the writer marking it localDirty() is safe. The localStore will
+			// eventually get the block.
+			block.notifyLocalSyncComplete();
+
+			if (block.shouldStoreGlobally()) { // If this block is the last data segment or an ibmap or an inodesBlock
+				globalProc.store(bid, this); // Add the block in the queue to be transferred to the globalStore
+			}
 		}
-		
+
 		return syncedCnt;
 	}
-	
+
 	/*private long updateLocalDirty(Block block, long dirtyCount) {
 		block.clearInLocalQueue();	// We have to do it so that either the current executing 
 									// thread or the appender can add the block in the local queue
@@ -224,19 +249,12 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	}*/
 	
 	@Override
-	public void notifyGlobalStoreComplete(Block block, boolean successful) throws KawkabException {
+	public void notifyGlobalStoreComplete(BlockID blockID, boolean successful) throws KawkabException {
 		// Called by the global store manager when it is done with storing the block in the global store
 		
-		/* if not successful, add in some queue to retry later
-		 * 
-		 * atomically increment dirty count
-		 * if dirty count after increment is 2 (dirty count's initial value is 0), this means
-		 * the block is not in cache and the block is persisted globally. Therefore, the block can be
-		 * deleted from the local store.
-		 * 
-		*/
+		/* if not successful, add in some queue to retry later  */
 		
-		if (block.isLocalDirty()) {// We have to check the count again. We cannot simply call localDirtyCount()
+		/*if (block.isLocalDirty()) {// We have to check the count again. We cannot simply call localDirtyCount()
 							// because we need to notify any thread waiting for the block to be removed 
 							// from the local queue.
 							// Otherwise, a block can be evicted from the cache while the block is still being synced to the local store.
@@ -245,38 +263,48 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			return;
 		} else {
 			// System.out.println("[LSM] Local NOT dirty. Skipping: " + block.id() + ", cnt="+dirtyCount);
-			block.notifySyncComplete();
+			block.notifyLocalSyncComplete();
+		}*/
+
+		if (!successful) {
+			System.out.println("[LS] Store to global failed for: " + blockID);
+			globalProc.store(blockID, this); //FIXME: This doesn't seem to be the right approach
+			return;
 		}
 		
 		//System.out.println("[LSM] Finished storing to global: " + block.id());
-		
-		if (!block.isInCache() && block.evictLocallyOnMemoryEviction()) {
+
+		/*if (!block.isInCache() && block.evictLocallyOnMemoryEviction()) {
 			// Block is not cached. Therefore, the cache will not delete the block.
 			// The block is in the local store and it can be deleted.
 			// Therefore, mark that the block can be evicted from the local store.
 			evictFromLocal(block);
+		}*/
+
+		if (blockID.type() == BlockID.BlockType.DATA_SEGMENT) {
+			evictFromLocal(blockID); //FIXME: We should add it in the list of toBeEvicted
 		}
 	}
 	
-	public void notifyEvictedFromCache(Block block) throws KawkabException {
-		block.unsetInCache();
+	//public void notifyEvictedFromCache(Block block) throws KawkabException {
+		//block.unsetInCache();
 		
-		if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
+		//if (block.globalDirtyCount() == 0 && block.evictLocallyOnMemoryEviction()) {
+		/*if (block.evictLocallyOnMemoryEviction()) {
 			evictFromLocal(block);
-		} else {
-			//TODO: Add in canBeEvicted list. Also, remove from the canBeEvicted list if the block becomes dirty again
-		}
-	}
-	
-	private void evictFromLocal(Block block) throws KawkabException {
-		if (block.id().onPrimaryNode() && !block.isInLocal())
 			return;
-		
-		BlockID id = block.id();
+		}*/
+
+		//TODO: Add in canBeEvicted list. Also, remove from the canBeEvicted list if the block becomes dirty again
+	//}
+	
+	private void evictFromLocal(BlockID id) throws KawkabException {
+		if (id.onPrimaryNode())
+			return;
 		
 		//System.out.println("[LSM] Evict locally: " + id);
 		
-		if (storedFilesMap.removeEntry(id) == null) { //The cache and the global store race to evictFromLocal this block.
+		if (storedFilesMap.removeEntry(id) == null) {
 			return;
 		}
 		
@@ -285,7 +313,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			throw new KawkabException("[LSM] Unable to delete file: " + file.getAbsolutePath());
 		}
 		
-		block.unsetInLocalStore();
+		//block.unsetInLocalStore();
 		
 		//int mapSize = storedFilesMap.size();
 		//int permits = storePermits.availablePermits();
@@ -347,11 +375,33 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		try {
 			block.loadFromFile();
-			block.setInLocalStore(); // This happens when we load the block from the local store after a reboot, or after eviction from the cache
+			//block.setInLocalStore(); // This happens when we load the block from the local store after a reboot, or after eviction from the cache
 		} catch (IOException e) {
 			throw new KawkabException(e);
 		}
-		
+
+
+		/*Lock lock = fileLocks.grabFileLock(id); // To prevent concurrent read from the GlobalStoreManager
+		FileChannel channel = null;
+		try {
+			lock.lock();
+			channel = channels.acquireChannel(id);
+
+			assert channel.isOpen();
+
+			block.loadFrom(channel);
+		} catch (IOException e) {
+			System.out.println("Unable to load data for ID: " + id);
+			//FIXME: What should we do here? Should we return?
+			throw new KawkabException(e);
+		} finally {
+			if (channel != null) {
+				channels.releaseFileChannel(id);
+			}
+
+			lock.unlock();
+		}*/
+
 		return true;
 	}
 	
@@ -375,7 +425,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			Block block = null;
 			while( (block = storeQs[i].poll()) != null) {
 				try {
-					processStoreRequest(block);
+					processStoreRequest(block, fileChannels[i]);
 				} catch (KawkabException e) {
 					e.printStackTrace();
 				}
@@ -390,6 +440,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		globalProc.shutdown();
 		
 		storedFilesMap.shutdown();
+		
+		for (int i=0; i<fileChannels.length; i++) {
+			fileChannels[i].shutdown();
+		}
 		
 		System.out.println("Closed LocalStoreManager");
 	}

@@ -1,17 +1,12 @@
 package kawkab.fs.core;
 
+import com.google.common.cache.*;
+import kawkab.fs.commons.Configuration;
+import kawkab.fs.core.exceptions.KawkabException;
+
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
-
-import kawkab.fs.commons.Configuration;
-import kawkab.fs.core.exceptions.KawkabException;
 
 public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 	private static final Object initLock = new Object();
@@ -71,7 +66,7 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 		
 		assert block != null;
 		
-		block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock
+		//block.loadBlock(); // Loads data into the block based on the block's load policy. The loadBlock
 									// function
 									// deals with concurrency. Therefore, we don't need to provide mutual exclusion
 									// here.
@@ -129,15 +124,15 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 		
 		//System.out.println("Evicting from cache: "+block.id());
 		
-		try {
+		//try {
 			//block.waitUntilSynced();  // FIXME: This is a blocking call and the cacheLock is locked. This may
 	                                  // lead to performance problems because the thread sleeps while holding
 	                                  // the cacheLock. The lock cannot be released because otherwise another
 	                                  // thread can come and may acquire the block.
-			localStore.notifyEvictedFromCache(block);
-		} catch (KawkabException e) {
-			e.printStackTrace();
-		}
+			//localStore.notifyEvictedFromCache(block);
+		//} catch (KawkabException e) {
+		//	e.printStackTrace();
+		//}
 	}
 	
 	//FIXME: Currently a cache entry can be evicted from the cache even if the block is dirty.
@@ -146,4 +141,16 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 	public long size() {
 		return cache.size();
 	}
+
+	@Override
+	public String getStats() {
+		return null;
+	}
+
+	@Override
+	public void printStats() {
+	}
+
+	@Override
+	public void resetStats(){}
 }

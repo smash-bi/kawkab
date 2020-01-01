@@ -2,7 +2,6 @@ package kawkab.fs.tests;
 
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
-import kawkab.fs.core.Cache;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
@@ -21,10 +20,10 @@ public class PartialReadTest {
 	@BeforeAll
 	public static void initialize() throws IOException, InterruptedException, KawkabException {
 		int nodeID = Configuration.getNodeID();
-		Properties props = Configuration.getProperties(Configuration.propsFileCluster);
+		Properties props = Configuration.getProperties(Configuration.propsFileClusterSmall);
 		
 		System.out.println("Node ID = " + nodeID);
-		System.out.println("Loading properties from: " + props);
+		System.out.println("Loading properties from: " + Configuration.propsFileClusterSmall);
 		
 		Filesystem.bootstrap(nodeID, props);
 	}
@@ -58,10 +57,12 @@ public class PartialReadTest {
 		// Fill some bytes in a segment
 		rand.nextBytes(beforeFlushData);
 		file.append(beforeFlushData, 0, beforeFlushData.length);
+
+		System.out.println("Size after append before flush = " + file.size());
 		// Release the inodesBlock for cache flush
 		fs.close(file);
 		// Empty the cache so that the data is partially loaded for append next time
-		Cache.instance().flush();
+		fs.flush();
 
 		System.out.println("Writing after flush");
 
@@ -71,11 +72,13 @@ public class PartialReadTest {
 		rand.nextBytes(afterFlushData);
 		file.append(afterFlushData, 0, afterFlushData.length);
 
+		System.out.println("Size after append after flush = " + file.size());
+
 		byte[] readData = new byte[beforeFlushData.length];
 		byte[] allData = new byte[beforeFlushData.length + afterFlushData.length];
 
-		file.read(readData, initialOffset, beforeFlushData.length);
-		file.read(allData, initialOffset, allData.length);
+		file.read(readData, initialOffset, beforeFlushData.length, true);
+		file.read(allData, initialOffset, allData.length, true);
 
 		/*System.out.println(Arrays.toString(beforeFlushData));
 		System.out.println(Arrays.toString(readData));

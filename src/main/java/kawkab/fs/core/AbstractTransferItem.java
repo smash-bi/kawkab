@@ -18,8 +18,8 @@ package kawkab.fs.core;
 public abstract class AbstractTransferItem {
 	private volatile boolean inQueue = false;
 	
-	public long inQCount = 0; //For debug purposes
-	public long inTries = 0; //For debug purposes
+	//public long inQCount = 0; //For debug purposes
+	//public long inTries = 0; //For debug purposes
 	
 	/**
 	 * This is not an atomic function. However, the race is safe when adding this object in <code>TransferQueue</code>.

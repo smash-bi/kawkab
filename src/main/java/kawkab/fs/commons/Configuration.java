@@ -17,6 +17,7 @@ public final class Configuration {
 	
 	public final static String propsFileLocal = "config-local.properties";
 	public final static String propsFileCluster = "config.properties";
+	public final static String propsFileClusterSmall = "config-small.properties";
 	
 	public final int thisNodeID; //FIXME: Get this from a configuration file or command line. Node IDs start with 0.
 	
@@ -27,8 +28,7 @@ public final class Configuration {
 	public final int directBlocksPerInode = 0;
 	
 	public final long maxFileSizeBytes = Long.MAX_VALUE;
-	//public final int numPointersInIndexBlock = blockSegmentSizeBytes/IndexBlock.pointerSizeBytes;
-	
+
 	//Ibmap blocks range for this machine
 	public final int ibmapBlockSizeBytes; // = 1*1024; //FIXME: using a small number for testing
 	public final int ibmapsPerMachine; // = 1; //FIXME: Calculate this based on the maximum number of files supported per machine
@@ -42,10 +42,15 @@ public final class Configuration {
 	//FIXME: Calculate this based on the maximum number of files supported by a machine
 	public final int inodeBlocksPerMachine; // = (int)((8.0d*ibmapBlockSizeBytes*ibmapsPerMachine)/inodesPerBlock);//inodesPerMachine/inodesPerBlock 
 	public final int inodeBlocksRangeStart; // = thisNodeID*inodeBlocksPerMachine; //TODO: Get these numbers from a configuration file or ZooKeeper
-																					 //Blocks start with ID 0.
-	
-	public final int indexBlockSizeBytes; // Size of the indexBlock.
-	
+																					 //Blocks start with ID 0.public final int indexNodeSizeBytes; // Size of the indexBlock.
+
+	// Constants related to PostOrderHeapIndex
+	public final int percentIndexEntriesPerNode;
+	public final int indexBlockSizeBytes; // Size of the indexBlock. Each block is a file in the local filesystem. A block is a collection of index nodes (POHNode).
+	public final int indexNodeSizeBytes; // Size of the POHNode. Each node have index entries and index pointers.
+	public final int nodesPerBlockPOH; // Number of POHNodes in each index block
+
+
 	public final int maxBlocksPerLocalDevice; // = 20510 + inodeBlocksPerMachine + ibmapsPerMachine; //FIXME: Should it not be a long value???
 	//public final int maxBlocksInCache; //        = 20000; //Size of the cache in number of blocks. The blocks are ibmaps, inodeBlocks, and data segments (not data blocks)
 	public final int cacheSizeMiB;	// Size of the cache in MB
@@ -54,7 +59,7 @@ public final class Configuration {
 	public final int inodesBlockFetchExpiryTimeoutMs; //  = 2000; //Expire data fetched from the global store after dataExpiryTimeoutMs
 	//public final int primaryFetchExpiryTimeoutMs = 5000; //Expire data fetched from the primary node after primaryFetchExpiryTimeoutMs
 
-	public final int syncThreadsPerDevice; // = 1;
+	public final int numLocalDevices; // = 1;
 	public final int numWorkersStoreToGlobal; // = 8;
 	//public final int numWorkersLoadFromGlobal = 5;
 	
@@ -81,13 +86,13 @@ public final class Configuration {
 	public final String minioAccessKey; // = "kawkab"; //Length must be at least 5 characters long. This should match minio server settings.
 	public final String minioSecretKey; // = "kawkabsecret"; //Length must be at least 8 characters long. This should match minio server settings.
 	
-	//gRPC service
+	//Thrift service port for remote reads
 	public final int primaryNodeServicePort; // = 22332;
 
 	// Filesystem RPC service for the filesystem clients
 	public final int fsServerListenPort; // = 33433;
 	public final int maxBufferLen; // = 16*1024; //in bytes
-	
+
 	public final Map<Integer, NodeInfo> nodesMap;
 	
 	public static Configuration instance() {
@@ -105,7 +110,8 @@ public final class Configuration {
 	}
 	
 	private Configuration(int nodeID, Properties props) {
-		thisNodeID 				= nodeID;
+		System.out.println("Configuring the system...");
+		thisNodeID = nodeID;
 		
 		for(Object keyObj : props.keySet()) {
 			String key = (String)keyObj;
@@ -127,10 +133,13 @@ public final class Configuration {
 			
 		dataSegmentFetchExpiryTimeoutMs  = Integer.parseInt(props.getProperty("dataSegmentFetchExpiryTimeoutMs", "10000"));
 		inodesBlockFetchExpiryTimeoutMs  = Integer.parseInt(props.getProperty("inodesBlockFetchExpiryTimeoutMs", "2000"));
-		
-		indexBlockSizeBytes  = Integer.parseInt(props.getProperty("indexBlockSizeBytes", ""+segmentSizeBytes));
 
-		syncThreadsPerDevice	= Integer.parseInt(props.getProperty("syncThreadsPerDevice", "1"));
+		indexBlockSizeBytes = dataBlockSizeBytes;
+		indexNodeSizeBytes = segmentSizeBytes; //Integer.parseInt(props.getProperty("indexBlockSizeBytes", ""+segmentSizeBytes));
+		percentIndexEntriesPerNode = Integer.parseInt(props.getProperty("percentIndexEntriesPerNode", "70"));
+		nodesPerBlockPOH = indexBlockSizeBytes/indexNodeSizeBytes;
+
+		numLocalDevices = Integer.parseInt(props.getProperty("numLocalDevices", "1"));
 		numWorkersStoreToGlobal	= Integer.parseInt(props.getProperty("numWorkersStoreToGlobal", "4"));
 			
 		// Folders in the underlying filesystem
@@ -171,7 +180,7 @@ public final class Configuration {
 		
 		ibmapsPath = basePath+File.separator+"ibmaps";
 		inodeBlocksPath = basePath+File.separator+"inodes";
-		indexBlocksPath = basePath+File.separator+"indices";
+		indexBlocksPath = basePath+File.separator+"index";
 		blocksPath = basePath+File.separator+"blocks";
 		namespacePath = basePath+File.separator+"namespace";
 		
@@ -191,24 +200,30 @@ public final class Configuration {
 		System.out.println(String.format("Data block size MB ....... = %.3f",dataBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Data block segment size MB = %.3f",segmentSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Num. of segments per block = %d", segmentsPerBlock));
-		System.out.println(String.format("Direct blocks per inode .. = %d", directBlocksPerInode));
+		//System.out.println(String.format("Direct blocks per inode .. = %d", directBlocksPerInode));
 		//System.out.println(String.format("Pointers per index block . = %d", numPointersInIndexBlock));
-		System.out.println(String.format("Maximum file size MB ..... = %.3f", maxFileSizeBytes/1024.0/1024.0));
+		//System.out.println(String.format("Maximum file size MB ..... = %.3f", maxFileSizeBytes/1024.0/1024.0));
 		System.out.println();
 		System.out.println(String.format("Ibmap block size MB ...... = %.3f", ibmapBlockSizeBytes/1024.0/1024.0));
-		System.out.println(String.format("Ibmap blocks per machine . = %d", ibmapsPerMachine));
-		System.out.println(String.format("Ibmaps total size MB ..... = %.3f", ibmapBlockSizeBytes*ibmapsPerMachine/1024.0/1024.0));
-		System.out.println(String.format("Ibmaps range start ....... = %d", ibmapBlocksRangeStart));
+		//System.out.println(String.format("Ibmap blocks per machine . = %d", ibmapsPerMachine));
+		//System.out.println(String.format("Ibmaps total size MB ..... = %.3f", ibmapBlockSizeBytes*ibmapsPerMachine/1024.0/1024.0));
+		//System.out.println(String.format("Ibmaps range start ....... = %d", ibmapBlocksRangeStart));
 		System.out.println();
 		System.out.println(String.format("Inode block size MB ...... = %.3f", inodesBlockSizeBytes/1024.0/1024.0));
 		System.out.println(String.format("Inode size bytes ......... = %d", inodeSizeBytes));
 		System.out.println(String.format("Inodes per block ......... = %d", inodesPerBlock));
 		System.out.println(String.format("Inode blocks per machine . = %d", inodeBlocksPerMachine));
-		System.out.println(String.format("Inode blocks total size MB = %.3f", inodeBlocksPerMachine*inodesBlockSizeBytes/1024.0/1024.0));
-		System.out.println(String.format("Inode blocks range start . = %d", inodeBlocksRangeStart));
-		System.out.println(String.format("Max blocks per local device= %d", maxBlocksPerLocalDevice));
+		//System.out.println(String.format("Inode blocks total size MB = %.3f", inodeBlocksPerMachine*inodesBlockSizeBytes/1024.0/1024.0));
+		//System.out.println(String.format("Inode blocks range start . = %d", inodeBlocksRangeStart));
 		System.out.println();
 		System.out.println(String.format("Cache size (MiB) ......... = %d", cacheSizeMiB));
+		System.out.println();
+		System.out.println(String.format("Num local devices......... = %d", numLocalDevices));
+		System.out.println(String.format("Max blocks per local device= %d", maxBlocksPerLocalDevice));
+		System.out.println();
+		System.out.println(String.format("Global store workers...... = %d", numWorkersStoreToGlobal));
+		System.out.println(String.format("Index node size bytes= %d", indexNodeSizeBytes));
+		System.out.println(String.format("RPC buffer len............ = %d", maxBufferLen));
 	}
 	
 	private void verify() {
@@ -227,12 +242,14 @@ public final class Configuration {
 		
 		assert cacheSizeMiB > (segmentSizeBytes/1048576.0);
 		
-		assert indexBlockSizeBytes % 16 == 0; //For the time being, an index entry is 16 bytes, timestamp + byteOffset
+		//assert indexBlockSizeBytes % 24 == 0; //For the time being, an index entry is 16 bytes, two timestamp, segInFile or indexNodeNumber
 		
 		assert powerOfTwo(segmentSizeBytes) : "segmentSizeBytes should be power of 2, currently it is: "+segmentSizeBytes;
 		assert powerOfTwo(dataBlockSizeBytes) : "dataBlockSizeBytesshould be power of 2, currently it is: "+dataBlockSizeBytes;
 		assert powerOfTwo(inodesBlockSizeBytes) : "inodesBlockSizeBytes should be power of 2, currently it is: "+inodesBlockSizeBytes;
-		assert powerOfTwo(indexBlockSizeBytes) : "indexBlockSizeBytes should be power of 2, currently it is: "+indexBlockSizeBytes;
+		assert powerOfTwo(indexNodeSizeBytes) : "indexBlockSizeBytes should be power of 2, currently it is: "+ indexNodeSizeBytes;
+
+		assert nodesPerBlockPOH > 0 : "nodesPerBlockPOH should be greater than zero, currently it is " + nodesPerBlockPOH;
 	}
 	
 	private boolean powerOfTwo(long val){

@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Commons;
@@ -22,7 +23,7 @@ public class Namespace {
 	private NamespaceService ns;
 	private Cache cache;
 	private int lastIbmapUsed;
-	private KeyedLock locks;
+	private KeyedLock<String> locks;
 	private static LocalStoreManager localStore;
 
 	private Map<Long, Boolean> openedFiles; // Map<inumber, appendMode> //FIXME: Should we use a bit-map instead of a map?
@@ -33,7 +34,7 @@ public class Namespace {
 
 	private Namespace() throws KawkabException {
 		cache = Cache.instance();
-		locks = new KeyedLock();
+		locks = new KeyedLock<>();
 		lastIbmapUsed = Configuration.instance().ibmapBlocksRangeStart;
 		openedFiles = new ConcurrentHashMap<>();
 		ns = NamespaceService.instance();
@@ -80,7 +81,7 @@ public class Namespace {
 					inumber = ns.getInumber(filename);
 				} catch (FileNotExistException fnee) { // If the file does not exist
 					if (appendMode) { // Create file if the file is opened in the append mode.
-						System.out.println("[NS] Creating new file: " + filename);
+						// System.out.println("[NS] Creating new file: " + filename);
 						inumber = createNewFile(opts.recordSize());
 						
 						try {
@@ -89,7 +90,7 @@ public class Namespace {
 							//System.out.println("[N] Created a new file: " + filename + ", inumber: " + inumber);
 						} catch (FileAlreadyExistsException faee) { // If the file already exists, e.g., because another
 							// node created the same file with different inumber
-							System.out.println("[NS] File already exists in ZK: " + filename);
+							// System.out.println("[NS] File already exists in ZK: " + filename);
 							releaseInumber(inumber);
 							continue;
 							//inumber = ns.getInumber(filename); // We may get another exception if another node deletes
@@ -107,7 +108,37 @@ public class Namespace {
 			// TODO: update openFilesTable
 
 			// if the file is opened in append mode and this node is not the primary file writer
-			if (appendMode && Commons.primaryWriterID(inumber) != thisNodeID) {
+			if (appendMode && !Commons.onPrimaryNode(inumber)) {
+				throw new InvalidFileModeException(
+						String.format("Cannot open file in the append mode. Inumber of the file is out of range of this node's range. NodeID=%d, PrimaryWriter=%d",
+								thisNodeID,
+								Commons.primaryWriterID(inumber)));
+			}
+
+			if (appendMode) {
+				openAppendFile(inumber, filename);
+			}
+		} finally {
+			locks.unlock(filename);
+		}
+
+		return inumber;
+	}
+
+	public synchronized long openFileDbg(String filename, boolean appendMode, FileOptions opts) throws IbmapsFullException, IOException,
+			InvalidFileModeException, FileAlreadyOpenedException, FileNotExistException, KawkabException, InterruptedException {
+		long inumber;
+
+		// Lock namespace for the given filename
+		locks.lock(filename);
+
+		try {
+				inumber = createNewFile(opts.recordSize());
+
+			// TODO: update openFilesTable
+
+			// if the file is opened in append mode and this node is not the primary file writer
+			if (appendMode && !Commons.onPrimaryNode(inumber)) {
 				throw new InvalidFileModeException(
 						String.format("Cannot open file in the append mode. Inumber of the file is out of range of this node's range. NodeID=%d, PrimaryWriter=%d",
 								thisNodeID,
@@ -127,7 +158,7 @@ public class Namespace {
 	/**
 	 * FIXME: This function is not finalized. This need to be updated to implement
 	 * proper openFilesTable.
-	 * 
+	 *
 	 * @param inumber
 	 * @throws FileAlreadyOpenedException
 	 */
@@ -165,7 +196,7 @@ public class Namespace {
 			try {
 				// System.out.println("[NS] Map number: " + mapNum);
 				ibmap = (Ibmap) (cache.acquireBlock(id));
-				ibmap.loadBlock();
+				ibmap.loadBlock(false);
 				inumber = ibmap.useNextInumber();
 				if (inumber >= 0)
 					break;
@@ -209,7 +240,7 @@ public class Namespace {
 			// inumber + ", primary: " + Commons.primaryWriterID(inumber));
 
 			inodesBlock = (InodesBlock) cache.acquireBlock(id);
-			inodesBlock.loadBlock();
+			inodesBlock.loadBlock(false);
 			inodesBlock.initInode(inumber, recordSize);
 		} finally {
 			if (inodesBlock != null) {

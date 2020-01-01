@@ -1,19 +1,15 @@
 package kawkab.fs.core;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.WritableByteChannel;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-
-import com.google.protobuf.ByteString;
-
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.services.grpc.PrimaryNodeServiceClient;
+import kawkab.fs.core.services.thrift.PrimaryNodeServiceClient;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * This is a parent class for Ibmap, InodeBlock, and DataSegment classes. It provides a common interface for the subclasses
@@ -37,48 +33,47 @@ public abstract class Block extends AbstractTransferItem {
 	private final static LocalStoreManager localStoreManager = LocalStoreManager.instance(); //FIXME: Handle exception properly;  // Local store such as local SSD
 	protected final static PrimaryNodeServiceClient primaryNodeService = PrimaryNodeServiceClient.instance(); // To load the block from the primary node
 	
-	private final Object localStoreSyncLock; // Lock to prevent cache eviction before syncing to the local store
-	
-	private final Lock dataLoadLock; //Lock for loading data in memory, disabling other threads from reading the block until data is loaded
-	
-	private AtomicInteger globalDirtyCnt;
-	private volatile boolean isLocalDirty; // Keeps track of the number of times the block is udpated. It helps in keeping track of the
+	//private AtomicInteger globalDirtyCnt;
+	private AtomicInteger localDirtyCnt; // Keeps track of the number of times the block is udpated. It helps in keeping track of the
 	                        // updated bytes and flush only the updated bytes to the local/global store. 
 	                        // TODO: Change this to a dirty bit. This can be achieved by an AtomicBoolean instead of
 	                        // an AtomicInteger
 	
 	//private volatile boolean inLocalQueue;  // The block is in a queue for local persistence
-	private AtomicBoolean inGlobalQueue; // The block is in a queue for global persistence
+	//private AtomicBoolean inGlobalQueue; // The block is in a queue for global persistence
 	private AtomicBoolean inLocalStore; // The blocks is currently in the local store (can be in more places as well)
-	private AtomicBoolean inCache;      // The block is in cache 
+	//private AtomicBoolean inCache;      // The block is in cache
 	
 	private boolean isLoaded; //If the block bytes are already loaded; used only on the primary node
+
+	protected boolean isOnPrimary;
 	
-	public long inQCount = 0; //For debug purposes
-	public long inTries = 0; //For debug purposes
+	//public long inQCount = 0; //For debug purposes
+	//public long inTries = 0; //For debug purposes
 	
 	public Block(BlockID id) {
 		this.id = id;
-		
-		localStoreSyncLock = new Object();
-		dataLoadLock = new ReentrantLock();
-		
-		isLocalDirty = false;
-		globalDirtyCnt = new AtomicInteger(0);
-		inGlobalQueue  = new AtomicBoolean(false);
+		isOnPrimary    = id != null && id.onPrimaryNode();
+		localDirtyCnt = new AtomicInteger(0);
+		//globalDirtyCnt = new AtomicInteger(0);
+		//inGlobalQueue  = new AtomicBoolean(false);
 		inLocalStore   = new AtomicBoolean(false);
-		inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and 
+		//inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and
 		                                          // the newly created blocks are always cached.
+		isLoaded = false;
 	}
 	
 	protected void reset(BlockID id) {
+		assert (id==null && this.id!=null) || (id!= null && this.id==null) : String.format("id=%s, this.id=%s",id, this.id);
+
 		this.id = id;
-		isLocalDirty = false;
-		globalDirtyCnt.set(0);
-		inGlobalQueue.set(false);
+		localDirtyCnt.set(0);
+		//globalDirtyCnt.set(0);
+		//inGlobalQueue.set(false);
 		inLocalStore.set(false);
-		inCache.set(false);
+		//inCache.set(false);
 		isLoaded = false;
+		isOnPrimary = id != null && id.onPrimaryNode();
 	}
 	
 	/**
@@ -117,46 +112,22 @@ public abstract class Block extends AbstractTransferItem {
 	
 	/**
 	 * Store contents of the block to channel. This function stores only the
-	 * updated bytes in the channel.
+	 * dirty bytes in the channel.
 	 * 
 	 * @param channel
 	 * @return Number of bytes written to the channel.
 	 * @throws IOException
 	 */
-	abstract int storeTo(WritableByteChannel channel)  throws IOException;
+	protected abstract int storeTo(FileChannel channel)  throws IOException;
 	
 	/**
 	 * Stores the block in a file.
 	 * @return Number of bytes written in the file.
 	 */
-	abstract int storeToFile() throws IOException;
-	
-	/**
-	 * Stores the complete block in the channel.
-	 * 
-	 * @param channel
-	 * @return Number of bytes written to the channel.
-	 * @throws IOException
-	 */
-	//public abstract int storeFullTo(WritableByteChannel channel) throws IOException;
-	
-	/**
-	 * Loads contents of this block from InputStream in.
-	 * @param in
-	 * @return Number of bytes read from the input stream.
-	 * @throws IOException
-	 */
-	// abstract int fromInputStream(InputStream in) throws IOException;
-	
-	/**
-	 * Returns a ByteArrayInputStream that wraps around the byte[] containing the block in bytes. PrimaryNodeService
-	 * calls this function to transfer data to the remote readers.Note that no guarantees are made about the concurrent
-	 * modification of the block while the block is read from the stream.
-	 */
-	public abstract ByteString byteString();
+	protected abstract int storeToFile() throws IOException;
 
 	/**
-	 * @return Size of the block in bytes when the complete block is serialized. 
+	 * @return Size of the block in bytes when the complete block is serialized.
 	 */
 	public abstract int sizeWhenSerialized();
 	
@@ -169,39 +140,45 @@ public abstract class Block extends AbstractTransferItem {
 	 * Increment the local dirty counts.
 	 */
 	public void markLocalDirty() {
-		isLocalDirty = true;
+		localDirtyCnt.incrementAndGet();
 	}
 	
 	/**
 	 * Increment the global dirty counts.
 	 */
-	public void markGlobalDirty() {
+	/*public void markGlobalDirty() {
 		globalDirtyCnt.incrementAndGet();
-	}
+	}*/
 	
 	/**
 	 * @return Returns whether this block has been modified until now or not.
 	 */
 	public boolean isLocalDirty(){
-		return isLocalDirty;
+		return localDirtyCnt.get() > 0;
 	}
-	
+
 	/**
 	 * @return Returns the current value of the local dirty count
 	 */
-	/*public long localDirtyCount() {
-		return isLocalDirty.get();
-	}*/
-	
-	public boolean getAndClearLocalDirty() {
-		boolean isDirty = isLocalDirty;
-		isLocalDirty = false;
-		return isDirty;
+	public int localDirtyCount() {
+		return localDirtyCnt.get();
+	}
+
+	public int decAndGetLocalDirty(int delta) {
+		int cnt = localDirtyCnt.addAndGet(-delta);
+
+		assert cnt >= 0;
+
+		return cnt;
+
+		/*boolean isDirty = localDirtyCnt;
+		localDirtyCnt = false;
+		return isDirty;*/
 	}
 	
-	public void notifySyncComplete() {
-		synchronized (localStoreSyncLock) {
-			localStoreSyncLock.notifyAll(); // Wake up the threads if they are waiting to evict this block from the cache
+	public void notifyLocalSyncComplete() {
+		synchronized (this) {
+			notifyAll(); // Wake up the threads if they are waiting to evict this block from the cache
 		}
 	}
 	
@@ -209,48 +186,16 @@ public abstract class Block extends AbstractTransferItem {
 	 * Returns the current value of the global dirty count
 	 * @return
 	 */
-	public int globalDirtyCount() {
+	/*public int globalDirtyCount() {
 		return globalDirtyCnt.get();
-	}
-	
-	public int decAndGetGlobalDirty(int count) {
-		return globalDirtyCnt.addAndGet(-count);
-	}
-	
-	public boolean inGlobalQueue() {
-		return inGlobalQueue.get();
-	}
-	
-	/**
-	 * Marks that the block is in a queue to be persisted in the local store.
-	 * 
-	 * @return Returns true if the block was already marked to be in the local queue
-	 */
-	/*public boolean markInLocalQueue() {
-		*//*if (inLocalQueue.get())
-			return true;
-		return inLocalQueue.getAndSet(true);*//*
-		
-		if (inLocalQueue)
-			return true;
-		inLocalQueue = true;
-		return false;
 	}*/
 	
-	/**
-	 * Clears the mark that the block is in a queue for persistence in the local store.
-	 * 
-	 * @return Returns false if the marker was already clear
-	 */
-	/*public void clearInLocalQueue() {
-		if (!inLocalQueue)
-			return;
-		
-		inLocalQueue = false;
-		
-		*//*if (!inLocalQueue.get())
-			return false;
-		return inLocalQueue.getAndSet(false);*//*
+	/*public int decAndGetGlobalDirty(int count) {
+		return globalDirtyCnt.addAndGet(-count);
+	}*/
+	
+	/*public boolean inGlobalQueue() {
+		return inGlobalQueue.get();
 	}*/
 	
 	/**
@@ -258,18 +203,18 @@ public abstract class Block extends AbstractTransferItem {
 	 * 
 	 * @return Returns true if the block was already marked to be in a local store queue
 	 */
-	public boolean markInGlobalQueue() {
+	/*public boolean markInGlobalQueue() {
 		return inGlobalQueue.getAndSet(true);
-	}
+	}*/
 	
 	/**
 	 * Clears the mark that the block is in a queue for persistence in the local store.
 	 * 
 	 * @return Returns false if the marker was already clear
 	 */
-	public boolean clearInGlobalQueue() {
+	/*public boolean clearInGlobalQueue() {
 		return inGlobalQueue.getAndSet(false);
-	}
+	}*/
 	
 	public abstract boolean evictLocallyOnMemoryEviction();
 	
@@ -283,12 +228,13 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws InterruptedException 
 	 */
 	public void waitUntilSynced() throws InterruptedException {
-		if (isLocalDirty || inTransferQueue()) {
-			synchronized(localStoreSyncLock) {
-				while (isLocalDirty || inTransferQueue()) { // It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
-					System.out.println("[B] Waiting until this block is synced to the local store and then evicted from the cache: " + id + ", isLocalDirty: " +
-								isLocalDirty + ", inLocalQueue="+inTransferQueue());
-					localStoreSyncLock.wait();
+		if (localDirtyCnt.get() > 0 || inTransferQueue()) {
+			synchronized(this) {
+				// It may happen that the block's dirty count is zero but the block is also in the queue. See (1) at the end of this file.
+				while (localDirtyCnt.get() > 0 || inTransferQueue()) {
+					//System.out.println("[B] swait: " + id + ", dty: " +
+					//			isLocalDirty + ", inLQ="+inTransferQueue());
+					wait();
 				}
 				//System.out.println("[B] Block synced, now evicting: " + id);
 			}
@@ -300,8 +246,10 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws FileNotExistException
 	 * @throws KawkabException
 	 */
-	protected void loadFromGlobal() throws FileNotExistException, KawkabException {
-		globalStoreManager.load(this);
+	protected void loadFromGlobal(int offset, int length) throws FileNotExistException, KawkabException {
+		//System.out.printf("[B] Loading %s from GS\n",id);
+
+		globalStoreManager.load(this, offset, length);
 	}
 	
 	/**
@@ -313,23 +261,31 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws KawkabException
 	 * @throws IOException
 	 */
-	public void loadBlock() throws FileNotExistException, KawkabException, IOException {
-		if (id.onPrimaryNode()) { // If this node is the primary writer of the file
-			loadBlockOnPrimary();
+	public void loadBlock(boolean loadFromPrimary) throws FileNotExistException, KawkabException, IOException {
+		if (isOnPrimary) { // If this node is the primary writer of the file
+			if (!isLoaded)
+				loadBlockOnPrimary();
 			return;
 		}
 		
-		loadBlockOnNonPrimary();
+		loadBlockOnNonPrimary(loadFromPrimary);
 	}
 	
 	/**
 	 * Load block on the current non-primary node
-	 * 
+	 *
+	 * If this node is the primary node of this block, the block is first attempted to be loaded from the local store.
+	 * If this node is a non-primary node, the loadFromPrimary parameter indicates whether to load only from the primary
+	 * or follow another policy, e.g., first try to load from the global store.
+	 *
+	 * @param loadFromPrimary Whether to load the block only from the primary if this node is a non-primary node. This
+	 *                        flag is checked only on a non-primary node.
+	 *
 	 * @throws FileNotExistException
 	 * @throws KawkabException
 	 * @throws IOException
 	 */
-	protected abstract void loadBlockOnNonPrimary() throws FileNotExistException, KawkabException, IOException;
+	protected abstract void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, KawkabException, IOException;
 	
 	/**
 	 * Helper function: Loads the block from the local or the global store. This code runs only on the primary node
@@ -340,44 +296,33 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws IOException
 	 */
 	private void loadBlockOnPrimary() throws FileNotExistException, KawkabException, IOException {
-		if (!id.onPrimaryNode()) { //FIXME: Do we need to check again? First time this is checked in the loadBlock().
+		if (!isOnPrimary) { //FIXME: Do we need to check again? First time this is checked in the loadBlock().
 			throw new KawkabException("Unexpected execution path. This node is not the primary node of this block: " + 
 																		id() + ", primary node: " + id.primaryNodeID());
 		}
-		
+
 		//Load only if the block is not already loaded
 		if (!isLoaded) {
-			try {
-				dataLoadLock.lock(); // Disable loading from concurrent threads
+			//dataLoadLock.lock(); // Disable loading from concurrent threads
+			synchronized (this) {
 				//Load only if it is not already loaded
 				if (!isLoaded) { // Prevent subsequent loads from other threads
-				
+					//System.out.println(" [B] **** LOAD BLOCK ON PRIMARY: " + id);
 					//System.out.println("[B] On primary. Load from the LOCAL store: " + id);
-					
+
 					if (!localStoreManager.load(this)) { // Load data from the local store
 						System.out.println("[B] On primary: Loading from the GLOBAL STORE: " + id);
-						loadFromGlobal(); // Load from the global store if failed to load from the local store
+						loadFromGlobal(0, sizeWhenSerialized()); // Load from the global store if failed to load from the local store
 					}
-					
+
 					isLoaded = true; //Once data is loaded on the primary, it should not expired because
-				                     // the concurrent readers/writer read/modify the same block in the cache.
+					// the concurrent readers/writer read/modify the same block in the cache.
 				}
-			} finally {
-				dataLoadLock.unlock();
 			}
 		}
 	}
-	
-	/**
-	 * Helper function to load the content of the block from the primary node.
-	 * 
-	 * @throws FileNotExistException
-	 * @throws KawkabException
-	 * @throws IOException
-	 */
-	protected abstract void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException;
-	
-	void setInLocalStore() {
+
+	/*void setInLocalStore() {
 		inLocalStore.set(true);
 	}
 	
@@ -387,20 +332,27 @@ public abstract class Block extends AbstractTransferItem {
 	
 	boolean isInLocal() {
 		return inLocalStore.get();
-	}
+	}*/
 	
-	void unsetInCache() {
+	/*void unsetInCache() {
 		inCache.set(false);
 	}
 	
 	boolean isInCache() {
 		return inCache.get();
-	}
+	}*/
 	
-	abstract void onMemoryEviction();
+	protected void setIsLoaded() {
+		//System.out.printf("[B] Setting %s is loaded\n",id);
+		isLoaded = true;
+	}
+
+	/*public boolean isLoaded() {
+		return isLoaded;
+	}*/
 }
 
-/**
+/*
  * (1)	It may happen that a block's dirty count is zero and the block is in the queue:
  * 		- Appender writes the block B and increments dirty count d
  * 		- Appender puts the block in queue after marking that the block is in the queue

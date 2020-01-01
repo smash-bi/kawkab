@@ -72,12 +72,12 @@ public class TransferPriorityQueue<T extends AbstractTransferItem> {
 	 * @param id
 	 */
 	public void add(T item, long id) {
-		item.inTries++;
+		//item.inTries++;
 		if (item.getAndSetInQueue(true)) { // The item is already in the queue
 			return;
 		}
 		
-		item.inQCount++;
+		//item.inQCount++;
 		
 		ConcurrentLinkedQueue<T> q = queuesMap.get(id);
 		
@@ -99,10 +99,10 @@ public class TransferPriorityQueue<T extends AbstractTransferItem> {
 		T item = unifiedQueue.take();
 		item.getAndSetInQueue(false);
 		
-		inTriesAgg += item.inTries;
-		inQCountAgg += item.inQCount;
-		item.inTries = 0;
-		item.inQCount = 0;
+		//inTriesAgg += item.inTries;
+		//inQCountAgg += item.inQCount;
+		//item.inTries = 0;
+		//item.inQCount = 0;
 		
 		return item;
 	}
@@ -118,10 +118,10 @@ public class TransferPriorityQueue<T extends AbstractTransferItem> {
 		
 		item.getAndSetInQueue(false);
 		
-		inTriesAgg += item.inTries;
-		inQCountAgg += item.inQCount;
-		item.inTries = 0;
-		item.inQCount = 0;
+		//inTriesAgg += item.inTries;
+		//inQCountAgg += item.inQCount;
+		//item.inTries = 0;
+		//item.inQCount = 0;
 		
 		return item;
 	}

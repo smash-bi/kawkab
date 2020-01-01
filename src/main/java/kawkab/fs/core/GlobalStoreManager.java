@@ -1,11 +1,11 @@
 package kawkab.fs.core;
 
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
+
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 public class GlobalStoreManager {
 	private static final Object initLock = new Object();
@@ -17,7 +17,7 @@ public class GlobalStoreManager {
 	private volatile boolean working = true;    // To stop accepting new requests after working is false
 	
 	private static GlobalStoreManager instance;
-	
+
 	public static GlobalStoreManager instance() {
 		if (instance == null) {
 			synchronized(initLock) {
@@ -35,7 +35,7 @@ public class GlobalStoreManager {
 		for(int i=0; i<numWorkers; i++) {
 			backends[i] = new S3Backend();
 		}
-		
+
 		startWorkers();
 	}
 	
@@ -48,7 +48,7 @@ public class GlobalStoreManager {
 	private void startWorkers() {
 		storeQs = new LinkedBlockingQueue[numWorkers];
 		for(int i=0; i<numWorkers; i++) {
-			storeQs[i] = new LinkedBlockingQueue<Task>();
+			storeQs[i] = new LinkedBlockingQueue<>();
 		}
 		
 		workers = new Thread[numWorkers];
@@ -71,31 +71,31 @@ public class GlobalStoreManager {
 	 * @throws FileNotExistException
 	 * @throws KawkabException
 	 */
-	public void load(Block block) throws FileNotExistException, KawkabException {
+	public void load(Block block, int offset, int length) throws FileNotExistException, KawkabException {
 		//TODO: Limit the number of load requests, probably using semaphore
 		//TODO: Make it a blocking function and use a threadpool for the load requests
 		
 		synchronized(loadWorker) {
-			loadWorker.loadFromGlobal(block);
+			loadWorker.loadFromGlobal(block, offset, length);
 		}
 	}
 	
-	public void store(Block block, SyncCompleteListener listener) throws KawkabException {
+	public void store(BlockID blockID, SyncCompleteListener listener) throws KawkabException {
 		/*if (!working) {
 			throw new KawkabException("GlobalStoreManager has already received stop signal.");
 		}*/
 		
-		if (block.markInGlobalQueue()) { // The block is already in the queue or being processed
+		/*if (block.markInGlobalQueue()) { // The block is already in the queue or being processed
 			//System.out.println("\t\t[GSM] Skip: " + block.id());
 			return;
-		}
+		}*/
 		
 		//System.out.println("\t\t\t[GSM] Enque: " + block.id());
 		
 		//Load balance between workers, but assign same worker to the same block.
-		int queueNum = Math.abs(block.id().hashCode()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
+		int queueNum = Math.abs(blockID.hashCode()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
 		
-		storeQs[queueNum].add(new Task(block, listener));
+		storeQs[queueNum].add(new Task(blockID, listener));
 	}
 	
 	/**
@@ -139,14 +139,14 @@ public class GlobalStoreManager {
 	private void storeToGlobal(Task task, GlobalBackend backend) throws KawkabException {
 		//System.out.println("[GSM] Storing: " + task.block.id());
 		
-		Block block = task.block;
+		//Block block = task.blockID;
 		
-		block.clearInGlobalQueue(); // We must get the current dirty count after clearing the inQueue flag because a
+		//block.clearInGlobalQueue(); // We must get the current dirty count after clearing the inQueue flag because a
 		// concurrent writer may want to add the block in the queue. If the concurrent
 		// writer fails to add in the queue, then this worker should add the block in the
 		// if the dirty count is non-zero.
 		
-		int count = block.globalDirtyCount();
+		//int count = block.globalDirtyCount();
 		
 		//assert count > 0; // count must be greater than zero because the block is added in the queue only if its dirty count is non-zero.
 		
@@ -160,7 +160,8 @@ public class GlobalStoreManager {
 		// Therefore, we can reach this line in the code when the dirty count is zero.
 		
 		boolean successful = true;
-		if (count > 0) {
+
+		/*if (count > 0) {
 			try {
 				backend.storeToGlobal(block);
 			} catch (KawkabException e) {
@@ -174,10 +175,12 @@ public class GlobalStoreManager {
 			//System.out.println("[GSM] Global bit dirty, resubmitting block: " + block.id() + ", cnt="+count);
 			store(block, task.listener);
 			return;
-		}
+		}*/
+
+		backend.storeToGlobal(task.blockID);
 		
 		try {
-			task.listener.notifyGlobalStoreComplete(block, successful);
+			task.listener.notifyGlobalStoreComplete(task.blockID, successful);
 		} catch (KawkabException e) {
 			e.printStackTrace();
 		}
@@ -224,9 +227,9 @@ public class GlobalStoreManager {
 	
 	private class Task {
 		final SyncCompleteListener listener;
-		final Block block;
-		Task(Block block, SyncCompleteListener listener){
-			this.block = block;
+		final BlockID blockID;
+		Task(BlockID blockID, SyncCompleteListener listener){
+			this.blockID = blockID;
 			this.listener = listener;
 		}
 	}
