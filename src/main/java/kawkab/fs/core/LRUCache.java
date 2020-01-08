@@ -24,7 +24,7 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 		this.maxBlocksInCache = maxBlocksInCache;
 		this.evictListener = evictListener;
 		evLog = new LatHistogram(TimeUnit.MICROSECONDS, "EvictLog", 100, 100000);
-		highMark = (int)(0.95*maxBlocksInCache);
+		highMark = (int)(0.8*maxBlocksInCache);
 	}
 
 	@Override
@@ -86,12 +86,13 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 		return false;
 	}*/
 
-	void bulkRemove(int toEvict) {
+	int bulkRemove(int toEvict) {
 		//System.out.println("[LC] To evict = "+toEvict);
 
 		//int evicted = 0;
 		//int skipped = 0;
 		evLog.start();
+		int evicted = 0;
 		Iterator<Entry<BlockID, CachedItem>> itr = super.entrySet().iterator();
 		//while(evicted < toEvict && itr.hasNext()) {
 		for (int i=0; i<toEvict; i++) {
@@ -110,7 +111,7 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 			evictListener.onEvictBlock(block);
 
 			itr.remove();
-			//evicted++;
+			evicted++;
 
 			//assert dbgCI.equals(ci) : String.format("CachedItems not equal, eci.hc=%d, dbgCI.hc=%d, eci.id=%s, dbgCI.id=%s, eci.id.hc=%d, dbgCI.id.hc=%d\n",
 			//		ci.hashCode(), dbgCI.hashCode(), ci.block().id(), dbgCI.block().id(), ci.block().id().hashCode(), dbgCI.block().id().hashCode());
@@ -130,6 +131,8 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 
 		//if (evicted != toEvict)
 		//	System.out.println("[LC] Evicted = "+evicted+", skipped="+skipped);
+
+		return evicted;
 	}
 
 	public String getStats() {

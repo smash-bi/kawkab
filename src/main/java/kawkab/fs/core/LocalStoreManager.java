@@ -3,8 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.timerqueue.TimerQueue;
-import kawkab.fs.core.timerqueue.TimerQueueIface;
+import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 import java.io.File;
 import java.io.IOException;
@@ -27,6 +26,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private final FileLocks fileLocks;
 	
 	private static LocalStoreManager instance;
+	private LocalEvictQueue leq;
+
+	//private final Object syncWaitMutex;
 
 	public synchronized static LocalStoreManager instance() {
 		if (instance == null) {
@@ -44,6 +46,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		storePermits = new Semaphore(maxBlocks);
 		
 		fileLocks = FileLocks.instance();
+
+		leq = new LocalEvictQueue("LocalEvictQueue", storedFilesMap, storePermits);
 		
 		int inLocalSystem = storedFilesMap.size();
 		assert inLocalSystem <= maxBlocks;
@@ -52,7 +56,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-		
+
+		//syncWaitMutex = new Object();
+
 		System.out.println("Initializing local store manager. Workers = " + numWorkers);
 		
 		startWorkers();
@@ -203,6 +209,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 			syncedCnt = block.storeTo(channel);
 
+			channel.force(true);
+
 			//block.markGlobalDirty();
 		} catch (IOException e) {
 			System.out.println("Unbale to store data for ID: " + bid);
@@ -238,6 +246,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				globalProc.store(bid, this); // Add the block in the queue to be transferred to the globalStore
 			}
 		}
+
+		//notifyLocalSynced();
 
 		return syncedCnt;
 	}
@@ -298,8 +308,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		//TODO: Add in canBeEvicted list. Also, remove from the canBeEvicted list if the block becomes dirty again
 	//}
 	
-	private void evictFromLocal(BlockID id) throws KawkabException {
-		if (id.onPrimaryNode())
+	void evictFromLocal(BlockID id) throws KawkabException {
+		/*if (id.onPrimaryNode())
 			return;
 		
 		//System.out.println("[LSM] Evict locally: " + id);
@@ -319,7 +329,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		//int permits = storePermits.availablePermits();
 		//System.out.println("\t\t\t\t\t\t Evict: Permits: " + permits + ", map: " + mapSize);
 		
-		storePermits.release();
+		storePermits.release();*/
+		leq.evict(id);
 	}
 	
 	/**
@@ -328,9 +339,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * Multiple writers can call this function concurrently. However, only one writer per block should be allowed to call this function.
 	 * The function assumes that the caller prevents multiple writers from creating the same new block.
 	 */
-	public void createBlock(BlockID blockID) throws IOException, InterruptedException {
-		
-		storePermits.acquire(); // This provides an upper limit on the number of blocks that can be created locally.
+	public void createBlock(BlockID blockID) throws IOException, OutOfMemoryException {
+		if (!storePermits.tryAcquire()) { // This provides an upper limit on the number of blocks that can be created locally.
+			throw new OutOfMemoryException("Local store is full.");
+		}
 		
 		File file = new File(blockID.localPath());
 		File parent = file.getParentFile();
@@ -366,7 +378,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 */
 	public boolean load(Block block) throws FileNotExistException,KawkabException {
 		BlockID id = block.id();
-		//System.out.println("[LSM] Load block: " + id.name());
+		System.out.println("[LSM] Load block: " + id);
 		
 		if (!storedFilesMap.exists(id)) {
 			System.out.println("[LSM] Block is not available locally: " + id);
@@ -454,4 +466,16 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		return storedFilesMap.exists(id);
 	}
+
+	/*private void notifyLocalSynced() {
+		synchronized (syncWaitMutex) {
+			syncWaitMutex.notify();
+		}
+	}
+
+	public void syncWait() throws InterruptedException{
+		synchronized (syncWaitMutex) {
+			syncWaitMutex.wait();
+		}
+	}*/
 }

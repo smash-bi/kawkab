@@ -6,6 +6,7 @@ import kawkab.fs.core.IndexNodeID;
 import kawkab.fs.core.LocalStoreManager;
 import kawkab.fs.core.exceptions.IndexBlockFullException;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
@@ -170,18 +171,28 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param nodeID ID of the first node in the index block
 	 * @return
 	 */
-	private void createNewBlock(IndexNodeID nodeID) throws IOException, InterruptedException {
+	private void createNewBlock(IndexNodeID nodeID) throws IOException, OutOfMemoryException {
 		  //System.out.println("[POH] Creating new block: " + nodeID.localPath());
 
 		localStore.createBlock(nodeID);
 	}
 
-	private POHNode createNewNodeCached(final int nodeNumber) throws IOException, KawkabException, InterruptedException {
+	private POHNode createNewNodeCached(final int nodeNumber) throws IOException, KawkabException {
 		IndexNodeID nodeID = new IndexNodeID(inumber, nodeNumber);
 
 		//System.out.println("[POH] Creating new node: " + nodeID);
 
 		POHNode node = (POHNode) cache.acquireBlock(nodeID);
+		if (nodeNumber % nodesPerBlock == 0 || nodeNumber == 1) {
+			try {
+				createNewBlock(nodeID);
+			} catch(OutOfMemoryException e) {
+				cache.releaseBlock(nodeID);
+				throw e;
+			}
+		}
+
+
 		node.init(nodeNumber, heightOfNode(nodeNumber), entriesPerNode, childrenPerNode, nodeSizeBytes, nodesPerBlock);
 		node.initForAppend();
 		setChildren(node, false);
@@ -189,8 +200,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		assert prev == null;
 
-		if (nodeNumber % nodesPerBlock == 0 || nodeNumber == 1)
-			createNewBlock(nodeID);
+
 
 		return node;
 	}
@@ -257,7 +267,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 				int nodeNum = (int)(curIndexLen/2/entriesPerNode) +1;
 				POHNode node = createNewNodeCached(nodeNum);
 				acquiredNode = new TimerQueueItem<>(node, this);
-			} catch (IOException | KawkabException | InterruptedException e) {
+			} catch (IOException | KawkabException e) {
 				e.printStackTrace();
 				return;
 			}
@@ -335,7 +345,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 				int nodeNum = (int)(curIndexLen/2/entriesPerNode) +1;
 				POHNode node = createNewNodeCached(nodeNum);
 				acquiredNode = new TimerQueueItem<>(node, this);
-			} catch (IOException | KawkabException | InterruptedException e) {
+			} catch (IOException | KawkabException  e) {
 				e.printStackTrace();
 				return;
 			}
@@ -546,32 +556,36 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		//long t1 = System.currentTimeMillis();
 
-		int curNode = findRootNode(ts, lastNodeIdx, loadFromPrimary);
+		//int curNode = findRootNode(ts, lastNodeIdx, loadFromPrimary);
+		POHNode curNode = findRootNode(ts, lastNodeIdx, loadFromPrimary);
 
 		//long t2 = System.currentTimeMillis();
 
-		if (curNode <= 0) //No results found
+		//if (curNode <= 0) //No results found
+		//	return null;
+		if (curNode == null)
 			return null;
 
 		//LatHistogram ls1 = new LatHistogram(TimeUnit.MICROSECONDS, "dbg1", 100, 100000);
 		//LatHistogram ls2 = new LatHistogram(TimeUnit.MICROSECONDS, "dbg2", 100, 100000);
 
-		POHNode node = acquireNode(curNode, loadFromPrimary);
-		while(node.height() > 0) {
-			if (node.entryMinTS() <= ts)
+		//POHNode node = acquireNode(curNode, loadFromPrimary);
+		while(curNode.height() > 0) {
+			if (curNode.entryMinTS() <= ts)
 				break;
 
+			int nextNode;
 			if (findLast) {
 				//ls1.start();
-				curNode = node.findLastChild(ts);
+				nextNode = curNode.findLastChild(ts);
 				//ls1.end();
 			} else {
 				//ls2.start();
-				curNode = node.findFirstChild(ts);
+				nextNode = curNode.findFirstChild(ts);
 				//ls2.end();
 			}
 
-			node = acquireNode(curNode, loadFromPrimary);
+			curNode = acquireNode(nextNode, loadFromPrimary);
 			//ls1.printStats();
 			//ls2.printStats();
 		}
@@ -580,7 +594,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		//System.out.printf("t1=%d, t2=%d\n", t2-t1, t3-t2);
 
-		return node;
+		return curNode;
 	}
 
 	/**
@@ -588,18 +602,19 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param ts
 	 * @return
 	 */
-	private int findRootNode(final long ts, final int lastNodeIdx, boolean loadFromPrimary) throws IOException, KawkabException {
+	private POHNode findRootNode(final long ts, final int lastNodeIdx, boolean loadFromPrimary) throws IOException, KawkabException {
 		//System.out.printf("[POH] findRootNode: ts=%d, lastMin=%d, lastMax=%d\n", ts, nodes.get(curNode).minTS(), nodes.get(curNode).maxTS());
 		//if (ts < acquireNode(1, loadFromPrimary).minTS()) //if the first index entry is larger than the ts, i.e., the given range is lower than data
 		//	return -1;
 
 		int curNode = lastNodeIdx; // Begin with the last node
+		POHNode node = null;
 
 		// First traverse the root nodes up to the left-most tree
 		while(curNode > 0) { // until we have explored all the root nodes; nodes[0] is null.
 			// Move to the root of the tree on the left
 
-			POHNode node = acquireNode(curNode, loadFromPrimary);
+			node = acquireNode(curNode, loadFromPrimary);
 
 			//System.out.printf("[POH] findRootNode: ts=%d, node=%s, minTS=%d, maxTS=%d\n", ts, node.nodeNumber(), node.minTS(), node.maxTS());
 
@@ -607,10 +622,12 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 				break;
 
 			curNode = curNode - nodesCountTable[node.height()];
-
 		}
 
-		return  curNode;
+		if (curNode == 0)
+			return null;
+
+		return  node;
 	}
 
 	/**

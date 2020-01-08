@@ -201,9 +201,9 @@ public final class Filesystem {
 	}
 
 	public void printStats() throws KawkabException {
-		for (FileHandle file : openFiles.values()) {
+		/*for (FileHandle file : openFiles.values()) {
 			file.printStats();
-		}
+		}*/
 
 		pns.printStats();
 

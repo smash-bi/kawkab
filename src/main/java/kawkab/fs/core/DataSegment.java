@@ -68,6 +68,7 @@ public final class DataSegment extends Block {
 
 		recordSize = segmentID.recordSize();
 		isLastSeg = segmentID.segmentInBlock()+1 == conf.segmentsPerBlock;
+		initialAppendPos = 0;
 	}
 
 	synchronized void reInit(DataSegmentID segmentID) {
@@ -85,6 +86,7 @@ public final class DataSegment extends Block {
 		isSegFull = false;
 		recordSize = segmentID.recordSize();
 		initedForAppends = false;
+		initialAppendPos = 0;
 	}
 
 	synchronized void prepareForAppend(long offsetInFile) {
@@ -132,6 +134,8 @@ public final class DataSegment extends Block {
 		//dataBuf.position(writePntr+toAppend);
 		
 		int pos = writePos.addAndGet(toAppend);
+
+		assert pos <= dataBuf.capacity();
 		
 		//Mark block as full
 		if (pos == segmentSizeBytes) {
@@ -236,11 +240,14 @@ public final class DataSegment extends Block {
 		buf.limit(limit);
 
 		assert buf.remaining() >= recordSize; // at least have one record
+
 		if (timestamp < buf.getLong(0)) { // if the records in this segment are all greater than the given ts
+			System.out.printf("Record with timestamp %d not found, the timestamp is smaller than the first record\n", timestamp);
 			return false;
 		}
 
 		if (buf.getLong(limit-recordSize) < timestamp) { // All the records in this segment are smaller than the given ts
+			System.out.printf("Record with timestamp %d not found, the timestamp is larger than the last record\n", timestamp);
 			return false;
 		}
 
@@ -442,11 +449,14 @@ public final class DataSegment extends Block {
 			writePos.set(bytesRead);
 			isSegFull = bytesRead == conf.segmentSizeBytes;
 			initialAppendPos = bytesRead;
+		} else {
+			int pos = writePos.addAndGet(bytesRead);
+			dirtyOffset += bytesRead;
+			isSegFull = pos + recordSize > segmentSizeBytes;
+
+			assert pos <= dataBuf.capacity();
 		}
 
-		int pos = writePos.addAndGet(bytesRead);
-		dirtyOffset += bytesRead;
-		isSegFull = pos+recordSize > segmentSizeBytes;
 
 		//System.out.printf("[DS] After loading %s from channel: bytesRead=%d, writePos=%d, datBufPos=%d\n",
 		//		id, bytesRead, pos, dataBuf.position());

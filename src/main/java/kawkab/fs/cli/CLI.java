@@ -8,6 +8,7 @@ import kawkab.fs.client.KClient;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
 import kawkab.fs.core.Cache;
+import kawkab.fs.core.DataSegmentID;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
@@ -20,6 +21,8 @@ import kawkab.fs.utils.GCMonitor;
 import kawkab.fs.utils.LatHistogram;
 
 import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -129,7 +132,7 @@ public final class CLI {
 							parseAppendTest(args);
 							continue;
 						case "flush":
-							flushCache();
+							dropCache();
 							continue;
 						case "clear":
 							clearStats();
@@ -609,14 +612,14 @@ public final class CLI {
 		double thr = sizeMB / durSec;
 		double opThr = cnt / durSec;
 
-		System.out.printf("recSize=%d, numRecs=%d, rTput=%,.0f MB/s, mean=%.2f, opsTput=%,.0f OPS, " +
+		System.out.printf("recSize=%d, numRecs=%d, opsTput=%,.0f OPS, dTput=%,.2f MB/s, mean=%.2f, " +
 						"50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f, batchSize=%d, stdev=%.2f\n",
-				recSize, stats.count(), thr, opThr, stats.mean(), quantiles.get(50), quantiles.get(95), quantiles.get(99),
+				recSize, cnt, opThr, thr, stats.mean(), quantiles.get(50), quantiles.get(95), quantiles.get(99),
 				stats.min(), stats.max(), batchSize, stats.sampleStandardDeviation()
 				);
 
 		System.out.printf("%d, %d, %.0f, %.2f, %.0f, %.2f, %.2f, %.2f, %.2f, %.2f, %d, %.2f\n",
-				recSize, stats.count(), thr, opThr, stats.mean(), quantiles.get(50), quantiles.get(95), quantiles.get(99),
+				recSize, cnt, opThr, thr, stats.mean(), quantiles.get(50), quantiles.get(95), quantiles.get(99),
 				stats.min(), stats.max(), batchSize, stats.sampleStandardDeviation()
 		);
 
@@ -638,7 +641,7 @@ public final class CLI {
 		double opThr = cnt / durSec;
 
 		System.out.printf("%s: recSize=%d, numRecs=%d, rTput=%,.0f MB/s, opsTput=%,.0f OPS, Lat %s\n",
-				tag, recSize, numRecs, thr, opThr, latHist.getStats());
+				tag, recSize, cnt, thr, opThr, latHist.getStats());
 
 		return new Result(latHist.sampled(), opThr, thr, latHist.min(), latHist.max(), latHist.accumulator().histogram(), null, batchSize);
 	}
@@ -758,19 +761,48 @@ public final class CLI {
 
 		System.out.printf("Appended %d records of %d bytes. New file size is %d records.\n",numRecs, recSize, file.size()/recSize);
 
-		System.out.printf("Elapsed time (ns): %,d\n",elapsed);
+		System.out.printf("Elapsed time (us): %,d\n",elapsed);
 	}
 
-	private void flushCache() throws KawkabException, IOException, InterruptedException {
+	private void dropCache() throws KawkabException, IOException, InterruptedException {
 		fs.flush();
-		flushOSCache();
+		clearOSCache();
+		//clearDiskCache();
 	}
 
-	private void flushOSCache() throws InterruptedException, IOException {
-		Runtime run = Runtime.getRuntime(); // get OS Runtime
+	private void clearOSCache() throws InterruptedException, IOException {
+		/*Runtime run = Runtime.getRuntime(); // get OS Runtime
 		// execute a system command and give back the process
-		Process pr = run.exec("sudo sync; sudo echo 3 > /proc/sys/vm/drop_caches");
-		pr.waitFor();
+		Process pr = run.exec("sudo sh -c \"echo 3 > /proc/sys/vm/drop_caches\"");
+		pr.waitFor();*/
+
+		String[] cmd = new String[]{"/bin/bash", "/home/sm3rizvi/kawkab/dropcaches.sh"};
+		Process pr = Runtime.getRuntime().exec(cmd);
+		int exitVal = pr.waitFor();
+		if (exitVal != 0) {
+			System.out.println("Failed to drop OS caches");
+		}
+	}
+
+	private void clearDiskCache() throws IOException, InterruptedException {
+		String fn = "/hdd1/sm3rizvi/kawkab/tempfile.img"; //A random 1GB file create using "fallocate -l 1G tempfile.img"
+
+		try (
+				RandomAccessFile file = new RandomAccessFile(fn, "r");
+				SeekableByteChannel channel = file.getChannel()
+		) {
+
+			channel.position(0);
+			int read = 1;
+			ByteBuffer buf = ByteBuffer.allocate(16*1024*1024);
+			while (read > 0) {
+				buf.clear();
+				read = channel.read(buf);
+			}
+			//assert bytesLoaded == 0;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	private void parseSize(String[] args) throws IOException, KawkabException {

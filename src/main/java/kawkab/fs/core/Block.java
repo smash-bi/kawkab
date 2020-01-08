@@ -10,6 +10,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
 
 /**
  * This is a parent class for Ibmap, InodeBlock, and DataSegment classes. It provides a common interface for the subclasses
@@ -47,7 +48,7 @@ public abstract class Block extends AbstractTransferItem {
 	private boolean isLoaded; //If the block bytes are already loaded; used only on the primary node
 
 	protected boolean isOnPrimary;
-	
+
 	//public long inQCount = 0; //For debug purposes
 	//public long inTries = 0; //For debug purposes
 	

@@ -25,6 +25,7 @@ public class PartitionedBufferedCache extends Cache {
 
 	private ConcurrentHashMap<BlockID, CachedItem> pinnedMap;
 	private KeyedLock<Integer> pinLock;
+	private int totalSegments;
 
 	private PartitionedBufferedCache() {
 		System.out.println("Initializing PartitionedBufferedCache cache..." );
@@ -34,6 +35,7 @@ public class PartitionedBufferedCache extends Cache {
 		localStore = LocalStoreManager.instance();
 		
 		int numSegmentsInCache = (int)((conf.cacheSizeMiB * 1048576L)/conf.segmentSizeBytes);
+		totalSegments = numSegmentsInCache;
 		if (numSegmentsInCache <= 0) {
 			System.out.println("Cache size is not sufficient to cache the metadata and the data segments");
 		}
@@ -49,7 +51,7 @@ public class PartitionedBufferedCache extends Cache {
 		pinnedMap = new ConcurrentHashMap<>();
 		pinLock = new KeyedLock<>();
 
-		runEvictor();
+		//runEvictor();
 	}
 	
 	public static PartitionedBufferedCache instance() {
@@ -263,8 +265,8 @@ public class PartitionedBufferedCache extends Cache {
 		}
 
 		if (accessed > 0)
-			stats.append(String.format("Cache agg: size=%d, accessed=%d, missed=%d, evicted=%d, hitRatio=%.02f\n",
-					size, accessed, missed, evicted, 100.0*(accessed-missed)/accessed));
+			stats.append(String.format("Cache agg: size=%.2f%%, accessed=%d, missed=%d, evicted=%d, hitRatio=%.02f\n",
+					totalSegments*100.0/size, accessed, missed, evicted, 100.0*(accessed-missed)/accessed));
 
 		return stats.toString();
 	}
@@ -283,7 +285,7 @@ public class PartitionedBufferedCache extends Cache {
 		}
 	}
 
-	private void runEvictor() {
+	/*private void runEvictor() {
 		Thread evictor = new Thread(() -> {
 			while(true) {
 				for (int i = 0; i < cache.length; i++) {
@@ -300,5 +302,5 @@ public class PartitionedBufferedCache extends Cache {
 		evictor.setName("CacheEvictor");
 		evictor.setDaemon(true);
 		evictor.start();
-	}
+	}*/
 }

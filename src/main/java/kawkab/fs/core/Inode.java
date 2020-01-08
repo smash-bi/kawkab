@@ -42,7 +42,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	private boolean isInited;
 	private int recsPerSeg;
 
-	private static final int bufferTimeOffsetMs = 2;
+	private static final int bufferTimeOffsetMs = 0;
 
 	public static final long MAXFILESIZE = conf.maxFileSizeBytes;
 
@@ -144,8 +144,10 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		long segInFile = index.findHighest(timestamp, indexLength(fileSize.get()), loadFromPrimary);
 		//idxLog.end();
 
-		if (segInFile == -1)
-			return  false;
+		if (segInFile == -1) {
+			System.out.printf("[I] Record with timestamp %d not found.\n", timestamp);
+			return false;
+		}
 
 		//System.out.println("  Read at offset: " + offsetInFile);
 		BlockID curSegId = idBySegInFile(segInFile);
@@ -439,14 +441,10 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new MaxFileSizeExceededException();
 		}*/
 
+		boolean haveNewBlock = false;
 		if (acquiredSeg == null || !timerQ.tryDisable(acquiredSeg)) {
-			boolean createNew = (FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L;
-			try{
-				acquiredSeg = acquireSegment(fileSizeBuffered, createNew);
-			} catch (Exception e) {
-				e.printStackTrace();
-				throw e;
-			}
+			haveNewBlock = (FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L;
+			acquiredSeg = acquireSegment(fileSizeBuffered, haveNewBlock);
 			//acquiredSeg.getItem().setIsLoaded();
 			acquiredSeg.getItem().prepareForAppend(fileSizeBuffered);
 		}
@@ -459,14 +457,21 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		long recInFile = fileSizeBuffered/recordSize;
 		boolean isFirstRec = recInFile % recsPerSeg == 0;
 		long segInFile = recInFile/recsPerSeg;
+
 		if (isFirstRec) { // If the current record is the first record in the data segment
-			index.appendMinTS(timestamp, segInFile, indexLength(fileSizeBuffered));
+			try {
+				index.appendMinTS(timestamp, segInFile, indexLength(fileSizeBuffered));
+			}catch(OutOfMemoryException e) {
+				if (haveNewBlock) {
+					localStore.evictFromLocal(ds.id());
+					throw e;
+				}
+			}
 		}
 
-		fileSizeBuffered += appended;
+		//fileSizeBuffered += appended;
 
-		timerQ.enableAndAdd(acquiredSeg,clock.currentTime()+ bufferTimeOffsetMs);
-
+		TimerQueueItem<DataSegment> item = acquiredSeg;
 		//tlog1.start();
 		if (ds.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
 			acquiredSeg = null;		// is now immutable. The segment will be eventually returned to the cache.
@@ -476,8 +481,20 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			//System.out.printf("[I] DS is full: segInFile=%d, indexLen=%d\n", segInFile, indexLength(fileSizeBuffered-recordSize));
 
 			long lastTS = srcBuf.getLong(srcBuf.position()-recSize);
-			index.appendMaxTS(lastTS, segInFile, indexLength(fileSizeBuffered-recSize));
+
+			try {
+				index.appendMaxTS(lastTS, segInFile, indexLength(fileSizeBuffered  + appended- recSize));
+			} catch(OutOfMemoryException e) {
+				if (haveNewBlock) {
+					localStore.evictFromLocal(ds.id());
+					throw e;
+				}
+			}
 		}
+
+		timerQ.enableAndAdd(item,clock.currentTime()+ bufferTimeOffsetMs);
+
+		fileSizeBuffered += appended;
 
 		fileSize.set(fileSizeBuffered);
 
@@ -541,14 +558,20 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * @throws InterruptedException
 	 */
 	private TimerQueueItem<DataSegment> acquireSegment(long fileSize, boolean createBlock) throws IOException, InterruptedException, KawkabException {
-		DataSegmentID segId;
-		if (createBlock) { // if the last block is full
-			segId = createNewBlock(fileSize);
-		} else { // Otherwise the last segment was full or we are just starting without any segment at hand
-			segId = getSegmentID(fileSize);
-		}
+		DataSegmentID segId = getSegmentID(fileSize);
 		DataSegment ds = (DataSegment) cache.acquireBlock(segId);
 		assert ds.id() != null;
+
+		if (createBlock) { // if the last block is full
+			try {
+				createNewBlock(segId);
+			} catch(OutOfMemoryException e) {
+				cache.releaseBlock(segId);
+				throw e;
+			}
+		}
+
+
 		//ds.initForAppend(fileSize, recordSize);
 		return new TimerQueueItem<>(ds, this);
 	}
@@ -563,16 +586,12 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	/**
 	 * Creates a new block in the virtual file.
-	 * @param fileSize The current fileSize during the last append operation. Note that the
-	 * fileSize instance variable is updated as the last step in the append operation.
 	 * @return Returns the ID of the first segment in the block.
 	 * @throws IOException
 	 * @throws InterruptedException
 	 */
-	DataSegmentID createNewBlock(final long fileSize) throws IOException, InterruptedException {
-		DataSegmentID dsid = getSegmentID(fileSize);
+	void createNewBlock(final DataSegmentID dsid) throws IOException, OutOfMemoryException {
 		localStore.createBlock(dsid);
-		return dsid;
 	}
 
 	public long fileSize(){

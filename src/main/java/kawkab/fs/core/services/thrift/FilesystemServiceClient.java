@@ -10,15 +10,18 @@ import org.apache.thrift.transport.TFastFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
+import java.util.concurrent.locks.LockSupport;
 
 public class FilesystemServiceClient {
 	private FilesystemService.Client client;
 	private TTransport transport;
-	private final int MAX_TRIES = 3;
+	private final int MAX_TRIES = 1000;
+	private Random rand = new Random();
 
 	/**
 	 * @param serverIP IP of the server to connect
@@ -120,12 +123,30 @@ public class FilesystemServiceClient {
 
 	public int appendRecords(ByteBuffer buffer) throws OutOfMemoryException, KawkabException {
 		int tries = 0;
+		int base = 1000;
 		while(++tries < MAX_TRIES) {
 			try {
 				return client.appendRecords(buffer);
 			} catch (TOutOfMemoryException e) {
 				// Retry if the memory was full
+				//System.out.println("W " + waitUS);
+				int waitUS = base * (1 << tries) + rand.nextInt(100);
+				//int waitUS = base * tries + rand.nextInt(100);
+				//if (waitUS > 2000000)
+				//	waitUS = 2000000;
+
+				if (waitUS > 3000) {
+					try {
+						Thread.sleep(waitUS / 1000);
+					} catch (InterruptedException ex) {
+						ex.printStackTrace();
+					}
+				} else {
+					LockSupport.parkNanos(waitUS * 1000);
+				}
 			} catch (TException e) {
+				if (e.getMessage().contains("Unable to create the file"))
+					continue;
 				throw new KawkabException(e);
 			}
 		}

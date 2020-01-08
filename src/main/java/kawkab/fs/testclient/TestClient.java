@@ -24,7 +24,7 @@ public class TestClient {
 	private Printer pr;
 	private Record recGen;
 	private String cls;
-	
+
 	private static int rampDownSec = 2;
 
 	public TestClient(int id, String sip, int sport, Record recGen, Printer printer) {
@@ -42,7 +42,7 @@ public class TestClient {
 
 	public Result runTest(int testDurSec, int nTestFiles, int warmupSecs, int batchSize, TestClientServiceClient rpcClient) throws KawkabException {
 		pr.print(cls+"Starting append test...");
-		
+
 		if (client == null || !client.isConnected()) {
 			throw new KawkabException("Client is not connected");
 		}

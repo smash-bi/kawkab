@@ -12,7 +12,9 @@ import kawkab.fs.records.SampleRecord;
 import org.apache.thrift.TException;
 
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -110,7 +112,7 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			if (!fh.recordAt(dstBuf, timestamp, recSize, loadFromPrimary)) {
-				throw new TRequestFailedException("Record not found");
+				throw new TRequestFailedException("Record not found for timestamp " + timestamp);
 			}
 
 			return dstBuf;
@@ -427,6 +429,7 @@ public class FilesystemServiceImpl implements Iface {
 	public int flush() throws TException {
 		try {
 			fs.flush();
+			//clearDiskCache();
 			flushOSCache();
 		} catch (KawkabException | InterruptedException | IOException e) {
 			e.printStackTrace();
@@ -436,10 +439,38 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	private void flushOSCache() throws InterruptedException, IOException {
-		Runtime run = Runtime.getRuntime(); // get OS Runtime
+		/*Runtime run = Runtime.getRuntime(); // get OS Runtime
 		// execute a system command and give back the process
-		Process pr = run.exec("sudo sync; sudo echo 1 > /proc/sys/vm/drop_caches");
-		pr.waitFor();
+		Process pr = run.exec("sudo sh -c \"echo 2 > /proc/sys/vm/drop_caches\"");
+		pr.waitFor();*/
+
+		String[] cmd = new String[]{"/bin/bash", "/home/sm3rizvi/kawkab/dropcaches.sh"};
+		Process pr = Runtime.getRuntime().exec(cmd);
+		int exitVal = pr.waitFor();
+		if (exitVal != 0) {
+			System.out.println("Failed to drop OS caches");
+		}
+	}
+
+	private void clearDiskCache() {
+		String fn = "/hdd1/sm3rizvi/kawkab/tempfile.img"; //A random 1GB file create using "fallocate -l 1G tempfile.img"
+
+		try (
+				RandomAccessFile file = new RandomAccessFile(fn, "r");
+				SeekableByteChannel channel = file.getChannel()
+		) {
+
+			channel.position(0);
+			int read = 1;
+			ByteBuffer buf = ByteBuffer.allocate(16*1024*1024);
+			while (read > 0) {
+				buf.clear();
+				read = channel.read(buf);
+			}
+			//assert bytesLoaded == 0;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Override

@@ -871,13 +871,7 @@ public class POHNode extends Block {
 		}
 
 		// If the node is not full
-		if (entryIdx != entries.length) {
-			loadBlockFromPrimary();
-			lastFetchTimeMs = clock.currentTime();
-			return;
-		}
-
-		if (loadFromPrimary) {
+		if (entryIdx != entries.length || loadFromPrimary) {
 			loadBlockFromPrimary();
 			lastFetchTimeMs = clock.currentTime();
 			return;

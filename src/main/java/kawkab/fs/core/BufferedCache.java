@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static kawkab.fs.core.BlockID.BlockType;
@@ -26,8 +28,8 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 
 	private ReentrantLock cacheLock; // Cache level locking
 
-	//private Condition acqLockCond;
-	//private Boolean canAcquireBlock = true;
+	private Condition acqLockCond;
+	private Boolean canAcquireBlock = true;
 	//private Block syncWaitBlock;
 
 	private LocalStoreManager localStore;
@@ -56,7 +58,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		this.id = id;
 
 		cacheLock = new ReentrantLock();
-		//acqLockCond = cacheLock.newCondition();
+		acqLockCond = cacheLock.newCondition();
 
 		localStore = LocalStoreManager.instance();
 
@@ -71,13 +73,13 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		acqLog = new LatHistogram(TimeUnit.MICROSECONDS, "Cache acquire", 1, 100);
 		relLog = new LatHistogram(TimeUnit.MICROSECONDS, "Cache release", 1, 100);
 
-		highMark = (int)(numSegmentsInCache*0.95);
-		midMark = (int)(numSegmentsInCache*0.8);
-		lowMark = (int) (numSegmentsInCache*0.6);
+		highMark = (int)(numSegmentsInCache*0.80);
+		midMark = (int)(numSegmentsInCache*0.70);
+		lowMark = (int) (numSegmentsInCache*0.60);
 
 		System.out.printf("HM=%d, MM=%d, LM=%d\n", highMark, midMark, lowMark);
 
-		//runEvictor();
+		runEvictor();
 	}
 	
 	public static BufferedCache instance() {
@@ -154,10 +156,9 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		// block can be acquired or not. If not, (1) we should release the lock, (2) let the threads to succeed in
 		// the releaseBlock function, and (3) let the thread in waitUntilSynced() to awake the threads waiting on the
 		// lock condition acqLockCond.
-		/*while (!canAcquireBlock) { // Cannot acquire block as the cache is full and the last evicted block is being synced to the localStore
-			waited++;
+		while (!canAcquireBlock) { // Cannot acquire block as the cache is full and the last evicted block is being synced to the localStore
 			acqLockCond.awaitUninterruptibly();
-		}*/
+		}
 
 		accessed++;
 
@@ -166,8 +167,10 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 			CachedItem cachedItem = cache.get(blockID); // Try acquiring the block from the memory
 			
 			if (cachedItem == null) { // If the block is not cached
-				if (cache.size() == MAX_BLOCKS_IN_CACHE)
+				if (cache.size() == MAX_BLOCKS_IN_CACHE) {
+					//waitUntilSynced();
 					throw new OutOfMemoryException("Cache is full. Current cache size: " + cache.size());
+				}
 
 				missed++;
 
@@ -223,6 +226,29 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		return cachedBlock;
 	}
 
+	/*private void waitUntilSynced() throws OutOfMemoryException {
+		canAcquireBlock = false;
+		cacheLock.unlock();
+
+		int evicted = evictEntries();
+		if (evicted == 0) {
+			try {
+				localStore.syncWait();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+
+		cacheLock.lock();
+
+		if (cache.size() == MAX_BLOCKS_IN_CACHE) {
+			throw new OutOfMemoryException("Cache is full. Current cache size: " + cache.size());
+		}
+
+		acqLockCond.signal();
+		canAcquireBlock = true;
+	}*/
+
 	/**
 	 * Releases the block and decrements its reference count. Blocks with reference count 0 are eligible for eviction.
 	 * 
@@ -268,17 +294,41 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		}*/
 	}
 
-	void evictEntries() {
+	int evictEntries() {
 		int size = cache.size();
+		int removed = 0;
 		if (size > lowMark) {
 			int toRemove = size > highMark ? 100 : size > midMark ? 50 : 10;
 			cacheLock.lock();
 			try{
-				cache.bulkRemove(toRemove);
+				removed = cache.bulkRemove(toRemove);
 			} finally {
 				cacheLock.unlock();
 			}
 		}
+
+		return removed;
+	}
+
+	private void runEvictor() {
+		Thread evictor = new Thread(() -> {
+			while(true) {
+				evictEntries();
+				try {
+					if (cache.size() <= lowMark)
+						Thread.sleep(1);
+					else if (cache.size() <= midMark)
+						LockSupport.parkNanos(500000);
+					else
+						LockSupport.parkNanos(100000);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		});
+		evictor.setName("CacheEvictor");
+		evictor.setDaemon(true);
+		evictor.start();
 	}
 
 	/**
@@ -412,8 +462,9 @@ public class BufferedCache extends Cache implements BlockEvictionListener{
 		if (accessed == 0)
 			return "No stats";
 
-		return String.format("size=%d, accessed=%d, missed=%d, evicted=%d, hitRatio=%.02f\nacqLog: %s\nrelLog: %s\n%s\n",
-				size(), accessed, missed, evicted, 100.0*(accessed-missed)/accessed, acqLog.getStats(), relLog.getStats(), cache.getStats());
+		return String.format("filled=%.2f%%, accessed=%d, missed=%d, evicted=%d, hitRatio=%.02f\nacqLog: %s\nrelLog: %s\n%s\n",
+				cache.size()*100.0/MAX_BLOCKS_IN_CACHE,
+				accessed, missed, evicted, 100.0*(accessed-missed)/accessed, acqLog.getStats(), relLog.getStats(), cache.getStats());
 
 	}
 

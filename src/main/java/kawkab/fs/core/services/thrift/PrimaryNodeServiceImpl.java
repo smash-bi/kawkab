@@ -46,6 +46,7 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 		try {
 			ds = (DataSegment)cache.acquireBlock(id);
 			ds.storeTo(buffer, offset);
+			ds.loadBlock(true);
 			buffer.flip();
 			return buffer;
 		} catch (IOException | KawkabException e) {
