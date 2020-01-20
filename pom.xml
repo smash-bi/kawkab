@@ -155,7 +155,7 @@
 						<!--						<argument>-XX:CMSInitiatingOccupancyFraction=92</argument>-->
 						<!--						<argument>-XX:+UseCMSInitiatingOccupancyOnly</argument>-->
 
-												<argument>-XX:+UseConcMarkSweepGC</argument>
+												<!--<argument>-XX:+UseConcMarkSweepGC</argument>-->
 						<!--						<argument>-XX:+UseSerialGC</argument>-->
 						<!--						<argument>-XX:+UseParallelGC</argument>-->
 						<!--						<argument>-XX:ParallelCMSThreads=2</argument>-->
@@ -164,8 +164,8 @@
 						<!--						<argument>XX:+UseDynamicNumberOfCompilerThreads</argument>-->
 
 						<!-- ZGC requires JDK 11 -->
-						<!--argument>-XX:+UnlockExperimentalVMOptions</argument>
-						<argument>-XX:+UseZGC</argument-->
+						<argument>-XX:+UnlockExperimentalVMOptions</argument>
+						<argument>-XX:+UseZGC</argument>
 
 						<!-- EpsilonGC, a no-op GC, requires JDK11 -->
 						<!--						<argument>-XX:+UnlockExperimentalVMOptions</argument>-->
@@ -393,6 +393,15 @@
 			<artifactId>commons-lang3</artifactId>
 			<version>3.9</version>
 		</dependency -->
+
+		<!-- https://mvnrepository.com/artifact/org.apache.commons/commons-math3 -->
+		<!-- For Zipf Distribution -->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-math3</artifactId>
+			<version>3.6.1</version>
+		</dependency>
+
 
 	</dependencies>
 

@@ -2,7 +2,6 @@ package kawkab.fs.testclient;
 
 import kawkab.fs.api.Record;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.utils.Accumulator;
 
 public class TestRunner {
 	private TestClientServiceServer tserver;
@@ -13,9 +12,10 @@ public class TestRunner {
 		READ
 	}
 
-	Result[] runTest(int testID, int testDurSec, int nc, int cidOffset, int nf, String sip, int sport, int batchSize, Record recGen,
+	Result[]  runTest(int testID, int testDurSec, int nc, int cidOffset, int nf, String sip, int sport, int batchSize, Record recGen,
 						  Printer pr, int warmupSecs, final TestType type, int totalClients, int mid, String mip, int mport, String outFolder) {
 		final Result[] results = new Result[nc];
+
 		Thread[] threads = new Thread[nc];
 		for (int i=0; i<nc; i++) {
 			final int clid = cidOffset+i;
@@ -40,6 +40,8 @@ public class TestRunner {
 								res = runNoopTest(testDurSec, clid, nf, sip, sport, batchSize, recGen.newRecord(), pr, warmupSecs, client);
 								break;
 							case READ:
+								res = runReadTest(testDurSec, clid, nf, sip, sport, recGen.newRecord(), pr, warmupSecs, client);
+								break;
 							default:
 								throw new KawkabException("Test not implemented " + type);
 						}
@@ -93,7 +95,18 @@ public class TestRunner {
 									  int batchSize, Record recGen, final Printer pr, int warmupSecs, TestClientServiceClient rpcClient) throws KawkabException {
 		TestClient client = new TestClient(cid, sip, sport, recGen, pr);
 		client.connect();
-		Result res = client.runTest(durSec, nTestFiles, warmupSecs, batchSize, rpcClient);
+		Result res = client.runAppendTest(cid, durSec, nTestFiles, warmupSecs, batchSize, rpcClient);
+		client.disconnect();
+
+		return res;
+	}
+
+	private Result runReadTest(final int durSec, final int cid, int nTestFiles, final String sip, final int sport,
+							   Record recGen, final Printer pr, int warmupSecs, TestClientServiceClient rpcClient) throws KawkabException {
+
+		TestClient client = new TestClient(cid, sip, sport, recGen, pr);
+		client.connect();
+		Result res = client.runReadTest(cid, durSec, nTestFiles, warmupSecs, rpcClient);
 		client.disconnect();
 
 		return res;
@@ -103,7 +116,7 @@ public class TestRunner {
 							   int batchSize, Record recGen, final Printer pr, int warmupSecs, TestClientServiceClient rpcClient) throws KawkabException {
 		TestClient client = new TestClient(cid, sip, sport, recGen, pr);
 		client.connect();
-		Result res = client.runNoopWritesTest(durSec, nTestFiles, warmupSecs, batchSize, rpcClient);
+		Result res = client.runNoopWritesTest(cid, durSec, nTestFiles, warmupSecs, batchSize, rpcClient);
 		client.disconnect();
 
 		return res;

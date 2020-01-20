@@ -6,12 +6,12 @@ import java.io.IOException;
 
 public class NullCache extends Cache {
 	@Override
-	public Block acquireBlock(BlockID blockID) throws IOException, KawkabException {
+	public Block acquireBlock(BlockID blockID) throws IOException {
 		return blockID.newBlock();
 	}
 
 	@Override
-	public void releaseBlock(BlockID blockID) throws KawkabException {
+	public void releaseBlock(BlockID blockID) {
 	}
 
 	@Override

@@ -582,10 +582,6 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 
 	@Override
 	public void deferredWork(InodesBlock ib) {
-		try {
-			localStore.store(ib);
-		} catch (KawkabException e) {
-			e.printStackTrace();
-		}
+		localStore.store(ib);
 	}
 }

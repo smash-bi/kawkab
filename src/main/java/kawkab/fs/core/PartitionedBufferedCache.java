@@ -3,10 +3,17 @@ package kawkab.fs.core;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
+import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.GCMonitor;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.LockSupport;
 
 import static kawkab.fs.core.BlockID.BlockType;
 
@@ -21,11 +28,12 @@ public class PartitionedBufferedCache extends Cache {
 	private Configuration conf;
 	private BufferedCache[] cache; // An extended LinkedHashMap that implements removeEldestEntry()
 	private LocalStoreManager localStore;
-	private int numPartitions = 8;
+	private int numPartitions = 12;
 
 	private ConcurrentHashMap<BlockID, CachedItem> pinnedMap;
 	private KeyedLock<Integer> pinLock;
 	private int totalSegments;
+	private volatile boolean working = true;
 
 	private PartitionedBufferedCache() {
 		System.out.println("Initializing PartitionedBufferedCache cache..." );
@@ -34,14 +42,13 @@ public class PartitionedBufferedCache extends Cache {
 		
 		localStore = LocalStoreManager.instance();
 		
-		int numSegmentsInCache = (int)((conf.cacheSizeMiB * 1048576L)/conf.segmentSizeBytes);
-		totalSegments = numSegmentsInCache;
-		if (numSegmentsInCache <= 0) {
+		totalSegments = (int)((conf.cacheSizeMiB * 1048576L)/conf.segmentSizeBytes);
+		if (totalSegments <= 0) {
 			System.out.println("Cache size is not sufficient to cache the metadata and the data segments");
 		}
-		assert numSegmentsInCache > 0;
+		assert totalSegments > 0;
 
-		int numSegmentsPerPart = numSegmentsInCache/numPartitions;
+		int numSegmentsPerPart = totalSegments/numPartitions;
 		
 		cache = new BufferedCache[numPartitions];
 		for (int i=0; i<numPartitions; i++) {
@@ -52,6 +59,9 @@ public class PartitionedBufferedCache extends Cache {
 		pinLock = new KeyedLock<>();
 
 		//runEvictor();
+
+		//runStatsCollector();
+
 	}
 	
 	public static PartitionedBufferedCache instance() {
@@ -113,7 +123,7 @@ public class PartitionedBufferedCache extends Cache {
 	 * @throws KawkabException The block is not cached if the exception is thrown
 	 */
 	@Override
-	public Block acquireBlock(BlockID blockID)  throws OutOfMemoryException, KawkabException {
+	public Block acquireBlock(BlockID blockID)  throws OutOfMemoryException {
 		if (blockID.type() != BlockType.DATA_SEGMENT) {
 			return acquirePinned(blockID);
 		}
@@ -132,7 +142,7 @@ public class PartitionedBufferedCache extends Cache {
 	 * @throws KawkabException
 	 */
 	@Override
-	public void releaseBlock(BlockID blockID) throws KawkabException {
+	public void releaseBlock(BlockID blockID) {
 		if (blockID.type() != BlockType.DATA_SEGMENT) {
 			releasePinned(blockID);
 			return;
@@ -165,7 +175,7 @@ public class PartitionedBufferedCache extends Cache {
 		return ci.block();
 	}
 
-	private void releasePinned(BlockID blockID) throws KawkabException {
+	private void releasePinned(BlockID blockID) {
 		CachedItem ci = pinnedMap.get(blockID);
 
 		assert ci != null : "Releasing non-cached item: " + blockID;
@@ -222,6 +232,8 @@ public class PartitionedBufferedCache extends Cache {
 	
 	@Override
 	public void shutdown() throws KawkabException {
+		working = false;
+
 		int size = pinnedMap.size();
 		for (int i=0; i<numPartitions; i++) {
 			size += cache[i].size();
@@ -265,8 +277,8 @@ public class PartitionedBufferedCache extends Cache {
 		}
 
 		if (accessed > 0)
-			stats.append(String.format("Cache agg: size=%.2f%%, accessed=%d, missed=%d, evicted=%d, hitRatio=%.02f\n",
-					totalSegments*100.0/size, accessed, missed, evicted, 100.0*(accessed-missed)/accessed));
+			stats.append(String.format("Cache agg: size=%.0f%%, accessed=%d, missed=%d, evicted=%d, hitRatio=%.02f\n",
+					size*100.0/totalSegments, accessed, missed, evicted, 100.0*(accessed-missed)/accessed));
 
 		return stats.toString();
 	}
@@ -285,22 +297,107 @@ public class PartitionedBufferedCache extends Cache {
 		}
 	}
 
-	/*private void runEvictor() {
-		Thread evictor = new Thread(() -> {
-			while(true) {
-				for (int i = 0; i < cache.length; i++) {
-					cache[i].evictEntries();
+	private void runEvictor() {
+		final int numThreads = 1;
+		final int partsPerThr = numPartitions/numThreads;
+
+		for (int k=0; k<numThreads; k++) {
+			final int offset = k*partsPerThr;
+			Thread evictor = new Thread(() -> {
+				while (true) {
+					for (int i = offset; i < offset+partsPerThr; i++) {
+						cache[i].evictEntries();
+					}
+
+					int perSeg = totalSegments / numPartitions;
+
+					double max = 0;
+					for (int i = 0; i < numPartitions; i++) {
+						double size = cache[i].size() * 100.0 / perSeg;
+						if (max < size)
+							max = size;
+					}
+
+					try {
+						Thread.sleep(500);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+
+					/*if (max > 90) {
+						LockSupport.parkNanos(1000000);
+					} else {
+						try {
+							Thread.sleep(100);
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+					}*/
+				}
+			});
+			evictor.setName("CacheEvictor");
+			evictor.setDaemon(true);
+			evictor.start();
+		}
+	}
+
+	// fixme: For debugging only
+	public void runStatsCollector() {
+		Thread collector = new Thread(() -> {
+			SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss:SSS");
+			Date date = new Date(System.currentTimeMillis());
+			System.out.println("Current time: " + formatter.format(date));
+
+			//Accumulator accm = new Accumulator(10000);
+			//ApproximateClock clock = ApproximateClock.instance();
+			//long startT = clock.currentTime();
+
+			int lsCap = conf.maxBlocksPerLocalDevice * conf.numLocalDevices;
+			String outFile = "/home/sm3rizvi/kawkab/experiments/logs/cache.log";
+			File file = new File(outFile).getParentFile();
+			if (!file.exists()) {
+				file.mkdirs();
+			}
+
+			GlobalStoreManager gsm = GlobalStoreManager.instance();
+
+			try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile));) {
+				writer.write(formatter.format(date) + "\n");
+				writer.write("# cache occupancy, local store occupancy\n");
+
+				int n = 0;
+				while (working) {
+					long size = 0;
+					for (int i = 0; i < numPartitions; i++) {
+						size += cache[i].size();
+					}
+
+					double cacheOcc = size * 100.0 / totalSegments;
+					double lsOcc = localStore.size() * 100.0 / lsCap;
+					double canEvict = localStore.canEvict() * 100.0 / lsCap;
+					double gsQlen = gsm.qlen() * 100.0 / lsCap;
+
+					//accm.put((int) ((clock.currentTime() - startT) / 1000.0), occupancy);
+
+
+					System.out.println(String.format("%d: %.2f, %.2f, %.2f, %.2f\n",++n, cacheOcc, lsOcc, canEvict, gsQlen));
+					writer.write(String.format("%.2f, %.2f, %.2f, %.2f\n",cacheOcc, lsOcc, canEvict, gsQlen));
+
+					try {
+						Thread.sleep(1000);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
 				}
 
-				try {
-					Thread.sleep(1);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+				writer.write("\n");
+				writer.flush();
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
 		});
-		evictor.setName("CacheEvictor");
-		evictor.setDaemon(true);
-		evictor.start();
-	}*/
+		collector.setName("CacheLogger");
+		collector.setDaemon(true);
+		collector.start();
+	}
 }

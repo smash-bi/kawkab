@@ -103,7 +103,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	 * @throws KawkabException The block is not cached if the exception is thrown
 	 */
 	@Override
-	public Block acquireBlock(BlockID blockID) throws IOException, KawkabException {
+	public Block acquireBlock(BlockID blockID) throws IOException {
 		// System.out.println("[C] acquire: " + blockID);
 
 		CachedItem cachedItem = null;
@@ -139,7 +139,7 @@ public class CustomCache extends Cache implements BlockEvictionListener{
 	 * @throws KawkabException 
 	 */
 	@Override
-	public void releaseBlock(BlockID blockID) throws KawkabException {
+	public void releaseBlock(BlockID blockID) {
 		// System.out.println("[C] Release block: " + blockID);
 		
 		CachedItem cachedItem = null;

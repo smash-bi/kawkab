@@ -247,7 +247,7 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws FileNotExistException
 	 * @throws KawkabException
 	 */
-	protected void loadFromGlobal(int offset, int length) throws FileNotExistException, KawkabException {
+	protected void loadFromGlobal(int offset, int length) throws FileNotExistException, IOException {
 		//System.out.printf("[B] Loading %s from GS\n",id);
 
 		globalStoreManager.load(this, offset, length);
@@ -262,7 +262,7 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws KawkabException
 	 * @throws IOException
 	 */
-	public void loadBlock(boolean loadFromPrimary) throws FileNotExistException, KawkabException, IOException {
+	public void loadBlock(boolean loadFromPrimary) throws FileNotExistException, IOException {
 		if (isOnPrimary) { // If this node is the primary writer of the file
 			if (!isLoaded)
 				loadBlockOnPrimary();
@@ -286,7 +286,7 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws KawkabException
 	 * @throws IOException
 	 */
-	protected abstract void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, KawkabException, IOException;
+	protected abstract void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, IOException;
 	
 	/**
 	 * Helper function: Loads the block from the local or the global store. This code runs only on the primary node
@@ -296,10 +296,10 @@ public abstract class Block extends AbstractTransferItem {
 	 * @throws KawkabException
 	 * @throws IOException
 	 */
-	private void loadBlockOnPrimary() throws FileNotExistException, KawkabException, IOException {
+	private void loadBlockOnPrimary() throws FileNotExistException, IOException {
 		if (!isOnPrimary) { //FIXME: Do we need to check again? First time this is checked in the loadBlock().
-			throw new KawkabException("Unexpected execution path. This node is not the primary node of this block: " + 
-																		id() + ", primary node: " + id.primaryNodeID());
+			assert false : "Unexpected execution path. This node is not the primary node of this block: " +
+					id() + ", primary node: " + id.primaryNodeID();
 		}
 
 		//Load only if the block is not already loaded

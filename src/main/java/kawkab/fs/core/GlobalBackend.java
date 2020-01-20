@@ -3,8 +3,11 @@ package kawkab.fs.core;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+
 public interface GlobalBackend {
-	public void loadFromGlobal(Block destBlock, int offset, int length) throws FileNotExistException, KawkabException;
-	public void storeToGlobal(BlockID srcBlock) throws KawkabException;
-	public void shutdown();
+	void loadFromGlobal(Block destBlock, int offset, int length) throws FileNotExistException, IOException;
+	void storeToGlobal(BlockID srcBlock, ByteBuffer stageBuf) throws KawkabException;
+	void shutdown();
 }

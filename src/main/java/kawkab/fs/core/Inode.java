@@ -1,5 +1,6 @@
 package kawkab.fs.core;
 
+import com.sun.jna.platform.unix.X11;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
@@ -9,7 +10,6 @@ import kawkab.fs.core.index.poh.PostOrderHeapIndex;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
-import kawkab.fs.utils.LatHistogram;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -17,7 +17,7 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class Inode implements DeferredWorkReceiver<DataSegment> {
@@ -42,9 +42,11 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	private boolean isInited;
 	private int recsPerSeg;
 
-	private static final int bufferTimeOffsetMs = 0;
+	private static final int bufferTimeOffsetMs = 1;
 
 	public static final long MAXFILESIZE = conf.maxFileSizeBytes;
+
+	private AtomicInteger initCount;
 
 	protected Inode(long inumber, int recordSize) {
 		this.inumber = inumber;
@@ -59,9 +61,14 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * This function should be called after the inode has been loaded from the file or the remote node or the global store.
 	 */
 	synchronized void prepare(TimerQueueIface fsQ, TimerQueueIface segsQ) {
-		if (isInited)
+		if (isInited) {
+			initCount.incrementAndGet();
+			System.out.println("Inode already inited.");
+			assert index != null;
 			return;
+		}
 		isInited = true;
+		initCount = new AtomicInteger(1);
 
 		//System.out.printf("[I] Initializing index for inode: %d, recSize=%d\n", inumber, recordSize);
 
@@ -442,7 +449,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		}*/
 
 		boolean haveNewBlock = false;
+		boolean acquiredFromCache = false;
 		if (acquiredSeg == null || !timerQ.tryDisable(acquiredSeg)) {
+			acquiredFromCache = true;
 			haveNewBlock = (FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L;
 			acquiredSeg = acquireSegment(fileSizeBuffered, haveNewBlock);
 			//acquiredSeg.getItem().setIsLoaded();
@@ -461,17 +470,26 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (isFirstRec) { // If the current record is the first record in the data segment
 			try {
 				index.appendMinTS(timestamp, segInFile, indexLength(fileSizeBuffered));
-			}catch(OutOfMemoryException e) {
+			}catch(OutOfMemoryException | OutOfDiskSpaceException e) {
+				ds.rollback(appended);
+
+				if (acquiredFromCache) {
+					deferredWork(acquiredSeg.getItem());
+					acquiredSeg = null;
+				}
 				if (haveNewBlock) {
 					localStore.evictFromLocal(ds.id());
-					throw e;
+
 				}
+
+				throw e;
 			}
 		}
 
 		//fileSizeBuffered += appended;
 
 		TimerQueueItem<DataSegment> item = acquiredSeg;
+
 		//tlog1.start();
 		if (ds.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
 			acquiredSeg = null;		// is now immutable. The segment will be eventually returned to the cache.
@@ -485,10 +503,16 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			try {
 				index.appendMaxTS(lastTS, segInFile, indexLength(fileSizeBuffered  + appended- recSize));
 			} catch(OutOfMemoryException e) {
+				ds.rollback(appended);
+
+				if (acquiredFromCache) {
+					deferredWork(ds);
+				}
 				if (haveNewBlock) {
 					localStore.evictFromLocal(ds.id());
-					throw e;
 				}
+
+				throw e;
 			}
 		}
 
@@ -497,6 +521,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		fileSizeBuffered += appended;
 
 		fileSize.set(fileSizeBuffered);
+
+		localStore.store(ds);
 
 		return appended;
 	}
@@ -565,7 +591,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (createBlock) { // if the last block is full
 			try {
 				createNewBlock(segId);
-			} catch(OutOfMemoryException e) {
+			} catch(OutOfDiskSpaceException e) {
 				cache.releaseBlock(segId);
 				throw e;
 			}
@@ -590,7 +616,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * @throws IOException
 	 * @throws InterruptedException
 	 */
-	void createNewBlock(final DataSegmentID dsid) throws IOException, OutOfMemoryException {
+	void createNewBlock(final DataSegmentID dsid) throws IOException, OutOfDiskSpaceException {
 		localStore.createBlock(dsid);
 	}
 
@@ -678,11 +704,17 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 */
 	synchronized void cleanup() throws KawkabException { //Synchronized with appendBuffered() due to acquiredSeg
 		//tlog.printStats("DS.append,ls.store");
+		int n = initCount.decrementAndGet();
+		if (n > 0)
+			return;
 
 		releaseAcquiredSeg();
 
 		if (index != null)
 			index.shutdown();
+
+		index = null;
+		isInited = false;
 
 		//idxLog.printStats();
 	}
@@ -719,11 +751,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	@Override
 	public void deferredWork(DataSegment ds) {
-		try {
-			cache.releaseBlock(ds.id());
-		} catch (KawkabException e) {
-			e.printStackTrace();
-		}
+		cache.releaseBlock(ds.id());
 	}
 
 	public long numRecords() {

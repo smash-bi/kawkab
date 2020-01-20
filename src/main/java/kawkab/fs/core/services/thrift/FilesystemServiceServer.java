@@ -26,9 +26,9 @@ public class FilesystemServiceServer {
 	private ExecutorService executor;
 
 	public FilesystemServiceServer(Filesystem fs) throws KawkabException {
-		int minThreads = 8;
+		int minThreads = 5;
 		int maxThreads = 1000;
-		int ioThreads = 8;
+		int ioThreads = 3;
 
 		FilesystemService.Iface handler = new FilesystemServiceImpl(fs);
 
@@ -47,7 +47,7 @@ public class FilesystemServiceServer {
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new THsHaServer(new THsHaServer.Args(transport)
-					.transportFactory(new TFastFramedTransport.Factory())
+					.transportFactory(new TFastFramedTransport.Factory(conf.maxBufferLen, conf.maxBufferLen))
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new Processor<>(handler))
 					.minWorkerThreads(minThreads)
@@ -67,7 +67,7 @@ public class FilesystemServiceServer {
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new TThreadedSelectorServer(new TThreadedSelectorServer.Args(transport)
-					.transportFactory(new TFastFramedTransport.Factory())
+					.transportFactory(new TFastFramedTransport.Factory(conf.maxBufferLen, conf.maxBufferLen))
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new Processor<>(handler))
 
@@ -88,7 +88,7 @@ public class FilesystemServiceServer {
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new THsHaServer(new THsHaServer.Args(transport)
-					.transportFactory(new TFastFramedTransport.Factory())
+					.transportFactory(new TFastFramedTransport.Factory(conf.maxBufferLen, conf.maxBufferLen))
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new Processor<>(handler))
 					.minWorkerThreads(minThreads)

@@ -74,7 +74,7 @@ public class ItemTimer {
 		do {
 			state = mState.get();
 			
-			assert state == INIT || state != DISABLED; //FIXME: Should we allow calling disable multiple times???
+			//assert state == INIT || state != DISABLED; //FIXME: Should we allow calling disable multiple times???
 			
 			/*if (state == DISABLED) {
 				new Exception().printStackTrace();

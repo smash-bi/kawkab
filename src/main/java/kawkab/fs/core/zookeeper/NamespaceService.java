@@ -81,7 +81,7 @@ public final class NamespaceService {
 		} catch (KeeperException e) {
 			if (e.code() == Code.NONODE) {
 				//System.out.println("[NSS] File not exist in ZK: " + filename + ", path: " + path);
-				throw new FileNotExistException(e.getMessage());
+				throw new FileNotExistException("File does not exist: " + e.getMessage());
 			}
 			
 			throw new KawkabException(e);

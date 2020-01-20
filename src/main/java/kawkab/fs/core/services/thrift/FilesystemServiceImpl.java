@@ -6,6 +6,7 @@ import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.OutOfDiskSpaceException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.core.services.thrift.FilesystemService.Iface;
 import kawkab.fs.records.SampleRecord;
@@ -136,6 +137,10 @@ public class FilesystemServiceImpl implements Iface {
 		try {
 			List<ByteBuffer> results = fh.readRecords(minTS, maxTS, recSize, loadFromPrimary);
 			//printBuffers(results);
+
+			if (results == null)
+				return new ArrayList<>(0);
+
 			return results;
 		} catch (OutOfMemoryException e) {
 			//e.getMessage();
@@ -180,7 +185,7 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			return fh.append(data, recSize);
-		} catch (OutOfMemoryException e) {
+		} catch (OutOfMemoryException | OutOfDiskSpaceException e) {
 			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
@@ -199,7 +204,7 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			return fh.append(srcBuf, recSize);
-		} catch (OutOfMemoryException e) {
+		} catch (OutOfMemoryException | OutOfDiskSpaceException e) {
 			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
@@ -255,7 +260,7 @@ public class FilesystemServiceImpl implements Iface {
 
 			try {
 				fh.append(data, s.recSize);
-			} catch (OutOfMemoryException e) {
+			} catch (OutOfMemoryException | OutOfDiskSpaceException e) {
 				//e.getMessage();
 				throw new TOutOfMemoryException(e.getMessage());
 			} catch (Exception | AssertionError e) {
@@ -291,7 +296,7 @@ public class FilesystemServiceImpl implements Iface {
 			//data.position(offset);
 			try {
 				cnt += fh.append(srcBuf, recSize);
-			} catch (OutOfMemoryException e) {
+			} catch (OutOfMemoryException | OutOfDiskSpaceException e) {
 				//e.getMessage();
 				throw new TOutOfMemoryException(e.getMessage());
 			} catch (Exception | AssertionError e) {
@@ -354,7 +359,7 @@ public class FilesystemServiceImpl implements Iface {
 		int length = srcBuf.remaining();
 		try {
 			return fh.append(srcBuf.array(), offset, length);
-		} catch (OutOfMemoryException e) {
+		} catch (OutOfMemoryException | OutOfDiskSpaceException e) {
 			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {

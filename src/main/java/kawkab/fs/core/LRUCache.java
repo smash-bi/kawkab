@@ -5,33 +5,50 @@ import kawkab.fs.utils.LatHistogram;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("serial")
 public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 	private BlockEvictionListener evictListener;
-	private final int maxBlocksInCache;
+	//private final int maxBlocksInCache;
 	private LatHistogram evLog;
-	private int maxTimeMS = 60000;
-	private ApproximateClock clock = ApproximateClock.instance();
-	private final long stTime = System.currentTimeMillis();
+	//private ApproximateClock clock = ApproximateClock.instance();
 	private final int highMark;
-	private boolean evicting = false;
+	private final Random rand;
+	private int[] probs;
+	private int prbIdx;
 
 	public LRUCache(int maxBlocksInCache, BlockEvictionListener evictListener) {
 		//super((int)((maxBlocksInCache/0.75)+1), 0.75f, true);
 		super(maxBlocksInCache*2, 0.75f, true);
-		this.maxBlocksInCache = maxBlocksInCache;
+		//this.maxBlocksInCache = maxBlocksInCache;
 		this.evictListener = evictListener;
 		evLog = new LatHistogram(TimeUnit.MICROSECONDS, "EvictLog", 100, 100000);
-		highMark = (int)(0.8*maxBlocksInCache);
+		highMark = (int)(0.90*maxBlocksInCache);
+
+		rand = new Random();
+		probs = new int[100000];
+		for(int i=0; i<probs.length; i++) {
+			probs[i] = rand.nextInt(100);
+		}
 	}
 
 	@Override
 	protected boolean removeEldestEntry(Entry<BlockID, CachedItem> eldest) {
-		if (size() < highMark)
-			return false;
+		if (size() < highMark) {
+			if (++prbIdx == probs.length) {
+				prbIdx = 0;
+			}
 
+			if (probs[prbIdx] < 75) //Evict with 25% probability
+				return false;
+		}
+
+		/*if (size() < highMark)
+			return false;*/
+
+		evLog.start();
 		CachedItem toEvict = eldest.getValue();
 		if (toEvict.refCount() > 0 || toEvict.block().isLocalDirty())
 			return false;
@@ -41,6 +58,11 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 
 		evictListener.onEvictBlock(toEvict.block());
 
+		int elapsed = evLog.end();
+
+		if(elapsed > 100000) {
+			System.out.printf("[LC] Cache evict (us): %d\n",elapsed);
+		}
 		return true;
 	}
 
@@ -105,7 +127,8 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 			Block block = ci.block();
 			if (ci.refCount() != 0 || block.isLocalDirty()) {
 				//skipped++;
-				continue;
+				//continue;
+				break;
 			}
 
 			evictListener.onEvictBlock(block);
@@ -116,7 +139,10 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 			//assert dbgCI.equals(ci) : String.format("CachedItems not equal, eci.hc=%d, dbgCI.hc=%d, eci.id=%s, dbgCI.id=%s, eci.id.hc=%d, dbgCI.id.hc=%d\n",
 			//		ci.hashCode(), dbgCI.hashCode(), ci.block().id(), dbgCI.block().id(), ci.block().id().hashCode(), dbgCI.block().id().hashCode());
 		}
-		evLog.end();
+		int elapsed = evLog.end();
+		if(elapsed > 100000) {
+			System.out.printf("Cache evict (us): %d, evicted=%d\n",elapsed,evicted);
+		}
 
 		// Can't evict a block that is dirty. However, if all the blocks are dirty or are referenced,
 		// evict the most LRU dirty block

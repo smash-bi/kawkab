@@ -2,10 +2,8 @@ package kawkab.fs.utils;
 
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.MemoryUsage;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import javax.management.Notification;
@@ -23,12 +21,14 @@ public class GCMonitor implements NotificationListener {
     private static Stats durationStats = new Stats();
 
     public class GCEvent {
+        public long gcTime;
         public long duration;
         public long startTime;
         public long endTime;
 
         //All are in milliseconds
-        GCEvent(long startTime, long endTime, long duration) {
+        GCEvent(long gcTime, long startTime, long endTime, long duration) {
+            this.gcTime = gcTime;
             this.startTime = startTime;
             this.endTime = endTime;
             this.duration = duration;
@@ -85,7 +85,7 @@ public class GCMonitor implements NotificationListener {
                 System.out.println();
             }
             
-            gcEvents.add(new GCEvent(info.getStartTime(), info.getEndTime(), duration));
+            gcEvents.add(new GCEvent(System.currentTimeMillis(), info.getStartTime(), info.getEndTime(), duration));
             durationStats.putValue(duration);
         }
     }
@@ -96,14 +96,16 @@ public class GCMonitor implements NotificationListener {
     
     public static void printEvents() {
 		for (GCEvent event : gcEvents) {
-			System.out.printf("[%d,%d,%d], ", event.duration, event.startTime, event.endTime);
+            SimpleDateFormat formatter = new SimpleDateFormat("HH:mm:ss:SSS");
+            Date date = new Date(System.currentTimeMillis());
+			System.out.printf("%s, %d, %d, %d\n", formatter.format(date), event.duration, event.startTime, event.endTime);
 		}
 		System.out.println();
     }
     
     public static void printDurations() {
     	for (GCEvent event : gcEvents) {
-			System.out.printf("%d, ", event.duration);
+			System.out.printf("%d\n", event.duration);
 		}
 		System.out.println();
     }

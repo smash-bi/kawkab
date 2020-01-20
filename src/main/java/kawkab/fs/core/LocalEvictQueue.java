@@ -12,7 +12,7 @@ import static kawkab.fs.core.LocalEvictQueue.EvictItem;
 
 public class LocalEvictQueue implements DeferredWorkReceiver<EvictItem> {
 	private TimerQueueIface timerQ;
-	private final static int EVICT_ITEM_MS = 10000;
+	private final static int EVICT_ITEM_MS = 30000;
 	private ApproximateClock clock = ApproximateClock.instance();
 	private LocalStoreDB lsd;
 	private Semaphore storePermits;
@@ -26,7 +26,7 @@ public class LocalEvictQueue implements DeferredWorkReceiver<EvictItem> {
 	public void evict(BlockID id) {
 		TimerQueueItem<EvictItem> item = new TimerQueueItem<>(new EvictItem(id), this);
 		int toWaitMS = EVICT_ITEM_MS;
-		if (storePermits.availablePermits() < 100) {
+		if (storePermits.availablePermits() < 1000) {
 			toWaitMS = 0;
 		}
 		timerQ.enableAndAdd(item, clock.currentTime()+toWaitMS);

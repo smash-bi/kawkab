@@ -20,7 +20,7 @@ public class KClient {
 	private Map<String, Session> sessions;
 	private ByteBuffer buffer;
 
-	private static int BUFLEN_BYTES = 1024 * 1024; // Maximum data size per RPC
+	private static int BUFLEN_BYTES = 16 * 1024 * 1024; // Maximum data size per RPC
 
 	public KClient (int id) {
 		this.id = id;
@@ -254,6 +254,9 @@ public class KClient {
 		List<ByteBuffer> results = client.readRecords(session.id, minTS, maxTS, recFactory.size(), loadFromPrimary);
 
 		//printBuffers(results, recFactory);
+
+		if (results.size() == 0)
+			return null;
 
 		List<Record> recs = new ArrayList<>(results.size());
 

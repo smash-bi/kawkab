@@ -4,7 +4,7 @@ import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.InodeNumberOutOfRangeException;
 import kawkab.fs.core.exceptions.InsufficientResourcesException;
-import kawkab.fs.core.exceptions.OutOfMemoryException;
+import kawkab.fs.core.exceptions.OutOfDiskSpaceException;
 
 import java.io.File;
 import java.io.IOException;
@@ -174,7 +174,7 @@ public final class Ibmap extends Block{
 	 * 
 	 * @throws IOException
 	 */
-	static void bootstrap() throws IOException, OutOfMemoryException {
+	static void bootstrap() throws IOException, OutOfDiskSpaceException {
 		if (bootstraped)
 			return;
 		

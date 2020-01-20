@@ -33,24 +33,28 @@ import org.apache.zookeeper.server.ByteBufferInputStream;
 public final class S3Backend implements GlobalBackend{
 	private AmazonS3 client;
 	private static final String rootBucket = "kawkab-blocks"; //Cannot contain uppercase letters.
-	private ByteBuffer buffer;
+	//private ByteBuffer buffer;
 	//private ByteBuffer bufferWrap;
 	private FileLocks fileLocks;
 	private static final String contentType = "application/octet-stream";
+	private int id;
+	boolean working;
 	
-	public S3Backend() {
+	public S3Backend(int id) {
+		this.id = id;
 		client = newS3Client();
+		working = true;
 		createRootBucket();
 		listExistingBuckets();
 		fileLocks = FileLocks.instance();
 		
 		Configuration conf = Configuration.instance();
-		buffer = ByteBuffer.allocateDirect((Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes)));
+		//buffer = ByteBuffer.allocateDirect((Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes)));
 		//bufferWrap = ByteBuffer.wrap(buffer);
 	}
 	
 	@Override
-	public void loadFromGlobal(final Block dstBlock, final int offset, final int length) throws FileNotExistException, KawkabException {
+	public void loadFromGlobal(final Block dstBlock, final int offset, final int length) throws FileNotExistException, IOException{
 		//TODO: Take a ByteBuffer as an input argument. Load the fetched data in the given ByteBuffer instead of calling block.load().
 
 		long rangeStart = offset;
@@ -88,7 +92,7 @@ public final class S3Backend implements GlobalBackend{
 				}
 				
 				if (retries == 1)
-					throw new KawkabException(ae);
+					throw new IOException(ae.getMessage()+", failed to complete the request after retires");
 				
 				try {
 					long sleepMs = (100+(Math.abs(rand.nextLong())%400));
@@ -96,7 +100,8 @@ public final class S3Backend implements GlobalBackend{
 							dstBlock.id().toString(),sleepMs));
 					Thread.sleep(sleepMs);
 				} catch (InterruptedException e) {
-					throw new KawkabException(e);
+					//throw new KawkabException(e);
+					return;
 				}
 			}
 		}
@@ -105,7 +110,7 @@ public final class S3Backend implements GlobalBackend{
 	}
 	
 	@Override
-	public void storeToGlobal(final BlockID id) throws KawkabException {
+	public void storeToGlobal(final BlockID id, final ByteBuffer buffer) throws KawkabException {
 		//System.out.println("[S3] Storing to global: " + id.localPath());
 		
 		int length = 0;
@@ -131,6 +136,7 @@ public final class S3Backend implements GlobalBackend{
 				lock.unlock();
 			}
 		} catch (IOException e) {
+			System.out.println("[S3] Unable to upload to S3: " + id);
 			e.printStackTrace();
 			throw new KawkabException(e);
 		}
@@ -159,13 +165,15 @@ public final class S3Backend implements GlobalBackend{
 		AWSCredentials credentials = new BasicAWSCredentials(conf.minioAccessKey, conf.minioSecretKey);
 		ClientConfiguration clientConfiguration = new ClientConfiguration();
 	    clientConfiguration.setSignerOverride("AWSS3V4SignerType"); //API signature S3v4. Depends on the minio API signature
+
+		System.out.printf("[S3] Connecting to %s\n", conf.minioServers[id]);
 	    
 		AmazonS3 client = AmazonS3ClientBuilder.standard()
 							.withCredentials(new AWSStaticCredentialsProvider(credentials))
 							.withClientConfiguration(clientConfiguration)
 							.withPathStyleAccessEnabled(true)
 							.withForceGlobalBucketAccessEnabled(true)
-							.withEndpointConfiguration(new EndpointConfiguration(conf.minioServers[0], "ca-central-1"))
+							.withEndpointConfiguration(new EndpointConfiguration(conf.minioServers[id], "ca-central-1"))
 							.build();
 		return client;
 	}
@@ -191,6 +199,10 @@ public final class S3Backend implements GlobalBackend{
 	
 	@Override
 	public void shutdown() {
+		if (!working)
+			return;
+
+		working = false;
 		System.out.println("Closing S3 backend ...");
 		client.shutdown();
 	}

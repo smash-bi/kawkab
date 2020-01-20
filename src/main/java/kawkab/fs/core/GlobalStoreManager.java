@@ -4,17 +4,22 @@ import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 public class GlobalStoreManager {
 	private static final Object initLock = new Object();
-	private GlobalBackend[] backends; // To store blocks to the global store
-	private GlobalBackend loadWorker; // To load a block from the global store
-	private LinkedBlockingQueue<Task> storeQs[]; // Buffer to queue block store requests
+	//private GlobalBackend[] storeBackends; // To store blocks to the global store
+	private GlobalBackend[] loadBackends; // To load a block from the global store
+	//private LinkedBlockingQueue<Task> storeQs[]; // Buffer to queue block store requests
+	private LinkedBlockingQueue<Task> storeQ; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks globally
 	private final int numWorkers = Configuration.instance().numWorkersStoreToGlobal; // Number of worker threads and number of reqsQs
 	private volatile boolean working = true;    // To stop accepting new requests after working is false
+
+	private final int numBackends = 3;
 	
 	private static GlobalStoreManager instance;
 
@@ -30,10 +35,13 @@ public class GlobalStoreManager {
 	}
 	
 	private GlobalStoreManager() {
-		loadWorker = new S3Backend();
-		backends = new GlobalBackend[numWorkers];
-		for(int i=0; i<numWorkers; i++) {
-			backends[i] = new S3Backend();
+		//loadWorker = new S3Backend();
+		//storeBackends = new GlobalBackend[numBackends];
+		loadBackends = new GlobalBackend[numBackends];
+		for(int i=0; i<numBackends; i++) {
+			GlobalBackend gb = new S3Backend(i);
+			//storeBackends[i] = gb;
+			loadBackends[i] = gb;
 		}
 
 		startWorkers();
@@ -46,20 +54,23 @@ public class GlobalStoreManager {
 	 * work based on the blocks, which is not easily achievable using ExecutorService.
 	 */
 	private void startWorkers() {
-		storeQs = new LinkedBlockingQueue[numWorkers];
+		storeQ = new LinkedBlockingQueue<>();
+		/*storeQs = new LinkedBlockingQueue[numWorkers];
 		for(int i=0; i<numWorkers; i++) {
-			storeQs[i] = new LinkedBlockingQueue<>();
-		}
-		
+			//storeQs[i] = new LinkedBlockingQueue<>();
+			storeQs[i] = q;
+		}*/
+
 		workers = new Thread[numWorkers];
 		for (int i=0; i<workers.length; i++) {
 			final int workerID = i;
 			workers[i] = new Thread("GlobalStoreWorker-"+workerID) {
 				public void run() {
-					runStoreWorker(storeQs[workerID], backends[workerID]);
+					runStoreWorker(storeQ);
 				}
 			};
-			
+
+
 			workers[i].start();
 		}
 	}
@@ -71,12 +82,14 @@ public class GlobalStoreManager {
 	 * @throws FileNotExistException
 	 * @throws KawkabException
 	 */
-	public void load(Block block, int offset, int length) throws FileNotExistException, KawkabException {
+	public void load(Block block, int offset, int length) throws FileNotExistException, IOException {
 		//TODO: Limit the number of load requests, probably using semaphore
 		//TODO: Make it a blocking function and use a threadpool for the load requests
-		
-		synchronized(loadWorker) {
-			loadWorker.loadFromGlobal(block, offset, length);
+
+		int backend = Math.abs(block.id().perBlockTypeKey()) % loadBackends.length;
+
+		synchronized(loadBackends[backend]) {
+			loadBackends[backend].loadFromGlobal(block, offset, length);
 		}
 	}
 	
@@ -93,15 +106,25 @@ public class GlobalStoreManager {
 		//System.out.println("\t\t\t[GSM] Enque: " + block.id());
 		
 		//Load balance between workers, but assign same worker to the same block.
-		int queueNum = Math.abs(blockID.hashCode()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
+		//int queueNum = Math.abs(blockID.perBlockTypeKey()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
 		
-		storeQs[queueNum].add(new Task(blockID, listener));
+		//storeQs[queueNum].add(new Task(blockID, listener));
+		storeQ.add(new Task(blockID, listener));
 	}
 	
 	/**
 	 * The workers poll the same queue 
 	 */
-	private void runStoreWorker(LinkedBlockingQueue<Task> reqs, GlobalBackend backend) {
+	private void runStoreWorker(LinkedBlockingQueue<Task> reqs) {
+		//LatHistogram storeLog = new LatHistogram(TimeUnit.MILLISECONDS, "GS upload", 100, 10000);
+
+		final Configuration conf = Configuration.instance();
+		ByteBuffer buffer = ByteBuffer.allocateDirect((Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes)));
+		GlobalBackend[] storeBackends = new GlobalBackend[numBackends];
+		for(int i=0; i<numBackends; i++) {
+			storeBackends[i] = new S3Backend(i);
+		}
+
 		while(true) {
 			Task task = null;
 			try {
@@ -117,26 +140,33 @@ public class GlobalStoreManager {
 					break;
 				continue;
 			}
-			
+
+			//storeLog.start();
 			try {
-				storeToGlobal(task, backend);
+				storeToGlobal(task, storeBackends, buffer);
 			} catch (KawkabException e) {
 				e.printStackTrace();
 			}
+			//int ms = storeLog.end();
+			//System.out.printf("Upload (ms): %d, qlen=%d\n", ms, reqs.size());
 		}
 		
 		// Perform the remaining tasks in the queue
 		Task task = null;
 		while( (task = reqs.poll()) != null) {
 			try {
-				storeToGlobal(task, backend);
+				storeToGlobal(task, storeBackends, buffer);
 			} catch (KawkabException e) {
 				e.printStackTrace();
 			}
 		}
+
+		for (int i=0; i<storeBackends.length; i++) {
+			storeBackends[i].shutdown();
+		}
 	}
 	
-	private void storeToGlobal(Task task, GlobalBackend backend) throws KawkabException {
+	private void storeToGlobal(Task task, GlobalBackend[] backends, ByteBuffer buffer) throws KawkabException {
 		//System.out.println("[GSM] Storing: " + task.block.id());
 		
 		//Block block = task.blockID;
@@ -177,8 +207,11 @@ public class GlobalStoreManager {
 			return;
 		}*/
 
-		backend.storeToGlobal(task.blockID);
-		
+		int backend = Math.abs(task.blockID.perBlockTypeKey()) % backends.length;
+		backends[backend].storeToGlobal(task.blockID, buffer);
+
+		//backend.storeToGlobal(task.blockID, buffer);
+
 		try {
 			task.listener.notifyGlobalStoreComplete(task.blockID, successful);
 		} catch (KawkabException e) {
@@ -202,25 +235,34 @@ public class GlobalStoreManager {
 				e.printStackTrace();
 			}
 		}
-		
+
+		/*Configuration conf = Configuration.instance();
+		ByteBuffer buffer = ByteBuffer.allocateDirect((Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes)));
 		for (int i=0; i<storeQs.length; i++) {
 			Task task = null;
 			while( (task = storeQs[i].poll()) != null) {
+				//int num = Math.abs(task.blockID.perBlockTypeKey()) % numWorkers;
 				try {
-					storeToGlobal(task, backends[0]);
+					storeToGlobal(task, storeBackends, buffer);
 				} catch (KawkabException e) {
 					e.printStackTrace();
 				}
 			}
 		}
 		
-		for(GlobalBackend backend : backends) {
+		for(GlobalBackend backend : storeBackends) {
+			backend.shutdown();
+		}*/
+
+		for(GlobalBackend backend : loadBackends) {
 			backend.shutdown();
 		}
-		
-		for (int i=0; i<storeQs.length; i++) {
+
+		/*for (int i=0; i<storeQs.length; i++) {
 			assert storeQs[i].size() == 0;
-		}
+		}*/
+
+		assert storeQ.size() == 0;
 		
 		System.out.println("Closed GlobalStoreManager");
 	}
@@ -232,5 +274,15 @@ public class GlobalStoreManager {
 			this.blockID = blockID;
 			this.listener = listener;
 		}
+	}
+
+	public int qlen() {
+		/*int size = 0;
+		for (int i=0; i<storeQs.length; i++) {
+			size += storeQs[i].size();
+		}
+
+		return size;*/
+		return storeQ.size();
 	}
 }

@@ -68,6 +68,10 @@ public class LatHistogram {
 	}
 	
 	public int end() {
+		return end(this.batchSize);
+	}
+
+	public int end(int batchSize) {
 		if (!started)
 			return -1;
 

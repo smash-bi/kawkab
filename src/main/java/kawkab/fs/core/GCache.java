@@ -55,7 +55,7 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 	}
 	
 	@Override
-	public Block acquireBlock(final BlockID blockID) throws IOException, KawkabException {
+	public Block acquireBlock(final BlockID blockID) throws IOException {
 		Block block = null;
 		try {
 			block = cache.get(blockID);
@@ -75,7 +75,7 @@ public class GCache extends Cache implements RemovalListener<BlockID, Block>{
 	}
 	
 	@Override
-	public void releaseBlock(BlockID blockID) throws KawkabException {
+	public void releaseBlock(BlockID blockID) {
 		Block block = null;
 		
 		try {

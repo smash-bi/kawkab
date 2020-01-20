@@ -54,11 +54,7 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 			throw new TException(e);
 		} finally {
 			if (ds != null) {
-				try {
-					cache.releaseBlock(id);
-				} catch (KawkabException e) {
-					e.printStackTrace();
-				}
+				cache.releaseBlock(id);
 			}
 
 			buffers.offer(buffer);
@@ -89,11 +85,7 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 			throw new TException(e);
 		} finally {
 			if (block != null) {
-				try {
-					cache.releaseBlock(id);
-				} catch (KawkabException e) {
-					e.printStackTrace();
-				}
+				cache.releaseBlock(id);
 			}
 
 			buffers.offer(buffer);
@@ -120,11 +112,7 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 			throw new TException(e);
 		} finally {
 			if (node  != null) {
-				try {
-					cache.releaseBlock(id);
-				} catch (KawkabException e) {
-					e.printStackTrace();
-				}
+				cache.releaseBlock(id);
 			}
 
 			buffers.offer(buffer);

@@ -125,12 +125,22 @@ public class Namespace {
 		return inumber;
 	}
 
+	Map<String, Long> dbgFiles = new ConcurrentHashMap<>();
 	public synchronized long openFileDbg(String filename, boolean appendMode, FileOptions opts) throws IbmapsFullException, IOException,
 			InvalidFileModeException, FileAlreadyOpenedException, FileNotExistException, KawkabException, InterruptedException {
 		long inumber;
 
 		// Lock namespace for the given filename
 		locks.lock(filename);
+
+		if (!appendMode) {
+			Long inum = dbgFiles.get(filename);
+			if (inum == null) {
+				throw new FileNotExistException("File does not exist: " + filename);
+			}
+
+			return inum;
+		}
 
 		try {
 				inumber = createNewFile(opts.recordSize());
@@ -148,6 +158,8 @@ public class Namespace {
 			if (appendMode) {
 				openAppendFile(inumber, filename);
 			}
+
+			dbgFiles.put(filename, inumber);
 		} finally {
 			locks.unlock(filename);
 		}

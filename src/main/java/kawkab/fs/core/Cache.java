@@ -63,7 +63,7 @@ public abstract class Cache {
 	 * @throws KawkabException 
 	 * @throws InterruptedException 
 	 */
-	public abstract Block acquireBlock(BlockID blockID) throws OutOfMemoryException, KawkabException, IOException;
+	public abstract Block acquireBlock(BlockID blockID) throws OutOfMemoryException, IOException;
 	
 	/**
 	 * Releases the block and decrements its reference count. Blocks with reference count 0 are eligible for eviction.
@@ -71,9 +71,8 @@ public abstract class Cache {
 	 * The released block is added in a queue for persistence if the block is dirty.
 	 * 
 	 * @param blockID
-	 * @throws KawkabException 
 	 */
-	public abstract void releaseBlock(BlockID blockID) throws KawkabException;
+	public abstract void releaseBlock(BlockID blockID);
 	
 	/**
 	 * Flushes the block in the persistent store. This should be used only for system shutdown.

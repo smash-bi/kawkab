@@ -5,8 +5,6 @@ import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
-import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.utils.LatHistogram;
 
 import java.io.File;
 import java.io.IOException;
@@ -17,7 +15,6 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static kawkab.fs.commons.FixedLenRecordUtils.offsetInSegment;
@@ -146,7 +143,12 @@ public final class DataSegment extends Block {
 		
 		return toAppend;
 	}
-	
+
+	synchronized void rollback(int numBytes) {
+		writePos.addAndGet(-numBytes);
+		dataBuf.position(dataBuf.position()-numBytes);
+	}
+
 	/**
 	 * @param srcBuffer Source buffer
 	 * @param offsetInFile
@@ -169,12 +171,12 @@ public final class DataSegment extends Block {
 		dataBuf.put(srcBuffer);
 
 		int pos = writePos.addAndGet(length);
-		
+
 		//Mark block as full
 		if (pos+recordSize > segmentSizeBytes) { //Cannot add any more records
 			isSegFull = true;
 		}
-		
+
 		markLocalDirty();
 
 		return length;
@@ -520,7 +522,7 @@ public final class DataSegment extends Block {
 
 	//public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "DS load", 100, 100000);
 
-	private synchronized void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
+	private synchronized void loadBlockFromPrimary() throws FileNotExistException, IOException {
 		//System.out.printf("[DS] Fetch %s from primary. writePos=%d, dirtyOffset=%d, dataBufPost=%d\n", id, writePos.get(), dirtyOffset, dataBuf.position());
 		//dbgHist.start();
 		loadFrom(primaryNodeService.getSegment((DataSegmentID)id, writePos.get()));
@@ -581,7 +583,7 @@ public final class DataSegment extends Block {
 	}
 
 	@Override
-	protected synchronized void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, KawkabException {
+	protected synchronized void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, IOException {
 		/* If never fetched or the last global-fetch has timed out, fetch from the global store.
 		 * Otherwise, if the last primary-fetch has timed out, fetch from the primary node.
 		 * Otherwise, don't fetch, data is still fresh.
@@ -606,16 +608,11 @@ public final class DataSegment extends Block {
 		}
 
 		if (loadFromPrimary) {
-			try {
-				//System.out.println("[DS] Loading from the primary: " + id());
-				loadBlockFromPrimary(); // Fetch data from the primary node
-				//lastPrimaryFetchTimeMs = now;
-				if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed
-					lastFetchTimeMs = now;
-			} catch (IOException ioe) {
-				//System.out.println("[DS] Not found in the global and the primary: " + id());
-				throw new KawkabException(ioe);
-			}
+			//System.out.println("[DS] Loading from the primary: " + id());
+			loadBlockFromPrimary(); // Fetch data from the primary node
+			//lastPrimaryFetchTimeMs = now;
+			if (lastFetchTimeMs == 0) // Set to now if the global fetch has failed
+				lastFetchTimeMs = now;
 			return;
 		}
 
@@ -650,9 +647,6 @@ public final class DataSegment extends Block {
 			loadFromGlobal(offset, length);
 			lastFetchTimeMs = now;
 			//lastPrimaryFetchTimeMs = 0;
-		} catch (IOException ioe) {
-			//System.out.println("[DS] Not found in the global and the primary: " + id());
-			throw new KawkabException(ioe);
 		}
 	}
 

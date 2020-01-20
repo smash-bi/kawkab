@@ -4,19 +4,15 @@ import kawkab.fs.core.ApproximateClock;
 import kawkab.fs.core.Cache;
 import kawkab.fs.core.IndexNodeID;
 import kawkab.fs.core.LocalStoreManager;
-import kawkab.fs.core.exceptions.IndexBlockFullException;
-import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.exceptions.OutOfMemoryException;
+import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
-import kawkab.fs.utils.LatHistogram;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Nodes in a post-order heap are created in the post-order, i.e., the parent node is created after the children. It is
@@ -32,7 +28,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	private final TimerQueueIface timerQ;
 	private volatile TimerQueueItem<POHNode> acquiredNode;
 	private static final ApproximateClock clock = ApproximateClock.instance();
-	private static final int bufferTimeOffsetMs = 1; //Giving some time for buffering
+	private static final int bufferTimeOffsetMs = 10; //Giving some time for buffering
 
 	private final double logBase;
 	private ConcurrentHashMap<Integer, POHNode> nodes;	//This is an append-only list. The readers should read but not modify the list. Only a single writer should append new nodes.
@@ -138,12 +134,13 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		}
 	}
 
-	private POHNode acquireNode(final int nodeNum, boolean loadFromPrimary) throws IOException, KawkabException {
+	private POHNode acquireNode(final int nodeNum, boolean loadFromPrimary) throws IOException, OutOfMemoryException, FileNotExistException {
 		if (nodeNum == 0)
 			return null;
 
 		//System.out.printf("[POH] Acquire node %d\n", nodeNum);
 		POHNode node = nodes.get(nodeNum);
+		boolean acquired = false;
 		if (node == null) {
 			synchronized (nodes) {
 				node = nodes.get(nodeNum);
@@ -154,12 +151,22 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 					node.init(nodeNum, heightOfNode(nodeNum), entriesPerNode, childrenPerNode, nodeSizeBytes, nodesPerBlock);
 					POHNode prev = nodes.put(nodeNum, node);
 					assert prev == null;
+					acquired = true;
 				}
 			}
 		}
 
 		//loadLog.start();
-		node.loadBlock(loadFromPrimary);
+		try {
+			node.loadBlock(loadFromPrimary);
+		} catch (FileNotExistException | IOException e) {
+			if (acquired) {
+				cache.releaseBlock(node.id());
+				nodes.remove(nodeNum);
+			}
+
+			throw e;
+		}
 		//loadLog.end();
 
 		return node;
@@ -171,22 +178,24 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param nodeID ID of the first node in the index block
 	 * @return
 	 */
-	private void createNewBlock(IndexNodeID nodeID) throws IOException, OutOfMemoryException {
+	private void createNewBlock(IndexNodeID nodeID) throws IOException, OutOfDiskSpaceException {
 		  //System.out.println("[POH] Creating new block: " + nodeID.localPath());
 
 		localStore.createBlock(nodeID);
 	}
 
-	private POHNode createNewNodeCached(final int nodeNumber) throws IOException, KawkabException {
+	private POHNode createNewNodeCached(final int nodeNumber) throws IOException, OutOfDiskSpaceException, OutOfMemoryException, FileNotExistException {
 		IndexNodeID nodeID = new IndexNodeID(inumber, nodeNumber);
 
 		//System.out.println("[POH] Creating new node: " + nodeID);
 
+		boolean created = false;
 		POHNode node = (POHNode) cache.acquireBlock(nodeID);
 		if (nodeNumber % nodesPerBlock == 0 || nodeNumber == 1) {
 			try {
 				createNewBlock(nodeID);
-			} catch(OutOfMemoryException e) {
+				created = true;
+			} catch(OutOfDiskSpaceException e) {
 				cache.releaseBlock(nodeID);
 				throw e;
 			}
@@ -195,7 +204,17 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		node.init(nodeNumber, heightOfNode(nodeNumber), entriesPerNode, childrenPerNode, nodeSizeBytes, nodesPerBlock);
 		node.initForAppend();
-		setChildren(node, false);
+		try {
+			setChildren(node, false);
+		} catch (FileNotExistException e) {
+			if (created) {
+				localStore.evictFromLocal(node.id());
+			}
+
+			cache.releaseBlock(node.id());
+			throw e;
+		}
+
 		POHNode prev = nodes.put(nodeNumber, node); //No other thread (readers) can concurrently access this node because the filesize is not updated yet
 
 		assert prev == null;
@@ -214,7 +233,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		return node;
 	}*/
 
-	private void setChildren(final POHNode node, boolean loadFromPrimary) throws IOException, KawkabException {
+	private void setChildren(final POHNode node, boolean loadFromPrimary) throws IOException, OutOfMemoryException, FileNotExistException {
 		if (node.height() > 0) {
 			for (int i = 1; i <= childrenPerNode; i++) {
 				POHNode child = acquireNode(nthChild(node.nodeNumber(), node.height(), i, loadFromPrimary), loadFromPrimary);
@@ -241,7 +260,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @throws IOException
 	 * @throws KawkabException
 	 */
-	public void appendMinTS(final long minTS, final long segmentInFile, final long curIndexLen) throws IOException, KawkabException {
+	public void appendMinTS(final long minTS, final long segmentInFile, final long curIndexLen) throws IOException, OutOfDiskSpaceException, OutOfMemoryException, FileNotExistException {
 		//TODO: check the arguments
 
 		// Current node should not be null.
@@ -263,14 +282,9 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		//System.out.printf("[POH] lastNodeFull=%b, curIdxLen=%d, entriesPerNodd=%d\n", lastNodeFull, curIndexLen, entriesPerNode);
 
 		if (lastNodeFull) { //If last node is full
-			try {
-				int nodeNum = (int)(curIndexLen/2/entriesPerNode) +1;
-				POHNode node = createNewNodeCached(nodeNum);
-				acquiredNode = new TimerQueueItem<>(node, this);
-			} catch (IOException | KawkabException e) {
-				e.printStackTrace();
-				return;
-			}
+			int nodeNum = (int) (curIndexLen / 2 / entriesPerNode) + 1;
+			POHNode node = createNewNodeCached(nodeNum);
+			acquiredNode = new TimerQueueItem<>(node, this);
 		}
 
 		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
@@ -635,7 +649,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param childNumber
 	 * @return
 	 */
-	private int nthChild(int parentNodeNum, int parentHeight, int childNumber, boolean loadFromPrimary) throws IOException, KawkabException {
+	private int nthChild(int parentNodeNum, int parentHeight, int childNumber, boolean loadFromPrimary) throws IOException, OutOfMemoryException, FileNotExistException {
 		assert parentHeight > 0 : "parentHeight must be greater than 0; parentHeight="+parentHeight;
 		assert childNumber > 0;
 
@@ -754,10 +768,6 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 	@Override
 	public void deferredWork(POHNode node) {
-		try {
-			localStore.store(node);
-		} catch (KawkabException e) {
-			e.printStackTrace();
-		}
+		localStore.store(node);
 	}
 }

@@ -20,8 +20,9 @@ import java.util.concurrent.locks.LockSupport;
 public class FilesystemServiceClient {
 	private FilesystemService.Client client;
 	private TTransport transport;
-	private final int MAX_TRIES = 1000;
+	private final int MAX_TRIES = 30;
 	private Random rand = new Random();
+	private final int BUFLEN = 32*1024*1024;
 
 	/**
 	 * @param serverIP IP of the server to connect
@@ -31,7 +32,7 @@ public class FilesystemServiceClient {
 	public FilesystemServiceClient(String serverIP, int port) throws KawkabException {
 		System.out.printf("[FSC] Connecting to %s:%d\n",serverIP,port);
 		try {
-			transport = new TFastFramedTransport(new TSocket(serverIP, port));
+			transport = new TFastFramedTransport(new TSocket(serverIP, port), BUFLEN, BUFLEN);
 			transport.open();
 
 			TProtocol protocol = new TBinaryProtocol(transport);
@@ -122,20 +123,30 @@ public class FilesystemServiceClient {
 	}
 
 	public int appendRecords(ByteBuffer buffer) throws OutOfMemoryException, KawkabException {
+		/*try {
+			return client.appendRecords(buffer);
+		} catch (TOutOfMemoryException e) {
+			throw new OutOfMemoryException(e.getMessage());
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}*/
+
 		int tries = 0;
 		int base = 1000;
-		while(++tries < MAX_TRIES) {
+		int maxTries = 100;
+		while(++tries < maxTries) {
 			try {
 				return client.appendRecords(buffer);
 			} catch (TOutOfMemoryException e) {
+				System.out.print(".");
 				// Retry if the memory was full
 				//System.out.println("W " + waitUS);
 				int waitUS = base * (1 << tries) + rand.nextInt(100);
 				//int waitUS = base * tries + rand.nextInt(100);
-				//if (waitUS > 2000000)
-				//	waitUS = 2000000;
+				if (waitUS > 4000000)
+					waitUS = 4000000;
 
-				if (waitUS > 3000) {
+				if (waitUS > 2000) {
 					try {
 						Thread.sleep(waitUS / 1000);
 					} catch (InterruptedException ex) {
@@ -144,14 +155,20 @@ public class FilesystemServiceClient {
 				} else {
 					LockSupport.parkNanos(waitUS * 1000);
 				}
+
+				if (tries+1 == maxTries) {
+					throw new OutOfMemoryException(String.format("Request failed after %d tries: " + e.getMessage(), tries));
+				}
 			} catch (TException e) {
-				if (e.getMessage().contains("Unable to create the file"))
+				if (e.getMessage().contains("Unable to create the file")) {
+					System.out.println("*");
 					continue;
+				}
 				throw new KawkabException(e);
 			}
 		}
 
-		throw new OutOfMemoryException(String.format("Request failed after %d tries", tries));
+		throw new KawkabException(String.format("Request failed after %d tries: ", tries));
 	}
 
 	public int appendNoops(ByteBuffer buffer) throws OutOfMemoryException, KawkabException {

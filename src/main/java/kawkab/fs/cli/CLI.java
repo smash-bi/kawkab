@@ -8,7 +8,6 @@ import kawkab.fs.client.KClient;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.Stats;
 import kawkab.fs.core.Cache;
-import kawkab.fs.core.DataSegmentID;
 import kawkab.fs.core.FileHandle;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.Filesystem.FileMode;
@@ -174,7 +173,26 @@ public final class CLI {
 	}
 
 	private void parseGC(String[] args) {
-		System.gc();
+		String usage = "Usage: gc <e|d|p>\ne Print GC events\n d Print GC durations\n p Perform GC";
+		if (args.length != 2) {
+			System.out.println("Incorrect parameters: " + usage);
+		}
+
+		switch (args[1]) {
+			case "e": {
+				GCMonitor.printEvents();
+				break;
+			}
+			case "d": {
+				GCMonitor.printDurations();
+			}
+			case "p": {
+				System.gc();
+				break;
+			}
+			default:
+				System.out.println("Incorrect parameters: " + usage);
+		}
 	}
 
 	private void parseStats(String[] args) throws KawkabException {

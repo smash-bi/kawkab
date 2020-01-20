@@ -3,7 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.utils.LatHistogram;
+import kawkab.fs.core.exceptions.OutOfDiskSpaceException;
 
 import java.io.File;
 import java.io.IOException;
@@ -13,7 +13,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.StandardOpenOption;
-import java.util.concurrent.TimeUnit;
 
 public final class InodesBlock extends Block {
 	private static boolean bootstraped; //Not saved persistently
@@ -152,14 +151,14 @@ public final class InodesBlock extends Block {
 	}
 
 	//public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "IB load", 100, 100000);
-	private void loadBlockFromPrimary()  throws FileNotExistException, KawkabException, IOException {
+	private void loadBlockFromPrimary()  throws FileNotExistException, IOException {
 		//dbgHist.start();
 		loadFrom(primaryNodeService.getInodesBlock((InodesBlockID)id()));
 		//dbgHist.end();
 	}
 
 	@Override
-	protected synchronized void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, KawkabException, IOException {
+	protected synchronized void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, IOException {
 		/* If never fetched or the last global-fetch has timed out, fetch from the global store.
 		 * Otherwise, if the last primary-fetch has timed out, fetch from the primary node.
 		 * Otherwise, don't fetch, data is still fresh. 
@@ -201,9 +200,6 @@ public final class InodesBlock extends Block {
 				loadFromGlobal(0, conf.inodesBlockSizeBytes);
 				lastFetchTimeMs = now;
 				//lastPrimaryFetchTimeMs = 0;
-			} catch (IOException ioe) {
-				System.out.println("[B] Not found in the global and the primary: " + id());
-				throw new KawkabException(ioe);
 			}
 		}
 	}
@@ -234,10 +230,10 @@ public final class InodesBlock extends Block {
 	/**
 	 * Creates inodeBlocks on local disk belonging to this machine.
 	 * @throws IOException
-	 * @throws InterruptedException 
+	 * @throws OutOfDiskSpaceException
 	 * @throws KawkabException 
 	 */
-	static void bootstrap() throws IOException, InterruptedException, KawkabException{
+	static void bootstrap() throws IOException, OutOfDiskSpaceException, KawkabException{
 		if (bootstraped)
 			return;
 		

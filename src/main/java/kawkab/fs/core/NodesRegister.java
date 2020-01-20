@@ -33,12 +33,10 @@ public class NodesRegister {
 	 * @return IP address of the node identified by the nodeID
 	 * @throws KawkabException if the given nodeID does not exist.
 	 */
-	public String getIP(int nodeID) throws KawkabException {
+	public String getIP(int nodeID) {
 		NodeInfo info = nodesMap.get(nodeID);
 		
-		if (info == null) {
-			throw new KawkabException("Node " + nodeID + " does not exist.");
-		}
+		assert info != null : "info should not be null for node ID " + nodeID;
 		
 		return info.ip;
 			

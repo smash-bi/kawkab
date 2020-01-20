@@ -3,7 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
-import kawkab.fs.core.exceptions.OutOfMemoryException;
+import kawkab.fs.core.exceptions.OutOfDiskSpaceException;
 
 import java.io.File;
 import java.io.IOException;
@@ -26,7 +26,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private final FileLocks fileLocks;
 	
 	private static LocalStoreManager instance;
-	private LocalEvictQueue leq;
+	//private LocalEvictQueue leq;
+	private LocalStoreCache lc;
 
 	//private final Object syncWaitMutex;
 
@@ -47,7 +48,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		fileLocks = FileLocks.instance();
 
-		leq = new LocalEvictQueue("LocalEvictQueue", storedFilesMap, storePermits);
+		//leq = new LocalEvictQueue("LocalEvictQueue", storedFilesMap, storePermits);
+		lc = new LocalStoreCache(maxBlocks, storedFilesMap, storePermits);
 		
 		int inLocalSystem = storedFilesMap.size();
 		assert inLocalSystem <= maxBlocks;
@@ -149,7 +151,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * @throws KawkabException if the localStore has already received the stop signal for shutting down.
 	 * @throws NullPointerException
 	 */
-	public void store(Block block) throws KawkabException {
+	public void store(Block block) {
 		// WARNING! This functions works correctly in combination with the processStoreRequest(block) function only if the
 		// same block is assigned always to the same worker thread.
 
@@ -195,25 +197,28 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			return 0;
 		}
 
-		//System.out.println("[LS] Locking file: " + block.id());
-
-
 		BlockID bid = block.id();
 		Lock lock = fileLocks.grabLock(bid); // To prevent concurrent read from the GlobalStoreManager
 		FileChannel channel = null;
 		try {
 			lock.lock();
-			channel = channels.acquireChannel(bid);
 
-			assert channel.isOpen();
+			while(dirtyCnt > 0) {
 
-			syncedCnt = block.storeTo(channel);
+				channel = channels.acquireChannel(bid);
 
-			channel.force(true);
+				assert channel.isOpen();
+
+				syncedCnt = block.storeTo(channel);
+
+				dirtyCnt = block.decAndGetLocalDirty(dirtyCnt);
+			}
+
+			//channel.force(true);
 
 			//block.markGlobalDirty();
 		} catch (IOException e) {
-			System.out.println("Unbale to store data for ID: " + bid);
+			System.out.printf("Unbale to store data for ID: %s, dirty bytes = %d\n", bid, block.decAndGetLocalDirty(0));
 			//FIXME: What should we do here? Should we return?
 			throw new KawkabException(e);
 		} finally {
@@ -233,8 +238,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		// that the MD5 hash of the file has changed. Now we update this flag in notifyStoreComplete() function.
 
 		//if (block.subtractAndGetLocalDirty(0) > 0) {
-		if (block.decAndGetLocalDirty(dirtyCnt) > 0) {
+		if (block.decAndGetLocalDirty(0) > 0) {
 			assert block.id().equals(bid);
+
 			if (bid.type() != BlockID.BlockType.INODES_BLOCK)
 				store(block);
 		} else {
@@ -292,7 +298,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}*/
 
 		if (blockID.type() == BlockID.BlockType.DATA_SEGMENT) {
-			evictFromLocal(blockID); //FIXME: We should add it in the list of toBeEvicted
+			evictFromLocal(blockID);
 		}
 	}
 	
@@ -308,7 +314,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		//TODO: Add in canBeEvicted list. Also, remove from the canBeEvicted list if the block becomes dirty again
 	//}
 	
-	void evictFromLocal(BlockID id) throws KawkabException {
+	public void evictFromLocal(BlockID id) {
 		/*if (id.onPrimaryNode())
 			return;
 		
@@ -330,7 +336,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		//System.out.println("\t\t\t\t\t\t Evict: Permits: " + permits + ", map: " + mapSize);
 		
 		storePermits.release();*/
-		leq.evict(id);
+		//leq.evict(id);
+		lc.evict(id);
 	}
 	
 	/**
@@ -339,30 +346,27 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * Multiple writers can call this function concurrently. However, only one writer per block should be allowed to call this function.
 	 * The function assumes that the caller prevents multiple writers from creating the same new block.
 	 */
-	public void createBlock(BlockID blockID) throws IOException, OutOfMemoryException {
+	public void createBlock(BlockID blockID) throws IOException, OutOfDiskSpaceException {
+		if (storePermits.availablePermits() <= 32) //This number should be more than the number of worker threads.
+			lc.makeSpace();
+
 		if (!storePermits.tryAcquire()) { // This provides an upper limit on the number of blocks that can be created locally.
-			throw new OutOfMemoryException("Local store is full.");
+			throw new OutOfDiskSpaceException (
+					String.format("Local store is full. Available store permits = %d, local store map size = %d, configured capacity = %d\n",
+							storePermits.availablePermits(), storedFilesMap.size(), Configuration.instance().maxBlocksPerLocalDevice));
 		}
-		
 		File file = new File(blockID.localPath());
 		File parent = file.getParentFile();
 		if (!parent.exists()){
 			parent.mkdirs();
 		}
 		
-		//syncLocally(block);
 		if (!file.createNewFile()) {
 			storePermits.release();
 			throw new IOException("Unable to create the file: " + blockID.localPath());
 		}
 		
-		storedFilesMap.put(blockID); // storedFilesMap.put() and block.setInLocal() are not required to be atomic. This is because a  
-										// file's size is only updated when the block has been created. Therefore, a reader cannot read 
-										// a non-existing block.
-		
-		// System.out.println("Created file: " + blockID.localPath() + " for " + blockID);
-		
-		//block.setInLocalStore(); //Mark the block as locally saved
+		storedFilesMap.put(blockID);
 	}
 	
 	/**
@@ -376,7 +380,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * @return false if the block is not available in the local store. Returns true if the block is loaded successfully
 	 * from the local store.
 	 */
-	public boolean load(Block block) throws FileNotExistException,KawkabException {
+	public boolean load(Block block) throws FileNotExistException, IOException {
 		BlockID id = block.id();
 		System.out.println("[LSM] Load block: " + id);
 		
@@ -384,35 +388,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			System.out.println("[LSM] Block is not available locally: " + id);
 			return false;
 		}
+
+		lc.touch(id);
 		
-		try {
-			block.loadFromFile();
-			//block.setInLocalStore(); // This happens when we load the block from the local store after a reboot, or after eviction from the cache
-		} catch (IOException e) {
-			throw new KawkabException(e);
-		}
-
-
-		/*Lock lock = fileLocks.grabFileLock(id); // To prevent concurrent read from the GlobalStoreManager
-		FileChannel channel = null;
-		try {
-			lock.lock();
-			channel = channels.acquireChannel(id);
-
-			assert channel.isOpen();
-
-			block.loadFrom(channel);
-		} catch (IOException e) {
-			System.out.println("Unable to load data for ID: " + id);
-			//FIXME: What should we do here? Should we return?
-			throw new KawkabException(e);
-		} finally {
-			if (channel != null) {
-				channels.releaseFileChannel(id);
-			}
-
-			lock.unlock();
-		}*/
+		block.loadFromFile();
 
 		return true;
 	}
@@ -478,4 +457,16 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			syncWaitMutex.wait();
 		}
 	}*/
+
+	public int size() {
+		return storedFilesMap.size();
+	}
+
+	public int permits() {
+		return storePermits.availablePermits();
+	}
+
+	public int canEvict() {
+		return lc.size();
+	}
 }

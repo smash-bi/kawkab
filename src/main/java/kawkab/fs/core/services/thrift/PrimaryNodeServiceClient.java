@@ -10,10 +10,12 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.services.thrift.PrimaryNodeService.Client;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.transport.TFastFramedTransport;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -37,7 +39,7 @@ public class PrimaryNodeServiceClient {
 		return instance;
 	}
 
-	public ByteBuffer getSegment(DataSegmentID id, final int offset) throws FileNotExistException, KawkabException {
+	public ByteBuffer getSegment(DataSegmentID id, final int offset) throws FileNotExistException, IOException {
 		//System.out.println("[PC] getSegment: " + id);
 
 		try {
@@ -46,11 +48,11 @@ public class PrimaryNodeServiceClient {
 			throw new FileNotExistException();
 		} catch (TException e) {
 			e.printStackTrace();
-			throw new KawkabException(e);
+			throw new IOException(e);
 		}
 	}
 
-	public ByteBuffer getInodesBlock(InodesBlockID id) throws FileNotExistException, KawkabException{
+	public ByteBuffer getInodesBlock(InodesBlockID id) throws FileNotExistException, IOException {
 		//System.out.println("[PC] getInodesBlock: " + id);
 
 		try {
@@ -58,11 +60,11 @@ public class PrimaryNodeServiceClient {
 		} catch (kawkab.fs.core.services.thrift.TFileNotExistException e) {
 			throw new FileNotExistException();
 		} catch (TException e) {
-			throw new KawkabException(e);
+			throw new IOException(e);
 		}
 	}
 
-	public ByteBuffer getIndexNode(IndexNodeID id, int fromTsIdx) throws FileNotExistException, KawkabException {
+	public ByteBuffer getIndexNode(IndexNodeID id, int fromTsIdx) throws FileNotExistException, IOException {
 		//System.out.println("[PC] getIndexNode: " + id);
 
 		try {
@@ -70,34 +72,30 @@ public class PrimaryNodeServiceClient {
 		} catch (kawkab.fs.core.services.thrift.TFileNotExistException e) {
 			throw new FileNotExistException();
 		} catch (TException e) {
-			throw new KawkabException(e);
+			throw new IOException(e);
 		}
 	}
 
-	private synchronized Client client(int nodeID) throws KawkabException {
+	private synchronized Client client(int nodeID) throws IOException {
 		PrimaryNodeService.Client client = clients.get(nodeID);
 		if (client != null) {
 			return client;
 		}
 
 		String ip = null;
-		try {
-			ip = nodesRegister.getIP(nodeID);
-		} catch (KawkabException e) {
-			e.printStackTrace();
-			throw e;
-		}
+		ip = nodesRegister.getIP(nodeID);
 
+		Configuration conf = Configuration.instance();
 		TTransport transport;
 		try {
-			int port = Configuration.instance().primaryNodeServicePort;
+			int port = conf.primaryNodeServicePort;
 			System.out.printf("[PNSC] Connecting to %s:%d\n",ip, port);
-			transport = new TFramedTransport(new TSocket(ip, port));
+			transport = new TFastFramedTransport(new TSocket(ip, port), conf.maxBufferLen, conf.maxBufferLen);
 			transport.open();
 			client = new PrimaryNodeService.Client(new TBinaryProtocol(transport));
 		} catch (TException x) {
 			x.printStackTrace();
-			throw new KawkabException(x);
+			throw new IOException(x);
 		}
 
 		clients.put(nodeID, client);

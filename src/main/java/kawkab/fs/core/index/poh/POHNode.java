@@ -812,7 +812,7 @@ public class POHNode extends Block {
 	}
 
 	//public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "IN load", 100, 100000);
-	private void loadBlockFromPrimary() throws FileNotExistException, KawkabException, IOException {
+	private void loadBlockFromPrimary() throws FileNotExistException, IOException {
 		//System.out.printf("[IN] Loading %s from the primary at offset %d\n",id, dirtyOffsetStart);
 
 		//dbgHist.start();
@@ -856,7 +856,7 @@ public class POHNode extends Block {
 	}
 
 	@Override
-	protected synchronized void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, KawkabException, IOException {
+	protected synchronized void loadBlockOnNonPrimary(boolean loadFromPrimary) throws FileNotExistException, IOException {
 		// If the node is full, try fetching from the global store. If fails, load from the primary node.
 		// Otherwise, the node is most likely not in the global store. Therefore, fetch from the primary node.
 
@@ -894,8 +894,11 @@ public class POHNode extends Block {
 
 	@Override
 	protected boolean shouldStoreGlobally() {
-		if (isFull() && isLastNodeInBlock)
+		if (isFull() && isLastNodeInBlock) {
 			return true;
+		}
+
+		//System.out.printf("%s, %b, %d, %d, %d\n", id, isFull(), tsCount.get(), entries.length*2, id.numNodeInIndexBlock()+1);
 
 		return false;
 	}
