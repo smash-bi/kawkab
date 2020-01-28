@@ -9,7 +9,6 @@ import org.apache.thrift.server.THsHaServer;
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TThreadedSelectorServer;
 import org.apache.thrift.transport.TFastFramedTransport;
-import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TNonblockingServerSocket;
 import org.apache.thrift.transport.TNonblockingServerTransport;
 
@@ -25,25 +24,23 @@ public class FilesystemServiceServer {
 	private boolean started = false;
 	private ExecutorService executor;
 
-	public FilesystemServiceServer(Filesystem fs) throws KawkabException {
-		int minThreads = 5;
-		int maxThreads = 1000;
-		int ioThreads = 3;
+	public FilesystemServiceServer(Filesystem fs, int port, int numIOThreads, int numWorkers) throws KawkabException {
+		//int maxThreads = 1000;
 
 		FilesystemService.Iface handler = new FilesystemServiceImpl(fs);
 
-		//server = hsHaServer(handler, minThreads, maxThreads);
-		server = threadedSelectorServer(handler, minThreads, ioThreads);
-		//server = threadPoolServer(handler, minThreads, maxThreads);
+		//server = hsHaServer(handler, minThreads, maxThreads, port);
+		server = threadedSelectorServer(handler, numWorkers, numIOThreads, port);
+		//server = threadPoolServer(handler, minThreads, maxThreads, port);
 	}
 
-	private TServer threadPoolServer(FilesystemService.Iface handler, int minThreads, int maxThreads) throws KawkabException {
+	private TServer threadPoolServer(FilesystemService.Iface handler, int minThreads, int maxThreads, int port) throws KawkabException {
 		System.out.printf("[FSI] TThreadPoolServer: minThreads=%d, maxThreads=%d\n", minThreads, maxThreads);
 
 		Configuration conf = Configuration.instance();
 		try {
 			// For transmitting data to wire
-			TNonblockingServerTransport transport = new TNonblockingServerSocket(conf.fsServerListenPort);
+			TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new THsHaServer(new THsHaServer.Args(transport)
@@ -58,19 +55,18 @@ public class FilesystemServiceServer {
 		}
 	}
 
-	private TServer threadedSelectorServer(FilesystemService.Iface handler, int workerThreads, int ioThreads) throws KawkabException {
+	private TServer threadedSelectorServer(FilesystemService.Iface handler, int workerThreads, int ioThreads, int port) throws KawkabException {
 		System.out.printf("[FSI] ThreadedSelectorServer: workerThreads=%d, ioThreads-%d\n", workerThreads, ioThreads);
 		Configuration conf = Configuration.instance();
 		try {
 			// For transmitting data to wire
-			TNonblockingServerTransport transport = new TNonblockingServerSocket(conf.fsServerListenPort);
+			TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new TThreadedSelectorServer(new TThreadedSelectorServer.Args(transport)
 					.transportFactory(new TFastFramedTransport.Factory(conf.maxBufferLen, conf.maxBufferLen))
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new Processor<>(handler))
-
 					.selectorThreads(ioThreads)
 					.workerThreads(workerThreads));
 		} catch(Exception e) {
@@ -79,12 +75,12 @@ public class FilesystemServiceServer {
 		}
 	}
 
-	private TServer hsHaServer(FilesystemService.Iface handler, int minThreads, int maxThreads) throws KawkabException {
+	private TServer hsHaServer(FilesystemService.Iface handler, int minThreads, int maxThreads, int port) throws KawkabException {
 		System.out.printf("[FSI] HsHaServer: minThreads=%d, maxThreads=%d\n", minThreads, maxThreads);
 		Configuration conf = Configuration.instance();
 		try {
 			// For transmitting data to wire
-			TNonblockingServerTransport transport = new TNonblockingServerSocket(conf.fsServerListenPort);
+			TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new THsHaServer(new THsHaServer.Args(transport)

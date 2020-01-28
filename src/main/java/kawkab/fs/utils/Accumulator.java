@@ -1,7 +1,5 @@
 package kawkab.fs.utils;
 
-import java.util.Arrays;
-
 public class Accumulator {
     private long[] buckets;
     private long totalCnt;
@@ -37,6 +35,8 @@ public class Accumulator {
             bucket = buckets.length-1;
         }
 
+        assert Long.MAX_VALUE - totalCnt >= count;
+
         buckets[bucket] += count;
         totalCnt += count;
 
@@ -46,7 +46,7 @@ public class Accumulator {
         if (minValue > bucket)
             minValue = bucket;
     }
-    
+
     /*public synchronized void put(int value) {
         assert value >= 0 : "Value is negative: " + value;
 
@@ -191,7 +191,7 @@ public class Accumulator {
         System.out.println();
     }
     
-    public synchronized long[] histogram(){
+    public synchronized long[] buckets(){
         return buckets;
     }
     

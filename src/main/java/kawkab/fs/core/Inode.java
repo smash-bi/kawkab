@@ -48,6 +48,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	private AtomicInteger initCount;
 
+	private static ThreadLocal<ByteBuffer> thrLocalBuf = ThreadLocal.withInitial(() -> ByteBuffer.allocate(conf.maxBufferLen));
+
 	protected Inode(long inumber, int recordSize) {
 		this.inumber = inumber;
 		this.recordSize = recordSize;
@@ -61,6 +63,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * This function should be called after the inode has been loaded from the file or the remote node or the global store.
 	 */
 	synchronized void prepare(TimerQueueIface fsQ, TimerQueueIface segsQ) {
+		thrLocalBuf.get(); //FIXME: To warmup the thread for the readers. This is not a good approach.
 		if (isInited) {
 			initCount.incrementAndGet();
 			System.out.println("Inode already inited.");
@@ -238,8 +241,6 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		return true;
 	}
 
-	private static ThreadLocal<ByteBuffer> thrLocalBuf = ThreadLocal.withInitial(() -> ByteBuffer.allocate(conf.maxBufferLen));
-
 	public List<ByteBuffer> readRecords(final long minTS, final long maxTS, final int recSize, boolean loadFromPrimary) throws KawkabException, IOException {
 		if (minTS < 0 || maxTS < 0) {
 			throw new KawkabException(String.format("Invalid minTS (%d) or maxTS (%d) is given", minTS, maxTS));
@@ -276,6 +277,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 					//segLoadLog.start();
 					curSegment.loadBlock(loadFromPrimary); //The segment data might not be loaded when we get from the cache
 					//segLoadLog.end();
+
+					//System.out.println("Buffer: " + dstBuf.remaining());
 
 					//ByteBuffer dstBuf = ByteBuffer.allocate(conf.segmentSizeBytes);
 					int cnt = curSegment.readRecords(minTS, maxTS, dstBuf);

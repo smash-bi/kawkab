@@ -19,6 +19,12 @@ import java.util.Arrays;
 import static kawkab.fs.testclient.TestRunner.*;
 
 public class ClientMain {
+	public enum TestType {
+		APPEND,
+		NOOP,
+		READ
+	}
+
 	private Printer pr;
 
 	public static void main(String[] args) throws KawkabException, InterruptedException {
@@ -27,9 +33,10 @@ public class ClientMain {
 	}
 
 	private void init(String[] args) throws KawkabException, InterruptedException {
-		String usage = "Usage: TestClient cid=clientID sip=svrIP sport=svrPort wt=waitTimeMs " +
-				"mid=masterID mip=masterIP mport=masterPort mgc=true|false nc=numClients" +
-				"bs=batchSize rs=16|50 fp=filePrefix type=apnd|noop tc=totalClients [td=tesdDurSec]";
+		String usage = "Usage: TestClient cid=clientID sip=svrIP sport=svrPort " +
+				"mid=masterID mip=masterIP mport=masterPort wt=waitTimeMs [mgc=true|false nc=numClients" +
+				"bs=batchSize rs=16|50 fp=filePrefix type=apnd|noop tc=totalClients td=tesdDurSec " +
+				"rps=reqsPerSecx1000 wr=writeRatio]";
 
 
 		/*double[] exp = {1250000};
@@ -43,7 +50,7 @@ public class ClientMain {
 			args = args[0].split(" ");
 		}
 
-		if (args.length < 15) {
+		if (args.length < 6) {
 			System.out.printf("Expecting 15 arguments, %d given.\n%s\n", args.length, usage);
 			return;
 		}
@@ -60,16 +67,18 @@ public class ClientMain {
 		int nc		= 0; // Number of client threads in this instance
 		int bs		= 0; // batch size; number of requests per message
 		int rs		= 0; // record size in bytes
-		int nf		= 0; //Total number of files across all the clients
-		int td		= 300;
+		int nf		= 0; // Total number of files across all the clients
+		int td		= 300;  // Test duration in seconds
+		int warmupsec = 10; // Warmup time in seconds
 		String type = "apnd";
-		int warmupsec = 0;
 		String fp = "test-";
 		int testID = 1;
+		int wr = 100; //write ratio
+		double iat = 100; // inter-arrival time in microseonds
 
 		StringBuilder params = new StringBuilder();
 		for (String iArg : args) {
-			System.out.println(iArg);
+			//System.out.println(iArg);
 			String[] arg = iArg.split("=");
 			params.append(iArg).append("\n");
 			switch(arg[0]) {
@@ -89,10 +98,15 @@ public class ClientMain {
 				case "typ": type = arg[1]; break;
 				case "tc": tc = Integer.parseInt(arg[1]); break;
 				case "td": td = Integer.parseInt(arg[1]); break;
+				case "wr": wr = Integer.parseInt(arg[1]); break;
+				case "iat": iat = Double.parseDouble(arg[1]); break;
 				default: System.out.printf("Invalid argument %s.\n%s",iArg,usage); return;
 			}
 		}
-		params.append("Twup=").append(warmupsec).append("\ntdur=").append(td);
+
+		//double iat = 1000000 /*micros in sec*/ / (rps * 1000.0 / bs); // convert the target rps in thousands to inter-arrival time
+		params.append("Twup=").append(warmupsec).append("\ntdur=").append(td).append("\niat=").append(iat);
+		System.out.println(params);
 
 		Record recGen;
 		if (rs == 16) {
@@ -105,11 +119,9 @@ public class ClientMain {
 
 		assert recGen.size() == rs;
 
-		assert nf >= tc : "Total number of files must be greater than total number of clients";
-
-		assert nf % tc == 0 : "nf % tc should be 0, i.e., files should be equally distributed";
-
-		int nfpc = nf / tc;
+		//assert nf >= tc : "Total number of files must be greater than total number of clients";
+		//assert nf % tc == 0 : "nf % tc should be 0, i.e., files should be equally distributed";
+		//int nfpc = nf / tc;
 
 		System.out.printf("Warmup sec=%d, test sec=%d, record size=%d\n", warmupsec, td, recGen.size());
 
@@ -120,9 +132,13 @@ public class ClientMain {
 		pr = new Printer();
 		pr.print("Starting client " + cid);
 
-		runTest(testID, cid, td, nc, nfpc, sip, sport, bs, recGen, warmupsec, type, tc, mid, mip, mport, wtMs, fp);
+		if (type.equals("rw"))
+			runRWTest(testID, iat, wr, bs, cid, td, nc, nf, sip, sport, recGen, warmupsec, tc, mid, mip, mport, wtMs, fp);
+		else {
+			runTest(testID, cid, td, nc, nf, sip, sport, bs, recGen, warmupsec, type, tc, mid, mip, mport, wtMs, fp);
+		}
 
-		ClientUtils.writeToFile(params.toString(), fp+"/params.txt");
+		ClientUtils.writeToFile(params.toString(), fp + "/params.txt");
 
 		pr.print("Finished client " + cid);
 	}
@@ -133,18 +149,21 @@ public class ClientMain {
 		TestRunner at = new TestRunner();
 
 		if (cid == mid) {
-			at.startServer(totalClients, mport);
+			at.startServer(totalClients, mport, mid);
 		}
 
 		if (initWaitMs > 0) {
 			initWait(initWaitMs);
 		}
 
-		TestType ttype = type.equals("apnd") ? TestType.APPEND : type.equals("noop")? TestType.NOOP : type.equals("read") ? TestType.READ : null;
-		if (ttype == null) {
-			System.out.println("Invalid test type " + type);
-			return null;
+		TestType ttype;
+		switch (type) {
+			case "apnd":  ttype = TestType.APPEND; break;
+			case "noop": ttype = TestType.NOOP; break;
+			case "read": ttype = TestType.READ; break;
+			default: System.out.println("Invalid test type " + type); return null;
 		}
+
 
 		Result[] results = at.runTest(testID, testDurSec, numCients, cid, filesPerClient, svrIP, sport, batchSize, recGen, pr, warmupsec, ttype,
 				totalClients, mid, mip, mport, filePrefix);
@@ -154,6 +173,28 @@ public class ClientMain {
 		}
 
 		return results;
+	}
+
+	private void runRWTest(int testID, double intArrTime, int writeRatio, int apBatchSize, int cidOffset, int testDurSec,
+						   int numCients, int filesPerClient, String svrIP, int sport, Record recGen, int warmupsec,
+						   int totalClients, int mid, String mip, int mport, int initWaitMs, String filePrefix)
+								throws KawkabException, InterruptedException {
+		TestRunnerAsync at = new TestRunnerAsync();
+
+		if (cidOffset == mid) {
+			at.startServer(totalClients, mport, mid);
+		}
+
+		if (initWaitMs > 0) {
+			initWait(initWaitMs);
+		}
+
+		at.runTest(testID, intArrTime, writeRatio, testDurSec, numCients, cidOffset, filesPerClient,
+				svrIP, sport, apBatchSize, recGen, warmupsec, mid, mip, mport, filePrefix);
+
+		if (cidOffset == mid) {
+			at.stopServer();
+		}
 	}
 
 	private void initWait(int waitTime) {

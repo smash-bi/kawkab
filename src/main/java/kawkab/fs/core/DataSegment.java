@@ -159,7 +159,7 @@ public final class DataSegment extends Block {
 		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
 		
 		assert writePos.get() == offsetInSegment :
-				String.format("writePos (%d) !=OffsetInSeg (%d) for seg %s, fs=%d", writePos.get(), offsetInSegment, id(), offsetInFile);
+				String.format("writePos (%d) != OffsetInSeg (%d) for seg %s, fsLen=%d", writePos.get(), offsetInSegment, id(), offsetInFile);
 		assert dataBuf.position() == offsetInSegment :
 				String.format("dataBuf pos %d is incorrect, expected %d", dataBuf.position(), offsetInSegment);
 		
@@ -244,12 +244,12 @@ public final class DataSegment extends Block {
 		assert buf.remaining() >= recordSize; // at least have one record
 
 		if (timestamp < buf.getLong(0)) { // if the records in this segment are all greater than the given ts
-			System.out.printf("Record with timestamp %d not found, the timestamp is smaller than the first record\n", timestamp);
+			System.out.printf("[DS] Record with timestamp %d not found, the timestamp is smaller than the first record\n", timestamp);
 			return false;
 		}
 
 		if (buf.getLong(limit-recordSize) < timestamp) { // All the records in this segment are smaller than the given ts
-			System.out.printf("Record with timestamp %d not found, the timestamp is larger than the last record\n", timestamp);
+			System.out.printf("[DS] Record with timestamp %d not found, the timestamp is larger than the last record\n", timestamp);
 			return false;
 		}
 

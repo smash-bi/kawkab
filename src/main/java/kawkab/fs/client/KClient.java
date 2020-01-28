@@ -199,6 +199,26 @@ public class KClient {
 		return client.appendRecords(buffer);
 	}
 
+	/*public void appendRecordsAsync(String[] fnames, Record[] records, AsyncMethodCallback<Integer> resultHandler) throws KawkabException {
+		assert client != null;
+		assert fnames.length == records.length;
+
+		buffer.clear();
+		for(int i=0; i<fnames.length; i++) {
+			String fn = fnames[i];
+			Record rec = records[i];
+			Session session = sessions.get(fn);
+			if (session == null)
+				throw new KawkabException(String.format("File %s is not opened",fn));
+
+			buffer.putInt(session.id);
+			buffer.put(rec.copyOutSrcBuffer());
+		}
+
+		buffer.flip();
+		client.appendRecordsAsync(buffer, resultHandler);
+	}*/
+
 	public int appendNoops(String[] fnames, Record[] records) throws OutOfMemoryException, KawkabException {
 		assert client != null;
 		assert fnames.length == records.length;
@@ -279,6 +299,16 @@ public class KClient {
 
 		return recs;
 	}
+
+	/*public void readRecordsAsync(String fn, long minTS, long maxTS, Record recFactory, boolean loadFromPrimary,
+								 AsyncMethodCallback<List<ByteBuffer>> resultHandler) throws KawkabException {
+		assert client != null;
+		Session session = sessions.get(fn);
+		if (session == null)
+			throw new KawkabException(String.format("File %s is not opened",fn));
+
+		client.readRecordsAsync(session.id, minTS, maxTS, recFactory.size(), loadFromPrimary, resultHandler);
+	}*/
 
 	private void printBuffers(List<ByteBuffer> results, Record recFactory) {
 		int recSize = recFactory.size();

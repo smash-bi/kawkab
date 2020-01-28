@@ -239,7 +239,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 		//if (block.subtractAndGetLocalDirty(0) > 0) {
 		if (block.decAndGetLocalDirty(0) > 0) {
-			assert block.id().equals(bid);
+			assert block.id().equals(bid); //If this happens, the same block is being used by multiple appenders. May be the cache is full.
 
 			if (bid.type() != BlockID.BlockType.INODES_BLOCK)
 				store(block);

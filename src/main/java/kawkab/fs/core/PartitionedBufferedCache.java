@@ -180,15 +180,25 @@ public class PartitionedBufferedCache extends Cache {
 
 		assert ci != null : "Releasing non-cached item: " + blockID;
 
-		int hc = blockID.hashCode();
-		ci.decrementRefCnt();
+		int rc = ci.decrementRefCnt();
 
 		Block block = ci.block();
 		if (blockID.onPrimaryNode() && block.isLocalDirty()) {
 			localStore.store(block);
 		}
 
-		//FIXME: Remove entries from the pinnedMap that have zero reference count
+		//FIXME: Remove the block if its refCount is zero and its bytes are not dirty
+		/*if (rc == 0) {
+			pinLock.lock(blockID.hashCode());
+			try{
+				if (ci.refCount() > 0)
+					return;
+
+				pinnedMap.remove(blockID);
+			} finally {
+				pinLock.unlock(blockID.hashCode());
+			}
+		}*/
 	}
 	
 	/**

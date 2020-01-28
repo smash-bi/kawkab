@@ -1,20 +1,14 @@
 package kawkab.fs.core;
 
-import java.io.IOException;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
-import kawkab.fs.core.exceptions.FileAlreadyExistsException;
-import kawkab.fs.core.exceptions.FileAlreadyOpenedException;
-import kawkab.fs.core.exceptions.FileNotExistException;
-import kawkab.fs.core.exceptions.IbmapsFullException;
-import kawkab.fs.core.exceptions.InvalidFileModeException;
-import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.zookeeper.NamespaceService;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Namespace {
 	private static final Object initLock = new Object();
@@ -26,7 +20,7 @@ public class Namespace {
 	private KeyedLock<String> locks;
 	private static LocalStoreManager localStore;
 
-	private Map<Long, Boolean> openedFiles; // Map<inumber, appendMode> //FIXME: Should we use a bit-map instead of a map?
+	private Map<Long, String> openedFiles; // Map<inumber, appendMode> //FIXME: Should we use a bit-map instead of a map?
 
 	private static Namespace instance;
 	private static final int ibmapsPerMachine = Configuration.instance().ibmapsPerMachine;
@@ -55,7 +49,6 @@ public class Namespace {
 	public void closeAppendFile(long inumber) throws KawkabException{
 		if (openedFiles.remove(inumber) == null)
 			throw new KawkabException("File is not previously opened or not in the openedFilesTable, inumber = " + inumber);
-
 	}
 
 	/**
@@ -111,8 +104,7 @@ public class Namespace {
 			if (appendMode && !Commons.onPrimaryNode(inumber)) {
 				throw new InvalidFileModeException(
 						String.format("Cannot open file in the append mode. Inumber of the file is out of range of this node's range. NodeID=%d, PrimaryWriter=%d",
-								thisNodeID,
-								Commons.primaryWriterID(inumber)));
+								thisNodeID, Commons.primaryWriterID(inumber)));
 			}
 
 			if (appendMode) {
@@ -142,17 +134,20 @@ public class Namespace {
 			return inum;
 		}
 
+		/*if (dbgFiles.containsKey(filename)) {
+			throw new FileAlreadyOpenedException("File is already opened in the append mode: " + filename);
+		}*/
+
 		try {
-				inumber = createNewFile(opts.recordSize());
+			inumber = createNewFile(opts.recordSize());
 
 			// TODO: update openFilesTable
 
 			// if the file is opened in append mode and this node is not the primary file writer
 			if (appendMode && !Commons.onPrimaryNode(inumber)) {
 				throw new InvalidFileModeException(
-						String.format("Cannot open file in the append mode. Inumber of the file is out of range of this node's range. NodeID=%d, PrimaryWriter=%d",
-								thisNodeID,
-								Commons.primaryWriterID(inumber)));
+						String.format("Cannot open file in the append mode. Inumber of the file is out of range of this node's range. " +
+										"NodeID=%d, PrimaryWriter=%d", thisNodeID, Commons.primaryWriterID(inumber)));
 			}
 
 			if (appendMode) {
@@ -174,11 +169,12 @@ public class Namespace {
 	 * @param inumber
 	 * @throws FileAlreadyOpenedException
 	 */
-	private void openAppendFile(long inumber, String filename) throws FileAlreadyOpenedException {
-		Boolean alreadyOpened = openedFiles.put(inumber, true);
+	private synchronized void openAppendFile(long inumber, String filename) throws FileAlreadyOpenedException {
+		String other = openedFiles.putIfAbsent(inumber, filename);
 
-		if (alreadyOpened != null && alreadyOpened == true) {
-			throw new FileAlreadyOpenedException("File is already opened in the append mode; inumber=" + inumber+", File: "+filename);
+		if (other != null) {
+			throw new FileAlreadyOpenedException(String.format(
+					"File %s is already opened in the append mode; inumber=%d, other file=%s", filename, inumber, other));
 		}
 	}
 
@@ -196,7 +192,7 @@ public class Namespace {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	private long getNewInumber() throws IbmapsFullException, IOException, KawkabException, InterruptedException {
+	private synchronized long getNewInumber() throws IbmapsFullException, IOException, KawkabException, InterruptedException {
 		long inumber;
 		int mapNum = lastIbmapUsed;
 		while (true) { // Iterate over the ibmap blocks.
@@ -241,7 +237,7 @@ public class Namespace {
 	 * @throws KawkabException
 	 * @throws InterruptedException
 	 */
-	private long createNewFile(int recordSize) throws IbmapsFullException, IOException, KawkabException, InterruptedException {
+	private synchronized long createNewFile(int recordSize) throws IbmapsFullException, IOException, KawkabException, InterruptedException {
 		long inumber = getNewInumber();
 
 		int blockIndex = InodesBlock.blockIndexFromInumber(inumber);

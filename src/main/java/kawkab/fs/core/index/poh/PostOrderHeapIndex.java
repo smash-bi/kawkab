@@ -10,8 +10,7 @@ import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -32,6 +31,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 	private final double logBase;
 	private ConcurrentHashMap<Integer, POHNode> nodes;	//This is an append-only list. The readers should read but not modify the list. Only a single writer should append new nodes.
+	//private Queue<POHNode> nodesQ;
 
 	// Configuration parameters
 	private final int childrenPerNode; //Branching factor of the tree
@@ -85,6 +85,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		System.out.printf("Per node index entries %d, pointers %d\n", entriesPerNode, childrenPerNode);
 
 		nodes = new ConcurrentHashMap<>();
+		//nodesQ = new LinkedList<>();
 		//nodes.add(null); // Add a dummy value to match the node number with the array index. We do this to simplify the calculation of the index of the children of a node
 		//currentNode = createNewNode(1);
 		//nodes.add(currentNode);
@@ -135,9 +136,12 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	}
 
 	private POHNode acquireNode(final int nodeNum, boolean loadFromPrimary) throws IOException, OutOfMemoryException, FileNotExistException {
+		assert nodeNum >= 0;
+
 		if (nodeNum == 0)
 			return null;
 
+		int max = 500;
 		//System.out.printf("[POH] Acquire node %d\n", nodeNum);
 		POHNode node = nodes.get(nodeNum);
 		boolean acquired = false;
@@ -152,6 +156,13 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 					POHNode prev = nodes.put(nodeNum, node);
 					assert prev == null;
 					acquired = true;
+
+					/*nodesQ.add(node);
+					if (nodesQ.size() > max) {
+						POHNode old = nodesQ.remove();
+						nodes.remove(old.nodeNumber());
+						cache.releaseBlock(old.id());
+					}*/
 				}
 			}
 		}
@@ -161,8 +172,10 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 			node.loadBlock(loadFromPrimary);
 		} catch (FileNotExistException | IOException e) {
 			if (acquired) {
-				cache.releaseBlock(node.id());
-				nodes.remove(nodeNum);
+				synchronized (nodes) {
+					cache.releaseBlock(node.id());
+					nodes.remove(nodeNum);
+				}
 			}
 
 			throw e;
@@ -597,6 +610,10 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 				//ls2.start();
 				nextNode = curNode.findFirstChild(ts);
 				//ls2.end();
+			}
+
+			if (nextNode == -1) {
+				return null;
 			}
 
 			curNode = acquireNode(nextNode, loadFromPrimary);

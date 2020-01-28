@@ -19,11 +19,16 @@ public class CachedItem {
 		//accessTime = clock.currentTime();
 		assert val > 0 : "val !> 0 : " + val;
 	}
-	
-	void decrementRefCnt() {
-		int val = refCount.getAndDecrement();
+
+	/**
+	 * @return The value after decrement
+	 */
+	int decrementRefCnt() {
+		int val = refCount.decrementAndGet();
 		//accessTime = clock.currentTime();
-		assert val > 0 : "val !> 0 : " + val;
+		assert val >= 0 : "val !> 0 : " + val;
+
+		return val;
 	}
 	
 	int refCount() {

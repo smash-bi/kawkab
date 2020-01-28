@@ -16,6 +16,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	private boolean halt;
 	private long testID;
 	private boolean ready;
+	private int masterID;
 
 	private final Object syncMutex = new Object();
 	private final Object barMutex = new Object();
@@ -23,12 +24,13 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	private int barInCnt;
 	private boolean entering=true;
 
-	public TestClientServiceImpl(int numClients) {
+	public TestClientServiceImpl(int numClients, int masterID) {
 		this.numClients = numClients;
+		this.masterID = masterID;
 	}
 
 	@Override
-	public TSyncResponse sync(int clid, int testID, boolean stopAll, TResult result, int masterID) throws TException {
+	public TSyncResponse sync(int clid, int testID, boolean stopAll, TResult result) throws TException {
 		synchronized (syncMutex) {
 			try {
 				if (this.testID != testID)
@@ -59,7 +61,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 					assert received == numClients;
 					ready = false;
 					received = 0;
-					printResults(aggResult);
+					//printResults(aggResult);
 				}
 				return resp;
 			} catch (Exception | AssertionError e) {
@@ -73,7 +75,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 		List<Long> latHist = Arrays.stream(aggRes.latHist()).boxed().collect(Collectors.toUnmodifiableList());
 		List<Long> tputLog = Arrays.stream(aggRes.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
 		return new TSyncResponse(new TResult(latHist, aggRes.count(), aggRes.latMin(), aggRes.latMax(),
-				aggRes.dataTput(), aggRes.opsTput(), tputLog, aggRes.batchSize()), stopAll);
+				aggRes.dataTput(), aggRes.opsTput(), tputLog, aggRes.recsTput()), stopAll);
 	}
 
 	@Override
@@ -132,7 +134,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 		long[] latHist = tres.latHistogram.stream().mapToLong(i->i).toArray();
 		long[] tputLog = tres.tputLog.stream().mapToLong(i->i).toArray();
 
-		dstResult.merge(new Result(tres.totalCount, tres.opsTput, tres.dataTput, tres.minVal, tres.maxVal, latHist, tputLog, tres.batchSize));
+		dstResult.merge(new Result(tres.totalCount, tres.opsTput, tres.dataTput, tres.minVal, tres.maxVal, latHist, tputLog, tres.recsTput));
 	}
 
 	private void printResults(Result result) {

@@ -6,21 +6,15 @@ import kawkab.fs.core.exceptions.KawkabException;
 public class TestRunner {
 	private TestClientServiceServer tserver;
 
-	public enum TestType {
-		APPEND,
-		NOOP,
-		READ
-	}
-
 	Result[]  runTest(int testID, int testDurSec, int nc, int cidOffset, int nf, String sip, int sport, int batchSize, Record recGen,
-						  Printer pr, int warmupSecs, final TestType type, int totalClients, int mid, String mip, int mport, String outFolder) {
+					  Printer pr, int warmupSecs, final ClientMain.TestType type, int totalClients, int mid, String mip, int mport, String outFolder) {
 		final Result[] results = new Result[nc];
 
 		Thread[] threads = new Thread[nc];
 		for (int i=0; i<nc; i++) {
 			final int clid = cidOffset+i;
 			final int idx = i;
-			threads[i] = new Thread(()->{
+			threads[i] = new Thread(()-> {
 				try {
 					TestClientServiceClient client = connectToMaster(mip, mport);
 					if (clid == mid) {
@@ -56,7 +50,7 @@ public class TestRunner {
 					System.out.printf("Client %d finished\n", clid);
 					//printStats(clid, accm, batchSize, recGen.size());
 
-					Result aggRes = client.sync(clid, testID, true, batchSize, res, mid);
+					Result aggRes = client.sync(clid, testID, true, res);
 
 					client.barrier(clid);
 
@@ -130,8 +124,8 @@ public class TestRunner {
 		client.disconnect();
 	}
 
-	public void startServer(int numClients, int svrPort) throws KawkabException {
-		tserver = new TestClientServiceServer(numClients, svrPort);
+	public void startServer(int numClients, int svrPort, int masterID) throws KawkabException {
+		tserver = new TestClientServiceServer(numClients, svrPort, masterID);
 		tserver.startServer();
 	}
 

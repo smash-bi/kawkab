@@ -566,7 +566,7 @@ public class POHNode extends Block {
 		int padding = nodeSizeBytes -numEntries*POHEntry.sizeBytes() - numChildren*POHChild.sizeBytes() - headerSizeBytes();
 		buffer.position(buffer.position() + padding);
 
-		//System.out.printf("\t     >> [IN] pos=%d, rem=%d, padding=%d\n", storeBuffer.position(), storeBuffer.remaining(), padding);
+		System.out.printf("\t     >> [IN] pos=%d, rem=%d, padding=%d\n", storeBuffer.position(), storeBuffer.remaining(), padding);
 
 		int nodeNum = buffer.getInt();
 		int ht = buffer.getInt();

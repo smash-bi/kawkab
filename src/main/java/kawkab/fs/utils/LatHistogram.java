@@ -24,19 +24,13 @@ public class LatHistogram {
 	private int randIdx;
 	private int samplePercent;
 	private Stopwatch sw;
-	private int batchSize;
 
 	public LatHistogram(TimeUnit unit, String tag, int samplePercent, int numBuckets) {
-		this(unit, tag, samplePercent, numBuckets, 1);
-	}
-
-	public LatHistogram(TimeUnit unit, String tag, int samplePercent, int numBuckets, int batchSize) {
 		assert 0 <= samplePercent && samplePercent <= 100 : "Sample percent must be between 0 and 100";
 		this.unit = unit;
 		this.tag = tag;
 		this.samplePercent = samplePercent;
 		stats = new Accumulator(numBuckets);
-		this.batchSize = batchSize;
 
 		int numRands = 100000;
 		rand = new int[numRands];
@@ -66,18 +60,14 @@ public class LatHistogram {
 		sw.reset();
 		sw.start();
 	}
-	
-	public int end() {
-		return end(this.batchSize);
-	}
 
-	public int end(int batchSize) {
+	public int end(int count) {
 		if (!started)
 			return -1;
 
 		int lastDur = (int)(sw.stop().elapsed(unit)); //Diff can be negative due to using nanoTime() in multi-cpu hardware
 		if (lastDur >= 0)
-			stats.put(lastDur, batchSize);
+			stats.put(lastDur, count);
 
 		started = false;
 

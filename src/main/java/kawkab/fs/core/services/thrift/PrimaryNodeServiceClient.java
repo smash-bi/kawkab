@@ -10,10 +10,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.services.thrift.PrimaryNodeService.Client;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.transport.TFastFramedTransport;
-import org.apache.thrift.transport.TFramedTransport;
-import org.apache.thrift.transport.TSocket;
-import org.apache.thrift.transport.TTransport;
+import org.apache.thrift.transport.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -46,6 +43,10 @@ public class PrimaryNodeServiceClient {
 			return client(id.primaryNodeID()).getSegment(id.inumber(), id.blockInFile(), id.segmentInBlock(), id.recordSize(), offset);
 		} catch (kawkab.fs.core.services.thrift.TFileNotExistException e) {
 			throw new FileNotExistException();
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			e.printStackTrace();
+			throw new IOException(e);
 		} catch (TException e) {
 			e.printStackTrace();
 			throw new IOException(e);
@@ -59,6 +60,10 @@ public class PrimaryNodeServiceClient {
 			return client(id.primaryNodeID()).getInodesBlock(id.blockIndex());
 		} catch (kawkab.fs.core.services.thrift.TFileNotExistException e) {
 			throw new FileNotExistException();
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			e.printStackTrace();
+			throw new IOException(e);
 		} catch (TException e) {
 			throw new IOException(e);
 		}
@@ -71,6 +76,10 @@ public class PrimaryNodeServiceClient {
 			return client(id.primaryNodeID()).getIndexNode(id.inumber(), id.numNodeInIndexBlock(), fromTsIdx);
 		} catch (kawkab.fs.core.services.thrift.TFileNotExistException e) {
 			throw new FileNotExistException();
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			e.printStackTrace();
+			throw new IOException(e);
 		} catch (TException e) {
 			throw new IOException(e);
 		}
@@ -90,7 +99,7 @@ public class PrimaryNodeServiceClient {
 		try {
 			int port = conf.primaryNodeServicePort;
 			System.out.printf("[PNSC] Connecting to %s:%d\n",ip, port);
-			transport = new TFastFramedTransport(new TSocket(ip, port), conf.maxBufferLen, conf.maxBufferLen);
+			transport = new TFastFramedTransport(new TSocket(ip, port));
 			transport.open();
 			client = new PrimaryNodeService.Client(new TBinaryProtocol(transport));
 		} catch (TException x) {

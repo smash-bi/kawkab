@@ -58,7 +58,7 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 
 		evictListener.onEvictBlock(toEvict.block());
 
-		int elapsed = evLog.end();
+		int elapsed = evLog.end(1);
 
 		if(elapsed > 100000) {
 			System.out.printf("[LC] Cache evict (us): %d\n",elapsed);
@@ -139,7 +139,7 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 			//assert dbgCI.equals(ci) : String.format("CachedItems not equal, eci.hc=%d, dbgCI.hc=%d, eci.id=%s, dbgCI.id=%s, eci.id.hc=%d, dbgCI.id.hc=%d\n",
 			//		ci.hashCode(), dbgCI.hashCode(), ci.block().id(), dbgCI.block().id(), ci.block().id().hashCode(), dbgCI.block().id().hashCode());
 		}
-		int elapsed = evLog.end();
+		int elapsed = evLog.end(1);
 		if(elapsed > 100000) {
 			System.out.printf("Cache evict (us): %d, evicted=%d\n",elapsed,evicted);
 		}

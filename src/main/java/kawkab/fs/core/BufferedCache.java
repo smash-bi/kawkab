@@ -164,7 +164,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 			CachedItem cachedItem = cache.get(blockID); // Try acquiring the block from the memory
 
 			if (cachedItem == null) { // If the block is not cached
-				if (cache.size() == MAX_BLOCKS_IN_CACHE) {
+				if (cache.size() == MAX_BLOCKS_IN_CACHE-1) {
 					int removed = cache.bulkRemove(1);
 					//waitUntilSynced();
 					if (removed == 0)
@@ -214,7 +214,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 
 			assert cache.size() <= MAX_BLOCKS_IN_CACHE;
 		} finally {                // FIXME: Catch any exceptions, and decrement the reference count before throwing
-			int elapsed = acqLog.end();
+			int elapsed = acqLog.end(1);
 			cacheLock.unlock();    // the exception. Change the caller functions to not release the block in
 
 			if (elapsed > 10000) {
@@ -276,7 +276,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 
 			//evictIfNeeded();
 		} finally {
-			relLog.end();
+			relLog.end(1);
 			cacheLock.unlock();
 		}
 

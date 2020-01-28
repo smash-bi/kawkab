@@ -58,7 +58,7 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 			}
 
 			buffers.offer(buffer);
-			segLog.end();
+			segLog.end(1);
 		}
 	}
 

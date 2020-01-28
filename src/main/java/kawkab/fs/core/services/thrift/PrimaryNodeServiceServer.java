@@ -23,11 +23,11 @@ public class PrimaryNodeServiceServer {
 	public PrimaryNodeServiceServer() throws KawkabException {
 		System.out.println("[PNS] Creating Primary Node Service");
 
-		int workerThreads = 8;
+		int workerThreads = 4;
 		//int maxThreads = 1000;
-		int ioThreads = 8;
+		int ioThreads = 2;
 
-		handler = new PrimaryNodeServiceImpl(workerThreads);
+		handler = new PrimaryNodeServiceImpl(ioThreads*workerThreads);
 
 		//server = hsHaServer(handler, workerThreads, maxThreads);
 		server = threadedSelectorServer(handler, workerThreads, ioThreads);
@@ -43,7 +43,7 @@ public class PrimaryNodeServiceServer {
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new THsHaServer(new THsHaServer.Args(transport)
-					.transportFactory(new TFastFramedTransport.Factory(conf.maxBufferLen, conf.maxBufferLen))
+					.transportFactory(new TFastFramedTransport.Factory())
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new Processor<>(handler))
 					.minWorkerThreads(minThreads)
@@ -64,7 +64,7 @@ public class PrimaryNodeServiceServer {
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new TThreadedSelectorServer(new TThreadedSelectorServer.Args(transport)
-					.transportFactory(new TFastFramedTransport.Factory(conf.maxBufferLen, conf.maxBufferLen))
+					.transportFactory(new TFastFramedTransport.Factory())
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new Processor<>(handler))
 
@@ -86,7 +86,7 @@ public class PrimaryNodeServiceServer {
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new THsHaServer(new THsHaServer.Args(transport)
-					.transportFactory(new TFastFramedTransport.Factory(conf.maxBufferLen, conf.maxBufferLen))
+					.transportFactory(new TFastFramedTransport.Factory())
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new Processor<>(handler))
 					.minWorkerThreads(minThreads)

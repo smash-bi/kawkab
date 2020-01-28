@@ -7,7 +7,6 @@ import org.apache.thrift.server.THsHaServer;
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TThreadedSelectorServer;
 import org.apache.thrift.transport.TFastFramedTransport;
-import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TNonblockingServerSocket;
 import org.apache.thrift.transport.TNonblockingServerTransport;
 
@@ -18,15 +17,16 @@ public class TestClientServiceServer {
 	private TServer server;
 	private boolean started = false;
 	private ExecutorService executor;
+	private final int maxBufferLen = 25 * 1024 * 1024;
 
-	public TestClientServiceServer(int numClients, int svrPort) throws KawkabException {
+	public TestClientServiceServer(int numClients, int svrPort, int masterID) throws KawkabException {
 		int numWorkers = numClients;
-		int ioThreads = 8;
+		int ioThreads = 10;
 
-		TestClientService.Iface handler = new TestClientServiceImpl(numClients);
+		TestClientService.Iface handler = new TestClientServiceImpl(numClients, masterID);
 
 		//server = hsHaServer(svrPort, handler, numWorkers, numWorkers*2);
-		//server = threadedSelectorServer(svrPort, handler, numWorkers*2, ioThreads);
+		//server = threadedSelectorServer(svrPort, handler, numWorkers, ioThreads);
 		server = threadPoolServer(svrPort, handler, numWorkers, (int)(numWorkers*1.5));
 	}
 
@@ -38,7 +38,7 @@ public class TestClientServiceServer {
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new TThreadedSelectorServer(new TThreadedSelectorServer.Args(transport)
-					.transportFactory(new TFastFramedTransport.Factory())
+					.transportFactory(new TFastFramedTransport.Factory(maxBufferLen, maxBufferLen))
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new TestClientService.Processor<>(handler))
 
@@ -58,7 +58,7 @@ public class TestClientServiceServer {
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new THsHaServer(new THsHaServer.Args(transport)
-					.transportFactory(new TFastFramedTransport.Factory())
+					.transportFactory(new TFastFramedTransport.Factory(maxBufferLen, maxBufferLen))
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new TestClientService.Processor<>(handler))
 					.minWorkerThreads(minThreads)
@@ -71,14 +71,13 @@ public class TestClientServiceServer {
 
 	private TServer threadPoolServer(int port, TestClientService.Iface handler, int minThreads, int maxThreads) throws KawkabException {
 		System.out.printf("[TCSS] TThreadPoolServer: minThreads=%d, maxThreads=%d\n", minThreads, maxThreads);
-
 		try {
 			// For transmitting data to wire
 			TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new THsHaServer(new THsHaServer.Args(transport)
-					.transportFactory(new TFramedTransport.Factory())
+					.transportFactory(new TFastFramedTransport.Factory(maxBufferLen, maxBufferLen))
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new TestClientService.Processor<>(handler))
 					.minWorkerThreads(minThreads)

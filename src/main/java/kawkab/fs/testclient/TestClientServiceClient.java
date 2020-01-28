@@ -7,7 +7,7 @@ import kawkab.fs.testclient.thrift.TestClientService;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.transport.TFramedTransport;
+import org.apache.thrift.transport.TFastFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
@@ -21,9 +21,9 @@ public class TestClientServiceClient {
 
 	public TestClientServiceClient(String serverIP, int port) throws KawkabException {
 		System.out.printf("[TCSC] Connecting to %s:%d\n",serverIP,port);
-		int maxBufferLen = 16 * 1024;
+		int maxBufferLen = 25 * 1024 * 1024;
 		try {
-			transport = new TFramedTransport(new TSocket(serverIP, port));
+			transport = new TFastFramedTransport(new TSocket(serverIP, port), maxBufferLen, maxBufferLen);
 			transport.open();
 
 			TProtocol protocol = new TBinaryProtocol(transport);
@@ -34,21 +34,21 @@ public class TestClientServiceClient {
 		}
 	}
 
-	public Result sync(int clid, int testID, boolean stopAll, int batchSize, Result result, int masterID) {
+	public Result sync(int clid, int testID, boolean stopAll, Result result) {
 		assert client != null;
 
 		List<Long> histogram = Arrays.stream(result.latHist()).boxed().collect(Collectors.toUnmodifiableList());
 		List<Long> tputTimeLog = Arrays.stream(result.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
 		TResult taccm = new TResult(histogram, result.count(), result.latMin(), result.latMax(),
-				result.dataTput(), result.opsTput(), tputTimeLog, batchSize);
+				result.dataTput(), result.opsTput(), tputTimeLog, result.recsTput());
 
 		try {
-			TSyncResponse resp = client.sync(clid, testID, stopAll, taccm, masterID);
+			TSyncResponse resp = client.sync(clid, testID, stopAll, taccm);
 			TResult res = resp.aggResult;
 
 			long[] latHist = res.latHistogram.stream().mapToLong(i->i).toArray();
 			long[] tputLog = res.tputLog.stream().mapToLong(i->i).toArray();
-			return new Result(res.totalCount, res.opsTput, res.dataTput, res.minVal, res.maxVal, latHist, tputLog, res.batchSize);
+			return new Result(res.totalCount, res.opsTput, res.dataTput, res.minVal, res.maxVal, latHist, tputLog, res.recsTput);
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 		}

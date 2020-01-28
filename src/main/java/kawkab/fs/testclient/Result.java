@@ -6,9 +6,9 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Arrays;
 
 public class Result {
-	private int batchSize;
 	private long reqsCount; //Total requests
 	private double opsThr; //ops per second
 	private double dataThr; // Data throughput
@@ -16,28 +16,27 @@ public class Result {
 	private double latMax;
 	private long[] latHist;
 	private long[] tputLog;
+	private int recsTput;
 
 	public Result() {
 		latMin = Double.MAX_VALUE;
-		batchSize = -1;
 	}
 
-	public Result(long reqsCount_, double opsThr_, double myThr_,
-		   double lMin, double lMax,
-		   long[] latHist_, long[] tputLog_, int batchSize_){
-		reqsCount=reqsCount_; opsThr =opsThr_; dataThr =myThr_;
-		latMin=lMin; latMax=lMax;
+	public Result(long reqsCount_, double opsThr_, double dataThr_,
+				  double lMin, double lMax, long[] latHist_, long[] tputLog_, int recsTput_) {
+		reqsCount = reqsCount_; opsThr = opsThr_; dataThr = dataThr_;
+		latMin = lMin; latMax=lMax;
 		latHist = latHist_;
 		tputLog = tputLog_;
-		batchSize = batchSize_;
+		recsTput = recsTput_;
 	}
 
 	public Result(Result res) {
-		reqsCount=res.reqsCount; opsThr =res.opsThr; dataThr =res.dataThr;
-		latMin=res.latMin; latMax=res.latMax;
-		latHist=res.latHist;
-		tputLog=res.tputLog;
-		batchSize=res.batchSize;
+		reqsCount = res.reqsCount; opsThr = res.opsThr; dataThr = res.dataThr;
+		latMin = res.latMin; latMax=res.latMax;
+		latHist = Arrays.copyOf(res.latHist, res.latHist.length);
+		tputLog = Arrays.copyOf(res.tputLog, res.tputLog.length);
+		recsTput = res.recsTput;
 	}
 
 	/*public Result(Accumulator latHistAccm, long[] tputLog) {
@@ -77,6 +76,8 @@ public class Result {
 		return tputLog;
 	}
 
+	public int recsTput() { return recsTput; }
+
 	public Accumulator latAccumulator() {
 		return new Accumulator(latHist, reqsCount, latMin, latMax);
 	}
@@ -88,16 +89,13 @@ public class Result {
 		if (tputLog == null || tputLog.length == 0)
 			tputLog = new long[from.tputLog.length];
 
-		if (batchSize == -1)
-			batchSize = from.batchSize;
-
 		assert latHist.length == from.latHist.length;
 		assert tputLog.length == from.tputLog.length;
-		assert batchSize == from.batchSize : String.format("Batch sizes do not match, %d != %d", batchSize, from.batchSize);
 
 		reqsCount += from.reqsCount;
 		opsThr += from.opsThr;
 		dataThr += from.dataThr;
+		recsTput += from.recsTput;
 
 		if (latMin > from.latMin)
 			latMin = from.latMin;
@@ -132,7 +130,7 @@ public class Result {
 		json.append(String.format("  \"99%%Lat\":%.2f, ", lats[2]));
 		json.append(String.format("  \"minLat\":%.2f, ", latMin));
 		json.append(String.format("  \"maxLat\":%.2f, ", latMax));
-		json.append(String.format("  \"batchSize\":%d ", batchSize));
+		json.append(String.format("  \"recsPs\":%d, ", recsTput));
 
 		if (exportHists) {
 			appendHists(json);
@@ -207,7 +205,7 @@ public class Result {
 		header.append("\"99%% latency\", ");
 		header.append("\"Min latency\", ");
 		header.append("\"Max latency\", ");
-		header.append("\"batch size\"");
+		header.append("\"Records throughput\"");
 
 		return header.toString();
 	}
@@ -227,7 +225,7 @@ public class Result {
 		csv.append(String.format("%.0f, ", lats[2]));
 		csv.append(String.format("%.0f, ", latMin));
 		csv.append(String.format("%.0f, ", latMax));
-		csv.append(String.format("%d\n", batchSize));
+		csv.append(String.format("%d\n", recsTput));
 
 		return csv.toString();
 	}
@@ -260,9 +258,5 @@ public class Result {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-	}
-
-	public int batchSize() {
-		return batchSize;
 	}
 }

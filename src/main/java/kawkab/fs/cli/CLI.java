@@ -482,7 +482,7 @@ public final class CLI {
 		for (int i=0; i<count; i++) {
 			tlog.start();
 			client.noopRead(recSize);
-			tlog.end();
+			tlog.end(1);
 		}
 
 		assert count == tlog.sampled();
@@ -538,7 +538,7 @@ public final class CLI {
 
 			latHist.start();
 			List<Record> recs = client.readRecords(fname, tsMin[i], tsMax[i], recgen, loadFromPrimary);
-			long lat = latHist.end();
+			long lat = latHist.end(1);
 
 			if (lat < 0) {
 				i--;
@@ -587,13 +587,13 @@ public final class CLI {
 				int recNum = (int) (t1 + rand.nextInt((int) (t2 - t1)));
 				tlog.start();
 				recgen = client.recordNum(fname, recNum, recgen, loadFromPrimary);
-				lat = tlog.end();
+				lat = tlog.end(1);
 
 			} else {
 				int recTime = (int) (t1 + rand.nextInt((int) (t2 - t1)));
 				tlog.start();
 				recgen = client.recordAt(fname, recTime, recgen, loadFromPrimary);
-				lat = tlog.end();
+				lat = tlog.end(1);
 			}
 
 			if (lat < 0) {
@@ -661,7 +661,7 @@ public final class CLI {
 		System.out.printf("%s: recSize=%d, numRecs=%d, rTput=%,.0f MB/s, opsTput=%,.0f OPS, Lat %s\n",
 				tag, recSize, cnt, thr, opThr, latHist.getStats());
 
-		return new Result(latHist.sampled(), opThr, thr, latHist.min(), latHist.max(), latHist.accumulator().histogram(), null, batchSize);
+		return new Result(latHist.sampled(), opThr, thr, latHist.min(), latHist.max(), latHist.accumulator().buckets(), null, 0);
 	}
 
 	private void parseReadRecord(String[] args) throws IOException, KawkabException {
@@ -707,7 +707,7 @@ public final class CLI {
 				LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "read-lat", 100, 100000);
 				tlog.start();
 				file.recordNum(recgen.copyInDstBuffer(), recNum, recgen.size(), true);
-				tlog.end();
+				tlog.end(1);
 
 				System.out.println(recgen);
 				tlog.printStats();
@@ -723,7 +723,7 @@ public final class CLI {
 				if (file.recordAt(recgen.copyInDstBuffer(), atTS, recgen.size(), true))
 					System.out.println(recgen);
 				else
-					System.out.println("Record not found at " + atTS);
+					System.out.println("[CLI] Record not found at " + atTS);
 				break;
 			}
 			case "r": {
@@ -837,9 +837,9 @@ public final class CLI {
 		}
 
 		long fs = file.size();
-		long fsMib = fs / 2048576;
+		double fsMib = fs / (1024.0*1024.0);
 
-		System.out.printf("File size = %d MiB, %d B, recsInFile=%d\n", fsMib, fs, file.recordsInFile());
+		System.out.printf("File size = %.2f MiB, %d B, recsInFile=%d\n", fsMib, fs, file.recordsInFile());
 	}
 	
 	private void parseAppendTest(String[] args) throws KawkabException, IOException {
@@ -905,7 +905,7 @@ public final class CLI {
 							
 							tlog.start();
 							appended += file.append(writeBuf, 0, toWrite);
-							tlog.end();
+							tlog.end(1);
 							
 							ops++;
 						}

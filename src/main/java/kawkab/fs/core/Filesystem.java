@@ -3,7 +3,6 @@ package kawkab.fs.core;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.*;
-import kawkab.fs.core.index.poh.POHNode;
 import kawkab.fs.core.services.thrift.FilesystemServiceServer;
 import kawkab.fs.core.services.thrift.PrimaryNodeServiceServer;
 import kawkab.fs.core.timerqueue.TimerQueue;
@@ -34,16 +33,16 @@ public final class Filesystem {
 	private TimerQueueIface segsQ;
 
 	private Filesystem() throws KawkabException, IOException {
+		conf = Configuration.instance();
 		namespace = Namespace.instance();
 		pns = new PrimaryNodeServiceServer();
 		pns.startServer();
-		fss = new FilesystemServiceServer(this);
+		fss = new FilesystemServiceServer(this, conf.fsServerListenPort, 8, 8);
 		fss.startServer();
 		fsQ = new TimerQueue("FS Timer Queue");
 		segsQ = new TimerQueue("Segs Timer Queue");
 		openFiles = new HashMap<>();
 		cache = Cache.instance();
-		conf = Configuration.instance();
 	}
 	
 	public static synchronized Filesystem instance() throws KawkabException, IOException {
@@ -77,8 +76,8 @@ public final class Filesystem {
 		assert opts.recordSize() > 0;
 		assert opts.recordSize() <= Configuration.instance().segmentSizeBytes;
 
-		//long inumber = namespace.openFileDbg(filename, mode == FileMode.APPEND, opts); //FIXME
-		long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
+		long inumber = namespace.openFileDbg(filename, mode == FileMode.APPEND, opts); //FIXME
+		//long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 
 		//long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber + ", mode: " + mode);
@@ -205,9 +204,9 @@ public final class Filesystem {
 	}
 
 	public void printStats() throws KawkabException {
-		/*for (FileHandle file : openFiles.values()) {
+		for (FileHandle file : openFiles.values()) {
 			file.printStats();
-		}*/
+		}
 
 		pns.printStats();
 

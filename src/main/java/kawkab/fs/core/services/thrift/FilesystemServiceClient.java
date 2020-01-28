@@ -4,11 +4,11 @@ import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 import org.apache.thrift.TException;
+import org.apache.thrift.async.AsyncMethodCallback;
+import org.apache.thrift.async.TAsyncClientManager;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.transport.TFastFramedTransport;
-import org.apache.thrift.transport.TSocket;
-import org.apache.thrift.transport.TTransport;
+import org.apache.thrift.transport.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -18,11 +18,13 @@ import java.util.Random;
 import java.util.concurrent.locks.LockSupport;
 
 public class FilesystemServiceClient {
-	private FilesystemService.Client client;
-	private TTransport transport;
+	private FilesystemService.Client sClient; // Synchronous client
+	private FilesystemService.AsyncClient aClient; // Asynchronous client
+	private TTransport sTransport;
+	//private TNonblockingTransport aTransport;
 	private final int MAX_TRIES = 30;
 	private Random rand = new Random();
-	private final int BUFLEN = 32*1024*1024;
+	private final int BUFLEN = 16*1024*1024;
 
 	/**
 	 * @param serverIP IP of the server to connect
@@ -32,14 +34,18 @@ public class FilesystemServiceClient {
 	public FilesystemServiceClient(String serverIP, int port) throws KawkabException {
 		System.out.printf("[FSC] Connecting to %s:%d\n",serverIP,port);
 		try {
-			transport = new TFastFramedTransport(new TSocket(serverIP, port), BUFLEN, BUFLEN);
-			transport.open();
+			sTransport = new TFastFramedTransport(new TSocket(serverIP, port), BUFLEN, BUFLEN);
+			sTransport.open();
 
-			TProtocol protocol = new TBinaryProtocol(transport);
-			client = new FilesystemService.Client(protocol);
-		} catch (TException x) {
-			x.printStackTrace();
-			throw new KawkabException(x);
+			TNonblockingTransport aTransport = new TNonblockingSocket(serverIP, port);
+			//aTransport.open();
+
+			TProtocol protocol = new TBinaryProtocol(sTransport);
+			sClient = new FilesystemService.Client(protocol);
+			aClient = new FilesystemService.AsyncClient(new TBinaryProtocol.Factory(), new TAsyncClientManager(), aTransport);
+		} catch (TException | IOException e) {
+			e.printStackTrace();
+			throw new KawkabException(e);
 		}
 	}
 
@@ -53,7 +59,7 @@ public class FilesystemServiceClient {
 	 */
 	public int open(String filename, Filesystem.FileMode mode, int recordSize) throws KawkabException {
 		try {
-			return client.open(filename, convertFileMode(mode), recordSize);
+			return sClient.open(filename, convertFileMode(mode), recordSize);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -70,7 +76,10 @@ public class FilesystemServiceClient {
 		}
 
 		try {
-			return client.bulkOpen(reqs);
+			return sClient.bulkOpen(reqs);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -78,7 +87,10 @@ public class FilesystemServiceClient {
 
 	public ByteBuffer recordNum(int sessionID, long recNum, int recSize, boolean loadFromPrimary) throws KawkabException {
 		try {
-			return client.recordNum(sessionID, recNum, recSize, loadFromPrimary);
+			return sClient.recordNum(sessionID, recNum, recSize, loadFromPrimary);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -86,7 +98,10 @@ public class FilesystemServiceClient {
 
 	public ByteBuffer recordAt(int sessionID, long timestamp, int recSize, boolean loadFromPrimary) throws KawkabException {
 		try {
-			return client.recordAt(sessionID, timestamp, recSize, loadFromPrimary);
+			return sClient.recordAt(sessionID, timestamp, recSize, loadFromPrimary);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -94,7 +109,22 @@ public class FilesystemServiceClient {
 
 	public List<ByteBuffer> readRecords(int sessionID, long minTS, long maxTS, int recSize, boolean loadFromPrimary) throws KawkabException {
 		try {
-			return client.readRecords(sessionID, minTS, maxTS, recSize, loadFromPrimary);
+			return sClient.readRecords(sessionID, minTS, maxTS, recSize, loadFromPrimary);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
+		} catch (TException e) {
+			throw new KawkabException(e);
+		}
+	}
+
+	public void readRecordsAsync(int sessionID, long minTS, long maxTS, int recSize, boolean loadFromPrimary,
+											 AsyncMethodCallback<List<ByteBuffer>> resultHandler) throws KawkabException {
+		try {
+			aClient.readRecords(sessionID, minTS, maxTS, recSize, loadFromPrimary, resultHandler);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -108,7 +138,10 @@ public class FilesystemServiceClient {
 	 */
 	public int append(int sessionID, ByteBuffer buffer) throws KawkabException {
 		try {
-			return client.append(sessionID, buffer);
+			return sClient.append(sessionID, buffer);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -116,7 +149,10 @@ public class FilesystemServiceClient {
 
 	public int append(int sessionID, ByteBuffer srcBuf, int recSize) throws KawkabException {
 		try {
-			return client.appendRecord(sessionID, srcBuf, recSize);
+			return sClient.appendRecord(sessionID, srcBuf, recSize);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -136,7 +172,7 @@ public class FilesystemServiceClient {
 		int maxTries = 100;
 		while(++tries < maxTries) {
 			try {
-				return client.appendRecords(buffer);
+				return sClient.appendRecords(buffer);
 			} catch (TOutOfMemoryException e) {
 				System.out.print(".");
 				// Retry if the memory was full
@@ -159,6 +195,9 @@ public class FilesystemServiceClient {
 				if (tries+1 == maxTries) {
 					throw new OutOfMemoryException(String.format("Request failed after %d tries: " + e.getMessage(), tries));
 				}
+			} catch (TTransportException e) {
+				System.out.println("==> Thrift transport exception: " + e.getType());
+				throw new KawkabException(e);
 			} catch (TException e) {
 				if (e.getMessage().contains("Unable to create the file")) {
 					System.out.println("*");
@@ -171,11 +210,22 @@ public class FilesystemServiceClient {
 		throw new KawkabException(String.format("Request failed after %d tries: ", tries));
 	}
 
+	public void appendRecordsAsync(ByteBuffer buffer, AsyncMethodCallback<Integer> resultHandler) throws OutOfMemoryException, KawkabException {
+		try {
+			aClient.appendRecords(buffer, resultHandler);
+		} catch (TException e) {
+			if (e.getMessage().contains("Unable to create the file")) {
+				System.out.println("*");
+			}
+			throw new KawkabException(e);
+		}
+	}
+
 	public int appendNoops(ByteBuffer buffer) throws OutOfMemoryException, KawkabException {
 		int tries = 0;
 		while(++tries < MAX_TRIES) {
 			try {
-				return client.appendNoops(buffer);
+				return sClient.appendNoops(buffer);
 			} catch (TOutOfMemoryException e) {
 				// Retry if the memory was full
 			} catch (TException e) {
@@ -191,7 +241,7 @@ public class FilesystemServiceClient {
 		while(++tries < MAX_TRIES) {
 			try {
 				//System.out.printf("pos=%d, lim=%d, recSize=%d\n", srcBuf.position(), srcBuf.limit(), recSize);
-				return client.appendRecordBuffered(sessionID, srcBuf, recSize);
+				return sClient.appendRecordBuffered(sessionID, srcBuf, recSize);
 			} catch (TOutOfMemoryException e) {
 				// Retry if the memory was full
 			} catch (TException e) {
@@ -204,7 +254,10 @@ public class FilesystemServiceClient {
 
 	public int appendBatched(int sessionID, List<ByteBuffer> srcBufs, int recSize) throws KawkabException {
 		try {
-			return client.appendRecordBatched(sessionID, srcBufs, recSize);
+			return sClient.appendRecordBatched(sessionID, srcBufs, recSize);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -212,7 +265,10 @@ public class FilesystemServiceClient {
 
 	public long size(int sessionID) throws KawkabException {
 		try {
-			return client.size(sessionID);
+			return sClient.size(sessionID);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -220,7 +276,10 @@ public class FilesystemServiceClient {
 
 	public int recordSize(int sessionID) throws KawkabException {
 		try {
-			return client.recordSize(sessionID);
+			return sClient.recordSize(sessionID);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -228,7 +287,10 @@ public class FilesystemServiceClient {
 
 	public void close(int sessionID) throws KawkabException {
 		try {
-			client.close(sessionID);
+			sClient.close(sessionID);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -241,7 +303,10 @@ public class FilesystemServiceClient {
 		}
 
 		try {
-			client.bulkClose(idsList);
+			sClient.bulkClose(idsList);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -249,7 +314,10 @@ public class FilesystemServiceClient {
 
 	public int noopWrite(long none) throws KawkabException {
 		try {
-			return client.noopWrite(none);
+			return sClient.noopWrite(none);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -257,7 +325,10 @@ public class FilesystemServiceClient {
 
 	public ByteBuffer noopRead(int recSize) throws KawkabException {
 		try {
-			return client.noopRead(recSize);
+			return sClient.noopRead(recSize);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			throw new KawkabException(e);
 		} catch (TException e) {
 			throw new KawkabException(e);
 		}
@@ -265,17 +336,23 @@ public class FilesystemServiceClient {
 
 	public void flush() {
 		try {
-			client.flush();
+			sClient.flush();
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			e.printStackTrace();
 		} catch (TException e) {
 			e.printStackTrace();
 		}
 	}
 
 	public void disconnect() {
-		transport.close();
+		//aTransport.close();
+		sTransport.close();
 
-		transport = null;
-		client = null;
+		//aTransport = null;
+		sTransport = null;
+		aClient = null;
+		sClient = null;
 	}
 
 	private TFileMode convertFileMode(Filesystem.FileMode mode){
@@ -287,10 +364,5 @@ public class FilesystemServiceClient {
 			default:
 				return null;
 		}
-	}
-
-	private void verifyConnected() throws KawkabException {
-		if (transport == null || !transport.isOpen())
-			throw new KawkabException("Client is not connected");
 	}
 }

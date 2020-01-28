@@ -1,6 +1,7 @@
 package kawkab.fs.testclient;
 
 import com.google.common.base.Stopwatch;
+import com.google.common.math.Stats;
 import kawkab.fs.api.Record;
 import kawkab.fs.client.KClient;
 import kawkab.fs.core.ApproximateClock;
@@ -80,16 +81,16 @@ public class TestClient {
 	private Result readTest(int cid, int testDurSec, int nTestFiles, int warmupSecs, TestClientServiceClient rpcClient) throws KawkabException {
 		String[] fnames = openFiles(cid-1, nTestFiles, "testfile", Filesystem.FileMode.READ);
 
-		try {
+		/*try {
 			System.out.println("Waiting for 5 secs before starting...");
 			Thread.sleep(5000); //Sleep for 10 seconds before start reading
 		} catch (InterruptedException e) {
 			e.printStackTrace();
-		}
+		}*/
 
 		rpcClient.barrier(id);
 
-		warmupSecs = 10; //FIXME: We should not override the value here
+		//warmupSecs = 10; //FIXME: We should not override the value here
 
 		Result res = null;
 		try {
@@ -168,7 +169,7 @@ public class TestClient {
 		return result;
 	}
 
-	private Result appendRecsBuffered(String[] fnames, int durSec, Record recGen, int batchSize) throws OutOfMemoryException, KawkabException {
+	private Result appendRecsBuffered(String[] fnames, int durSec, Record recGen, final int batchSize) throws OutOfMemoryException, KawkabException {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
@@ -177,9 +178,10 @@ public class TestClient {
 			batch[i] = recGen.newRecord();
 		}
 
-		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Append records buffered", 100, 1000000, batchSize);
-		Stopwatch sw = Stopwatch.createStarted();
+		LatHistogram latHist = new LatHistogram(TimeUnit.MICROSECONDS, "Append records buffered", 100, 1000000);
+		//Stopwatch sw = Stopwatch.createStarted();
 		Accumulator tputLog = new Accumulator(durSec+1);
+		Accumulator rps = new Accumulator(durSec+1);
 		ApproximateClock clock = ApproximateClock.instance();
 		long startT = clock.currentTime();
 		while((now = System.currentTimeMillis()) < et) {
@@ -188,18 +190,20 @@ public class TestClient {
 				batch[i].timestamp(now);
 			}
 
-			tlog.start();
+			latHist.start();
 			client.appendBuffered(fname, batch, recGen.size());
-			tlog.end();
+			latHist.end(batchSize);
 
-			tputLog.put((int)((clock.currentTime()-startT)/1000.0), batchSize);
+			int elapsed = (int)((clock.currentTime()-startT)/1000.0);
+			tputLog.put(elapsed, 1);
+			rps.put(elapsed, batchSize);
 		}
 
-		sw.stop();
+		//sw.stop();
 
-		Accumulator accm = tlog.accumulator();
-		long msec = sw.elapsed(TimeUnit.MILLISECONDS);
-		return prepareResult(accm, msec, batchSize, recGen.size(), tputLog.histogram());
+		Accumulator accm = latHist.accumulator();
+		//long msec = sw.elapsed(TimeUnit.MILLISECONDS);
+		return prepareResult(accm, tputLog, rps, recGen.size());
 	}
 
 	private Result readRecords(String[] fnames, int durSec, Record recGen) throws KawkabException, InterruptedException {
@@ -209,17 +213,20 @@ public class TestClient {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
-		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Append records buffered", 100, 1000000, -1);
+		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Append records buffered", 100, 3000000);
 		Accumulator tputLog = new Accumulator(durSec+1);
+		Accumulator rps = new Accumulator(durSec+1);
 		ApproximateClock clock = ApproximateClock.instance();
 		long startT = clock.currentTime();
 
-		int winMs = 3000; // read window size
-		int offsetMs = 3000;  //Read window offset. If we don't give an offset, maxTS may not exist in the file.
-		Stopwatch sw = Stopwatch.createStarted();
+		long batch = 0;
+		long count = 0;
+		int winMs = 1000; // read window size
+		int offsetMs = 2000;  //Read window offset. If we don't give an offset, maxTS may not exist in the file.
+		//Stopwatch sw = Stopwatch.createStarted();
 		while((now = System.currentTimeMillis()) < et) {
 			long minTs = now - winMs - offsetMs;
-			long maxTs = now - offsetMs;
+			long maxTs = minTs + winMs;
 			String fn = fnames[rand.nextInt(fnames.length)];
 
 			tlog.start();
@@ -232,26 +239,29 @@ public class TestClient {
 
 			int numRecs = recs.size();
 
-			tlog.end(numRecs);
+			tlog.end(1);
 
 			int elapsed = (int)((clock.currentTime()-startT)/1000.0);
-			tputLog.put(elapsed, numRecs);
+			tputLog.put(elapsed, 1);
+			rps.put(elapsed, numRecs);
 
+			batch += numRecs;
+			count++;
 
-			long sleepMs = winMs - (System.currentTimeMillis() - now);
+			//long sleepMs = winMs - (System.currentTimeMillis() - now);
 			//System.out.printf("Read %d recs in %d us, sleep %d ms\n", numRecs, elUS, sleepMs);
-			Thread.sleep(sleepMs);
+			//Thread.sleep(sleepMs);
 
 		}
-		sw.stop();
+		//sw.stop();
 
-		System.out.println("Finished read test");
+		System.out.printf("avg. batch = %d, reqs = %d, avg batch/req = %d\n", batch, count, (int)(batch/count));
 
-		return prepareResult(tlog.accumulator(), sw.elapsed(TimeUnit.MILLISECONDS), -1, recGen.size(), tputLog.histogram());
+		return prepareResult(tlog.accumulator(), tputLog, rps, recGen.size());
 
 	}
 
-	private Result appendRecords(String[] fnames, int durSec, Record recGen, int batchSize) throws OutOfMemoryException, KawkabException {
+	private Result appendRecords(String[] fnames, int durSec, Record recGen, final int batchSize) throws OutOfMemoryException, KawkabException {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
@@ -260,14 +270,13 @@ public class TestClient {
 		Record[] batch = new Record[batchSize];
 		for (int i=0; i<batchSize; i++) {
 			batch[i] = recGen.newRecord();
-			files[i] = fnames[rand.nextInt(fnames.length)];
 		}
 
 		Random r2 = new Random(1);
 		//int sleepTimeNs = 1750000; // For stable throughput test
 		//int sleepTimeNs = 900000; //For buffer overflow test
 
-		int sleepTimeNs = 500000; //For reads
+		int sleepTimeNs = 0; //For reads
 		int burstProb = 0; // For reads
 
 		int sleepNs = sleepTimeNs;
@@ -275,9 +284,11 @@ public class TestClient {
 		//int burstProb = 20;
 
 
-		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Append records buffered", 100, 1000000, batchSize);
-		Stopwatch sw = Stopwatch.createStarted();
+		int fidx = 0;
+		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Append records buffered", 100, 2000000);
 		Accumulator tputLog = new Accumulator(durSec+1);
+		Accumulator rps = new Accumulator(durSec+1);
+		//Stopwatch sw = Stopwatch.createStarted();
 		ApproximateClock clock = ApproximateClock.instance();
 		long startT = clock.currentTime();
 		int elapsed = 0;
@@ -302,6 +313,8 @@ public class TestClient {
 			now = System.currentTimeMillis();
 			for (int i=0; i<batchSize; i++) {
 				batch[i].timestamp(now);
+				fidx = (fidx+1) % fnames.length;
+				files[i] = fnames[fidx];
 			}
 
 			tlog.start();
@@ -312,70 +325,16 @@ public class TestClient {
 				elapsed = (int)((clock.currentTime()-startT)/1000.0);
 				continue;
 			}
-			tlog.end();
+			tlog.end(1);
 
 			elapsed = (int)((clock.currentTime()-startT)/1000.0);
 
-			tputLog.put(elapsed, batchSize);
+			tputLog.put(elapsed, 1);
+			rps.put(elapsed, batchSize);
 		}
-		sw.stop();
+		//sw.stop();
 
-		return prepareResult(tlog.accumulator(), sw.elapsed(TimeUnit.MILLISECONDS), batchSize, recGen.size(), tputLog.histogram());
-	}
-
-	private Result appendRecordsLongBursts(String[] fnames, int durSec, Record recGen, int batchSize) throws OutOfMemoryException, KawkabException {
-		long now = System.currentTimeMillis();
-		long et = now + durSec*1000;
-
-		Random rand = new Random();
-		String[] files = new String[batchSize];
-		Record[] batch = new Record[batchSize];
-		for (int i=0; i<batchSize; i++) {
-			batch[i] = recGen.newRecord();
-			files[i] = fnames[rand.nextInt(fnames.length)];
-		}
-
-		int sleepTimeNs = 1250000;
-		int sb1 = 100;
-		int se1 = 200;
-		int sb2 = 500;
-		int se2 = 750;
-
-		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Append records buffered", 100, 1000000, batchSize);
-		Stopwatch sw = Stopwatch.createStarted();
-		Accumulator tputLog = new Accumulator(durSec+1);
-		Accumulator latLOg = new Accumulator(durSec+1);
-		ApproximateClock clock = ApproximateClock.instance();
-		long startT = clock.currentTime();
-		int elapsed = 0;
-		while((now = System.currentTimeMillis()) < et) {
-			if (!(elapsed >= sb1 && elapsed <= se1) && !(elapsed >= sb2 && elapsed <= se2)) {
-				LockSupport.parkNanos(sleepTimeNs + rand.nextInt(50000));
-			}
-
-			for (int i=0; i<batchSize; i++) {
-				batch[i].timestamp(now);
-			}
-
-			tlog.start();
-			try {
-				client.appendRecords(files, batch);
-			} catch (KawkabException e) {
-				if (e.getMessage().startsWith("Request failed after")) {
-					System.out.println("+");
-					elapsed = (int)((clock.currentTime()-startT)/1000.0);
-					continue;
-				}
-			}
-			tlog.end();
-
-			elapsed = (int)((clock.currentTime()-startT)/1000.0);
-
-			tputLog.put(elapsed, batchSize);
-		}
-		sw.stop();
-
-		return prepareResult(tlog.accumulator(), sw.elapsed(TimeUnit.MILLISECONDS), batchSize, recGen.size(), tputLog.histogram());
+		return prepareResult(tlog.accumulator(), tputLog, rps, recGen.size());
 	}
 
 	private Result appendRecs(String[] fnames, int durSec, Record recGen) throws KawkabException {
@@ -387,6 +346,7 @@ public class TestClient {
 		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "Append records", 100, 1000000);
 		Stopwatch sw = Stopwatch.createStarted();
 		Accumulator tputLog = new Accumulator(durSec+1);
+		Accumulator rps = new Accumulator(durSec+1);
 		ApproximateClock clock = ApproximateClock.instance();
 		long startT = clock.currentTime();
 		while((now = System.currentTimeMillis()) < et) {
@@ -395,13 +355,15 @@ public class TestClient {
 
 			tlog.start();
 			client.append(fname, rec);
-			tlog.end();
+			tlog.end(1);
 
-			tputLog.put((int)((clock.currentTime()-startT)/1000.0), 1);
+			int elapsed = (int)((clock.currentTime()-startT)/1000.0);
+			tputLog.put(elapsed, 1);
+			rps.put(elapsed, 1);
 		}
 		sw.stop();
 
-		return prepareResult(tlog.accumulator(), sw.elapsed(TimeUnit.MILLISECONDS), 1, recGen.size(), tputLog.histogram());
+		return prepareResult(tlog.accumulator(), tputLog, rps, recGen.size());
 	}
 
 	private Result noopWriteTest(int cid, int testDurSec, int nTestFiles, int warmupSecs, int batchSize, TestClientServiceClient rpcClient) throws KawkabException {
@@ -440,9 +402,10 @@ public class TestClient {
 			files[i] = fnames[rand.nextInt(fnames.length)];
 		}
 
-		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "NoOP records buffered", 100, 1000000, batchSize);
+		LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "NoOP records buffered", 100, 1000000);
 		Stopwatch sw = Stopwatch.createStarted();
 		Accumulator tputLog = new Accumulator(durSec+1);
+		Accumulator rps = new Accumulator(durSec+1);
 		ApproximateClock clock = ApproximateClock.instance();
 		long startT = clock.currentTime();
 		while((now = System.currentTimeMillis()) < et) {
@@ -452,13 +415,15 @@ public class TestClient {
 
 			tlog.start();
 			client.appendNoops(files, batch);
-			tlog.end();
+			tlog.end(1);
 
-			tputLog.put((int)((clock.currentTime()-startT)/1000.0), batchSize);
+			int elapsed = (int)((clock.currentTime()-startT)/1000.0);
+			tputLog.put(elapsed, 1);
+			rps.put(elapsed, batchSize);
 		}
 		sw.stop();
 
-		return prepareResult(tlog.accumulator(), sw.elapsed(TimeUnit.MILLISECONDS), batchSize, recGen.size(), tputLog.histogram());
+		return prepareResult(tlog.accumulator(), tputLog, rps, recGen.size());
 	}
 
 	/*private Result sendNoops(int durSec) throws KawkabException {
@@ -525,12 +490,14 @@ public class TestClient {
 		client.disconnect();
 	}
 
-	private Result prepareResult(Accumulator accm, double durMsec, int batchSize, int recSize, long[] tputLog) {
-		long cnt = accm.count();
-		double sizeMB = recSize*cnt / (1024.0 * 1024.0);
-		double thr = sizeMB * 1000.0 / durMsec;
-		double opThr = cnt * 1000.0 / durMsec;
+	private Result prepareResult(Accumulator lats, Accumulator tputs, Accumulator rps, int recSize) {
+		long cnt = lats.count();
+		//double sizeMB = recSize*cnt / (1024.0 * 1024.0);
+		//double thr = sizeMB * 1000.0 / durMsec;
+		double opThr = Stats.meanOf(tputs.buckets());
+		int recsPerSec = (int)Stats.meanOf(rps.buckets());
+		double thr = recsPerSec*recSize / (1024.0 * 1024.0);
 
-		return new Result(cnt, opThr, thr, accm.min(), accm.max(), accm.histogram(), tputLog, batchSize);
+		return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats.buckets(), tputs.buckets(), recsPerSec);
 	}
 }

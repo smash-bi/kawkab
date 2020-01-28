@@ -69,10 +69,15 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public List<Integer> bulkOpen(List<TFileOpenRequest> fopenReqs) throws TRequestFailedException, TException {
+	public synchronized List<Integer> bulkOpen(List<TFileOpenRequest> fopenReqs) throws TRequestFailedException, TException {
 		List<Integer> retVals = new ArrayList<>(fopenReqs.size());
-		for (TFileOpenRequest req : fopenReqs) {
-			retVals.add(open(req.filename, req.fileMode, req.recordSize));
+		try {
+			for (TFileOpenRequest req : fopenReqs) {
+				retVals.add(open(req.filename, req.fileMode, req.recordSize));
+			}
+		}  catch (Exception | AssertionError e) {
+			e.printStackTrace();
+			throw new TRequestFailedException(e.getMessage());
 		}
 
 		return retVals;
