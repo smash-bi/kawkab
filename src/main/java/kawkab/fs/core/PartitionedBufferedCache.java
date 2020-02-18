@@ -34,6 +34,7 @@ public class PartitionedBufferedCache extends Cache {
 	private KeyedLock<Integer> pinLock;
 	private int totalSegments;
 	private volatile boolean working = true;
+	private DSPool dsp;
 
 	private PartitionedBufferedCache() {
 		System.out.println("Initializing PartitionedBufferedCache cache..." );
@@ -48,11 +49,12 @@ public class PartitionedBufferedCache extends Cache {
 		}
 		assert totalSegments > 0;
 
+		dsp = new DSPool(totalSegments+1);
 		int numSegmentsPerPart = totalSegments/numPartitions;
 		
 		cache = new BufferedCache[numPartitions];
 		for (int i=0; i<numPartitions; i++) {
-			cache[i] = new BufferedCache(numSegmentsPerPart, i+1);
+			cache[i] = new BufferedCache(numSegmentsPerPart, i+1, dsp);
 		}
 
 		pinnedMap = new ConcurrentHashMap<>();
@@ -289,6 +291,8 @@ public class PartitionedBufferedCache extends Cache {
 		if (accessed > 0)
 			stats.append(String.format("Cache agg: size=%.0f%%, accessed=%d, missed=%d, evicted=%d, hitRatio=%.02f\n",
 					size*100.0/totalSegments, accessed, missed, evicted, 100.0*(accessed-missed)/accessed));
+
+		System.out.println("Pinned map size: " + pinnedMap.size());
 
 		return stats.toString();
 	}

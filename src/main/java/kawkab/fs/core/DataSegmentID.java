@@ -17,6 +17,7 @@ public final class DataSegmentID extends BlockID {
 	private final int recordSize;
 	private String localPath;
 	private int hash;
+	private int hash2;
 	private static int numDevices = Configuration.instance().numLocalDevices;
 	private static final String blocksPath = Configuration.instance().blocksPath;
 	
@@ -84,7 +85,9 @@ public final class DataSegmentID extends BlockID {
 
 	@Override
 	public int perBlockTypeKey() {
-		return Objects.hash(inumber, blockInFile);
+		if (hash2 == 0)
+			hash2 = Objects.hash(inumber, blockInFile);
+		return hash2;
 	}
 
 	@Override
@@ -130,3 +133,4 @@ public final class DataSegmentID extends BlockID {
 				segmentInBlock == that.segmentInBlock;
 	}
 }
+

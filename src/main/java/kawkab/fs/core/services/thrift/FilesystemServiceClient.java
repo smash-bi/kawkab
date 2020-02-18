@@ -24,7 +24,7 @@ public class FilesystemServiceClient {
 	//private TNonblockingTransport aTransport;
 	private final int MAX_TRIES = 30;
 	private Random rand = new Random();
-	private final int BUFLEN = 16*1024*1024;
+	private final int BUFLEN = 500*1024;
 
 	/**
 	 * @param serverIP IP of the server to connect

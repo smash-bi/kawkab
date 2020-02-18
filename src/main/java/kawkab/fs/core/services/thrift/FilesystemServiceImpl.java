@@ -1,5 +1,6 @@
 package kawkab.fs.core.services.thrift;
 
+import com.google.common.base.Stopwatch;
 import kawkab.fs.api.FileOptions;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Configuration;
@@ -106,7 +107,8 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public ByteBuffer recordAt(int sessionID, long timestamp, int recSize, boolean loadFromPrimary) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
+	public ByteBuffer recordAt(int sessionID, long timestamp, int recSize, boolean loadFromPrimary)
+			throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
 		Session s = sessions.get(sessionID);
 		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
@@ -132,7 +134,8 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public List<ByteBuffer> readRecords(int sessionID, long minTS, long maxTS, int recSize, boolean loadFromPrimary) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
+	public List<ByteBuffer> readRecords(int sessionID, long minTS, long maxTS, int recSize, boolean loadFromPrimary)
+			throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException {
 		Session s = sessions.get(sessionID);
 		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
@@ -260,8 +263,10 @@ public class FilesystemServiceImpl implements Iface {
 			}
 			FileHandle fh = s.fh;
 
-			pos += Integer.BYTES + s.recSize;
+			pos += Integer.BYTES + s.recSize; //session ID + record size
 			data.limit(pos);
+
+			//long t = System.currentTimeMillis();
 
 			try {
 				fh.append(data, s.recSize);
@@ -272,6 +277,9 @@ public class FilesystemServiceImpl implements Iface {
 				e.printStackTrace();
 				throw new TRequestFailedException(e.getMessage());
 			}
+
+			//t = System.currentTimeMillis() - t;
+			//System.out.println(t);
 
 			data.limit(limit);
 			cnt++;
@@ -313,7 +321,8 @@ public class FilesystemServiceImpl implements Iface {
 	}
 
 	@Override
-	public ByteBuffer read(int sessionID, long offset, int length, boolean loadFromPrimary) throws TRequestFailedException, TInvalidSessionException, TInvalidArgumentException, TOutOfMemoryException {
+	public ByteBuffer read(int sessionID, long offset, int length, boolean loadFromPrimary)
+			throws TRequestFailedException, TInvalidSessionException, TInvalidArgumentException, TOutOfMemoryException {
 		Session s = sessions.get(sessionID);
 		if (s == null) {
 			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");

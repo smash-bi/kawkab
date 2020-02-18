@@ -3,6 +3,7 @@ package kawkab.fs.testclient;
 import kawkab.fs.api.Record;
 import kawkab.fs.core.exceptions.KawkabException;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -13,7 +14,7 @@ public class TestRunnerAsync {
 					  int warmupSecs, int mid, String mip, int mport, String outFolder) {
 		final Result[][] results = new Result[nc][];
 
-		final LinkedBlockingQueue<Boolean> rq = new LinkedBlockingQueue<>();
+		final LinkedBlockingQueue<Instant> rq = new LinkedBlockingQueue<>();
 
 		Thread[] threads = new Thread[nc];
 		for (int i=0; i<nc; i++) {
@@ -40,7 +41,7 @@ public class TestRunnerAsync {
 						readAgg = client.sync(clid, testID, true, res[0]);
 					}
 					if (res[1] != null) {
-						if (clid == mid && res[0] != null) {
+						if (clid == mid /*&& res[0] != null*/) {
 							client.setup(testID);
 						}
 						client.barrier(clid);
@@ -120,7 +121,9 @@ public class TestRunnerAsync {
 			saveResults(filePrefix+"write-", writeRes);
 		}
 
-		saveResults(filePrefix+"mixed-", mixedRes);
+		if (mixedRes != null) {
+			saveResults(filePrefix + "mixed-", mixedRes);
+		}
 	}
 
 	private void saveResults(String filePrefix, Result res) {
@@ -130,7 +133,7 @@ public class TestRunnerAsync {
 	}
 
 	private Result[] runTest(int cid, String sip, int sport, boolean isController, double iat, int writeRatio, int testDurSec, int filesPerclient, int apBatchSize,
-							 int warmupSecs, Record recGen, final LinkedBlockingQueue<Boolean> rq, TestClientServiceClient rpcClient) throws KawkabException {
+							 int warmupSecs, Record recGen, final LinkedBlockingQueue<Instant> rq, TestClientServiceClient rpcClient) throws KawkabException {
 
 		TestClientAsync client = new TestClientAsync(cid);
 		client.connect(sip, sport);

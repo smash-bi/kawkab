@@ -1,6 +1,5 @@
 package kawkab.fs.core;
 
-import com.sun.jna.platform.unix.X11;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
@@ -10,6 +9,7 @@ import kawkab.fs.core.index.poh.PostOrderHeapIndex;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
+import kawkab.fs.utils.LatHistogram;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -17,6 +17,7 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -56,7 +57,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	}
 
 	//private LatHistogram idxLog;
-	//private LatHistogram segLoadLog;
+	//private LatHistogram tl;
 
 	/**
 	 * Prepare after opening the file.
@@ -83,7 +84,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, fsQ);
 
 		//idxLog = new LatHistogram(TimeUnit.MICROSECONDS, "Index search", 100, 1000000);
-		//segLoadLog = new LatHistogram(TimeUnit.MICROSECONDS, "segLoadLog", 10, 1000);
+		//tl = new LatHistogram(TimeUnit.MILLISECONDS, "segLoadLog", 100, 1000);
 
 		/*try {
 			index.loadAndInit(indexLength(fileSize.get()));
@@ -599,7 +600,6 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 				throw e;
 			}
 		}
-
 
 		//ds.initForAppend(fileSize, recordSize);
 		return new TimerQueueItem<>(ds, this);

@@ -437,27 +437,28 @@ public final class DataSegment extends Block {
 		if (length == 0)
 			return 0;
 
-		ByteBuffer buffer = dataBuf;
+		ByteBuffer buffer = dataBuf.duplicate();
 		if (initedForAppends) {
-			buffer = dataBuf.duplicate();
+			buffer.limit(initialAppendPos);
+		} else {
+			buffer.clear();
 		}
-		buffer.clear();
-		buffer.limit(length);
 
-		int bytesRead = Commons.readFrom(channel, dataBuf);
+		int bytesRead = Commons.readFrom(channel, buffer);
 
 		if (!initedForAppends) {
 			dirtyOffset = bytesRead;
 			writePos.set(bytesRead);
 			isSegFull = bytesRead == conf.segmentSizeBytes;
 			initialAppendPos = bytesRead;
-		} else {
+			initedForAppends = true;
+		} /*else {
 			int pos = writePos.addAndGet(bytesRead);
 			dirtyOffset += bytesRead;
 			isSegFull = pos + recordSize > segmentSizeBytes;
 
 			assert pos <= dataBuf.capacity();
-		}
+		}*/
 
 
 		//System.out.printf("[DS] After loading %s from channel: bytesRead=%d, writePos=%d, datBufPos=%d\n",

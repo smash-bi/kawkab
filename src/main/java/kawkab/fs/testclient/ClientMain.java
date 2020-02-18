@@ -69,7 +69,7 @@ public class ClientMain {
 		int rs		= 0; // record size in bytes
 		int nf		= 0; // Total number of files across all the clients
 		int td		= 300;  // Test duration in seconds
-		int warmupsec = 10; // Warmup time in seconds
+		int warmupsec = 5; // Warmup time in seconds
 		String type = "apnd";
 		String fp = "test-";
 		int testID = 1;

@@ -8,10 +8,12 @@ import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
+import kawkab.fs.utils.LatHistogram;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * TODO: Store InodeBlocks in a separate table than the cache.
@@ -34,7 +36,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	private final static LocalStoreManager localStore;	// FIXME: Isn't it a bad design to access localStore from a file handle?
 	private final static int bufferTimeLimitMs = 5000;
 	//private final LatHistogram rLog;
-	//private final LatHistogram wLog;
+	private final LatHistogram wLog;
 
 	static {
 		Configuration conf = Configuration.instance();
@@ -63,7 +65,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 			inode.loadLastBlock();
 
 		//rLog = new LatHistogram(TimeUnit.MICROSECONDS, "R-"+inumber, 10, 10000);
-		//wLog = new LatHistogram(TimeUnit.MICROSECONDS, "W-"+inumber, 10, 10000);
+		wLog = new LatHistogram(TimeUnit.MICROSECONDS, "W-"+inumber, 10, 20000);
 	}
 
 	/**
@@ -347,7 +349,8 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 			throw new FileHandleClosedException("The file handle is closed. Open the file again to get the new handle.");
 		}
 
-		//wLog.start();
+		wLog.start();
+
 
 		int appendedBytes = inode.appendRecords(srcBuf, recSize);
 
@@ -358,7 +361,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		inbAcquired.getItem().markLocalDirty();
 		fsQ.enableAndAdd(inbAcquired, clock.currentTime() + bufferTimeLimitMs);
 
-		//wLog.end();
+		wLog.end(1);
 		return appendedBytes;
 	}
 
@@ -488,12 +491,12 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		/*if (rLog.sampled() > 0) {
 			System.out.print("File "+inumber+" read stats: ");
 			rLog.printStats();
-		}
+		}*/
 
 		if (wLog.sampled() > 0) {
 			System.out.print("File "+inumber+" append stats: ");
 			wLog.printStats();
-		}*/
+		}
 
 		if (onPrimaryNode) {
 			if (inodesBlock == null)
@@ -523,7 +526,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 
 	public void resetStats() throws KawkabException {
 		//rLog.reset();
-		//wLog.reset();
+		wLog.reset();
 
 		if (onPrimaryNode) {
 			if (inodesBlock == null)

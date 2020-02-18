@@ -232,8 +232,8 @@ public final class Configuration {
 		assert inodesBlockSizeBytes % inodesPerBlock == 0;
 		assert dataBlockSizeBytes == segmentsPerBlock*segmentSizeBytes;
 		
-		assert ibmapBlockSizeBytes <= segmentSizeBytes;
-		assert inodesBlockSizeBytes <= segmentSizeBytes;
+		//assert ibmapBlockSizeBytes <= segmentSizeBytes;
+		//assert inodesBlockSizeBytes <= segmentSizeBytes;
 		
 		assert minioAccessKey.length() >= 5; //From minio documentation
 		assert minioSecretKey.length() >= 8; //From minio documentation

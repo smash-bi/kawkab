@@ -297,7 +297,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			evictFromLocal(block);
 		}*/
 
-		if (blockID.type() == BlockID.BlockType.DATA_SEGMENT) {
+		if (blockID.type() == BlockID.BlockType.DATA_SEGMENT || blockID.type() == BlockID.BlockType.INDEX_BLOCK) {
 			evictFromLocal(blockID);
 		}
 	}
@@ -347,8 +347,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * The function assumes that the caller prevents multiple writers from creating the same new block.
 	 */
 	public void createBlock(BlockID blockID) throws IOException, OutOfDiskSpaceException {
-		if (storePermits.availablePermits() <= 32) //This number should be more than the number of worker threads.
+		if (storePermits.availablePermits() <= 64) { //This number should be more than the number of worker threads.
 			lc.makeSpace();
+		}
 
 		if (!storePermits.tryAcquire()) { // This provides an upper limit on the number of blocks that can be created locally.
 			throw new OutOfDiskSpaceException (

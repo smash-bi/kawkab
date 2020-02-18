@@ -25,9 +25,9 @@ public class LocalStoreCache {
 		this.storePermits = permits;
 		this.cacheSize = cacheSize;
 
-		lowMark = (int)(0.7*cacheSize);
-		highMark = (int)(0.9*cacheSize);
-		toEvict = (int)(0.01*cacheSize);
+		lowMark = (int)(0.5*cacheSize);
+		highMark = (int)(0.8*cacheSize);
+		toEvict = (int)(0.005*cacheSize);
 
 		runEvictor();
 	}
@@ -73,7 +73,7 @@ public class LocalStoreCache {
 		Stopwatch sw = Stopwatch.createStarted();
 		synchronized (cache) {
 			if (cache.size() > 0)
-				cache.bulkRemove(1);
+				cache.bulkRemove(30);
 			else
 				return;
 			//cache.notifyAll();
@@ -83,7 +83,7 @@ public class LocalStoreCache {
 			}
 		}
 		long elapsed = sw.stop().elapsed(TimeUnit.MILLISECONDS);
-		if (elapsed > 10) {
+		if (elapsed > 1) {
 			System.out.println("Local store make space (ms): " + elapsed);
 		}
 	}
@@ -100,7 +100,8 @@ public class LocalStoreCache {
 				if (size <= lowMark || cache.size() == 0) {
 					synchronized (cache) {
 						try {
-							cache.wait();
+							cache.wait(1000);
+							continue;
 						} catch (InterruptedException e) {
 							break;
 						}
@@ -111,11 +112,11 @@ public class LocalStoreCache {
 
 				synchronized (cache) {
 					cache.bulkRemove(n);
-					cache.notifyAll();
+					//cache.notifyAll();
 				}
  
 				try {
-					Thread.sleep(100);
+					Thread.sleep(500);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}

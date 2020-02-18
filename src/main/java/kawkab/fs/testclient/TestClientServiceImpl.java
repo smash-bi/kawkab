@@ -22,7 +22,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	private final Object barMutex = new Object();
 
 	private int barInCnt;
-	private boolean entering=true;
+	private boolean entering = true;
 
 	public TestClientServiceImpl(int numClients, int masterID) {
 		this.numClients = numClients;
@@ -43,22 +43,32 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 
 				System.out.printf("Client sync: rcvd=%d, total=%d, clid=%d\n", received, numClients, clid);
 
+				if (received == 1) {
+					aggResult = new Result();
+				}
+
 				merge(aggResult, result);
 				halt = halt || stopAll;
 				result = null;
 
-				if (clid == masterID) {
+				if (received == numClients) {
+					syncMutex.notify();
+				} else if (clid == masterID) {
+					syncMutex.wait();
+				}
+
+				/*if (clid == masterID) {
 					if (received != numClients) {
 						syncMutex.wait();
 					}
 				} else if (received == numClients) {
 					syncMutex.notify();
-				}
+				}*/
 
 				TSyncResponse resp = response(aggResult, halt);
 
 				if (clid == masterID) {
-					assert received == numClients;
+					assert received == numClients : String.format(" rcvd (%d) != (%d) numClients", received, numClients);
 					ready = false;
 					received = 0;
 					//printResults(aggResult);
@@ -82,7 +92,6 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	public void setup(int testID) throws TException {
 		System.out.printf("[TCSI Setting up for test %d, client=%d\n", testID, numClients);
 		this.testID = testID;
-
 		received = 0;
 		aggResult = new Result();
 		halt = false;

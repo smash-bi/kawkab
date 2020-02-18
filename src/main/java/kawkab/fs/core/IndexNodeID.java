@@ -13,6 +13,7 @@ public class IndexNodeID extends BlockID {
 	private final int blockInIndex; // Block number in the index. Each block have many index nodes.
 	private String localPath;
 	private int hash;
+	private int hash2;
 
 	private static final Configuration conf = Configuration.instance();
 	private static final int indexBlocksPerDirectory = conf.indexBlocksPerDirectory;
@@ -59,7 +60,9 @@ public class IndexNodeID extends BlockID {
 
 	@Override
 	public int perBlockTypeKey() {
-		return Objects.hash(inumber, blockInIndex);
+		if (hash2 == 0)
+			Objects.hash(inumber, blockInIndex);
+		return hash2;
 	}
 
 	@Override

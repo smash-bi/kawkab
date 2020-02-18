@@ -17,7 +17,7 @@ public class TestClientServiceServer {
 	private TServer server;
 	private boolean started = false;
 	private ExecutorService executor;
-	private final int maxBufferLen = 25 * 1024 * 1024;
+	private final int maxBufferLen = 16 * 1024 * 1024;
 
 	public TestClientServiceServer(int numClients, int svrPort, int masterID) throws KawkabException {
 		int numWorkers = numClients;
@@ -27,7 +27,7 @@ public class TestClientServiceServer {
 
 		//server = hsHaServer(svrPort, handler, numWorkers, numWorkers*2);
 		//server = threadedSelectorServer(svrPort, handler, numWorkers, ioThreads);
-		server = threadPoolServer(svrPort, handler, numWorkers, (int)(numWorkers*1.5));
+		server = threadPoolServer(svrPort, handler, numWorkers, (int)(numWorkers*1.2));
 	}
 
 	private TServer threadedSelectorServer(int port, TestClientService.Iface handler, int workerThreads, int ioThreads) throws KawkabException {

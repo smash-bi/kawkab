@@ -46,10 +46,11 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 	private final int id;
 
 	private BufferedCache() {
-		this((int) ((Configuration.instance().cacheSizeMiB * 1048576L) / Configuration.instance().segmentSizeBytes), 0);
+		this((int)((Configuration.instance().cacheSizeMiB * 1048576L) / Configuration.instance().segmentSizeBytes), 0,
+				new DSPool((int) ((Configuration.instance().cacheSizeMiB * 1048576L) / Configuration.instance().segmentSizeBytes)));
 	}
 
-	public BufferedCache(int numSegmentsInCache, int id) {
+	public BufferedCache(int numSegmentsInCache, int id, DSPool dsp) {
 		System.out.println("Initializing BufferedCache cache...");
 
 		this.id = id;
@@ -61,7 +62,8 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 
 		assert numSegmentsInCache > 0;
 
-		dsp = new DSPool(numSegmentsInCache);
+		//dsp = new DSPool(numSegmentsInCache);
+		this.dsp = dsp;
 		cache = new LRUCache(numSegmentsInCache, this);
 
 		//FIXME: The size of cache is not what is reflected from the configuration
@@ -70,9 +72,9 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 		acqLog = new LatHistogram(TimeUnit.MICROSECONDS, "Cache acquire", 1, 100);
 		relLog = new LatHistogram(TimeUnit.MICROSECONDS, "Cache release", 1, 100);
 
-		highMark = (int) (numSegmentsInCache * 0.80);
-		midMark = (int) (numSegmentsInCache * 0.75);
-		lowMark = (int) (numSegmentsInCache * 0.70);
+		highMark = (int) (numSegmentsInCache * 0.99);
+		midMark = (int) (numSegmentsInCache * 0.95);
+		lowMark = (int) (numSegmentsInCache * 0.90);
 
 		System.out.printf("HM=%d, MM=%d, LM=%d\n", highMark, midMark, lowMark);
 

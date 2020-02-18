@@ -8,13 +8,14 @@ import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.utils.Accumulator;
-import kawkab.fs.utils.LatHistogram;
 import org.apache.commons.math3.distribution.PoissonDistribution;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 
 public class TestClientAsync {
@@ -22,7 +23,8 @@ public class TestClientAsync {
 	private KClient client;
 	private Random fileRand;
 	private String[] files;
-	private ApproximateClock clock;
+	//private ApproximateClock clock;
+	private Clock clock = Clock.systemDefaultZone();
 	private volatile boolean work = true;
 
 	private static int rampDownSec = 2;
@@ -30,11 +32,11 @@ public class TestClientAsync {
 	TestClientAsync(int id) {
 		this.cid = id;
 		fileRand = new Random();
-		clock = ApproximateClock.instance();
+		//clock = ApproximateClock.instance();
 	}
 
 	Result[] runTest(boolean isController, double iat, int writeRatio, int testDurSec, int filesPerclient, int apBatchSize,
-						   int warmupSecs, Record recGen, final LinkedBlockingQueue<Boolean> rq, TestClientServiceClient rpcClient) throws KawkabException {
+						   int warmupSecs, Record recGen, final LinkedBlockingQueue<Instant> rq, TestClientServiceClient rpcClient) throws KawkabException {
 		int offset = (cid-1)*filesPerclient;
 		openFiles(offset, filesPerclient, recGen.size());
 
@@ -57,20 +59,20 @@ public class TestClientAsync {
 		Result[] res = null;
 		try {
 			System.out.printf("Ramp-up for %d seconds...\n", warmupSecs);
-			test(warmupSecs, recGen.newRecord(), apBatchSize, rq);
+			test(warmupSecs, recGen.newRecord(), apBatchSize, writeRatio, rq);
 
 			System.out.printf("Running test for %d seconds...\n", testDurSec);
-			res = test(testDurSec, recGen.newRecord(), apBatchSize, rq);
+			res = test(testDurSec, recGen.newRecord(), apBatchSize, writeRatio, rq);
 
 			System.out.printf("Ramp-down for %d seconds...\n", rampDownSec);
-			test(rampDownSec, recGen.newRecord(), apBatchSize, rq);
+			test(rampDownSec, recGen.newRecord(), apBatchSize, writeRatio, rq);
 		}catch (AssertionError | Exception e) {
 			e.printStackTrace();
 		} finally {
 			closeFiles();
 		}
 
-		rpcClient.barrier(cid);
+		//rpcClient.barrier(cid);
 
 		if (isController) {
 			work = false;
@@ -85,10 +87,9 @@ public class TestClientAsync {
 		return res;
 	}
 
-	private void generateReqs(final double iat, final int writeRatio, final LinkedBlockingQueue<Boolean> rq) {
+	private void generateReqs(final double iat, final int writeRatio, final LinkedBlockingQueue<Instant> rq) {
 		PoissonDistribution arrRand = new PoissonDistribution(iat); //arrival time for the next request
 		Random waitRand = new Random();
-		Random reqRand = new Random();
 
 		while(work) {
 			int toSend = 1;
@@ -107,7 +108,6 @@ public class TestClientAsync {
 					} else {
 						LockSupport.parkNanos(60000);
 					}
-
 				} catch (InterruptedException e) {
 					return;
 				}
@@ -126,29 +126,37 @@ public class TestClientAsync {
 				break;
 			}
 
-			if (rq.size() > 500) {
-				String.format("Current queue size is %d, probably needs more clients", rq.size());
+			int size = rq.size();
+			if (size > 0 && size % 1000 == 0) {
+				System.out.printf("Reqs queue %d\n", rq.size());
+			} else if (size > 0) {
+				System.out.print(size +" ");
 			}
 
 			for (int i=0; i<toSend; i++) {
-				if ((reqRand.nextInt(100)+1) <= writeRatio) {
+				rq.add(clock.instant());
+
+				/*if ((reqRand.nextInt(100)+1) <= writeRatio) {
 					//sendAppendRequest(fnames, apBatchSize, recGen, accm);
-					rq.add(true);
+					rq.add(clock.instant().getNano());
 				} else {
 					//sendReadRequest(fnames, recGen, accm);
-					rq.add(false);
-				}
+					rq.add(-1);
+				}*/
 			}
 		}
 	}
 
 
-	private Result[] test(int durSec, Record recGen, final int apBatchSize, final LinkedBlockingQueue<Boolean> rq) throws OutOfMemoryException, KawkabException {
+	private Result[] test(int durSec, Record recGen, final int apBatchSize, final int writeRatio, final LinkedBlockingQueue<Instant> rq)
+			throws OutOfMemoryException, KawkabException {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
-		LatHistogram rLats = new LatHistogram(TimeUnit.MICROSECONDS, "", 100, 2000000);
-		LatHistogram wLats = new LatHistogram(TimeUnit.MICROSECONDS, "", 100, 2000000);
+		//LatHistogram rLats = new LatHistogram(TimeUnit.MICROSECONDS, "", 100, 1000000);
+		//LatHistogram wLats = new LatHistogram(TimeUnit.MICROSECONDS, "", 100, 1000000);
+		Accumulator wLats = new Accumulator(1000000);
+		Accumulator rLats = new Accumulator(1000000);
 		Accumulator rTputs = new Accumulator(durSec+1);
 		Accumulator wTputs = new Accumulator(durSec+1);
 		Accumulator rRps = new Accumulator(durSec+1);
@@ -161,35 +169,50 @@ public class TestClientAsync {
 		}
 
 		long rBatchSize = 0;
-		long startT = clock.currentTime();
-		while(clock.currentTime() < et) {
+		//long startT = clock.currentTime();
+		ApproximateClock apClock = ApproximateClock.instance();
+		Random reqRand = new Random();
+		long startT = System.currentTimeMillis();
+		while((now = apClock.currentTime()) < et) {
 			try {
-				boolean isAppend = rq.take();
+				Instant ts = rq.take();
+				boolean isAppend = (reqRand.nextInt(100)+1) <= writeRatio;
 
-				long lat;
+				int lat;
 				int batchSize = -1;
 				if (isAppend) {
-					wLats.start();
-					sendAppendRequest(fnames, records);
-					lat = wLats.end(1);
+					//wLats.start();
+					sendAppendRequest(fnames, records, now);
 					batchSize = apBatchSize;
+					//lat = wLats.end(1);
 				} else {
-					rLats.start();
-					batchSize = sendReadRequest(recGen);
-					lat = rLats.end(1);
-					rBatchSize += batchSize;
+					//rLats.start();
+					batchSize = sendReadRequest(recGen, apClock.currentTime());
+					if (batchSize == 0) {
+						System.out.print("-");
+						continue;
+					}
+					//lat = rLats.end(1);
+				}
+
+				try {
+					lat = (int) (Duration.between(ts, clock.instant()).toNanos() / 1000);
+				} catch (ArithmeticException e) {
+					continue;
 				}
 
 				if (lat < 0)
 					continue;
 
-				int elapsed = (int)((clock.currentTime()-startT)/1000.0);
-
+				int elapsed = (int)((apClock.currentTime()-startT)/1000.0);
 				if (isAppend) {
+					wLats.put(lat, 1);
 					//wTputs.put(elapsed, batchSize);
 					wTputs.put(elapsed, 1);
 					wRps.put(elapsed, batchSize);
 				} else {
+					rLats.put(lat, 1);
+					rBatchSize += batchSize;
 					//rTputs.put(elapsed, batchSize);
 					rTputs.put(elapsed, 1);
 					rRps.put(elapsed, batchSize);
@@ -207,18 +230,17 @@ public class TestClientAsync {
 			//rBatchSize = rBatchSize / rLats.count(); // Take the average number of records read per operation
 			System.out.println("rBatchSize = " + (rBatchSize/rLats.count()));
 			rBatchSize = 1; // Take the average number of records read per operation
-			readRes = prepareResult(rLats.accumulator(), rTputs, rRps, recGen.size());
+			readRes = prepareResult(rLats, rTputs, rRps, recGen.size());
 		}
 
 		if (wLats.count() > 0) {
-			writeRes = prepareResult(wLats.accumulator(), wTputs, wRps, recGen.size());
+			writeRes = prepareResult(wLats, wTputs, wRps, recGen.size());
 		}
 
 		return new Result[]{readRes, writeRes};
 	}
 
-	private void sendAppendRequest(String[] fnames, Record[] records) throws KawkabException {
-		long ts = clock.currentTime();
+	private void sendAppendRequest(String[] fnames, Record[] records, long ts) throws KawkabException {
 		for (int i=0; i<records.length; i++) {
 			records[i].timestamp(ts);
 			fnames[i] = files[fileRand.nextInt(files.length)];
@@ -227,10 +249,10 @@ public class TestClientAsync {
 		client.appendRecords(fnames, records);
 	}
 
-	private int sendReadRequest(Record recGen) throws KawkabException {
+	private int sendReadRequest(Record recGen, long tsNow) throws KawkabException {
 		int winMs = 1000; // read window size
 		int offsetMs = 2000;  //Read window offset. If we don't give an offset, maxTS may not exist in the file.
-		long minTs = clock.currentTime() - winMs - offsetMs;
+		long minTs = tsNow - winMs - offsetMs;
 		long maxTs = minTs + winMs;
 		String fn = files[fileRand.nextInt(files.length)];
 		List<Record> res = client.readRecords(fn, minTs, maxTs, recGen, true);
