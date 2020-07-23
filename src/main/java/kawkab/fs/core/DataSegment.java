@@ -327,7 +327,9 @@ public final class DataSegment extends Block {
 		int limit = writePos.get();
 		buf.limit(limit);
 
-		assert buf.remaining() >= recordSize; // at least have one record
+		assert buf.remaining() >= recordSize :
+				String.format("buf.remaining < recordSize, buf.rem=%d, recSize=%d", buf.remaining(), recordSize); // at least have one record
+
 		if (maxTS < buf.getLong(0)) { // if the records in this segment are all greater than the given range
 			return 0;
 		}

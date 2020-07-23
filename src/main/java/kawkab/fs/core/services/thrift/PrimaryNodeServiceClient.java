@@ -22,6 +22,7 @@ public class PrimaryNodeServiceClient {
 	private Map<Integer, TTransport> transports;
 	private static PrimaryNodeServiceClient instance;
 	private static NodesRegister nodesRegister = NodesRegister.instance();
+	private final int BUFLEN = 500*1024;
 
 	private PrimaryNodeServiceClient() {
 		clients = new HashMap<>();
@@ -54,7 +55,7 @@ public class PrimaryNodeServiceClient {
 	}
 
 	public ByteBuffer getInodesBlock(InodesBlockID id) throws FileNotExistException, IOException {
-		//System.out.println("[PC] getInodesBlock: " + id);
+		System.out.println("[PC] getInodesBlock: " + id);
 
 		try {
 			return client(id.primaryNodeID()).getInodesBlock(id.blockIndex());
@@ -65,6 +66,7 @@ public class PrimaryNodeServiceClient {
 			e.printStackTrace();
 			throw new IOException(e);
 		} catch (TException e) {
+			e.printStackTrace();
 			throw new IOException(e);
 		}
 	}
@@ -99,7 +101,7 @@ public class PrimaryNodeServiceClient {
 		try {
 			int port = conf.primaryNodeServicePort;
 			System.out.printf("[PNSC] Connecting to %s:%d\n",ip, port);
-			transport = new TFastFramedTransport(new TSocket(ip, port));
+			transport = new TFastFramedTransport(new TSocket(ip, port), BUFLEN, BUFLEN);
 			transport.open();
 			client = new PrimaryNodeService.Client(new TBinaryProtocol(transport));
 		} catch (TException x) {

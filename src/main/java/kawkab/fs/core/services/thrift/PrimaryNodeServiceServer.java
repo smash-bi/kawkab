@@ -64,10 +64,9 @@ public class PrimaryNodeServiceServer {
 
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new TThreadedSelectorServer(new TThreadedSelectorServer.Args(transport)
-					.transportFactory(new TFastFramedTransport.Factory())
+					.transportFactory(new TFastFramedTransport.Factory(conf.maxBufferLen, conf.maxBufferLen))
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new Processor<>(handler))
-
 					.selectorThreads(ioThreads)
 					.workerThreads(workerThreads));
 		} catch(Exception e) {

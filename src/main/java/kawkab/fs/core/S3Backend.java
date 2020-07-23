@@ -152,8 +152,8 @@ public final class S3Backend implements GlobalBackend{
 			throw new KawkabException(e);
 		}
 		
-		
-		//System.out.println("\t[S3] >>> Finished store to global: " + id);   
+		if (id.type() == BlockID.BlockType.DATA_SEGMENT && ((DataSegmentID)id).inumber() == 0)
+			System.out.println("\t[S3] >>> Finished store to global: " + id + " rec0TS: " + buffer.getLong(0));
 	}
 	
 	private AmazonS3 newS3Client() {

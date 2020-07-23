@@ -76,8 +76,8 @@ public final class Filesystem {
 		assert opts.recordSize() > 0;
 		assert opts.recordSize() <= Configuration.instance().segmentSizeBytes;
 
-		long inumber = namespace.openFileDbg(filename, mode == FileMode.APPEND, opts); //FIXME
-		//long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
+		//long inumber = namespace.openFileDbg(filename, mode == FileMode.APPEND, opts); //FIXME
+		long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 
 		//long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber + ", mode: " + mode);

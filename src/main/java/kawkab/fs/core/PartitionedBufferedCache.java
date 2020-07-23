@@ -394,7 +394,7 @@ public class PartitionedBufferedCache extends Cache {
 					//accm.put((int) ((clock.currentTime() - startT) / 1000.0), occupancy);
 
 
-					System.out.println(String.format("%d: %.2f, %.2f, %.2f, %.2f\n",++n, cacheOcc, lsOcc, canEvict, gsQlen));
+					//System.out.println(String.format("%d: %.2f, %.2f, %.2f, %.2f\n",++n, cacheOcc, lsOcc, canEvict, gsQlen));
 					writer.write(String.format("%.2f, %.2f, %.2f, %.2f\n",cacheOcc, lsOcc, canEvict, gsQlen));
 
 					try {

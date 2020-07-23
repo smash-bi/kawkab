@@ -216,7 +216,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new KawkabException(String.format("Record number %d is out of range of the file. OffsetInFile=%d, recordSize=%d, recsInFile=%d",
 					recNum, offsetInFile, recordSize, fileSize/recordSize));
 
-		//System.out.println("  Read at offset: " + offsetInFile);
+		System.out.println("  Read at offset: " + offsetInFile);
 		BlockID curSegId = getByFileOffset(offsetInFile);
 
 		//System.out.println("Reading block at offset " + offsetInFile + ": " + curBlkUuid.key);
@@ -691,8 +691,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	}
 
 	int storeTo(ByteBuffer buffer) {
-		// assert fileSize.get() == fileSizeBuffered.get(); //Not needed because this is not called by the LocalStoreManager
-		//System.out.printf("[I] Storing inode %d to buffer: fs=%d, recSize=%d\n", inumber, fileSize.get(), recordSize);
+		//System.out.printf("[I] Storing inode %d to buffer: fs=%d, recSize=%d, bufSize=%d, pos=%d, rem=%d\n",
+		//		inumber, fileSize.get(), recordSize, buffer.capacity(), buffer.position(), buffer.remaining());
 
 		buffer.putLong(inumber);
 		buffer.putLong(fileSize.get());

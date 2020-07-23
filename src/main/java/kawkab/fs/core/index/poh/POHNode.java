@@ -563,7 +563,7 @@ public class POHNode extends Block {
 	}
 
 	private int loadHeaderFrom(ByteBuffer buffer, int nodeSizeBytes, int numEntries, int numChildren) {
-		int padding = nodeSizeBytes -numEntries*POHEntry.sizeBytes() - numChildren*POHChild.sizeBytes() - headerSizeBytes();
+		int padding = nodeSizeBytes - numEntries*POHEntry.sizeBytes() - numChildren*POHChild.sizeBytes() - headerSizeBytes();
 		buffer.position(buffer.position() + padding);
 
 		System.out.printf("\t     >> [IN] pos=%d, rem=%d, padding=%d\n", storeBuffer.position(), storeBuffer.remaining(), padding);
@@ -571,8 +571,8 @@ public class POHNode extends Block {
 		int nodeNum = buffer.getInt();
 		int ht = buffer.getInt();
 
-		assert nodeNum == nodeNumber : String.format("Node number mismatch: loaded %d, should be %d",nodeNum, nodeNumber);
-		assert ht == height : String.format("Node height mismatch: loaded %d, should be %d",ht, height);
+		assert nodeNum == nodeNumber : String.format("Node number mismatch: loaded %d, should be %d", nodeNum, nodeNumber);
+		assert ht == height : String.format("Node height mismatch: loaded %d, should be %d", ht, height);
 
 		//System.out.printf("[IN] Loaded header: nodenum=%d, height=%d, padding=%d\n", nodeNum, ht, padding);
 
@@ -799,7 +799,7 @@ public class POHNode extends Block {
 	}
 
 	public int loadFrom(ByteBuffer buffer, int atTSOffset) throws IOException {
-		//System.out.printf("[IN] Loading %s from buffer at offset \n",id, atTSOffset);
+		System.out.printf("[IN] Loading %s from buffer at offset \n",id, atTSOffset);
 
 		assert !isOnPrimary;
 
@@ -813,7 +813,7 @@ public class POHNode extends Block {
 
 	//public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "IN load", 100, 100000);
 	private void loadBlockFromPrimary() throws FileNotExistException, IOException {
-		//System.out.printf("[IN] Loading %s from the primary at offset %d\n",id, dirtyOffsetStart);
+		System.out.printf("[IN] Loading %s from the primary at offset %d\n",id, dirtyOffsetStart);
 
 		//dbgHist.start();
 
@@ -822,12 +822,12 @@ public class POHNode extends Block {
 		//dbgHist.end();
 
 		if (buffer.remaining() == 0) {
-			//System.out.println("[PN] No new entries retrieved.");
+			System.out.println("[PN] No new entries retrieved.");
 			return;
 		}
 
-		//System.out.printf("Before loading the node: pos=%d, rem=%d, dirtyOffset=%d, entryIdx=%d, txCount=%d\n",
-		//		buffer.position(), buffer.remaining(), dirtyOffsetStart, entryIdx, tsCount.get());
+		System.out.printf("[IN] Before loading the node: pos=%d, rem=%d, dirtyOffset=%d, entryIdx=%d, txCount=%d\n",
+				buffer.position(), buffer.remaining(), dirtyOffsetStart, entryIdx, tsCount.get());
 
 		int numTSLoaded = loadFrom(buffer, dirtyOffsetStart);
 
@@ -840,8 +840,8 @@ public class POHNode extends Block {
 		tsCount.addAndGet(dirtyOffsetStart);
 		entryIdx = (dirtyOffsetStart+1)/2;
 
-		//System.out.printf("[IN] After loading the node: pos=%d, rem=%d, dirtyOffset=%d, entryIdx=%d, txCount=%d\n",
-		//		buffer.position(), buffer.remaining(), dirtyOffsetStart, entryIdx, tsCount.get());
+		System.out.printf("[IN] After loading the node: pos=%d, rem=%d, dirtyOffset=%d, entryIdx=%d, txCount=%d\n",
+				buffer.position(), buffer.remaining(), dirtyOffsetStart, entryIdx, tsCount.get());
 
 
 		//if (loadedLastMax) { // Last entry's maxTS is not loaded
@@ -861,12 +861,12 @@ public class POHNode extends Block {
 		// Otherwise, the node is most likely not in the global store. Therefore, fetch from the primary node.
 
 		if (isFull()) {
-			//System.out.printf("[IN] Node %s is full. Not loading.\n",id);
+			System.out.printf("[IN] Node %s is full. Not loading.\n",id);
 			return;
 		}
 
 		if (clock.currentTime() - lastFetchTimeMs <= fetchTimeLimitMs) {
-			//System.out.printf("[IN] Fetch time is not expired. Not loading %s\n",id);
+			System.out.printf("[IN] Fetch time is not expired. Not loading %s\n",id);
 			return;
 		}
 

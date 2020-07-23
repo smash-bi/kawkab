@@ -248,7 +248,7 @@ public final class CLI {
 			return;
 		}
 
-		String usage = "Usage: co <filename> <r rec|a> [<recSize>]";
+		String usage = "Usage: co <filename> <r|a> [<recSize>]";
 
 		if (args.length < 3) {
 			System.out.println(usage);

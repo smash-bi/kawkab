@@ -61,6 +61,7 @@ public class FilesystemServiceClient {
 		try {
 			return sClient.open(filename, convertFileMode(mode), recordSize);
 		} catch (TException e) {
+			e.printStackTrace();
 			throw new KawkabException(e);
 		}
 	}
@@ -158,20 +159,16 @@ public class FilesystemServiceClient {
 		}
 	}
 
-	public int appendRecords(ByteBuffer buffer) throws OutOfMemoryException, KawkabException {
-		/*try {
-			return client.appendRecords(buffer);
-		} catch (TOutOfMemoryException e) {
-			throw new OutOfMemoryException(e.getMessage());
-		} catch (TException e) {
-			throw new KawkabException(e);
-		}*/
-
+	public int appendRecords(ByteBuffer buffer, boolean isPacked) throws OutOfMemoryException, KawkabException {
 		int tries = 0;
 		int base = 1000;
 		int maxTries = 100;
 		while(++tries < maxTries) {
 			try {
+				if (isPacked) {
+					return sClient.appendRecordsPacked(buffer);
+				}
+
 				return sClient.appendRecords(buffer);
 			} catch (TOutOfMemoryException e) {
 				System.out.print(".");
@@ -353,6 +350,17 @@ public class FilesystemServiceClient {
 		sTransport = null;
 		aClient = null;
 		sClient = null;
+	}
+
+	public void printStats(int sessionID) {
+		try {
+			sClient.printStats(sessionID);
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			e.printStackTrace();
+		} catch (TException e) {
+			e.printStackTrace();
+		}
 	}
 
 	private TFileMode convertFileMode(Filesystem.FileMode mode){

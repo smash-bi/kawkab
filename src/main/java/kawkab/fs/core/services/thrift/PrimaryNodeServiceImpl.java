@@ -83,6 +83,9 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 		} catch (IOException | KawkabException e) {
 			e.printStackTrace();
 			throw new TException(e);
+		} catch (Exception | AssertionError e) {
+			e.printStackTrace();
+			throw new TException(e);
 		} finally {
 			if (block != null) {
 				cache.releaseBlock(id);

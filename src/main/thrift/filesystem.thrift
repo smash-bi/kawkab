@@ -111,6 +111,10 @@ service FilesystemService {
     i32 appendRecords (1: binary data) throws
             	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
 
+    /*Batching records of multiple files in a buffer. Records of the same file are packed together*/
+        i32 appendRecordsPacked (1: binary data) throws
+                	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
+
     //NoOP equivalent of appendRecords
     i32 appendNoops (1: binary data) throws
                 	    (1: TRequestFailedException rfe, 2: TInvalidSessionException ise, 3: TOutOfMemoryException ome);
@@ -128,6 +132,8 @@ service FilesystemService {
 	oneway void bulkClose (1: list<i32> sessionID);
 
 	i32 flush();
+
+	oneway void printStats(1: i32 sessionID);
 
 	i32 noopWrite (1: i64 none) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);
 	binary noopRead (1: i32 recSize) throws (1: TRequestFailedException rfe, 2: TInvalidSessionException ise);

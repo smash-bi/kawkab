@@ -67,9 +67,9 @@ public class ClientMain {
 		int nc		= 0; // Number of client threads in this instance
 		int bs		= 0; // batch size; number of requests per message
 		int rs		= 0; // record size in bytes
-		int nf		= 0; // Total number of files across all the clients
+		int nf		= 0; // Number of files per client
 		int td		= 300;  // Test duration in seconds
-		int warmupsec = 5; // Warmup time in seconds
+		int warmupsec = 120; // Warmup time in seconds
 		String type = "apnd";
 		String fp = "test-";
 		int testID = 1;

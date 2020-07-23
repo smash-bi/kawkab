@@ -8,6 +8,7 @@ import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.utils.Accumulator;
+import kawkab.fs.utils.LatHistogram;
 import org.apache.commons.math3.distribution.PoissonDistribution;
 
 import java.time.Clock;
@@ -16,6 +17,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 
 public class TestClientAsync {
@@ -59,13 +61,13 @@ public class TestClientAsync {
 		Result[] res = null;
 		try {
 			System.out.printf("Ramp-up for %d seconds...\n", warmupSecs);
-			test(warmupSecs, recGen.newRecord(), apBatchSize, writeRatio, rq);
+			test(warmupSecs, recGen.newRecord(), apBatchSize, writeRatio, rq, false, isController);
 
 			System.out.printf("Running test for %d seconds...\n", testDurSec);
-			res = test(testDurSec, recGen.newRecord(), apBatchSize, writeRatio, rq);
+			res = test(testDurSec, recGen.newRecord(), apBatchSize, writeRatio, rq, true, isController);
 
 			System.out.printf("Ramp-down for %d seconds...\n", rampDownSec);
-			test(rampDownSec, recGen.newRecord(), apBatchSize, writeRatio, rq);
+			test(rampDownSec, recGen.newRecord(), apBatchSize, writeRatio, rq, false, isController);
 		}catch (AssertionError | Exception e) {
 			e.printStackTrace();
 		} finally {
@@ -148,13 +150,12 @@ public class TestClientAsync {
 	}
 
 
-	private Result[] test(int durSec, Record recGen, final int apBatchSize, final int writeRatio, final LinkedBlockingQueue<Instant> rq)
+	private Result[] test(int durSec, Record recGen, final int apBatchSize, final int writeRatio, final LinkedBlockingQueue<Instant> rq,
+						  boolean logStats, boolean isController)
 			throws OutOfMemoryException, KawkabException {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
-		//LatHistogram rLats = new LatHistogram(TimeUnit.MICROSECONDS, "", 100, 1000000);
-		//LatHistogram wLats = new LatHistogram(TimeUnit.MICROSECONDS, "", 100, 1000000);
 		Accumulator wLats = new Accumulator(1000000);
 		Accumulator rLats = new Accumulator(1000000);
 		Accumulator rTputs = new Accumulator(durSec+1);
@@ -162,14 +163,17 @@ public class TestClientAsync {
 		Accumulator rRps = new Accumulator(durSec+1);
 		Accumulator wRps = new Accumulator(durSec+1);
 
-		String[] fnames = new String[apBatchSize];
+		String[] fnames = new String[apBatchSize]; //Random files used in a batch. Actual file name is populated from files class variable.
 		Record[] records = new Record[apBatchSize];
 		for (int i=0; i<records.length; i++) {
 			records[i] = recGen.newRecord();
 		}
 
+		LatHistogram wLog = null;
+		if (isController)
+			wLog = new LatHistogram(TimeUnit.MICROSECONDS, "AppendSendReqLat", 50, 40000);
+
 		long rBatchSize = 0;
-		//long startT = clock.currentTime();
 		ApproximateClock apClock = ApproximateClock.instance();
 		Random reqRand = new Random();
 		long startT = System.currentTimeMillis();
@@ -181,18 +185,20 @@ public class TestClientAsync {
 				int lat;
 				int batchSize = -1;
 				if (isAppend) {
-					//wLats.start();
-					sendAppendRequest(fnames, records, now);
+					if (isController)
+						wLog.start();
+
+					sendAppendRequest(fnames, records, now-startT+1);
 					batchSize = apBatchSize;
-					//lat = wLats.end(1);
+
+					if (isController)
+						wLog.end(1);
 				} else {
-					//rLats.start();
 					batchSize = sendReadRequest(recGen, apClock.currentTime());
 					if (batchSize == 0) {
 						System.out.print("-");
 						continue;
 					}
-					//lat = rLats.end(1);
 				}
 
 				try {
@@ -207,13 +213,11 @@ public class TestClientAsync {
 				int elapsed = (int)((apClock.currentTime()-startT)/1000.0);
 				if (isAppend) {
 					wLats.put(lat, 1);
-					//wTputs.put(elapsed, batchSize);
 					wTputs.put(elapsed, 1);
 					wRps.put(elapsed, batchSize);
 				} else {
 					rLats.put(lat, 1);
 					rBatchSize += batchSize;
-					//rTputs.put(elapsed, batchSize);
 					rTputs.put(elapsed, 1);
 					rRps.put(elapsed, batchSize);
 				}
@@ -237,6 +241,12 @@ public class TestClientAsync {
 			writeRes = prepareResult(wLats, wTputs, wRps, recGen.size());
 		}
 
+		if (isController && logStats) {
+			wLog.printStats();
+			System.out.println("Print stats on server for file: " + files[0]);
+			client.printStats(files[0]);
+		}
+
 		return new Result[]{readRes, writeRes};
 	}
 
@@ -246,7 +256,8 @@ public class TestClientAsync {
 			fnames[i] = files[fileRand.nextInt(files.length)];
 		}
 
-		client.appendRecords(fnames, records);
+		//client.appendRecords(fnames, records);
+		client.appendRecordsUnpacked(fnames, records);
 	}
 
 	private int sendReadRequest(Record recGen, long tsNow) throws KawkabException {
@@ -311,5 +322,6 @@ public class TestClientAsync {
 		double thr = recsPerSec*recSize / (1024.0 * 1024.0);
 
 		return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats.buckets(), tputs.buckets(), recsPerSec);
+		//return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats.buckets(), rps.buckets(), recsPerSec);
 	}
 }

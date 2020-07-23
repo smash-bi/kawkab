@@ -266,8 +266,6 @@ public class FilesystemServiceImpl implements Iface {
 			pos += Integer.BYTES + s.recSize; //session ID + record size
 			data.limit(pos);
 
-			//long t = System.currentTimeMillis();
-
 			try {
 				fh.append(data, s.recSize);
 			} catch (OutOfMemoryException | OutOfDiskSpaceException e) {
@@ -278,8 +276,53 @@ public class FilesystemServiceImpl implements Iface {
 				throw new TRequestFailedException(e.getMessage());
 			}
 
-			//t = System.currentTimeMillis() - t;
-			//System.out.println(t);
+			data.limit(limit);
+			cnt++;
+		}
+
+		return cnt;
+	}
+
+	/**
+	 * Appends records batched in the buffer. The buffer contains the TVL {sessionID, num records, records}.
+	 * @param data
+	 * @return Returns the number of records appended
+	 * @throws TRequestFailedException
+	 * @throws TInvalidSessionException
+	 * @throws TOutOfMemoryException
+	 * @throws TException
+	 */
+	@Override
+	public int appendRecordsPacked(ByteBuffer data) throws TRequestFailedException, TInvalidSessionException, TOutOfMemoryException, TException {
+		int pos = data.position();
+		int limit = data.limit();
+
+		assert data.remaining() >= Integer.BYTES;
+
+		int cnt = 0;
+		while(pos < limit) {
+			int sessionID = data.getInt();
+
+			Session s = sessions.get(sessionID);
+			if (s == null) {
+				throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
+			}
+			FileHandle fh = s.fh;
+
+			int count = data.getInt();
+
+			pos += Integer.BYTES + Integer.BYTES + (s.recSize * count); //session ID + count + (record size * records)
+			data.limit(pos);
+
+			try {
+				fh.append(data, s.recSize);
+			} catch (OutOfMemoryException | OutOfDiskSpaceException e) {
+				//e.getMessage();
+				throw new TOutOfMemoryException(e.getMessage());
+			} catch (Exception | AssertionError e) {
+				e.printStackTrace();
+				throw new TRequestFailedException(e.getMessage());
+			}
 
 			data.limit(limit);
 			cnt++;
@@ -500,6 +543,22 @@ public class FilesystemServiceImpl implements Iface {
 	@Override
 	public ByteBuffer noopRead(int recSize) throws TRequestFailedException, TInvalidSessionException {
 		return ByteBuffer.allocate(recSize);
+	}
+
+	@Override
+	public void printStats(int sessionID) throws TException {
+		Session s = sessions.get(sessionID);
+		if (s == null) {
+			throw new TInvalidSessionException("Session ID is invalid or the session does not exist.");
+		}
+		FileHandle fh = s.fh;
+
+		try {
+			fh.printStats();
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new TRequestFailedException(e.getMessage());
+		}
 	}
 
 	private Filesystem.FileMode convertFileMode(TFileMode mode){
