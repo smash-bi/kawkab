@@ -122,7 +122,7 @@ public class AppendTest {
 			rec.timestamp(i+1);
 			tlog.start();
 			file.append(rec.copyOutSrcBuffer(), rec.size());
-			tlog.end();
+			tlog.end(1);
 		}
 		double durSec = (System.currentTimeMillis() - startTime) / 1000.0;
 
@@ -183,7 +183,7 @@ public class AppendTest {
 							
 							tlog.start();
 							appended += file.append(writeBuf, 0, toWrite);
-							tlog.end();
+							tlog.end(toWrite);
 
 							ops++;
 						}

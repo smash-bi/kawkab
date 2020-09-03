@@ -64,7 +64,7 @@ public final class S3Backend implements GlobalBackend{
 			rangeEnd = rangeStart + dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
 		}*/
 		
-		System.out.printf("\t\t[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n", dstBlock.id(), rangeStart, rangeEnd, length, dstBlock.id().localPath());
+		// System.out.printf("\t\t[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n", dstBlock.id(), rangeStart, rangeEnd, length, dstBlock.id().localPath());
 		
 		String path = dstBlock.id().localPath();
 		GetObjectRequest getReq = new GetObjectRequest(rootBucket, path);
@@ -152,8 +152,8 @@ public final class S3Backend implements GlobalBackend{
 			throw new KawkabException(e);
 		}
 		
-		if (id.type() == BlockID.BlockType.DATA_SEGMENT && ((DataSegmentID)id).inumber() == 0)
-			System.out.println("\t[S3] >>> Finished store to global: " + id + " rec0TS: " + buffer.getLong(0));
+		//if (id.type() == BlockID.BlockType.DATA_SEGMENT && ((DataSegmentID)id).inumber() == 0)
+			//System.out.println("\t[S3] >>> Finished store to global: " + id + " rec0TS: " + buffer.getLong(0));
 	}
 	
 	private AmazonS3 newS3Client() {

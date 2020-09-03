@@ -30,20 +30,13 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	private final TimerQueueIface fsQ;
 	private TimerQueueItem<InodesBlock> inbAcquired;
 
-	private final static Cache cache;
+	private final static Cache cache = Cache.instance();
 	private final static ApproximateClock clock = ApproximateClock.instance();
-	private final static int inodesPerBlock;	// Used in accessing the inode of this file when on the non-primary node
-	private final static LocalStoreManager localStore;	// FIXME: Isn't it a bad design to access localStore from a file handle?
+	private final static int inodesPerBlock = Configuration.instance().inodesPerBlock;	// Used in accessing the inode of this file when on the non-primary node
+	private final static LocalStoreManager localStore = LocalStoreManager.instance();	// FIXME: Isn't it a bad design to access localStore from a file handle?
 	private final static int bufferTimeLimitMs = 5000;
 	//private final LatHistogram rLog;
 	private final LatHistogram wLog;
-
-	static {
-		Configuration conf = Configuration.instance();
-		inodesPerBlock = conf.inodesPerBlock;
-		cache = Cache.instance();
-		localStore = LocalStoreManager.instance();
-	}
 
 	public FileHandle(long inumber, FileMode mode, TimerQueueIface fsQ, TimerQueueIface segsQ) throws IOException, KawkabException {
 		this.inumber = inumber;

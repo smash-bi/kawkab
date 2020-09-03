@@ -62,7 +62,7 @@ public class PartitionedBufferedCache extends Cache {
 
 		//runEvictor();
 
-		//runStatsCollector();
+		runStatsCollector();
 
 	}
 	
@@ -367,7 +367,7 @@ public class PartitionedBufferedCache extends Cache {
 			//long startT = clock.currentTime();
 
 			int lsCap = conf.maxBlocksPerLocalDevice * conf.numLocalDevices;
-			String outFile = "/home/sm3rizvi/kawkab/experiments/logs/cache.log";
+			String outFile = "/home/sm3rizvi/kawkab/experiments/logs/cache-"+conf.thisNodeID+".log";
 			File file = new File(outFile).getParentFile();
 			if (!file.exists()) {
 				file.mkdirs();

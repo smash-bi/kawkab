@@ -218,14 +218,17 @@ public final class DataSegment extends Block {
 	 */
 	int read(final ByteBuffer dstBuffer, long offsetInFile) {
 		assert dstBuffer.remaining() >= recordSize;
-		
+
 		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
-		
+
 		ByteBuffer buf = dataBuf.duplicate(); //FIXME: Ensure that this is thread-safe in the presence of a concurrent writer!!!
 		
 		buf.position(offsetInSegment);
 		buf.limit(offsetInSegment+recordSize);
 		dstBuffer.put(buf);
+
+		System.out.printf("[DS] offsetInFile=%d, offsetInSeg=%d, bufLimit=%d, copyBufTS=%d, dataBufTS=%d\n",
+				offsetInFile, offsetInSegment, offsetInSegment+recordSize, buf.getLong(offsetInSegment), dataBuf.getLong(offsetInSegment));
 
 		return buf.position() - offsetInSegment;
 	}
@@ -490,7 +493,7 @@ public final class DataSegment extends Block {
 		//storeBuffer.clear();
 		//storeBuffer.position(pos);
 
-		//System.out.printf("[DS] Loading %s from buffer: srcRem=%d, srcPos=%d, dstRem=%d, dstPos=%d, dirtyOffset=%d\n",
+		//System.out.printf("[DS] Before Loading %s from buffer: srcRem=%d, srcPos=%d, dstRem=%d, dstPos=%d, dirtyOffset=%d\n",
 		//		id, srcBuffer.remaining(), srcBuffer.position(), dataBuf.remaining(), pos, dirtyOffset);
 
 		dataBuf.put(srcBuffer);
@@ -516,9 +519,11 @@ public final class DataSegment extends Block {
 		storeBuffer.position(offset);
 		storeBuffer.limit(limit);
 
-		//System.out.printf("[DS] ByteBuffer store %s: pos=%d, limit=%d, rem=%d, offset=%d\n", id, storeBuffer.position(), limit, storeBuffer.remaining(), offset);
-
 		dstBuffer.put(storeBuffer);
+
+		//System.out.printf("[DS] ByteBuffer store %s: pos=%d, limit=%d, rem=%d, offset=%d, rec0TSSRC=%d, rec0TSDST=%d\n",
+		//		id, storeBuffer.position(), limit, storeBuffer.remaining(), offset, dstBuffer.getLong(dstBuffer.position() - (limit-offset)), storeBuffer.getLong(offset));
+
 
 		return;
 	}

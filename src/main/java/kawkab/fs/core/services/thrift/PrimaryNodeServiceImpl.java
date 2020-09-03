@@ -34,9 +34,12 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 
 	@Override
 	public ByteBuffer getSegment(long inumber, long blockInFile, int segmentInBlock, int recordSize, int offset) throws TFileNotExistException, TException {
+
 		segLog.start();
 
 		DataSegmentID id = new DataSegmentID(inumber, blockInFile, segmentInBlock, recordSize);
+
+		System.out.println("Get segment: " + id);
 
 		ByteBuffer buffer = buffers.poll();
 		if (buffer == null) buffer = ByteBuffer.allocate(segmentSizeBytes);
@@ -45,8 +48,8 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 		DataSegment ds = null;
 		try {
 			ds = (DataSegment)cache.acquireBlock(id);
-			ds.storeTo(buffer, offset);
 			ds.loadBlock(true);
+			ds.storeTo(buffer, offset);
 			buffer.flip();
 			return buffer;
 		} catch (IOException | KawkabException e) {
@@ -76,6 +79,7 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 
 		try {
 			block = (InodesBlock)cache.acquireBlock(id);
+			block.loadBlock(true);
 			block.storeTo(buffer);
 			buffer.flip();
 
@@ -99,6 +103,9 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 	public ByteBuffer getIndexNode(long inumber, int nodeNumInIndex, int fromTsIndex) throws TFileNotExistException, TException {
 		IndexNodeID id = new IndexNodeID(inumber, nodeNumInIndex);
 
+		// System.out.printf("[PSI] getIndexNode request: inum=%d, nodeNumInIdx=%d, fromTsIdx=%d idxNodeID=%s\n",
+		//		inumber, nodeNumInIndex, fromTsIndex, id);
+
 		ByteBuffer buffer = buffers.poll();
 		if (buffer == null) buffer = ByteBuffer.allocate(segmentSizeBytes);
 		buffer.clear();
@@ -107,6 +114,7 @@ public class PrimaryNodeServiceImpl implements PrimaryNodeService.Iface {
 
 		try {
 			node = (POHNode) cache.acquireBlock(id);
+			node.loadBlock(true);
 			node.storeTo(buffer, fromTsIndex);
 			buffer.flip();
 			return buffer;

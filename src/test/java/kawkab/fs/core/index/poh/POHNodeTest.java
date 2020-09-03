@@ -15,6 +15,7 @@ public class POHNodeTest {
 	private static Configuration conf;
 	@BeforeAll
 	public static void initialize() throws IOException, InterruptedException, KawkabException {
+		System.out.println("Initializing Test");
 		int nodeID = Configuration.getNodeID();
 		Properties props = Configuration.getProperties(Configuration.propsFileClusterSmall);
 		Configuration.configure(nodeID, props);
@@ -193,7 +194,9 @@ public class POHNodeTest {
 		System.out.println("Test: findAllEntriesTest");
 
 		IndexNodeID id = new IndexNodeID(1, 1);
+
 		POHNode node = new POHNode(id);
+
 		node.init(1, 0, 10, 2, conf.indexNodeSizeBytes, conf.indexBlockSizeBytes);
 
 		node.appendEntry(5, 7, 1);

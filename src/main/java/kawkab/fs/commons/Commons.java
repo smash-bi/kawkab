@@ -1,15 +1,11 @@
 package kawkab.fs.commons;
 
-import kawkab.fs.core.exceptions.KawkabException;
-
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Base64;
-import java.util.Properties;
 
 public final class Commons {
 	private static final int ibmapBlockSizeBytes;
@@ -17,9 +13,14 @@ public final class Commons {
 	private static final Configuration conf;
 	
 	static {
-		conf = Configuration.instance();
-		ibmapBlockSizeBytes = conf.ibmapBlockSizeBytes;
-		ibmapsPerMachine = conf.ibmapsPerMachine;
+		try {
+			conf = Configuration.instance();
+			ibmapBlockSizeBytes = conf.ibmapBlockSizeBytes;
+			ibmapsPerMachine = conf.ibmapsPerMachine;
+		} catch (Exception | AssertionError e) {
+			e.printStackTrace();
+			throw e;
+		}
 	}
 	
 	public static String uuidToBase64String(long uuidHigh, long uuidLow){

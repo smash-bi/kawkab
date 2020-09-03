@@ -53,15 +53,19 @@ public abstract class Block extends AbstractTransferItem {
 	//public long inTries = 0; //For debug purposes
 	
 	public Block(BlockID id) {
-		this.id = id;
-		isOnPrimary    = id != null && id.onPrimaryNode();
-		localDirtyCnt = new AtomicInteger(0);
-		//globalDirtyCnt = new AtomicInteger(0);
-		//inGlobalQueue  = new AtomicBoolean(false);
-		inLocalStore   = new AtomicBoolean(false);
-		//inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and
-		                                          // the newly created blocks are always cached.
-		isLoaded = false;
+		try {
+			this.id = id;
+			isOnPrimary = id != null && id.onPrimaryNode();
+			localDirtyCnt = new AtomicInteger(0);
+			//globalDirtyCnt = new AtomicInteger(0);
+			//inGlobalQueue  = new AtomicBoolean(false);
+			inLocalStore = new AtomicBoolean(false);
+			//inCache        = new AtomicBoolean(true); // Initialized to true because the cache creates block objects and
+			// the newly created blocks are always cached.
+			isLoaded = false;
+		} catch (Exception | AssertionError e) {
+			e.printStackTrace();
+		}
 	}
 	
 	protected void reset(BlockID id) {

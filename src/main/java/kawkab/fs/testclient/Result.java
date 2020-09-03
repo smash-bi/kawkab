@@ -130,7 +130,7 @@ public class Result {
 		json.append(String.format("  \"99%%Lat\":%.2f, ", lats[2]));
 		json.append(String.format("  \"minLat\":%.2f, ", latMin));
 		json.append(String.format("  \"maxLat\":%.2f, ", latMax));
-		json.append(String.format("  \"recsPs\":%d, ", recsTput));
+		json.append(String.format("  \"recsPs\":%d ", recsTput));
 
 		if (exportHists) {
 			appendHists(json);

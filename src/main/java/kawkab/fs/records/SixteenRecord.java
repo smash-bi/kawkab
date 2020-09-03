@@ -75,7 +75,7 @@ public class SixteenRecord implements Record {
 
 	@Override
 	public String toString() {
-		return String.format("ts=%d,v=d",timestamp(), value());
+		return String.format("ts=%d,v=%d",timestamp(), value());
 	}
 
 	@Override

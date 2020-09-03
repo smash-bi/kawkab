@@ -31,6 +31,9 @@ public class TestClientAsync {
 
 	private static int rampDownSec = 2;
 
+	private long apRecordTS = 1;
+	private long readRecordTS = 1;
+
 	TestClientAsync(int id) {
 		this.cid = id;
 		fileRand = new Random();
@@ -40,7 +43,7 @@ public class TestClientAsync {
 	Result[] runTest(boolean isController, double iat, int writeRatio, int testDurSec, int filesPerclient, int apBatchSize,
 						   int warmupSecs, Record recGen, final LinkedBlockingQueue<Instant> rq, TestClientServiceClient rpcClient) throws KawkabException {
 		int offset = (cid-1)*filesPerclient;
-		openFiles(offset, filesPerclient, recGen.size());
+		openFiles(offset, filesPerclient, recGen.size(), writeRatio);
 
 		rpcClient.barrier(cid);
 
@@ -150,7 +153,7 @@ public class TestClientAsync {
 	}
 
 
-	private Result[] test(int durSec, Record recGen, final int apBatchSize, final int writeRatio, final LinkedBlockingQueue<Instant> rq,
+	private Result[] test(int durSec, Record recGen, final int reqBatchSize, final int writeRatio, final LinkedBlockingQueue<Instant> rq,
 						  boolean logStats, boolean isController)
 			throws OutOfMemoryException, KawkabException {
 		long now = System.currentTimeMillis();
@@ -163,10 +166,10 @@ public class TestClientAsync {
 		Accumulator rRps = new Accumulator(durSec+1);
 		Accumulator wRps = new Accumulator(durSec+1);
 
-		String[] fnames = new String[apBatchSize]; //Random files used in a batch. Actual file name is populated from files class variable.
-		Record[] records = new Record[apBatchSize];
+		String[] fnames = new String[reqBatchSize]; //Random files used in a batch. Actual file name is populated from files class variable.
+		Record[] records = new Record[reqBatchSize];
 		for (int i=0; i<records.length; i++) {
-			records[i] = recGen.newRecord();
+			records[i] = recGen.newRandomRecord(new Random(), 0);
 		}
 
 		LatHistogram wLog = null;
@@ -188,13 +191,17 @@ public class TestClientAsync {
 					if (isController)
 						wLog.start();
 
-					sendAppendRequest(fnames, records, now-startT+1);
-					batchSize = apBatchSize;
+					sendAppendRequest(fnames, records, apRecordTS);
+					batchSize = reqBatchSize;
+					apRecordTS += records.length;
 
 					if (isController)
 						wLog.end(1);
 				} else {
-					batchSize = sendReadRequest(recGen, apClock.currentTime());
+					//batchSize = sendReadRequest(recGen, apClock.currentTime());
+
+					batchSize = sendHistoricalReadRequest(recGen, readRecordTS, readRecordTS+reqBatchSize);
+					readRecordTS += batchSize;
 					if (batchSize == 0) {
 						System.out.print("-");
 						continue;
@@ -252,7 +259,8 @@ public class TestClientAsync {
 
 	private void sendAppendRequest(String[] fnames, Record[] records, long ts) throws KawkabException {
 		for (int i=0; i<records.length; i++) {
-			records[i].timestamp(ts);
+			//records[i].timestamp(ts);
+			records[i].timestamp(ts++);
 			fnames[i] = files[fileRand.nextInt(files.length)];
 		}
 
@@ -273,7 +281,16 @@ public class TestClientAsync {
 		return res.size();
 	}
 
-	void openFiles(int offset, int numFiles, int recSize) throws KawkabException {
+	private int sendHistoricalReadRequest(Record recGen, long minTs, long maxTs) throws KawkabException {
+		String fn = files[fileRand.nextInt(files.length)];
+		List<Record> res = client.readRecords(fn, minTs, maxTs, recGen, false);
+		if (res == null)
+			return 0;
+
+		return res.size();
+	}
+
+	void openFiles(int offset, int numFiles, int recSize, int writeRatio) throws KawkabException {
 		assert client.isConnected();
 		assert files == null : "Files are already open";
 
@@ -285,7 +302,10 @@ public class TestClientAsync {
 
 		for (int i=0; i<files.length; i++) {
 			files[i] = String.format("tf-%d",offset+i);
-			modes[i] = Filesystem.FileMode.APPEND;
+			if (writeRatio > 0)
+				modes[i] = Filesystem.FileMode.APPEND;
+			else
+				modes[i] = Filesystem.FileMode.READ;
 			recSizes[i] = recSize;
 		}
 

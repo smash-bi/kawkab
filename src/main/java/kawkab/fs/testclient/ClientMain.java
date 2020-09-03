@@ -100,6 +100,7 @@ public class ClientMain {
 				case "td": td = Integer.parseInt(arg[1]); break;
 				case "wr": wr = Integer.parseInt(arg[1]); break;
 				case "iat": iat = Double.parseDouble(arg[1]); break;
+				case "wmup": warmupsec = Integer.parseInt(arg[1]); break;
 				default: System.out.printf("Invalid argument %s.\n%s",iArg,usage); return;
 			}
 		}

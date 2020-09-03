@@ -109,9 +109,9 @@ public class PostOrderHeapIndexTest {
 	}
 
 	private int heightOfNode(PostOrderHeapIndex poh, int nodeNumber) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-		Method method = PostOrderHeapIndex.class.getDeclaredMethod("heightOfNode", int.class, boolean.class);
+		Method method = PostOrderHeapIndex.class.getDeclaredMethod("heightOfNode", int.class);
 		method.setAccessible(true);
-		return (int) method.invoke(poh, nodeNumber, false);
+		return (int) method.invoke(poh, nodeNumber);
 	}
 
 	@Test

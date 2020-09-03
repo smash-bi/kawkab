@@ -6,7 +6,6 @@ import kawkab.fs.core.IndexNodeID;
 import kawkab.fs.core.InodesBlockID;
 import kawkab.fs.core.NodesRegister;
 import kawkab.fs.core.exceptions.FileNotExistException;
-import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.services.thrift.PrimaryNodeService.Client;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -16,17 +15,19 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class PrimaryNodeServiceClient {
-	private Map<Integer, PrimaryNodeService.Client> clients;
-	private Map<Integer, TTransport> transports;
+	private Map<Integer, ConcurrentLinkedQueue<PrimaryNodeService.Client>> clients;
+	private ConcurrentLinkedQueue<TTransport> transports;
 	private static PrimaryNodeServiceClient instance;
 	private static NodesRegister nodesRegister = NodesRegister.instance();
-	private final int BUFLEN = 500*1024;
+	//private final int BUFLEN = 500*1024;
+	private final int BUFLEN = 2*1024*1024; //500*1024;
 
 	private PrimaryNodeServiceClient() {
 		clients = new HashMap<>();
-		transports = new HashMap<>();
+		transports = new ConcurrentLinkedQueue<>();
 	}
 
 	public static PrimaryNodeServiceClient instance() {
@@ -39,9 +40,10 @@ public class PrimaryNodeServiceClient {
 
 	public ByteBuffer getSegment(DataSegmentID id, final int offset) throws FileNotExistException, IOException {
 		//System.out.println("[PC] getSegment: " + id);
-
+		int nodeID = id.primaryNodeID();
+		Client client = acquireClient(nodeID);
 		try {
-			return client(id.primaryNodeID()).getSegment(id.inumber(), id.blockInFile(), id.segmentInBlock(), id.recordSize(), offset);
+			return client.getSegment(id.inumber(), id.blockInFile(), id.segmentInBlock(), id.recordSize(), offset);
 		} catch (kawkab.fs.core.services.thrift.TFileNotExistException e) {
 			throw new FileNotExistException();
 		} catch (TTransportException e) {
@@ -51,14 +53,19 @@ public class PrimaryNodeServiceClient {
 		} catch (TException e) {
 			e.printStackTrace();
 			throw new IOException(e);
+		} finally {
+			releaseClient(client, nodeID);
 		}
 	}
 
 	public ByteBuffer getInodesBlock(InodesBlockID id) throws FileNotExistException, IOException {
-		System.out.println("[PC] getInodesBlock: " + id);
+		//System.out.println("[PC] getInodesBlock: " + id);
 
+		int nodeID = id.primaryNodeID();
+		Client client = acquireClient(nodeID);
 		try {
-			return client(id.primaryNodeID()).getInodesBlock(id.blockIndex());
+			//System.out.println("Primary node of the required block: " + id.primaryNodeID());
+			return client.getInodesBlock(id.blockIndex());
 		} catch (kawkab.fs.core.services.thrift.TFileNotExistException e) {
 			throw new FileNotExistException();
 		} catch (TTransportException e) {
@@ -68,14 +75,20 @@ public class PrimaryNodeServiceClient {
 		} catch (TException e) {
 			e.printStackTrace();
 			throw new IOException(e);
+		} finally {
+			releaseClient(client, nodeID);
 		}
 	}
 
 	public ByteBuffer getIndexNode(IndexNodeID id, int fromTsIdx) throws FileNotExistException, IOException {
-		//System.out.println("[PC] getIndexNode: " + id);
+		//System.out.printf("[PNSC] getIndexNode: %s, inum=%d, nodeInIdx=%d, numNodeInIdxBlock=%d, fromTsIdx=%d\n",
+		//		id, id.inumber(), id.nodeNumber(), id.numNodeInIndexBlock(), fromTsIdx);
+
+		int nodeID = id.primaryNodeID();
+		Client client = acquireClient(nodeID);
 
 		try {
-			return client(id.primaryNodeID()).getIndexNode(id.inumber(), id.numNodeInIndexBlock(), fromTsIdx);
+			return client.getIndexNode(id.inumber(), id.nodeNumber(), fromTsIdx);
 		} catch (kawkab.fs.core.services.thrift.TFileNotExistException e) {
 			throw new FileNotExistException();
 		} catch (TTransportException e) {
@@ -84,11 +97,18 @@ public class PrimaryNodeServiceClient {
 			throw new IOException(e);
 		} catch (TException e) {
 			throw new IOException(e);
+		} finally {
+			 releaseClient(client, nodeID);
 		}
 	}
 
-	private synchronized Client client(int nodeID) throws IOException {
-		PrimaryNodeService.Client client = clients.get(nodeID);
+	private Client acquireClient(int nodeID) throws IOException {
+		ConcurrentLinkedQueue<Client> clientList = clients.get(nodeID);
+		if (clientList == null) {
+			clientList = new ConcurrentLinkedQueue<>();
+			clients.put(nodeID, clientList);
+		}
+		PrimaryNodeService.Client client = clientList.poll();
 		if (client != null) {
 			return client;
 		}
@@ -109,13 +129,18 @@ public class PrimaryNodeServiceClient {
 			throw new IOException(x);
 		}
 
-		clients.put(nodeID, client);
-		transports.put(nodeID, transport);
+		//clients.put(nodeID, client);
+		transports.add(transport);
 		return client;
 	}
 
+	private void
+	releaseClient(Client client, int nodeID) {
+		clients.get(nodeID).add(client);
+	}
+
 	public void shutdown(){
-		for(TTransport tp : transports.values()) {
+		for(TTransport tp : transports) {
 			tp.close();
 		}
 	}

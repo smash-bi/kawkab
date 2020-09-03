@@ -9,8 +9,8 @@ public final class InodesBlockID extends BlockID{
 	private final int blockIndex;
 	private String localPath;
 	
-	private static final int inodeBlocksPerMachine = Configuration.instance().inodeBlocksPerMachine;
 	private static final int inodeBlocksPerDirectory = Configuration.instance().inodeBlocksPerDirectory;
+	private static final int inodeBlocksPerMachine = Configuration.instance().inodeBlocksPerMachine;
 	private static final String inodeBlocksPath = Configuration.instance().inodeBlocksPath + File.separator;
 	
 	public InodesBlockID(int blockIndex) {

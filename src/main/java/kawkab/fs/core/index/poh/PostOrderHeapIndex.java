@@ -129,13 +129,13 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		//System.out.printf("[POHI] Loading %d nodes, index length %d\n",nodesCount, len);
 
 		for (int i=1; i<=nodesCount; i++) {
-			acquireNode(i, true);
+			acquireNode(i, true, true);
 			//POHNode node = loadIndexNode(i);
 			//nodes.put(i, node);
 		}
 	}
 
-	private POHNode acquireNode(final int nodeNum, boolean loadFromPrimary) throws IOException, OutOfMemoryException, FileNotExistException {
+	private POHNode acquireNode(final int nodeNum, boolean loadFromPrimary, boolean loadData) throws IOException, OutOfMemoryException, FileNotExistException {
 		assert nodeNum >= 0;
 
 		if (nodeNum == 0)
@@ -168,17 +168,21 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		}
 
 		//loadLog.start();
-		try {
-			node.loadBlock(loadFromPrimary);
-		} catch (FileNotExistException | IOException e) {
-			if (acquired) {
-				synchronized (nodes) {
-					cache.releaseBlock(node.id());
-					nodes.remove(nodeNum);
-				}
-			}
+		if (loadData) {
+			// System.out.printf("[POH] Load node %d\n", nodeNum);
 
-			throw e;
+			try {
+				node.loadBlock(loadFromPrimary);
+			} catch (FileNotExistException | IOException e) {
+				if (acquired) {
+					synchronized (nodes) {
+						cache.releaseBlock(node.id());
+						nodes.remove(nodeNum);
+					}
+				}
+
+				throw e;
+			}
 		}
 		//loadLog.end();
 
@@ -200,7 +204,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	private POHNode createNewNodeCached(final int nodeNumber) throws IOException, OutOfDiskSpaceException, OutOfMemoryException, FileNotExistException {
 		IndexNodeID nodeID = new IndexNodeID(inumber, nodeNumber);
 
-		//System.out.println("[POH] Creating new node: " + nodeID);
+		// System.out.println("[POH] Creating new node: " + nodeID);
 
 		boolean created = false;
 		POHNode node = (POHNode) cache.acquireBlock(nodeID);
@@ -249,7 +253,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	private void setChildren(final POHNode node, boolean loadFromPrimary) throws IOException, OutOfMemoryException, FileNotExistException {
 		if (node.height() > 0) {
 			for (int i = 1; i <= childrenPerNode; i++) {
-				POHNode child = acquireNode(nthChild(node.nodeNumber(), node.height(), i, loadFromPrimary), loadFromPrimary);
+				POHNode child = acquireNode(nthChild(node.nodeNumber(), node.height(), i, loadFromPrimary), loadFromPrimary, true);
 				try {
 					node.appendChild(child);
 				} catch (IndexBlockFullException e) {
@@ -273,7 +277,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @throws IOException
 	 * @throws KawkabException
 	 */
-	public void appendMinTS(final long minTS, final long segmentInFile, final long curIndexLen) throws IOException, OutOfDiskSpaceException, OutOfMemoryException, FileNotExistException {
+	public void appendMinTS(final long minTS, final long segmentInFile, final long curIndexLen)
+			throws IOException, OutOfDiskSpaceException, OutOfMemoryException, FileNotExistException {
 		//TODO: check the arguments
 
 		// Current node should not be null.
@@ -303,7 +308,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
 			// FIXME: Note the variable overflow in curIndexLen+1
 			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode)); //ceil(entriesInIndex)/(entriesPerNode) gives the ceil value;
-			POHNode node = acquireNode(lastNode, false);
+			POHNode node = acquireNode(lastNode, false, false);
 			acquiredNode = new TimerQueueItem<>(node, this);
 		}
 
@@ -341,7 +346,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
 			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
-			POHNode node = acquireNode(lastNode, false);
+			POHNode node = acquireNode(lastNode, false, false);
 			acquiredNode = new TimerQueueItem<>(node, this);
 		}
 
@@ -380,7 +385,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
 			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
-			POHNode node = acquireNode(lastNode, false);
+			POHNode node = acquireNode(lastNode, false, false);
 			acquiredNode = new TimerQueueItem<>(node, this);
 		}
 
@@ -439,7 +444,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		// Find the right most node that has maxTS
 		// Traverse from that node to the left until the first value smaller than minTS is reached
 
-		System.out.printf("[POH] findAllMinBased: indexLen=%d\n", indexLen);
+		// System.out.printf("[POH] findAllMinBased: indexLen=%d\n", indexLen);
 
 		assert minTS <= maxTS;
 
@@ -463,7 +468,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 				break;
 
 			//curNode--;
-			curNode = acquireNode(curNode.nodeNumber()-1, loadFromPrimary);
+			curNode = acquireNode(curNode.nodeNumber()-1, loadFromPrimary, true);
 		}
 
 		return results;
@@ -476,7 +481,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param maxTS
 	 * @return
 	 */
-	public List<long[]> findAll(final long minTS, final long maxTS, final long indexLength, final boolean loadFromPrimary) throws IOException, KawkabException {
+	public List<long[]> findAll(final long minTS, final long maxTS, final long indexLength, final boolean loadFromPrimary)
+			throws IOException, KawkabException {
 		// Moving to the roots of the trees on the left, find the right-most root node N that has maxTS between minChildTS and maxEntryTS
 		// Traverse the tree rooted at N until the node K that has the maxTS between minEntryTS and maxEntryTS
 		// While traversing down the tree, select the right most child that has minChildTS less than or equal to maxTS
@@ -494,7 +500,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		POHNode curNode = findNode(maxTS, true, lastNodeIdx, loadFromPrimary);
 
 		if (curNode == null) {
-			POHNode lastNode = acquireNode(lastNodeIdx, loadFromPrimary);
+			POHNode lastNode = acquireNode(lastNodeIdx, loadFromPrimary, true);
 			return checkLastNode(lastNode, minTS, indexLength);
 		}
 
@@ -518,7 +524,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 			if (curNode.entryMinTS() < minTS)
 				break;
 
-			curNode = acquireNode(curNode.nodeNumber()-1, loadFromPrimary);
+			curNode = acquireNode(curNode.nodeNumber()-1, loadFromPrimary, true);
 		}
 
 
@@ -616,7 +622,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 				return null;
 			}
 
-			curNode = acquireNode(nextNode, loadFromPrimary);
+			curNode = acquireNode(nextNode, loadFromPrimary, true);
 			//ls1.printStats();
 			//ls2.printStats();
 		}
@@ -645,7 +651,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		while(curNode > 0) { // until we have explored all the root nodes; nodes[0] is null.
 			// Move to the root of the tree on the left
 
-			node = acquireNode(curNode, loadFromPrimary);
+			node = acquireNode(curNode, loadFromPrimary, true);
 
 			//System.out.printf("[POH] findRootNode: ts=%d, node=%s, minTS=%d, maxTS=%d\n", ts, node.nodeNumber(), node.minTS(), node.maxTS());
 
@@ -666,14 +672,21 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param childNumber
 	 * @return
 	 */
-	private int nthChild(int parentNodeNum, int parentHeight, int childNumber, boolean loadFromPrimary) throws IOException, OutOfMemoryException, FileNotExistException {
+	private int nthChild(int parentNodeNum, int parentHeight, int childNumber, boolean loadFromPrimary)
+			throws IOException, OutOfMemoryException, FileNotExistException {
 		assert parentHeight > 0 : "parentHeight must be greater than 0; parentHeight="+parentHeight;
 		assert childNumber > 0;
 
 		if (childNumber == childrenPerNode)
 			return parentNodeNum - 1;
 
-		return parentNodeNum - 1 - (childrenPerNode - childNumber)*(nodesCountTable[acquireNode(parentNodeNum-1, loadFromPrimary).height()]);
+		//int ht = acquireNode(parentNodeNum-1, loadFromPrimary, true).height();
+		int ht = nodeHeightsTable[parentNodeNum-1];
+
+		//System.out.printf("parent=%d, parentHeight=%d, childNum=%d, rightMostChildHeight=%d\n",
+		//		parentNodeNum, parentHeight, childNumber, ht);
+
+		return parentNodeNum - 1 - (childrenPerNode - childNumber)*(nodesCountTable[ht]);
 	}
 
 	/**

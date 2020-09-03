@@ -665,7 +665,7 @@ public final class CLI {
 	}
 
 	private void parseReadRecord(String[] args) throws IOException, KawkabException {
-		String usage = "Usage: rr <filename> [<n num> | <t ts> | <r ts1 ts2>]";
+		String usage = "Usage: rr <filename> [<n num> | <t ts> | <r ts1 ts2>] [l]";
 		if (args.length < 2) {
 			System.out.println(usage);
 			return;
@@ -694,6 +694,8 @@ public final class CLI {
 			return;
 		}
 
+		boolean loadFromPrimary = false;
+
 		String type = args[2];
 		switch (type) {
 			case "n": {
@@ -704,12 +706,16 @@ public final class CLI {
 
 				int recNum = Integer.parseInt(args[3]);
 
+				if (args.length == 5 && args[4].equals("l"))
+					loadFromPrimary = true;
+
+				Record dstRec = recgen.newRecord();
 				LatHistogram tlog = new LatHistogram(TimeUnit.MICROSECONDS, "read-lat", 100, 100000);
 				tlog.start();
-				file.recordNum(recgen.copyInDstBuffer(), recNum, recgen.size(), true);
+				file.recordNum(dstRec.copyInDstBuffer(), recNum, dstRec.size(), loadFromPrimary);
 				tlog.end(1);
 
-				System.out.println(recgen);
+				System.out.println(dstRec);
 				tlog.printStats();
 				break;
 			}
@@ -720,7 +726,11 @@ public final class CLI {
 				}
 
 				long atTS = Long.parseLong(args[3]);
-				if (file.recordAt(recgen.copyInDstBuffer(), atTS, recgen.size(), true))
+
+				if (args.length == 5 && args[4].equals("l"))
+					loadFromPrimary = true;
+
+				if (file.recordAt(recgen.copyInDstBuffer(), atTS, recgen.size(), loadFromPrimary))
 					System.out.println(recgen);
 				else
 					System.out.println("[CLI] Record not found at " + atTS);
@@ -734,7 +744,11 @@ public final class CLI {
 
 				long t1 = Long.parseLong(args[3]);
 				long t2 = Long.parseLong(args[4]);
-				List<Record> recs = file.readRecords(t1, t2, recgen, true);
+
+				if (args.length == 6 && args[5].equals("l"))
+					loadFromPrimary = true;
+
+				List<Record> recs = file.readRecords(t1, t2, recgen, loadFromPrimary);
 
 				if (recs == null) {
 					System.out.printf("Records not found b/w %d and %d\n", t1, t2);
