@@ -731,12 +731,13 @@ public class POHNode extends Block {
 
 			int numTSStored = storeEntriesTo(storeBuffer, dirtyOffsetStart);
 
+			// FIXME: This assertion is failing
 			assert numTSStored == numDirtyTS : String.format("numDirtyTS %d != %d numTSStored, tsCount=%d, dirtyoffset=%d",
 			 		numDirtyTS, numTSStored, tsCount.get(), dirtyOffsetStart);
 
 			// if (numTSStored != numDirtyTS) {
-			//	System.out.printf("numDirtyTS %d != %d numTSStored, tsCount=%d, dirtyoffset=%d\n",
-			//			numDirtyTS, numTSStored, tsCount.get(), dirtyOffsetStart);
+				// System.out.printf("numDirtyTS %d != %d numTSStored, tsCount=%d, dirtyoffset=%d\n",
+				//		numDirtyTS, numTSStored, tsCount.get(), dirtyOffsetStart);
 			// }
 
 			dirtyOffsetStart += numTSStored;
