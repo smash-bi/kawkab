@@ -7,9 +7,8 @@ import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.index.poh.PostOrderHeapIndex;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
-import kawkab.fs.core.timerqueue.TimerQueueIface;
-import kawkab.fs.core.timerqueue.TimerQueueItem;
-import kawkab.fs.utils.LatHistogram;
+import kawkab.fs.core.tq.TimerTransferQueue;
+import kawkab.fs.core.tq.TimerTransferableWrapper;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -17,7 +16,6 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -32,13 +30,13 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	private int recordSize; //Temporarily set to 1 until we implement reading/writing records
 	private PostOrderHeapIndex index;
 
-	private volatile TimerQueueItem<DataSegment> acquiredSeg;
-
 	private static final Cache cache = Cache.instance();
 	private static final ApproximateClock clock = ApproximateClock.instance();
 	private static final LocalStoreManager localStore = LocalStoreManager.instance();
 	private static final Configuration conf = Configuration.instance();
-	private TimerQueueIface timerQ;
+
+	private TimerTransferQueue timerQ;
+	private volatile TimerTransferableWrapper<DataSegment> acquiredSeg;
 
 	private boolean isInited;
 	private int recsPerSeg;
@@ -63,7 +61,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * Prepare after opening the file.
 	 * This function should be called after the inode has been loaded from the file or the remote node or the global store.
 	 */
-	synchronized void prepare(TimerQueueIface fsQ, TimerQueueIface segsQ) {
+	synchronized void prepare(TimerTransferQueue fsQ, TimerTransferQueue segsQ) {
 		thrLocalBuf.get(); //FIXME: To warmup the thread for the readers. This is not a good approach.
 		if (isInited) {
 			initCount.incrementAndGet();
@@ -454,7 +452,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 		boolean haveNewBlock = false;
 		boolean acquiredFromCache = false;
-		if (acquiredSeg == null || !timerQ.tryDisable(acquiredSeg)) {
+		if (acquiredSeg == null || !timerQ.disable(acquiredSeg)) {
 			acquiredFromCache = true;
 			haveNewBlock = (FixedLenRecordUtils.offsetInBlock(fileSizeBuffered, recordSize) % conf.dataBlockSizeBytes) == 0L;
 			acquiredSeg = acquireSegment(fileSizeBuffered, haveNewBlock);
@@ -492,11 +490,11 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 		//fileSizeBuffered += appended;
 
-		TimerQueueItem<DataSegment> item = acquiredSeg;
+		TimerTransferableWrapper<DataSegment> item = acquiredSeg;
 
 		//tlog1.start();
 		if (ds.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
-			acquiredSeg = null;		// is now immutable. The segment will be eventually returned to the cache.
+			//acquiredSeg = null;		// is now immutable. The segment will be eventually returned to the cache.
 
 			//long segmentInFile = FixedLenRecordUtils.segmentInFile(fileSizeBuffered-recordSize, recordSize);
 
@@ -520,7 +518,12 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			}
 		}
 
-		timerQ.enableAndAdd(item,clock.currentTime()+ bufferTimeOffsetMs);
+		timerQ.enableOrAdd(item,clock.currentTime()+ bufferTimeOffsetMs);
+
+		if (ds.isFull()) {
+			//timerQ.complete(acquiredSeg);
+			acquiredSeg = null;
+		}
 
 		fileSizeBuffered += appended;
 
@@ -546,7 +549,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 
 		while (remaining > 0) {
-			if (acquiredSeg == null || (!timerQ.tryDisable(acquiredSeg))) { //If null, no need to synchronize because the TimerQueue thread will never synchronize with this timer
+			if (acquiredSeg == null || (!timerQ.disable(acquiredSeg))) { //If null, no need to synchronize because the TimerQueue thread will never synchronize with this timer
 				boolean createNew = (fileSizeBuffered % conf.dataBlockSizeBytes) == 0L;
 				acquiredSeg = acquireSegment(fileSizeBuffered, createNew);
 				//acquiredSeg.getItem().setIsLoaded();
@@ -565,10 +568,11 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 				throw new KawkabException(e);
 			}
 
-			timerQ.enableAndAdd(acquiredSeg, clock.currentTime()+ bufferTimeOffsetMs);
+			timerQ.enableOrAdd(acquiredSeg, clock.currentTime()+ bufferTimeOffsetMs);
 
 			//tlog1.start();
 			if (ds.isFull()) {	// If the current segment is full, we don't need to keep the segment as the segment
+				//timerQ.complete(acquiredSeg);
 				acquiredSeg = null;		// is now immutable. The segment will be eventually returned to the cache.
 
 			}
@@ -587,7 +591,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * @throws IOException
 	 * @throws InterruptedException
 	 */
-	private TimerQueueItem<DataSegment> acquireSegment(long fileSize, boolean createBlock) throws IOException, InterruptedException, KawkabException {
+	private TimerTransferableWrapper<DataSegment> acquireSegment(long fileSize, boolean createBlock) throws IOException, InterruptedException, KawkabException {
 		DataSegmentID segId = getSegmentID(fileSize);
 		DataSegment ds = (DataSegment) cache.acquireBlock(segId);
 		assert ds.id() != null;
@@ -602,7 +606,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		}
 
 		//ds.initForAppend(fileSize, recordSize);
-		return new TimerQueueItem<>(ds, this);
+		TimerTransferableWrapper<DataSegment> wrapper = new TimerTransferableWrapper<>(ds, this);
+		timerQ.add(wrapper, clock.currentTime()+ bufferTimeOffsetMs);
+		return wrapper;
 	}
 
 	private DataSegmentID getSegmentID(long offsetInFile) {
@@ -729,8 +735,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	}
 
 	private void releaseAcquiredSeg() {
-		if (acquiredSeg != null && timerQ.tryDisable(acquiredSeg)) {
+		if (acquiredSeg != null && timerQ.disable(acquiredSeg)) {
 			deferredWork(acquiredSeg.getItem());
+			//timerQ.complete(acquiredSeg);
 			acquiredSeg = null;
 		}
 	}

@@ -1,22 +1,27 @@
 package kawkab.fs.core.tq;
 
 
+import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
+
 /**
  *
  */
 public class TimerTransferableWrapper<T> extends TransferableWrapper<T> implements Comparable<TimerTransferableWrapper<T>> {
 	protected long timeoutTS;
-	protected long nextTimeoutTS;		
+	protected long nextTimeoutTS;
+	private DeferredWorkReceiver<T> deferredWorker;
+	private boolean workPerformed = false;
 	
-	public TimerTransferableWrapper(T newItem) {
+	public TimerTransferableWrapper(T newItem, DeferredWorkReceiver<T> deferredWorker) {
 		super(newItem);
 		resetTimeouts();
+		this.deferredWorker = deferredWorker;
 	}
 		
-	public synchronized void reset(T newItem) throws InterruptedException {
+	/*public synchronized void reset(T newItem) throws InterruptedException {
 		super.reset(newItem);
 		resetTimeouts();
-	}
+	}*/
 
 	protected synchronized boolean addToTransferQueue(TimerTransferQueue<T> q, long timestamp) {
 		if (expiredOrDisabled()) {
@@ -37,19 +42,23 @@ public class TimerTransferableWrapper<T> extends TransferableWrapper<T> implemen
 		return timeoutTS;
 	}
 	
-	private T expireWrapper() {
+	private void expireWrapper() {
 		status = Status.EXPIRED;
 		resetTimeouts();
-		T ret = item;
-		item = null;
+		//T ret = item;
+		//item = null;
 		notifyAll();
-		return ret;
 	}
 
-	protected synchronized T removeFromTransferQueue(TimerTransferQueue<T> q) {
+	/**
+	 * @param q
+	 * @return whether the item has transitioned to expired.
+	 */
+	protected synchronized boolean removeFromTransferQueue(TimerTransferQueue<T> q) {
 		if (status == Status.INQ) {
 			if (nextTimeoutTS == -1) {
-				return expireWrapper();
+				expireWrapper();
+				return true;
 			} else {
 				timeoutTS = nextTimeoutTS;
 				nextTimeoutTS = -1;
@@ -64,7 +73,8 @@ public class TimerTransferableWrapper<T> extends TransferableWrapper<T> implemen
 		} else if (status == Status.OUTQ) {
 			assert(false);
 		}
-		return null;
+
+		return false;
 	}
 	
 	protected synchronized T expire() {
@@ -98,4 +108,11 @@ public class TimerTransferableWrapper<T> extends TransferableWrapper<T> implemen
 		nextTimeoutTS = -1;
 	}
 
+	protected void performDeferredWork() {
+		assert !workPerformed : "Deferred work is already performed";
+		workPerformed = true;
+		T item = dispose();
+		assert item != null : "Wrapper item is null";
+		deferredWorker.deferredWork(item);
+	}
 }

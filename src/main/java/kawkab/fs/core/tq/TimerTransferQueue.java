@@ -15,17 +15,21 @@ import java.util.PriorityQueue;
  */
 public class TimerTransferQueue<T> {
 	private PriorityQueue<TimerTransferableWrapper<T>> backingQueue;
-	private ResizeableCircularQueue<T> completeQueue;
+	//private ResizeableCircularQueue<TimerTransferableWrapper<T>> completeQueue;
+	private Thread worker;
+	private String name;
 	
 	private final static int defaultCapacity = 100;
 	
-	public TimerTransferQueue(int initCapacity) {
+	public TimerTransferQueue(String name, int initCapacity) {
+		this.name = name;
 		backingQueue = new PriorityQueue<TimerTransferableWrapper<T>>(initCapacity);
-		completeQueue = new ResizeableCircularQueue<T>(initCapacity);
+		//completeQueue = new ResizeableCircularQueue<TimerTransferableWrapper<T>>(initCapacity);
+		runWorker();
 	}
 	
-	public TimerTransferQueue() {
-		this(defaultCapacity);
+	public TimerTransferQueue(String name) {
+		this(name, defaultCapacity);
 	}
 	
 	/**
@@ -79,13 +83,14 @@ public class TimerTransferQueue<T> {
 	 * @param wrap	The wrapper object that we want t complete.
 	 * @return 		Success of operation
 	 */
-	public synchronized boolean complete(TimerTransferableWrapper<T> wrap) {
+	/*public synchronized boolean complete(TimerTransferableWrapper<T> wrap) {
 		T item = wrap.expire();	// Change the state of the wrapper to expire
 		if (item == null) return false;
-		completeQueue.add(item);
+		//completeQueue.add(item);
+		completeQueue.add(wrap);
 		notifyAll();
 		return true;
-	}
+	}*/
 	
 	public boolean disable(TimerTransferableWrapper<T> wrap) {
 		return wrap.disable();
@@ -95,15 +100,16 @@ public class TimerTransferQueue<T> {
 		return wrap.enable(timeout);
 	}
 	
-	public synchronized T take() throws InterruptedException {
+	private synchronized TimerTransferableWrapper<T> take() throws InterruptedException {
 		while (true) {
 			// Check to see if there are items in the complete queue.
-			int completeIndex = completeQueue.frontIndex();
+			/*int completeIndex = completeQueue.frontIndex();
 			if (completeIndex != -1) {
-				T item = completeQueue.getAtIndex(completeIndex);
+				//T item = completeQueue.getAtIndex(completeIndex);
+				TimerTransferableWrapper<T> w = completeQueue.getAtIndex(completeIndex);
 				completeQueue.pop();
-				return item;
-			}
+				return w;
+			}*/
 			// With no items in the complete queue, retrieve an item from
 			// the backingQueue. Block if the blockingQueue is empty.
 			TimerTransferableWrapper<T> w = backingQueue.peek();
@@ -113,8 +119,13 @@ public class TimerTransferQueue<T> {
 				long currentTS = System.currentTimeMillis();
 				long timeoutTS = w.getTimeout();
 				if (timeoutTS <= currentTS) {
-					T ret = backingQueue.poll().removeFromTransferQueue(this);
-					if (ret != null) {
+					//T ret = backingQueue.poll().removeFromTransferQueue(this);
+					TimerTransferableWrapper<T> ret = backingQueue.poll();
+					if (ret != null && ret.getItem() != null) {
+						boolean expired = ret.removeFromTransferQueue(this);
+						if (!expired)
+							continue;
+
 						return ret; // Wrapper removed. Return to caller
 					} else {
 						continue;   // Try again. This item had an updated timeout.
@@ -129,5 +140,34 @@ public class TimerTransferQueue<T> {
 
 	public synchronized int size() {
 		return backingQueue.size();
+	}
+
+	private void runWorker() {
+		worker = new Thread(() -> {
+			try {
+				while (true) {
+					TimerTransferableWrapper<T> w = take();
+					assert w != null : "Taken wrapper is null";
+					w.performDeferredWork();
+				}
+				//T next = take();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		});
+		worker.start();
+	}
+
+	public void shutdown() {
+		worker.interrupt();
+	}
+
+	public void waitUntilEmpty() {
+		while(size() > 0) {
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {
+			}
+		}
 	}
 }

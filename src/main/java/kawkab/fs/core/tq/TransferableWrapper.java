@@ -20,14 +20,14 @@ public class TransferableWrapper<T> {
 	/**
 	 * Wrappers should not be shared. It can be reused once it has been removed from the queue (EXPIRED)
 	 */
-	public synchronized void reset(T newItem) throws InterruptedException {
+	/*public synchronized void reset(T newItem) throws InterruptedException {
 		while (status != Status.EXPIRED) {
 			wait(); // Can't reuse until it has been popped from the queue
 		}
 		// Assign a new item and change the state back to OUTQ
 		item = newItem;
 		status = Status.OUTQ;
-	}
+	}*/
 		
 	protected synchronized boolean disable() {
 		if (expiredOrOut()) return false;
@@ -48,7 +48,7 @@ public class TransferableWrapper<T> {
 		status = Status.EXPIRED;
 		notifyAll();
 		T ret = getItem();
-		item = null;
+		//item = null;
 		return ret;
 	}
 	
@@ -58,5 +58,10 @@ public class TransferableWrapper<T> {
 	
 	protected boolean expiredOrDisabled() {
 		return (status == Status.EXPIRED || status == Status.DISABLED);
+	}
+
+	protected synchronized T dispose() {
+		assert status == Status.EXPIRED : "Disposable item is not expired: " + item;
+		return item;
 	}
 }

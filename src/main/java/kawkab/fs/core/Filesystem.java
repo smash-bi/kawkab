@@ -7,6 +7,7 @@ import kawkab.fs.core.services.thrift.FilesystemServiceServer;
 import kawkab.fs.core.services.thrift.PrimaryNodeServiceServer;
 import kawkab.fs.core.timerqueue.TimerQueue;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
+import kawkab.fs.core.tq.TimerTransferQueue;
 import kawkab.fs.utils.GCMonitor;
 
 import java.io.IOException;
@@ -29,8 +30,8 @@ public final class Filesystem {
 
 	private static Map<Long, FileHandle> openFiles; //FIXME: We should pass on a unique number to the FileHandle and use that as the key
 
-	private TimerQueueIface fsQ;
-	private TimerQueueIface segsQ;
+	private TimerTransferQueue fsQ;
+	private TimerTransferQueue segsQ;
 
 	private Filesystem() throws KawkabException, IOException {
 		conf = Configuration.instance();
@@ -39,8 +40,8 @@ public final class Filesystem {
 		pns.startServer();
 		fss = new FilesystemServiceServer(this, conf.fsServerListenPort, 8, 8);
 		fss.startServer();
-		fsQ = new TimerQueue("FS Timer Queue");
-		segsQ = new TimerQueue("Segs Timer Queue");
+		fsQ = new TimerTransferQueue("FS Timer Queue");
+		segsQ = new TimerTransferQueue("Segs Timer Queue");
 		openFiles = new HashMap<>();
 		cache = Cache.instance();
 	}
@@ -113,7 +114,7 @@ public final class Filesystem {
 			namespace.closeAppendFile(fh.inumber());
 	}
 
-	public TimerQueueIface getTimerQueue() {
+	public TimerTransferQueue getTimerQueue() {
 		return fsQ;
 	}
 	

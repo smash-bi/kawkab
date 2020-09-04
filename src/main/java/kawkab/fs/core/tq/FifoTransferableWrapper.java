@@ -19,7 +19,7 @@ public class FifoTransferableWrapper<T> extends TransferableWrapper<T> {
 		if (status == Status.INQ) {
 			status = Status.EXPIRED;
 			T ret = item;
-			item = null;  
+			item = null;
 			notifyAll();  // Wake up threads waiting for this wrapper to expire (so it can be reused)
 			return ret;
 		} else if (status == Status.DISABLED) {

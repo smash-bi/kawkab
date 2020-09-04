@@ -6,11 +6,12 @@ import kawkab.fs.core.IndexNodeID;
 import kawkab.fs.core.LocalStoreManager;
 import kawkab.fs.core.exceptions.*;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
-import kawkab.fs.core.timerqueue.TimerQueueIface;
-import kawkab.fs.core.timerqueue.TimerQueueItem;
+import kawkab.fs.core.tq.TimerTransferQueue;
+import kawkab.fs.core.tq.TimerTransferableWrapper;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -24,8 +25,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	// Persistent variables, persisted in the inode
 	private long inumber;
 	private final LocalStoreManager localStore = LocalStoreManager.instance();
-	private final TimerQueueIface timerQ;
-	private volatile TimerQueueItem<POHNode> acquiredNode;
+	private final TimerTransferQueue timerQ;
+	private volatile TimerTransferableWrapper<POHNode> acquiredNode;
 	private static final ApproximateClock clock = ApproximateClock.instance();
 	private static final int bufferTimeOffsetMs = 10; //Giving some time for buffering
 
@@ -60,7 +61,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	 * @param indexNodeSizeBytes
 	 * @param percentEntriesPerNode
 	 */
-	public PostOrderHeapIndex(long inumber, int indexNodeSizeBytes, int nodesPerBlock, int percentEntriesPerNode, Cache cache, TimerQueueIface tq) {
+	public PostOrderHeapIndex(long inumber, int indexNodeSizeBytes, int nodesPerBlock, int percentEntriesPerNode, Cache cache, TimerTransferQueue tq) {
 		int entrySize = POHNode.entrySizeBytes();
 		int childSize = POHNode.childSizeBytes();
 		int headerBytes = POHNode.headerSizeBytes();
@@ -302,17 +303,21 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		if (lastNodeFull) { //If last node is full
 			int nodeNum = (int) (curIndexLen / 2 / entriesPerNode) + 1;
 			POHNode node = createNewNodeCached(nodeNum);
-			acquiredNode = new TimerQueueItem<>(node, this);
+			acquiredNode = new TimerTransferableWrapper<>(node, this);
+			timerQ.add(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
 		}
 
-		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
+		if (acquiredNode == null || !timerQ.disable(acquiredNode)) {
 			// FIXME: Note the variable overflow in curIndexLen+1
 			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode)); //ceil(entriesInIndex)/(entriesPerNode) gives the ceil value;
 			POHNode node = acquireNode(lastNode, false, false);
-			acquiredNode = new TimerQueueItem<>(node, this);
+			acquiredNode = new TimerTransferableWrapper<>(node, this);
+			timerQ.add(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
 		}
 
 		POHNode currentNode = acquiredNode.getItem();
+
+		assert currentNode != null : "Wrapper item is null";
 
 		try {
 			currentNode.appendEntryMinTS(minTS, segmentInFile);
@@ -320,7 +325,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 			e.printStackTrace();
 		}
 
-		timerQ.enableAndAdd(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
+		timerQ.enableOrAdd(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
 
 		//System.out.println("Min: " + minTS + ", seg: " + segmentInFile);
 	}
@@ -344,17 +349,18 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 		assert curIndexLen % 2 == 1 : "Index length is incorrect: " + curIndexLen;
 
-		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
+		if (acquiredNode == null || !timerQ.disable(acquiredNode)) {
 			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
 			POHNode node = acquireNode(lastNode, false, false);
-			acquiredNode = new TimerQueueItem<>(node, this);
+			acquiredNode = new TimerTransferableWrapper<>(node, this);
+			timerQ.add(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
 		}
 
 		POHNode currentNode = acquiredNode.getItem();
 
 		currentNode.appendEntryMaxTS(maxTS, segmentInFile);
 
-		timerQ.enableAndAdd(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
+		timerQ.enableOrAdd(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
 
 		if (currentNode.isFull()) {
 			acquiredNode = null;
@@ -376,17 +382,19 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 			try {
 				int nodeNum = (int)(curIndexLen/2/entriesPerNode) +1;
 				POHNode node = createNewNodeCached(nodeNum);
-				acquiredNode = new TimerQueueItem<>(node, this);
+				acquiredNode = new TimerTransferableWrapper<>(node, this);
+				timerQ.add(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
 			} catch (IOException | KawkabException  e) {
 				e.printStackTrace();
 				return;
 			}
 		}
 
-		if (acquiredNode == null || !timerQ.tryDisable(acquiredNode)) {
+		if (acquiredNode == null || !timerQ.disable(acquiredNode)) {
 			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode));
 			POHNode node = acquireNode(lastNode, false, false);
-			acquiredNode = new TimerQueueItem<>(node, this);
+			acquiredNode = new TimerTransferableWrapper<>(node, this);
+			timerQ.add(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
 		}
 
 		POHNode currentNode = acquiredNode.getItem();
@@ -397,7 +405,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 			e.printStackTrace();
 		}
 
-		timerQ.enableAndAdd(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
+		timerQ.enableOrAdd(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);
 
 		if (currentNode.isFull()) {
 			acquiredNode = null;
@@ -759,7 +767,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	public void shutdown() throws KawkabException {
 		//timerQ.waitUntilEmpty();
 
-		if (acquiredNode != null && timerQ.tryDisable(acquiredNode)) {
+		if (acquiredNode != null && timerQ.disable(acquiredNode)) {
 			deferredWork(acquiredNode.getItem());
 		}
 
@@ -774,7 +782,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	}
 
 	public void flush() throws KawkabException {
-		if (acquiredNode != null && timerQ.tryDisable(acquiredNode)) {
+		if (acquiredNode != null && timerQ.disable(acquiredNode)) {
 			deferredWork(acquiredNode.getItem());
 		}
 

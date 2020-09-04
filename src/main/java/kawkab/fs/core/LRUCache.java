@@ -63,6 +63,9 @@ public final class LRUCache extends LinkedHashMap<BlockID, CachedItem> {
 		if(elapsed > 100000) {
 			System.out.printf("[LC] Cache evict (us): %d\n",elapsed);
 		}
+
+		//System.out.println("Evicted");
+
 		return true;
 	}
 
