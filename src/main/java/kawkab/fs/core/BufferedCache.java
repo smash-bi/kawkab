@@ -509,6 +509,14 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 
 	}
 
+	public LatHistogram acqStats() {
+		return acqLog;
+	}
+
+	public LatHistogram relStats() {
+		return relLog;
+	}
+
 	@Override
 	public void printStats() {
 		System.out.println(getStats());

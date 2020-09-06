@@ -580,4 +580,8 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	public void deferredWork(InodesBlock ib) {
 		localStore.store(ib);
 	}
+
+	public LatHistogram writeStats() {
+		return wLog;
+	}
 }

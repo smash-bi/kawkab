@@ -133,4 +133,12 @@ public class LatHistogram {
 	public Accumulator accumulator() {
 		return stats;
 	}
+
+	public void merge(LatHistogram from) {
+		assert unit.equals(from.unit);
+
+		tCount += from.tCount;
+
+		stats.merge(from.stats);
+	}
 }
