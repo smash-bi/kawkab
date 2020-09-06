@@ -9,6 +9,7 @@ import kawkab.fs.core.timerqueue.TimerQueue;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.tq.TimerTransferQueue;
 import kawkab.fs.utils.GCMonitor;
+import kawkab.fs.utils.LatHistogram;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -205,9 +206,18 @@ public final class Filesystem {
 	}
 
 	public void printStats() throws KawkabException {
+		LatHistogram writeStatsAgg = null;
 		for (FileHandle file : openFiles.values()) {
-			file.printStats();
+			//file.printStats();
+			if (writeStatsAgg == null) {
+				writeStatsAgg = file.writeStats();
+			} else {
+				writeStatsAgg.merge(file.writeStats());
+			}
 		}
+
+		if (writeStatsAgg != null)
+			System.out.printf("Aggregate write stats: %s\n", writeStatsAgg.getStats());
 
 		pns.printStats();
 

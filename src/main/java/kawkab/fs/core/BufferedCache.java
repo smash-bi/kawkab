@@ -69,8 +69,8 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 		//FIXME: The size of cache is not what is reflected from the configuration
 		MAX_BLOCKS_IN_CACHE = numSegmentsInCache; // + conf.inodeBlocksPerMachine + conf.ibmapsPerMachine;
 
-		acqLog = new LatHistogram(TimeUnit.MICROSECONDS, "Cache acquire", 1, 100);
-		relLog = new LatHistogram(TimeUnit.MICROSECONDS, "Cache release", 1, 100);
+		acqLog = new LatHistogram(TimeUnit.NANOSECONDS, "Cache acquire", 1, 50000);
+		relLog = new LatHistogram(TimeUnit.NANOSECONDS, "Cache release", 1, 50000);
 
 		highMark = (int) (numSegmentsInCache * 0.99);
 		midMark = (int) (numSegmentsInCache * 0.95);
@@ -219,7 +219,7 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 			int elapsed = acqLog.end(1);
 			cacheLock.unlock();    // the exception. Change the caller functions to not release the block in
 
-			if (elapsed > 10000) {
+			if (elapsed > 10000000) {
 				System.out.println("Cache acquire elapsed (us): " + elapsed);
 			}
 
@@ -522,6 +522,13 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 		cache.resetStats();
 	}
 
+	public LatHistogram acqStats() {
+		return acqLog;
+	}
+
+	public LatHistogram relStats() {
+		return relLog;
+	}
 
 	long evictCount() {
 		return evicted;

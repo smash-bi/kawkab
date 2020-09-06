@@ -58,7 +58,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 			inode.loadLastBlock();
 
 		//rLog = new LatHistogram(TimeUnit.MICROSECONDS, "R-"+inumber, 10, 10000);
-		wLog = new LatHistogram(TimeUnit.MICROSECONDS, "W-"+inumber, 10, 20000);
+		wLog = new LatHistogram(TimeUnit.NANOSECONDS, "W-"+inumber, 10, 20000);
 	}
 
 	/**
@@ -478,6 +478,10 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		}*/
 		
 		//TODO: Update openFiles table.
+	}
+
+	public LatHistogram writeStats() {
+		return wLog;
 	}
 
 	public void printStats() throws KawkabException {

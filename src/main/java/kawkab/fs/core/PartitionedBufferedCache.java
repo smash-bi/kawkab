@@ -5,6 +5,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
 import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.GCMonitor;
+import kawkab.fs.utils.LatHistogram;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -276,8 +277,18 @@ public class PartitionedBufferedCache extends Cache {
 		long size = 0;
 
 		StringBuilder stats = new StringBuilder();
+		LatHistogram acqStatsAgg = null;
+		LatHistogram relStatsAgg = null;
 		for (int i=0; i<numPartitions; i++) {
-			stats.append(cache[i].getStats());
+			//stats.append(cache[i].getStats());
+			if (i == 0) {
+				acqStatsAgg = cache[i].acqStats();
+				relStatsAgg = cache[i].relStats();
+			} else {
+				acqStatsAgg.merge(cache[i].acqStats());
+				relStatsAgg.merge(cache[i].relStats());
+			}
+
 			evicted += cache[i].evictCount();
 			missed += cache[i].missCount();
 			accessed += cache[i].accessCount();
@@ -286,8 +297,8 @@ public class PartitionedBufferedCache extends Cache {
 		}
 
 		if (accessed > 0)
-			stats.append(String.format("Cache agg: size=%.0f%%, accessed=%d, missed=%d, evicted=%d, hitRatio=%.02f\n",
-					size*100.0/totalSegments, accessed, missed, evicted, 100.0*(accessed-missed)/accessed));
+			stats.append(String.format("Agg acquire: %s\nAgg release: %s\nCache agg: size=%.0f%%, accessed=%d, missed=%d, evicted=%d, hitRatio=%.02f\n",
+					acqStatsAgg.getStats(), relStatsAgg.getStats(), size*100.0/totalSegments, accessed, missed, evicted, 100.0*(accessed-missed)/accessed));
 
 		System.out.println("Pinned map size: " + pinnedMap.size());
 
@@ -299,6 +310,16 @@ public class PartitionedBufferedCache extends Cache {
 		for (int i=0; i<numPartitions; i++) {
 			cache[i].printStats();
 		}
+
+		LatHistogram acqStatsAgg = cache[0].acqStats();
+		LatHistogram relStatsAgg = cache[0].relStats();
+		for (int i=1; i<numPartitions; i++) {
+			acqStatsAgg.merge(cache[i].acqStats());
+			relStatsAgg.merge(cache[i].relStats());
+		}
+
+		System.out.printf("Agg acquire stats: %s\n", acqStatsAgg.getStats());
+		System.out.printf("Agg release stats: %s\n", acqStatsAgg.getStats());
 	}
 
 	@Override

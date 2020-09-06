@@ -15,15 +15,15 @@ import java.util.concurrent.TimeUnit;
  * This class is not thread safe.
  */
 public class LatHistogram {
-	private TimeUnit unit;
-	private Accumulator stats;
+	private final TimeUnit unit;
+	private final Accumulator stats;
 	private boolean started;
 	private long tCount;
-	private String tag;
+	private final String tag;
 	private int[] rand;
 	private int randIdx;
-	private int samplePercent;
-	private Stopwatch sw;
+	private final int samplePercent;
+	private final Stopwatch sw;
 
 	public LatHistogram(TimeUnit unit, String tag, int samplePercent, int numBuckets) {
 		assert 0 <= samplePercent && samplePercent <= 100 : "Sample percent must be between 0 and 100";
@@ -132,5 +132,13 @@ public class LatHistogram {
 
 	public Accumulator accumulator() {
 		return stats;
+	}
+
+	public void merge(LatHistogram from) {
+		assert unit.equals(from.unit);
+
+		tCount += from.tCount;
+
+		stats.merge(from.stats);
 	}
 }
