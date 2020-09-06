@@ -37,7 +37,7 @@ public class TimerQueue implements TimerQueueIface {
 	@Override
 	public void enableAndAdd (TimerQueueItem item, long timeoutMs) {
 		assert working;
-		
+
 		item.enable(timeoutMs);
 		trnsfrQ.add(item);
 	}

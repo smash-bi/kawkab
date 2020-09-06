@@ -60,7 +60,7 @@ public class PartitionedBufferedCache extends Cache {
 		pinnedMap = new ConcurrentHashMap<>();
 		pinLock = new KeyedLock<>();
 
-		//runEvictor();
+		runEvictor();
 	}
 	
 	public static PartitionedBufferedCache instance() {

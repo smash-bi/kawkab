@@ -27,9 +27,11 @@ public class Accumulator {
         this.minValue = Double.MAX_VALUE;
     }
 
-    public synchronized void put(int bucket, int count) {
+    public synchronized void put(int value, int count) {
         assert count >= 0 : "Count is negative: " + count;
-        assert bucket >= 0 : "Bucket number is negative: " + count;
+        assert value >= 0 : "Bucket number is negative: " + count;
+
+        int bucket = value;
 
         if (bucket >= buckets.length){
             bucket = buckets.length-1;
@@ -40,11 +42,11 @@ public class Accumulator {
         buckets[bucket] += count;
         totalCnt += count;
 
-        if (maxValue < bucket)
-            maxValue = bucket;
+        if (maxValue < value)
+            maxValue = value;
 
-        if (minValue > bucket)
-            minValue = bucket;
+        if (minValue > value)
+            minValue = value;
     }
 
     /*public synchronized void put(int value) {
