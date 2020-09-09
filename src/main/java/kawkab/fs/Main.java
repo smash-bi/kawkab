@@ -34,9 +34,12 @@ public class Main {
 		System.out.println("-------------------------------");
 
 		int nodeID = Configuration.getNodeID();
-		Properties props = Configuration.getProperties(Configuration.propsFileCluster);
-		Filesystem.bootstrap(nodeID, props);
+		String propsFile = System.getProperty("conf", Configuration.propsFileCluster);
 
-		GCMonitor.initialize();
+		System.out.println("Node ID = " + nodeID);
+		System.out.println("Loading properties from: " + propsFile);
+
+		Properties props = Configuration.getProperties(propsFile);
+		Filesystem.bootstrap(nodeID, props);
 	}
 }

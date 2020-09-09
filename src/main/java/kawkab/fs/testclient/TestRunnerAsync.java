@@ -57,7 +57,7 @@ public class TestRunnerAsync {
 					processResults(readAgg, writeAgg, outFolder);
 				}
 
-				String fp = String.format("%s/clients/client-%02d", outFolder, clid);
+				String fp = String.format("%s/results/client-%02d", outFolder, clid);
 				if (results[idx][0] != null) ClientUtils.saveResult(results[idx][0], fp+"reads");
 				if (results[idx][1] != null) ClientUtils.saveResult(results[idx][1], fp+"writes");
 			});
