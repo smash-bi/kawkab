@@ -199,7 +199,6 @@ public final class CLI {
 		System.out.println("Current Time: " + Instant.now());
 		System.out.printf("GC stats (ms): %s\n", GCMonitor.getStats());
 		System.out.printf("Cache stats:\n%s", Cache.instance().getStats());
-		System.out.println("File stats:");
 		fs.printStats();
 	}
 

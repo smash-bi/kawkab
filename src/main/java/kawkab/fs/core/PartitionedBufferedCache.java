@@ -25,7 +25,7 @@ import static kawkab.fs.core.BlockID.BlockType;
 public class PartitionedBufferedCache extends Cache {
 	private static final Object initLock = new Object();
 	private static PartitionedBufferedCache instance;
-	
+
 	private Configuration conf;
 	private BufferedCache[] cache; // An extended LinkedHashMap that implements removeEldestEntry()
 	private LocalStoreManager localStore;
@@ -36,14 +36,15 @@ public class PartitionedBufferedCache extends Cache {
 	private int totalSegments;
 	private volatile boolean working = true;
 	private DSPool dsp;
+	private Thread collector;
 
 	private PartitionedBufferedCache() {
 		System.out.println("Initializing PartitionedBufferedCache cache..." );
-		
+
 		conf = Configuration.instance();
-		
+
 		localStore = LocalStoreManager.instance();
-		
+
 		totalSegments = (int)((conf.cacheSizeMiB * 1048576L)/conf.segmentSizeBytes);
 		if (totalSegments <= 0) {
 			System.out.println("Cache size is not sufficient to cache the metadata and the data segments");
@@ -52,7 +53,7 @@ public class PartitionedBufferedCache extends Cache {
 
 		dsp = new DSPool(totalSegments+1);
 		int numSegmentsPerPart = totalSegments/numPartitions;
-		
+
 		cache = new BufferedCache[numPartitions];
 		for (int i=0; i<numPartitions; i++) {
 			cache[i] = new BufferedCache(numSegmentsPerPart, i+1, dsp);
@@ -63,7 +64,7 @@ public class PartitionedBufferedCache extends Cache {
 
 		runEvictor();
 	}
-	
+
 	public static PartitionedBufferedCache instance() {
 		if (instance == null) {
 			synchronized(initLock) {
@@ -72,54 +73,54 @@ public class PartitionedBufferedCache extends Cache {
 				}
 			}
 		}
-		
+
 		return instance;
 	}
 
-	
+
 	/**
 	 * Acquires a reference of the block from the LRU cache. BlockID is an immutable ID of the block, which also creates
 	 * a new block class depending on the type of the ID. The BlockID returns a unique string key that this cache uses
 	 * to index the block. Therefore, if any two callers have different objects of BlockID but same data in the objects,
 	 * both callers will acquire the same block.
-	 * 
+	 *
 	 * NOTE: The caller must call releaseBlock() function to release the block and decrement its reference count, even
 	 * if this function throws an exception. This need to be changed so that the caller does not need to release the
-	 * block in the case of an exception. 
-	 * 
+	 * block in the case of an exception.
+	 *
 	 * The function parameter createNewBlock indicates that the caller wants to create a new block. In this case, the
-	 * cache creates a new block - it first reserves a block space in memory by instantiating the object through 
+	 * cache creates a new block - it first reserves a block space in memory by instantiating the object through
 	 * blockID.newBlock(), and then the cache calls the localStore.createBlock() function to create the block
 	 * in the local store. The local store then creates the block in the local storage.
-	 * 
+	 *
 	 * If the block is not already in the cache, the block is brought into the cache using the block.loadBlock()
 	 * function. The loadBlock function is a blocking function. Therefore, the calling thread blocks until the data
-	 * is loaded into the block. The block is loaded from the local store, the global store, or the primary node of 
+	 * is loaded into the block. The block is loaded from the local store, the global store, or the primary node of
 	 * the block.
-	 * 
+	 *
 	 * If the block is not in memory, and adding a new block exceeds the size of the cache, the cache evicts the LRU block
-	 * before creating space for the new block. The existing LRU block must have zero reference count, i.e., the block 
+	 * before creating space for the new block. The existing LRU block must have zero reference count, i.e., the block
 	 * must not be acquired by any thread. If the LRU block's reference count is not zero, it throws an exception.
-	 * 
+	 *
 	 * An acquired block cannot be evicted from the cache. The cache keeps the reference count of all the acquired blocks.
-	 * 
+	 *
 	 * The evicted block is first persisted to the local store if it is dirty.
-	 * 
-	 * Thread safety: The whole cache is locked to obtain the cached items. 
+	 *
+	 * Thread safety: The whole cache is locked to obtain the cached items.
 	 * If the item is already in the cache, it increments the reference count so that the count is updated atomically.
 	 * If the block is not in the cache, a new block object is created and its reference count is increment. The
 	 * cache is then unlocked. In this way, two simultaneous threads cannot create two different objects for the same
 	 * block.
-	 * 
+	 *
 	 * The cache lock provides mutual exclusion from the releaseBlock() function as well.
-	 * 
+	 *
 	 * This function calls block.load() function to load data into the block.
-	 * 
+	 *
 	 * If the function throws an exception, the caller must call the releaseBlock() function to release the block.
-	 * 
+	 *
 	 * @param blockID
 	 * @return
-	 * @throws IOException The block is not cached if the exception is thrown 
+	 * @throws IOException The block is not cached if the exception is thrown
 	 * @throws KawkabException The block is not cached if the exception is thrown
 	 */
 	@Override
@@ -200,10 +201,10 @@ public class PartitionedBufferedCache extends Cache {
 			}
 		}*/
 	}
-	
+
 	/**
 	 * Flushes the block in the persistent store. This should be used only for system shutdown.
-	 * 
+	 *
 	 * @throws KawkabException
 	 */
 	@Override
@@ -239,10 +240,21 @@ public class PartitionedBufferedCache extends Cache {
 
 		//pinnedMap.clear();
 	}
-	
+
 	@Override
 	public void shutdown() throws KawkabException {
 		working = false;
+
+		// Stop stats collector
+		if (collector != null) {
+			System.out.println("Closing stats collector");
+			collector.interrupt();
+			try {
+				collector.join(5000);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
 
 		int size = pinnedMap.size();
 		for (int i=0; i<numPartitions; i++) {
@@ -259,7 +271,7 @@ public class PartitionedBufferedCache extends Cache {
 		//flushPinned();
 		localStore.shutdown();
 	}
-	
+
 	@Override
 	public long size() {
 		int size = pinnedMap.size();
@@ -375,7 +387,7 @@ public class PartitionedBufferedCache extends Cache {
 
 	// fixme: For debugging only
 	public void runStatsCollector() {
-		Thread collector = new Thread(() -> {
+		collector = new Thread(() -> {
 			SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss:SSS");
 			Date date = new Date(System.currentTimeMillis());
 			System.out.println("Current time: " + formatter.format(date));
@@ -385,7 +397,8 @@ public class PartitionedBufferedCache extends Cache {
 			//long startT = clock.currentTime();
 
 			int lsCap = conf.maxBlocksPerLocalDevice * conf.numLocalDevices;
-			String outFile = "/home/sm3rizvi/kawkab/experiments/logs/cache-"+conf.thisNodeID+".log";
+			String outFolder = System.getProperty("outFolder", "/home/sm3rizvi/kawkab/experiments/logs");
+			String outFile = String.format("%s/server-%d-cache.txt", outFolder, conf.thisNodeID);
 			File file = new File(outFile).getParentFile();
 			if (!file.exists()) {
 				file.mkdirs();
@@ -395,7 +408,7 @@ public class PartitionedBufferedCache extends Cache {
 
 			try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile));) {
 				writer.write(formatter.format(date) + "\n");
-				writer.write("# cache occupancy, local store occupancy\n");
+				writer.write("# cache occupancy, local store occupancy, canEvict, gsQlen\n");
 
 				int n = 0;
 				while (working) {
@@ -424,8 +437,10 @@ public class PartitionedBufferedCache extends Cache {
 
 				writer.write("\n");
 				writer.flush();
+
+				System.out.println("Stats collector stopped");
 			} catch (IOException e) {
-				e.printStackTrace();
+				//e.printStackTrace();
 			}
 		});
 		collector.setName("CacheLogger");

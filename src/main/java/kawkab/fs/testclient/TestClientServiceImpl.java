@@ -108,7 +108,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 
 				barInCnt++;
 
-				System.out.printf("Client %d at barrier, total %d\n", clid, barInCnt);
+				System.out.printf("Client %d at barrier, total %d / %d\n", clid, barInCnt, numClients);
 
 				if (barInCnt != numClients) {
 					try {

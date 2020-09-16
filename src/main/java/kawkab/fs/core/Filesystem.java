@@ -77,8 +77,8 @@ public final class Filesystem {
 		assert opts.recordSize() > 0;
 		assert opts.recordSize() <= Configuration.instance().segmentSizeBytes;
 
-		//long inumber = namespace.openFileDbg(filename, mode == FileMode.APPEND, opts); //FIXME
-		long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
+		long inumber = namespace.openFileDbg(filename, mode == FileMode.APPEND, opts); //FIXME: This is for quick testing.
+		//long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 
 		//long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber + ", mode: " + mode);
@@ -165,6 +165,8 @@ public final class Filesystem {
 		Cache.instance().shutdown();
 		ApproximateClock.instance().shutdown();
 
+		printStats();
+		System.out.printf("Cache stats:\n%s", Cache.instance().getStats());
 		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
 		System.out.println("Closed FileSystem");
 		// GlobalStoreManager.instance().shutdown(); //The LocalStore closes the GlobalStore

@@ -145,6 +145,7 @@ public final class DataSegment extends Block {
 	}
 
 	synchronized void rollback(int numBytes) {
+		System.out.println("rollback");
 		writePos.addAndGet(-numBytes);
 		dataBuf.position(dataBuf.position()-numBytes);
 	}
@@ -161,7 +162,7 @@ public final class DataSegment extends Block {
 		assert writePos.get() == offsetInSegment :
 				String.format("writePos (%d) != OffsetInSeg (%d) for seg %s, fsLen=%d", writePos.get(), offsetInSegment, id(), offsetInFile);
 		assert dataBuf.position() == offsetInSegment :
-				String.format("dataBuf pos %d is incorrect, expected %d", dataBuf.position(), offsetInSegment);
+				String.format("%s: dataBuf pos %d is incorrect, expected %d", id, dataBuf.position(), offsetInSegment);
 		
 		int length = srcBuffer.remaining();
 
@@ -443,10 +444,10 @@ public final class DataSegment extends Block {
 			return 0;
 
 		ByteBuffer buffer = dataBuf.duplicate();
+		buffer.clear();
+
 		if (initedForAppends) {
 			buffer.limit(initialAppendPos);
-		} else {
-			buffer.clear();
 		}
 
 		int bytesRead = Commons.readFrom(channel, buffer);
@@ -456,7 +457,9 @@ public final class DataSegment extends Block {
 			writePos.set(bytesRead);
 			isSegFull = bytesRead == conf.segmentSizeBytes;
 			initialAppendPos = bytesRead;
+			dataBuf.position(initialAppendPos);
 			initedForAppends = true;
+			//System.out.printf("[DS] %s not inited for appends. Setting values\n", id);
 		} /*else {
 			int pos = writePos.addAndGet(bytesRead);
 			dirtyOffset += bytesRead;
@@ -467,7 +470,7 @@ public final class DataSegment extends Block {
 
 
 		//System.out.printf("[DS] After loading %s from channel: bytesRead=%d, writePos=%d, datBufPos=%d\n",
-		//		id, bytesRead, pos, dataBuf.position());
+		//		id, bytesRead, writePos.get(), dataBuf.position());
 
 		return bytesRead;
 	}

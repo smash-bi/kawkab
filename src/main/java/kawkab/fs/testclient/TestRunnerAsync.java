@@ -10,14 +10,15 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class TestRunnerAsync {
 	private TestClientServiceServer tserver;
 
-	void  runTest(int testID, double iat, int writeRatio, int testDurSec, int nc, int cidOffset, int nf, String sip, int sport, int apBatchSize, Record recGen,
+	void  runTest(int testID, double iat, int writeRatio, int testDurSec, int totalClients, int clientsPerMachine,
+				  int cidOffset, int nf, String sip, int sport, int apBatchSize, Record recGen,
 					  int warmupSecs, int mid, String mip, int mport, String outFolder) {
-		final Result[][] results = new Result[nc][];
+		final Result[][] results = new Result[clientsPerMachine][];
 
 		final LinkedBlockingQueue<Instant> rq = new LinkedBlockingQueue<>();
 
-		Thread[] threads = new Thread[nc];
-		for (int i=0; i<nc; i++) {
+		Thread[] threads = new Thread[clientsPerMachine];
+		for (int i=0; i<clientsPerMachine; i++) {
 			final int clid = cidOffset+i;
 			final int idx = i;
 			threads[i] = new Thread(()-> {
@@ -31,7 +32,8 @@ public class TestRunnerAsync {
 
 					client.barrier(clid);
 
-					Result[] res = runTest(clid, sip, sport, idx == 0, iat, writeRatio, testDurSec, nf, apBatchSize, warmupSecs, recGen, rq, client);
+					Result[] res = runTest(clid, sip, sport, idx == 0, iat, writeRatio, totalClients,
+							clientsPerMachine, testDurSec, nf, apBatchSize, warmupSecs, recGen, rq, client);
 					results[idx] = res;
 
 					System.out.printf("Client %d finished\n", clid);
@@ -57,7 +59,7 @@ public class TestRunnerAsync {
 					processResults(readAgg, writeAgg, outFolder);
 				}
 
-				String fp = String.format("%s/clients/client-%02d", outFolder, clid);
+				String fp = String.format("%s/results/client-%02d-", outFolder, clid);
 				if (results[idx][0] != null) ClientUtils.saveResult(results[idx][0], fp+"reads");
 				if (results[idx][1] != null) ClientUtils.saveResult(results[idx][1], fp+"writes");
 			});
@@ -66,7 +68,7 @@ public class TestRunnerAsync {
 			threads[i].start();
 		}
 
-		for(int i=0; i<nc; i++) {
+		for(int i=0; i<clientsPerMachine; i++) {
 			try {
 				threads[i].join();
 			} catch (InterruptedException e) {
@@ -94,7 +96,7 @@ public class TestRunnerAsync {
 			System.out.println("No write results.");
 		}
 
-		Result mixedRes = null;
+		Result mixedRes;
 		if (readAgg != null && writeAgg != null) {
 			mixedRes = new Result(readAgg);
 			mixedRes.merge(writeAgg);
@@ -102,11 +104,15 @@ public class TestRunnerAsync {
 			System.out.println("Aggregate results:");
 			System.out.printf("Mixed: %s\n", Arrays.toString(mixedRes.tputLog()));
 			printStats(mixedRes);
+		} else if (readAgg != null) {
+			mixedRes = readAgg;
+		} else {
+			mixedRes = writeAgg;
 		}
 
 		if (readAgg != null) { System.out.printf("Reads, %s", readAgg.csv()); }
 		if (writeAgg != null) { System.out.printf("Writes, %s", writeAgg.csv()); }
-		if (mixedRes != null) { System.out.printf("Mixed, %s", mixedRes.csv()); }
+		System.out.printf("All, %s", mixedRes.csv());
 
 		saveResults(outFolder + "/", readAgg, writeAgg, mixedRes);
 	}
@@ -122,7 +128,7 @@ public class TestRunnerAsync {
 		}
 
 		if (mixedRes != null) {
-			saveResults(filePrefix + "mixed-", mixedRes);
+			saveResults(filePrefix + "all-", mixedRes);
 		}
 	}
 
@@ -132,12 +138,13 @@ public class TestRunnerAsync {
 		res.exportCsv(filePrefix+"results.csv");
 	}
 
-	private Result[] runTest(int cid, String sip, int sport, boolean isController, double iat, int writeRatio, int testDurSec, int filesPerclient, int apBatchSize,
+	private Result[] runTest(int cid, String sip, int sport, boolean isController, double iat, int writeRatio,
+							 int totalClients, int clientsPerMachine, int testDurSec, int filesPerclient, int apBatchSize,
 							 int warmupSecs, Record recGen, final LinkedBlockingQueue<Instant> rq, TestClientServiceClient rpcClient) throws KawkabException {
 
 		TestClientAsync client = new TestClientAsync(cid);
 		client.connect(sip, sport);
-		Result[] res = client.runTest(isController, iat, writeRatio, testDurSec, filesPerclient, apBatchSize, warmupSecs, recGen, rq, rpcClient);
+		Result[] res = client.runTest(isController, iat, writeRatio, totalClients, clientsPerMachine, testDurSec, filesPerclient, apBatchSize, warmupSecs, recGen, rq, rpcClient);
 		client.disconnect();
 
 		return res;

@@ -29,10 +29,10 @@ public class TestClientAsync {
 	private Clock clock = Clock.systemDefaultZone();
 	private volatile boolean work = true;
 
-	private static int rampDownSec = 2;
+	private static final int rampDownSec = 2;
+	//private long readRecordTS = 1;
 
-	private long apRecordTS = 1;
-	private long readRecordTS = 1;
+	private long[] timestamps;
 
 	TestClientAsync(int id) {
 		this.cid = id;
@@ -40,10 +40,11 @@ public class TestClientAsync {
 		//clock = ApproximateClock.instance();
 	}
 
-	Result[] runTest(boolean isController, double iat, int writeRatio, int testDurSec, int filesPerclient, int apBatchSize,
+	Result[] runTest(boolean isController, double repRateMPS, int writeRatio, int totalClients, int clientsPerMachine, int testDurSec, int filesPerclient, int batchSize,
 						   int warmupSecs, Record recGen, final LinkedBlockingQueue<Instant> rq, TestClientServiceClient rpcClient) throws KawkabException {
 		int offset = (cid-1)*filesPerclient;
 		openFiles(offset, filesPerclient, recGen.size(), writeRatio);
+		timestamps = new long[files.length];
 
 		rpcClient.barrier(cid);
 
@@ -57,20 +58,20 @@ public class TestClientAsync {
 			}
 
 			work = true;
-			ctrlThr = new Thread(() -> generateReqs(iat, writeRatio, rq));
+			ctrlThr = new Thread(() -> generateReqs(repRateMPS, totalClients, clientsPerMachine, batchSize, rq));
 			ctrlThr.start();
 		}
 
 		Result[] res = null;
 		try {
 			System.out.printf("Ramp-up for %d seconds...\n", warmupSecs);
-			test(warmupSecs, recGen.newRecord(), apBatchSize, writeRatio, rq, false, isController);
+			test(warmupSecs, recGen.newRecord(), batchSize, writeRatio, rq, false, isController);
 
 			System.out.printf("Running test for %d seconds...\n", testDurSec);
-			res = test(testDurSec, recGen.newRecord(), apBatchSize, writeRatio, rq, true, isController);
+			res = test(testDurSec, recGen.newRecord(), batchSize, writeRatio, rq, true, isController);
 
 			System.out.printf("Ramp-down for %d seconds...\n", rampDownSec);
-			test(rampDownSec, recGen.newRecord(), apBatchSize, writeRatio, rq, false, isController);
+			test(rampDownSec, recGen.newRecord(), batchSize, writeRatio, rq, false, isController);
 		}catch (AssertionError | Exception e) {
 			e.printStackTrace();
 		} finally {
@@ -92,39 +93,45 @@ public class TestClientAsync {
 		return res;
 	}
 
-	private void generateReqs(final double iat, final int writeRatio, final LinkedBlockingQueue<Instant> rq) {
-		PoissonDistribution arrRand = new PoissonDistribution(iat); //arrival time for the next request
+	private void generateReqs(final double reqRateMPS, int totalCleints, int clientsPerMachine,
+							  int batchSize, final LinkedBlockingQueue<Instant> rq) {
+		double targetMPS = reqRateMPS/((double)totalCleints/(double)clientsPerMachine)/(double)batchSize; //total / ratePerMachine / batchSize
+		double iatMicros = 1 / (targetMPS);  //Convert millions per second to nano second wait interval
+
+		System.out.printf("IAT Micros = %f, ratePerMachMPS  = %f, tc=%d, cpm=%d, bs=%d, mps=%f\n",
+				iatMicros, targetMPS, totalCleints, clientsPerMachine, batchSize, reqRateMPS);
+
+		PoissonDistribution arrRand = new PoissonDistribution(iatMicros); //arrival time for the next request
 		Random waitRand = new Random();
 
 		while(work) {
 			int toSend = 1;
+			int waitTimeMicros = arrRand.sample(); // - (int)lastElapsed + residue;
 			long sleepStartTime = System.nanoTime();
-			int toWait = arrRand.sample(); // - (int)lastElapsed + residue;
-			int waitTime = toWait;
 
 			while(true) {
 				try {
-					assert waitTime > 0;
+					assert waitTimeMicros > 0;
 
-					if (waitTime >= 3 * 1000) {
-						Thread.sleep(waitTime / 1000, 0);
-					} else if (waitTime > 60) { //It sleeps for at least 60us.
-						LockSupport.parkNanos(waitTime*1000);
+					if (waitTimeMicros >= 3 * 1000) {
+						Thread.sleep(waitTimeMicros / 1000, 0);
+					} else if (waitTimeMicros > 100) { //It sleeps for at least 60us.
+						LockSupport.parkNanos(waitTimeMicros*1000);
 					} else {
-						LockSupport.parkNanos(60000);
+						busyWaitMicros(waitTimeMicros);
 					}
 				} catch (InterruptedException e) {
 					return;
 				}
 
 				int sleepTime = (int)((System.nanoTime() - sleepStartTime)/1000.0);
-				if (sleepTime > toWait) {
-					toSend = sleepTime/toWait;
-					int mod = sleepTime%toWait;
+				if (sleepTime > waitTimeMicros) {
+					toSend = sleepTime/waitTimeMicros;
+					int mod = sleepTime%waitTimeMicros;
 					if (waitRand.nextInt(100) < mod)
 						toSend += 1;
-				} else if (sleepTime < toWait) {
-					waitTime = toWait - sleepTime;
+				} else if (sleepTime < waitTimeMicros) {
+					waitTimeMicros = waitTimeMicros - sleepTime;
 					continue;
 				}
 
@@ -132,9 +139,7 @@ public class TestClientAsync {
 			}
 
 			int size = rq.size();
-			if (size > 0 && size % 1000 == 0) {
-				System.out.printf("Reqs queue %d\n", rq.size());
-			} else if (size > 0) {
+			if (size > 0) {
 				System.out.print(size +" ");
 			}
 
@@ -159,14 +164,15 @@ public class TestClientAsync {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
-		Accumulator wLats = new Accumulator(1000000);
-		Accumulator rLats = new Accumulator(1000000);
+		Accumulator wLats = new Accumulator(100000);
+		Accumulator rLats = new Accumulator(100000);
 		Accumulator rTputs = new Accumulator(durSec+1);
 		Accumulator wTputs = new Accumulator(durSec+1);
 		Accumulator rRps = new Accumulator(durSec+1);
 		Accumulator wRps = new Accumulator(durSec+1);
 
 		String[] fnames = new String[reqBatchSize]; //Random files used in a batch. Actual file name is populated from files class variable.
+		//int[] timestamps = new int[reqBatchSize];
 		Record[] records = new Record[reqBatchSize];
 		for (int i=0; i<records.length; i++) {
 			records[i] = recGen.newRandomRecord(new Random(), 0);
@@ -185,29 +191,31 @@ public class TestClientAsync {
 				Instant ts = rq.take();
 				boolean isAppend = (reqRand.nextInt(100)+1) <= writeRatio;
 
-				int lat;
 				int batchSize = -1;
 				if (isAppend) {
 					if (isController)
 						wLog.start();
 
-					sendAppendRequest(fnames, records, apRecordTS);
+					sendAppendRequest(fnames, records, timestamps);
 					batchSize = reqBatchSize;
-					apRecordTS += records.length;
 
 					if (isController)
 						wLog.end(1);
 				} else {
 					//batchSize = sendReadRequest(recGen, apClock.currentTime());
 
-					batchSize = sendHistoricalReadRequest(recGen, readRecordTS, readRecordTS+reqBatchSize);
-					readRecordTS += batchSize;
+					batchSize = sendFixedWindowReadRequest(recGen, reqBatchSize, timestamps);
+
+					//batchSize = sendHistoricalReadRequest(recGen, readRecordTS, readRecordTS+reqBatchSize);
+					//readRecordTS += batchSize;
+
 					if (batchSize == 0) {
 						System.out.print("-");
 						continue;
 					}
 				}
 
+				int lat;
 				try {
 					lat = (int) (Duration.between(ts, clock.instant()).toNanos() / 1000);
 				} catch (ArithmeticException e) {
@@ -257,11 +265,14 @@ public class TestClientAsync {
 		return new Result[]{readRes, writeRes};
 	}
 
-	private void sendAppendRequest(String[] fnames, Record[] records, long ts) throws KawkabException {
+	private void sendAppendRequest(String[] fnames, Record[] records, long[] timestamps) throws KawkabException {
 		for (int i=0; i<records.length; i++) {
-			//records[i].timestamp(ts);
-			records[i].timestamp(ts++);
-			fnames[i] = files[fileRand.nextInt(files.length)];
+			int iFile = fileRand.nextInt(files.length);
+			fnames[i] = files[iFile];
+			records[i].timestamp(++timestamps[iFile]);
+
+			//if (iFile == 0 && cid == 0)
+			//	System.out.printf("cid=%d, file=%s, TS=%d\n", cid, fnames[i], records[i].timestamp());
 		}
 
 		//client.appendRecords(fnames, records);
@@ -274,6 +285,24 @@ public class TestClientAsync {
 		long minTs = tsNow - winMs - offsetMs;
 		long maxTs = minTs + winMs;
 		String fn = files[fileRand.nextInt(files.length)];
+		List<Record> res = client.readRecords(fn, minTs, maxTs, recGen, true);
+		if (res == null)
+			return 0;
+
+		return res.size();
+	}
+
+	private int sendFixedWindowReadRequest(Record recGen, int batchSize, long[] timestamps) throws KawkabException {
+		int iFile = fileRand.nextInt(files.length);
+		String fn = files[iFile];
+		long maxTs = timestamps[iFile];
+		if (maxTs < batchSize)
+			return 0;
+
+		long minTs = maxTs - batchSize;
+
+		//System.out.printf("minTs=%d, maxTs=%d\n", minTs, maxTs);
+
 		List<Record> res = client.readRecords(fn, minTs, maxTs, recGen, true);
 		if (res == null)
 			return 0;
@@ -343,5 +372,16 @@ public class TestClientAsync {
 
 		return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats.buckets(), tputs.buckets(), recsPerSec);
 		//return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats.buckets(), rps.buckets(), recsPerSec);
+	}
+
+	private void busyWaitMicros(long micros){
+		long waitUntil = System.nanoTime() + (micros * 1_000);
+		while(waitUntil > System.nanoTime()){
+			;
+		}
+	}
+
+	private void waitMicros(int micros) {
+
 	}
 }

@@ -177,7 +177,7 @@ public class ClientMain {
 	}
 
 	private void runRWTest(int testID, double intArrTime, int writeRatio, int apBatchSize, int cidOffset, int testDurSec,
-						   int numCients, int filesPerClient, String svrIP, int sport, Record recGen, int warmupsec,
+						   int clientsPerMachine, int filesPerClient, String svrIP, int sport, Record recGen, int warmupsec,
 						   int totalClients, int mid, String mip, int mport, int initWaitMs, String filePrefix)
 								throws KawkabException, InterruptedException {
 		TestRunnerAsync at = new TestRunnerAsync();
@@ -190,7 +190,7 @@ public class ClientMain {
 			initWait(initWaitMs);
 		}
 
-		at.runTest(testID, intArrTime, writeRatio, testDurSec, numCients, cidOffset, filesPerClient,
+		at.runTest(testID, intArrTime, writeRatio, testDurSec, totalClients, clientsPerMachine, cidOffset, filesPerClient,
 				svrIP, sport, apBatchSize, recGen, warmupsec, mid, mip, mport, filePrefix);
 
 		if (cidOffset == mid) {
