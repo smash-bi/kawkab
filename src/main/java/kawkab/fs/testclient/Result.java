@@ -121,8 +121,8 @@ public class Result {
 		double[] lats = accm.getLatencies();
 		StringBuilder json = new StringBuilder();
 		json.append("{ ");
-		json.append(String.format("  \"reqs\":%,d, ", reqsCount));
-		json.append(String.format("  \"opsPs\":%,.0f, ", opsThr));
+		json.append(String.format("  \"reqs\":%d, ", reqsCount));
+		json.append(String.format("  \"opsPs\":%.0f, ", opsThr));
 		json.append(String.format("  \"thrMBps\":%.2f, ", dataThr));
 		json.append(String.format("  \"meanLat\":%.2f, ", accm.mean()));
 		json.append(String.format("  \"50%%Lat\":%.2f, ", lats[0]));

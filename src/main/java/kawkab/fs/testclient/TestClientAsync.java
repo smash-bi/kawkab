@@ -102,20 +102,21 @@ public class TestClientAsync {
 				iatMicros, targetMPS, totalCleints, clientsPerMachine, batchSize, reqRateMPS);
 
 		PoissonDistribution arrRand = new PoissonDistribution(iatMicros); //arrival time for the next request
-		Random waitRand = new Random();
 
 		while(work) {
 			int toSend = 1;
 			int waitTimeMicros = arrRand.sample(); // - (int)lastElapsed + residue;
 			long sleepStartTime = System.nanoTime();
 
+			/*long t1 = System.currentTimeMillis();
 			while(true) {
 				try {
-					assert waitTimeMicros > 0;
+					assert waitTimeMicros > 0 : "WiaTimeMicros <= 0: " + waitTimeMicros;
 
-					if (waitTimeMicros >= 3 * 1000) {
-						Thread.sleep(waitTimeMicros / 1000, 0);
-					} else if (waitTimeMicros > 100) { //It sleeps for at least 60us.
+					if (waitTimeMicros >= 3000) {
+						System.out.println(waitTimeMicros);
+						Thread.sleep(waitTimeMicros / 1000, (waitTimeMicros%1000)*1000);
+					} else if (waitTimeMicros > 60) { //It sleeps for at least 60us.
 						LockSupport.parkNanos(waitTimeMicros*1000);
 					} else {
 						busyWaitMicros(waitTimeMicros);
@@ -124,24 +125,35 @@ public class TestClientAsync {
 					return;
 				}
 
-				int sleepTime = (int)((System.nanoTime() - sleepStartTime)/1000.0);
+				double sleepTime = (System.nanoTime() - sleepStartTime)/1000.0;
+
 				if (sleepTime > waitTimeMicros) {
-					toSend = sleepTime/waitTimeMicros;
-					int mod = sleepTime%waitTimeMicros;
-					if (waitRand.nextInt(100) < mod)
+					toSend = (int)(sleepTime/waitTimeMicros);
+					double mod = sleepTime % waitTimeMicros;
+					if (mod > 0.2*waitTimeMicros)
 						toSend += 1;
 				} else if (sleepTime < waitTimeMicros) {
-					waitTimeMicros = waitTimeMicros - sleepTime;
+					waitTimeMicros = (int)(waitTimeMicros - sleepTime);
+					if (waitTimeMicros == 0)
+						break;
 					continue;
 				}
 
 				break;
 			}
 
-			int size = rq.size();
+			System.out.println(" => " + (System.currentTimeMillis() - t1));*/
+
+			if (waitTimeMicros > 60) { //It sleeps for at least 60us.
+				LockSupport.parkNanos(waitTimeMicros*1000);
+			} else {
+				busyWaitMicros(waitTimeMicros);
+			}
+
+			/*int size = rq.size();
 			if (size > 0) {
 				System.out.print(size +" ");
-			}
+			}*/
 
 			for (int i=0; i<toSend; i++) {
 				rq.add(clock.instant());
@@ -164,8 +176,8 @@ public class TestClientAsync {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
-		Accumulator wLats = new Accumulator(100000);
-		Accumulator rLats = new Accumulator(100000);
+		Accumulator wLats = new Accumulator(1000000);
+		Accumulator rLats = new Accumulator(1000000);
 		Accumulator rTputs = new Accumulator(durSec+1);
 		Accumulator wTputs = new Accumulator(durSec+1);
 		Accumulator rRps = new Accumulator(durSec+1);
@@ -248,7 +260,7 @@ public class TestClientAsync {
 		if (rLats.count() > 0) {
 			//rBatchSize = rBatchSize / rLats.count(); // Take the average number of records read per operation
 			System.out.println("rBatchSize = " + (rBatchSize/rLats.count()));
-			rBatchSize = 1; // Take the average number of records read per operation
+			//rBatchSize = 1; // Take the average number of records read per operation
 			readRes = prepareResult(rLats, rTputs, rRps, recGen.size());
 		}
 
