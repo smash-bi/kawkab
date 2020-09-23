@@ -1,6 +1,9 @@
 package kawkab.fs.testclient;
 
+import com.google.common.math.Stats;
 import kawkab.fs.utils.Accumulator;
+import kawkab.fs.utils.AccumulatorMap;
+import kawkab.fs.utils.Latency;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -12,18 +15,18 @@ public class Result {
 	private long reqsCount; //Total requests
 	private double opsThr; //ops per second
 	private double dataThr; // Data throughput
-	private double latMin;
-	private double latMax;
-	private long[] latHist;
-	private long[] tputLog;
+	private int latMin;
+	private int latMax;
+	private AccumulatorMap latHist;
+	private AccumulatorMap tputLog;
 	private int recsTput;
 
 	public Result() {
-		latMin = Double.MAX_VALUE;
+		latMin = Integer.MAX_VALUE;
 	}
 
 	public Result(long reqsCount_, double opsThr_, double dataThr_,
-				  double lMin, double lMax, long[] latHist_, long[] tputLog_, int recsTput_) {
+				  int lMin, int lMax, AccumulatorMap latHist_, AccumulatorMap tputLog_, int recsTput_) {
 		reqsCount = reqsCount_; opsThr = opsThr_; dataThr = dataThr_;
 		latMin = lMin; latMax=lMax;
 		latHist = latHist_;
@@ -34,8 +37,10 @@ public class Result {
 	public Result(Result res) {
 		reqsCount = res.reqsCount; opsThr = res.opsThr; dataThr = res.dataThr;
 		latMin = res.latMin; latMax=res.latMax;
-		latHist = Arrays.copyOf(res.latHist, res.latHist.length);
-		tputLog = Arrays.copyOf(res.tputLog, res.tputLog.length);
+		//latHist = Arrays.copyOf(res.latHist, res.latHist.length);
+		latHist = res.latHist.copyOf();
+		//tputLog = Arrays.copyOf(res.tputLog, res.tputLog.length);
+		tputLog = res.tputLog.copyOf();
 		recsTput = res.recsTput;
 	}
 
@@ -52,9 +57,23 @@ public class Result {
 		return reqsCount;
 	}
 
-	public long[] latHist() {
-		return latHist;
+	public int[] latHistKeys() {
+		return latHist.sortedKeys();
 	}
+
+	public long[] latHistValues() { return latHist.sortedBucketVals(); }
+
+	public int[] tputLogKeys() {
+		return tputLog.sortedKeys();
+	}
+
+	public long[] tputLogValues() {
+		return tputLog.sortedBucketVals();
+	}
+
+	/*public long[] latHist() {
+		return latHist;
+	}*/
 
 	public double opsTput() {
 		return opsThr;
@@ -64,33 +83,38 @@ public class Result {
 		return dataThr;
 	}
 
-	public double latMin() {
+	public int latMin() {
 		return latMin;
 	}
 
-	public double latMax() {
+	public int latMax() {
 		return latMax;
 	}
 
-	public long[] tputLog() {
+	/*public long[] tputLog() {
 		return tputLog;
-	}
+	}*/
 
 	public int recsTput() { return recsTput; }
 
-	public Accumulator latAccumulator() {
-		return new Accumulator(latHist, reqsCount, latMin, latMax);
-	}
+	/*public AccumulatorMap latAccumulator() {
+		return new AccumulatorMap(latHist.buckets(), reqsCount, latMin, latMax);
+	}*/
 
 	public void merge(Result from) {
-		if (latHist == null || latHist.length == 0)
+		/*if (latHist == null || latHist.length == 0)
 			latHist = new long[from.latHist.length];
 
 		if (tputLog == null || tputLog.length == 0)
 			tputLog = new long[from.tputLog.length];
 
 		assert latHist.length == from.latHist.length;
-		assert tputLog.length == from.tputLog.length;
+		assert tputLog.length == from.tputLog.length;*/
+
+		assert Long.MAX_VALUE - reqsCount > from.reqsCount;
+		assert Double.MAX_VALUE - opsThr > from.opsThr;
+		assert Double.MAX_VALUE - dataThr > from.dataThr;
+		assert Double.MAX_VALUE - recsTput > from.recsTput;
 
 		reqsCount += from.reqsCount;
 		opsThr += from.opsThr;
@@ -103,13 +127,19 @@ public class Result {
 		if (latMax < from.latMax)
 			latMax = from.latMax;
 
-		for(int i=0; i<latHist.length; i++) {
+		if (latHist == null) latHist = new AccumulatorMap();
+		latHist.merge(from.latHist);
+
+		if (tputLog == null) tputLog = new AccumulatorMap();
+		tputLog.merge(from.tputLog);
+
+		/*for(int i=0; i<latHist.length; i++) {
 			latHist[i] += from.latHist[i];
 		}
 
 		for(int i=0; i<tputLog.length; i++) {
 			tputLog[i] += from.tputLog[i];
-		}
+		}*/
 	}
 
 	public String toJson(boolean exportHists, boolean exportTputLog){
@@ -117,20 +147,25 @@ public class Result {
 	}
 
 	private StringBuilder toJsonSB(boolean exportHists, boolean exportTputLog){
-		Accumulator accm = new Accumulator(latHist, reqsCount, latMin, latMax);
-		double[] lats = accm.getLatencies();
+		//AccumulatorMap accm = new AccumulatorMap(latHist, reqsCount, latMin, latMax);
+		//double[] lats = accm.getLatencies();
+		Latency lats = latHist.getLatencies();
 		StringBuilder json = new StringBuilder();
 		json.append("{ ");
 		json.append(String.format("  \"reqs\":%d, ", reqsCount));
 		json.append(String.format("  \"opsPs\":%.0f, ", opsThr));
 		json.append(String.format("  \"thrMBps\":%.2f, ", dataThr));
-		json.append(String.format("  \"meanLat\":%.2f, ", accm.mean()));
-		json.append(String.format("  \"50%%Lat\":%.2f, ", lats[0]));
-		json.append(String.format("  \"95%%Lat\":%.2f, ", lats[1]));
-		json.append(String.format("  \"99%%Lat\":%.2f, ", lats[2]));
-		json.append(String.format("  \"minLat\":%.2f, ", latMin));
-		json.append(String.format("  \"maxLat\":%.2f, ", latMax));
-		json.append(String.format("  \"recsPs\":%d ", recsTput));
+		json.append(String.format("  \"meanLat\":%.2f, ", lats.mean));
+		json.append(String.format("  \"50%%Lat\":%.2f, ", lats.p50));
+		json.append(String.format("  \"95%%Lat\":%.2f, ", lats.p95));
+		json.append(String.format("  \"99%%Lat\":%.2f, ", lats.p99));
+		json.append(String.format("  \"minLat\":%d, ", latMin));
+		json.append(String.format("  \"maxLat\":%d, ", latMax));
+		json.append(String.format("  \"recsPs\":%d, ", recsTput));
+		json.append(String.format("  \"25%%Lat\":%.2f, ", lats.p25));
+		json.append(String.format("  \"75%%Lat\":%.2f", lats.p75));
+
+		appendLatCDF(json);
 
 		if (exportHists) {
 			appendHists(json);
@@ -145,11 +180,22 @@ public class Result {
 		return json;
 	}
 
+	private void appendLatCDF(StringBuilder sb) {
+		sb.append(",  \"Latency CDF\":[");
+		long[] cdf = latHist.cdf();
+		int i;
+		for(i=0; i<cdf.length-1; i++){
+			sb.append(cdf[i]).append(", ");
+		}
+		sb.append(cdf[i]);
+		sb.append("]\n");
+	}
+
 	private void appendTputLog(StringBuilder sb) {
 		StringBuilder index = new StringBuilder();
 		StringBuilder counts = new StringBuilder();
 
-		int lastIdx;
+		/*int lastIdx;
 		for(lastIdx=tputLog.length-1; lastIdx >= 0; lastIdx--) {
 			if (tputLog[lastIdx] > 0)
 				break;
@@ -162,7 +208,9 @@ public class Result {
 		}
 
 		index.append(i);
-		counts.append(tputLog[i]);
+		counts.append(tputLog[i]);*/
+
+		tputLog.sortedBucketPairs(index, counts);
 
 		sb.append(",  \"TputLog\":{");
 		sb.append("\"TimeSec\":[").append(index.toString()).append("]");
@@ -171,21 +219,23 @@ public class Result {
 	}
 
 	private void appendHists(StringBuilder sb) {
-		if (latHist == null || latHist.length == 0)
+		if (latHist == null)
 			return;
 
 		StringBuilder lats = new StringBuilder();
 		StringBuilder counts = new StringBuilder();
-		int i=0;
+
+		/*int i=0;
 		for (i=0; i<latHist.length-1; i++){
 			if (latHist[i] > 0) {
 				lats.append(i+",");
 				counts.append(latHist[i]+",");
 			}
 		}
-
 		lats.append(i);
-		counts.append(latHist[i]);
+		counts.append(latHist[i]);*/
+
+		latHist.sortedBucketPairs(lats, counts);
 
 		sb.append(",  \"Latency Histogram\":{");
 		sb.append("\"count\":[").append(counts.toString()).append("]");
@@ -205,27 +255,32 @@ public class Result {
 		header.append("\"99%% latency\", ");
 		header.append("\"Min latency\", ");
 		header.append("\"Max latency\", ");
-		header.append("\"Records throughput\"");
+		header.append("\"Records throughput\", ");
+		header.append("\"25%% latency\", ");
+		header.append("\"75%% latency\"");
 
 		return header.toString();
 	}
 
 
 	public String csv() {
-		Accumulator accm = new Accumulator(latHist, reqsCount, latMin, latMax);
-		double[] lats = accm.getLatencies();
+		//Accumulator accm = new Accumulator(latHist, reqsCount, latMin, latMax);
+		//double[] lats = accm.getLatencies();
+		Latency lats = latHist.getLatencies();
 
 		StringBuilder csv = new StringBuilder();
-		csv.append(String.format("%d, ", reqsCount));
+		csv.append(String.format(  "%d, ", reqsCount));
 		csv.append(String.format("%.0f, ", opsThr));
 		csv.append(String.format("%.2f, ", dataThr));
-		csv.append(String.format("%.0f, ", accm.mean()));
-		csv.append(String.format("%.0f, ", lats[0]));
-		csv.append(String.format("%.0f, ", lats[1]));
-		csv.append(String.format("%.0f, ", lats[2]));
-		csv.append(String.format("%.0f, ", latMin));
-		csv.append(String.format("%.0f, ", latMax));
-		csv.append(String.format("%d\n", recsTput));
+		csv.append(String.format("%.0f, ", lats.mean));
+		csv.append(String.format("%.0f, ", lats.p50));
+		csv.append(String.format("%.0f, ", lats.p95));
+		csv.append(String.format("%.0f, ", lats.p99));
+		csv.append(String.format("%d, ", latMin));
+		csv.append(String.format("%d, ", latMax));
+		csv.append(String.format(  "%d, ", recsTput));
+		csv.append(String.format("%.0f, ", lats.p25));
+		csv.append(String.format("%.0f\n", lats.p75));
 
 		return csv.toString();
 	}

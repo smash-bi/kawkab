@@ -17,6 +17,7 @@ public class TimerQueue implements TimerQueueIface {
 	 * @param name Name of the queue for debugging and tracing purposes.
 	 */
 	public TimerQueue(String name) {
+		System.out.println("Initializing Timer Queue: " + name);
 		trnsfrQ = new TransferQueue<>(name+"-TrnsfrQ");
 		processorThr = new Thread(name+"Thread") {
 			public void run() {

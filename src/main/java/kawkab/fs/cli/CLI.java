@@ -660,7 +660,9 @@ public final class CLI {
 		System.out.printf("%s: recSize=%d, numRecs=%d, rTput=%,.0f MB/s, opsTput=%,.0f OPS, Lat %s\n",
 				tag, recSize, cnt, thr, opThr, latHist.getStats());
 
-		return new Result(latHist.sampled(), opThr, thr, latHist.min(), latHist.max(), latHist.accumulator().buckets(), null, 0);
+		//return new Result(latHist.sampled(), opThr, thr, latHist.min(), latHist.max(), latHist.accumulator().buckets(), null, 0); //FIXME
+		assert false : "Need to update the params of Result";
+		return null;
 	}
 
 	private void parseReadRecord(String[] args) throws IOException, KawkabException {

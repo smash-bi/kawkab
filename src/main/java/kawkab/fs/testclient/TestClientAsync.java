@@ -7,7 +7,7 @@ import kawkab.fs.core.ApproximateClock;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
-import kawkab.fs.utils.Accumulator;
+import kawkab.fs.utils.AccumulatorMap;
 import kawkab.fs.utils.LatHistogram;
 import org.apache.commons.math3.distribution.PoissonDistribution;
 
@@ -24,6 +24,7 @@ public class TestClientAsync {
 	private int cid;
 	private KClient client;
 	private Random fileRand;
+	private Random reqRand;
 	private String[] files;
 	//private ApproximateClock clock;
 	private Clock clock = Clock.systemDefaultZone();
@@ -37,6 +38,7 @@ public class TestClientAsync {
 	TestClientAsync(int id) {
 		this.cid = id;
 		fileRand = new Random();
+		reqRand = new Random();
 		//clock = ApproximateClock.instance();
 	}
 
@@ -105,44 +107,7 @@ public class TestClientAsync {
 
 		while(work) {
 			int toSend = 1;
-			int waitTimeMicros = arrRand.sample(); // - (int)lastElapsed + residue;
-			long sleepStartTime = System.nanoTime();
-
-			/*long t1 = System.currentTimeMillis();
-			while(true) {
-				try {
-					assert waitTimeMicros > 0 : "WiaTimeMicros <= 0: " + waitTimeMicros;
-
-					if (waitTimeMicros >= 3000) {
-						System.out.println(waitTimeMicros);
-						Thread.sleep(waitTimeMicros / 1000, (waitTimeMicros%1000)*1000);
-					} else if (waitTimeMicros > 60) { //It sleeps for at least 60us.
-						LockSupport.parkNanos(waitTimeMicros*1000);
-					} else {
-						busyWaitMicros(waitTimeMicros);
-					}
-				} catch (InterruptedException e) {
-					return;
-				}
-
-				double sleepTime = (System.nanoTime() - sleepStartTime)/1000.0;
-
-				if (sleepTime > waitTimeMicros) {
-					toSend = (int)(sleepTime/waitTimeMicros);
-					double mod = sleepTime % waitTimeMicros;
-					if (mod > 0.2*waitTimeMicros)
-						toSend += 1;
-				} else if (sleepTime < waitTimeMicros) {
-					waitTimeMicros = (int)(waitTimeMicros - sleepTime);
-					if (waitTimeMicros == 0)
-						break;
-					continue;
-				}
-
-				break;
-			}
-
-			System.out.println(" => " + (System.currentTimeMillis() - t1));*/
+			int waitTimeMicros = arrRand.sample();
 
 			if (waitTimeMicros > 60) { //It sleeps for at least 60us.
 				LockSupport.parkNanos(waitTimeMicros*1000);
@@ -157,14 +122,6 @@ public class TestClientAsync {
 
 			for (int i=0; i<toSend; i++) {
 				rq.add(clock.instant());
-
-				/*if ((reqRand.nextInt(100)+1) <= writeRatio) {
-					//sendAppendRequest(fnames, apBatchSize, recGen, accm);
-					rq.add(clock.instant().getNano());
-				} else {
-					//sendReadRequest(fnames, recGen, accm);
-					rq.add(-1);
-				}*/
 			}
 		}
 	}
@@ -176,12 +133,12 @@ public class TestClientAsync {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
-		Accumulator wLats = new Accumulator(1000000);
-		Accumulator rLats = new Accumulator(1000000);
-		Accumulator rTputs = new Accumulator(durSec+1);
-		Accumulator wTputs = new Accumulator(durSec+1);
-		Accumulator rRps = new Accumulator(durSec+1);
-		Accumulator wRps = new Accumulator(durSec+1);
+		AccumulatorMap wLats = new AccumulatorMap(1000000);
+		AccumulatorMap rLats = new AccumulatorMap(1000000);
+		AccumulatorMap rTputs = new AccumulatorMap(durSec+1);
+		AccumulatorMap wTputs = new AccumulatorMap(durSec+1);
+		AccumulatorMap rRps = new AccumulatorMap(durSec+1);
+		AccumulatorMap wRps = new AccumulatorMap(durSec+1);
 
 		String[] fnames = new String[reqBatchSize]; //Random files used in a batch. Actual file name is populated from files class variable.
 		//int[] timestamps = new int[reqBatchSize];
@@ -304,6 +261,31 @@ public class TestClientAsync {
 		return res.size();
 	}
 
+	private int sendFixedRandomWindowReadRequest(Record recGen, int batchSize, long[] timestamps) throws KawkabException {
+		int iFile = fileRand.nextInt(files.length);
+		String fn = files[iFile];
+		long maxLimit = timestamps[iFile];
+		if (maxLimit < batchSize)
+			return 0;
+
+		int winSizeRecords = 10000;
+		long minLimit = maxLimit - winSizeRecords;
+		if (minLimit < 0) minLimit = 0;
+
+		//System.out.printf("minTs=%d, maxTs=%d\n", minTs, maxTs);
+
+		long minTS = minLimit + reqRand.nextInt(winSizeRecords);
+		if (minTS + batchSize > maxLimit) minTS = maxLimit - batchSize;
+
+		long maxTS = minTS + batchSize;
+
+		List<Record> res = client.readRecords(fn, minTS, maxTS, recGen, true);
+		if (res == null)
+			return 0;
+
+		return res.size();
+	}
+
 	private int sendFixedWindowReadRequest(Record recGen, int batchSize, long[] timestamps) throws KawkabException {
 		int iFile = fileRand.nextInt(files.length);
 		String fn = files[iFile];
@@ -374,23 +356,21 @@ public class TestClientAsync {
 		client.disconnect();
 	}
 
-	private Result prepareResult(Accumulator lats, Accumulator tputs, Accumulator rps, int recSize) {
+	private Result prepareResult(AccumulatorMap lats, AccumulatorMap tputs, AccumulatorMap rps, int recSize) {
 		long cnt = lats.count();
 		//double sizeMB = recSize*cnt / (1024.0 * 1024.0);
 		//double thr = sizeMB * 1000.0 / durMsec;
-		double opThr = Stats.meanOf(tputs.buckets());
-		int recsPerSec = (int)Stats.meanOf(rps.buckets());
+		double opThr = Stats.meanOf(tputs.sortedBucketVals());
+		int recsPerSec = (int)Stats.meanOf(rps.sortedBucketVals());
 		double thr = recsPerSec*recSize / (1024.0 * 1024.0);
 
-		return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats.buckets(), tputs.buckets(), recsPerSec);
+		return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats, tputs, recsPerSec);
 		//return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats.buckets(), rps.buckets(), recsPerSec);
 	}
 
 	private void busyWaitMicros(long micros){
 		long waitUntil = System.nanoTime() + (micros * 1_000);
-		while(waitUntil > System.nanoTime()){
-			;
-		}
+		while(waitUntil > System.nanoTime()){ ; }
 	}
 
 	private void waitMicros(int micros) {

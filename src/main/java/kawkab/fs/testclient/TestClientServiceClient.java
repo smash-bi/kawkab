@@ -4,6 +4,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.testclient.thrift.TResult;
 import kawkab.fs.testclient.thrift.TSyncResponse;
 import kawkab.fs.testclient.thrift.TestClientService;
+import kawkab.fs.utils.AccumulatorMap;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -37,18 +38,34 @@ public class TestClientServiceClient {
 	public Result sync(int clid, int testID, boolean stopAll, Result result) {
 		assert client != null;
 
-		List<Long> histogram = Arrays.stream(result.latHist()).boxed().collect(Collectors.toUnmodifiableList());
-		List<Long> tputTimeLog = Arrays.stream(result.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
-		TResult taccm = new TResult(histogram, result.count(), result.latMin(), result.latMax(),
-				result.dataTput(), result.opsTput(), tputTimeLog, result.recsTput());
+		List<Integer> latHistKeys = Arrays.stream(result.latHistKeys()).boxed().collect(Collectors.toUnmodifiableList());
+		List<Long> latHistValues = Arrays.stream(result.latHistValues()).boxed().collect(Collectors.toUnmodifiableList());
+
+		List<Integer> tputLogKeys = Arrays.stream(result.tputLogKeys()).boxed().collect(Collectors.toUnmodifiableList());
+		List<Long> tputLogValues = Arrays.stream(result.tputLogValues()).boxed().collect(Collectors.toUnmodifiableList());
+
+
+		//List<Long> tputTimeLog = Arrays.stream(result.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
+		//List<Long> latKeys = Arrays.stream(result.latHist()).boxed().collect(Collectors.toUnmodifiableList());
+
+		TResult taccm = new TResult(result.count(), result.latMin(), result.latMax(),
+				result.dataTput(), result.opsTput(), result.recsTput(), tputLogKeys, tputLogValues, latHistKeys, latHistValues);
 
 		try {
 			TSyncResponse resp = client.sync(clid, testID, stopAll, taccm);
 			TResult res = resp.aggResult;
 
-			long[] latHist = res.latHistogram.stream().mapToLong(i->i).toArray();
-			long[] tputLog = res.tputLog.stream().mapToLong(i->i).toArray();
-			return new Result(res.totalCount, res.opsTput, res.dataTput, res.minVal, res.maxVal, latHist, tputLog, res.recsTput);
+			//long[] latHist = res.latHistogram.stream().mapToLong(i->i).toArray();
+			//long[] tputLog = res.tputLog.stream().mapToLong(i->i).toArray();
+
+			int[] resLatHistKeys = res.latHistKeys.stream().mapToInt(i->i).toArray();
+			long[] resLatHistVals = res.latHistValues.stream().mapToLong(i->i).toArray();
+
+			int[] resTputLogKeys = res.tputLogKeys.stream().mapToInt(i->i).toArray();
+			long[] resTputLogVals = res.tputLogValues.stream().mapToLong(i->i).toArray();
+
+			return new Result(res.totalCount, res.opsTput, res.dataTput, res.minVal, res.maxVal,
+					new AccumulatorMap(resLatHistKeys, resLatHistVals), new AccumulatorMap(resTputLogKeys, resTputLogVals), res.recsTput);
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 		}

@@ -1,14 +1,16 @@
 namespace java kawkab.fs.testclient.thrift
 
 struct TResult {
-    1: required list<i64> latHistogram; //Latency histogram
-    2: required i64 totalCount;
-    3: required double minVal;
-    4: required double maxVal;
-    5: required double dataTput;
-    6: required double opsTput;
-    7: required list<i64> tputLog; //Throughput timeline log
-    8: required i32 recsTput;
+    1: required i64 totalCount;
+    2: required i32 minVal;
+    3: required i32 maxVal;
+    4: required double dataTput;
+    5: required double opsTput;
+    6: required i32 recsTput;
+    7: required list<i32> tputLogKeys; //Throughput timeline log keys
+    8: required list<i64> tputLogValues; //Throughput timeline log values
+    9: required list<i32> latHistKeys; //Latency histogram keys
+    10: required list<i64> latHistValues; //Latency histogram values
 }
 
 struct TSyncResponse {

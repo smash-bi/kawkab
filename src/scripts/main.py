@@ -260,86 +260,87 @@ def get_total_clients(conf):
 def run_batch(conf):
     res = ''
     run_n = 0
-    run_t = len(conf['test_type'])*len(conf['test_prefix'])*len(conf['batch_size'])
+    run_t = len(conf['test_type'])*len(conf['test_prefix'])
     run_t *= len(conf['record_size'])
     run_t *= len(conf['files_per_client'])
-    for _, iats in conf['writeratio_rps']:
-        run_t += len(iats)
-    run_t *= len(conf['test_runs'])
+    l = 0
+    for _,_, iats in conf['batch_writeratio_rps']:
+        l += len(iats)
+    run_t *= l * len(conf['test_runs'])
 
     for test_type in conf['test_type']:
-        for write_ratio, iats in conf['writeratio_rps']:
+        for batch_size, write_ratio, iats in conf['batch_writeratio_rps']:
             for nf in conf['files_per_client']:
                 for test_prefix in conf['test_prefix']:
-                    for batch_size in conf['batch_size']:
-                        for record_size in conf['record_size']:
-                            for iat in iats:
-                                for test_run in conf['test_runs']:
-                                    #clients = degree*sl_size
-                                    numClients = get_total_clients(conf) * conf['clients_per_machine']
-                                    conf['test_id'] = '%s-%s-nc%d-bs%d-rs%d-nf%d-wr%d-iat%g'%(
-                                                                                            test_type,
-                                                                                            test_prefix,
-                                                                                            numClients,
-                                                                                            batch_size,
-                                                                                            record_size,
-                                                                                            nf,
-                                                                                            write_ratio,
-                                                                                            iat,
-                                                                                        )
-                                    conf['test_dir'] = '%s/%s/run_%d'%(conf['exp_dir'],conf['test_id'],test_run)
-                                    conf['run_dir' ] = '/tmp/kawkab'
+                    #for batch_size in conf['batch_size']:
+                    for record_size in conf['record_size']:
+                        for iat in iats:
+                            for test_run in conf['test_runs']:
+                                #clients = degree*sl_size
+                                numClients = get_total_clients(conf) * conf['clients_per_machine']
+                                conf['test_id'] = '%s-%s-nc%d-bs%d-rs%d-nf%d-wr%d-iat%g'%(
+                                                                                        test_type,
+                                                                                        test_prefix,
+                                                                                        numClients,
+                                                                                        batch_size,
+                                                                                        record_size,
+                                                                                        nf,
+                                                                                        write_ratio,
+                                                                                        iat,
+                                                                                    )
+                                conf['test_dir'] = '%s/%s/run_%d'%(conf['exp_dir'],conf['test_id'],test_run)
+                                conf['run_dir' ] = '/tmp/kawkab'
 
-                                    conf['test_params'] = {
-                                        'typ'   : test_type,
-                                        'wr'    : write_ratio,
-                                        'fpc'    : nf,
-                                        'test_prefix'   : test_prefix,
-                                        'bs'    : batch_size,
-                                        'rs'    : record_size,
-                                        'iat'   : iat,
-                                        'test_run'   : test_run,
-                                        'nc'    : conf['clients_per_machine'],
-                                        'tc'    : numClients,
-                                        'td'    : conf['test_duration'],
-                                        'wmup'  : conf['warmup_sec'],
-                                    }
+                                conf['test_params'] = {
+                                    'typ'   : test_type,
+                                    'wr'    : write_ratio,
+                                    'fpc'    : nf,
+                                    'test_prefix'   : test_prefix,
+                                    'bs'    : batch_size,
+                                    'rs'    : record_size,
+                                    'iat'   : iat,
+                                    'test_run'   : test_run,
+                                    'nc'    : conf['clients_per_machine'],
+                                    'tc'    : numClients,
+                                    'td'    : conf['test_duration'],
+                                    'wmup'  : conf['warmup_sec'],
+                                }
 
-                                    #---------------------------------------------------
+                                #---------------------------------------------------
 
-                                    run_n += 1
-                                    print '-------------------------------------'
-                                    print 'Experiment %d of %d'%(run_n, run_t)
-                                    print 'Test ID: %s, Run=%d'%(conf['test_id'], test_run)
-                                    print '-------------------------------------'
+                                run_n += 1
+                                print '-------------------------------------'
+                                print 'Experiment %d of %d'%(run_n, run_t)
+                                print 'Test ID: %s, Run=%d'%(conf['test_id'], test_run)
+                                print '-------------------------------------'
 
-                                    #---------------------------------------------------
+                                #---------------------------------------------------
 
-                                    cleanup(conf)
-                                    stopwatch(3)
-                                    prepare_folders(conf)
-                                    start_backend(conf)
-                                    stopwatch(2)
-                                    start_servers(conf)
-                                    start_clients(conf)
-                                    stopwatch(3)
+                                cleanup(conf)
+                                stopwatch(3)
+                                prepare_folders(conf)
+                                start_backend(conf)
+                                stopwatch(2)
+                                start_servers(conf)
+                                start_clients(conf)
+                                stopwatch(3)
 
-                                    duration = conf['warmup_sec'] + conf['test_duration'] + 60
-                                    wait_for_process(conf, "clients", 'java', duration)
-                                    wait_for_process(conf, "servers", 'java', 5, True)
+                                duration = conf['warmup_sec'] + conf['test_duration'] + 60
+                                wait_for_process(conf, "clients", 'java', duration)
+                                wait_for_process(conf, "servers", 'java', 5, True)
 
-                                    #---------------------------------------------------
+                                #---------------------------------------------------
 
-                                    time.sleep(3)
+                                time.sleep(3)
 
-                                    try:
-                                        copy_files(conf)
-                                    except IOError as e:
-                                        print "I/O error({0}): {1}".format(e.errno, e.strerror)
+                                try:
+                                    copy_files(conf)
+                                except IOError as e:
+                                    print "I/O error({0}): {1}".format(e.errno, e.strerror)
 
-                                    get_results(conf)
+                                get_results(conf)
 
-                                    time.sleep(3)
+                                time.sleep(3)
 
     kill_processes(conf)
     print 'Finished...'

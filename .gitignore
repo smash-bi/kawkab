@@ -5,3 +5,5 @@ bin
 zookeeper-*
 /fs
 /minio
+figures
+*.pyc

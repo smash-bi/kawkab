@@ -3,15 +3,15 @@ package kawkab.fs.utils;
 public class Accumulator {
     private long[] buckets;
     private long totalCnt;
-    private double maxValue;
-    private double minValue = Double.MAX_VALUE;
+    private int maxValue;
+    private int minValue = Integer.MAX_VALUE;
 
     public Accumulator(int numBuckets) {
         buckets = new long[numBuckets];
         reset();
     }
 
-    public Accumulator(long[] histogram, long totalCnt, double min, double max) {
+    public Accumulator(long[] histogram, long totalCnt, int min, int max) {
         this.buckets = histogram;
         this.totalCnt = totalCnt;
         this.minValue = min;
@@ -24,7 +24,7 @@ public class Accumulator {
         }
         this.maxValue = 0;
         totalCnt = 0;
-        this.minValue = Double.MAX_VALUE;
+        this.minValue = Integer.MAX_VALUE;
     }
 
     public synchronized void put(int value, int count) {
@@ -48,68 +48,18 @@ public class Accumulator {
         if (minValue > value)
             minValue = value;
     }
-
-    /*public synchronized void put(int value) {
-        assert value >= 0 : "Value is negative: " + value;
-
-        int bucket = value;
-
-        if (bucket >= buckets.length){
-            bucket = buckets.length-1;
-        }
-        
-        buckets[bucket]++;
-        //totalSum += value;
-        totalCnt += 1;
-
-        if (maxValue < value)
-            maxValue = value;
-        
-        if (minValue > value)
-            minValue = value;
-
-        // Welford's online algorithm
-        //https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
-        //double delta = value - aggMean;
-        //aggMean += delta / totalCnt;
-        //double delta2 = value - aggMean;
-        //m2 += delta * delta2;
-    }*/
     
     public synchronized double mean(){
-        /*if (totalCnt > 0)
-            return 1.0*totalSum/totalCnt;
-        else
-            return -1;*/
-
-        //return aggMean;
-
         return mean(buckets);
     }
     
-    public synchronized double min(){
+    public synchronized int min(){
         return minValue;
     }
     
-    public synchronized double max(){
+    public synchronized int max(){
         return maxValue;
     }
-    
-    /*public double variance(){
-        if (totalCnt > 2)
-            //return (prodSum - (1.0*totalSum*totalSum/totalCnt))/totalCnt;
-            return m2 /totalCnt;
-        else
-            return -1;
-
-    }
-    
-    public synchronized double stdDev(){
-        if (variance() > 0)
-            return Math.sqrt(variance());
-        else
-            return -1;
-    }*/
     
     public synchronized long count() {
         return totalCnt;
@@ -166,8 +116,7 @@ public class Accumulator {
             return "No stats";
 
         double[] lats = getLatencies();
-        return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%.2f, max=%.2f, mean=%.2f",
-                lats[0],lats[1],lats[2], min(), max(), mean());
+        return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%d, max=%d, mean=%.2f", lats[0],lats[1],lats[2], min(), max(), mean());
     }
     
     public synchronized void printCDF() {
@@ -215,12 +164,7 @@ public class Accumulator {
             buckets[i] += from.buckets[i];
         }
 
-        //totalSum += from.totalSum;
         totalCnt += from.totalCnt;
-        //prodSum += from.prodSum;
-        //aggMean = (aggMean+from.aggMean)/2.0;
-        //aggMean = mean(buckets);
-        //m2 += this.m2;
 
         if (maxValue < from.maxValue)
             maxValue = from.maxValue;

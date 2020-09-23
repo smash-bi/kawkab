@@ -82,7 +82,7 @@ public class TestRunnerAsync {
 
 		if (readAgg != null) {
 			System.out.println("Read results:");
-			System.out.printf("Reads: %s\n", Arrays.toString(readAgg.tputLog()));
+			System.out.printf("Reads: %s\n", Arrays.toString(readAgg.tputLogValues()));
 			printStats(readAgg);
 		} else {
 			System.out.println("No read results.");
@@ -90,7 +90,7 @@ public class TestRunnerAsync {
 
 		if (writeAgg != null) {
 			System.out.println("Write results:");
-			System.out.printf("Writes: %s\n", Arrays.toString(writeAgg.tputLog()));
+			System.out.printf("Writes: %s\n", Arrays.toString(writeAgg.tputLogValues()));
 			printStats(writeAgg);
 		} else {
 			System.out.println("No write results.");
@@ -102,7 +102,7 @@ public class TestRunnerAsync {
 			mixedRes.merge(writeAgg);
 
 			System.out.println("Aggregate results:");
-			System.out.printf("Mixed: %s\n", Arrays.toString(mixedRes.tputLog()));
+			System.out.printf("Mixed: %s\n", Arrays.toString(mixedRes.tputLogValues()));
 			printStats(mixedRes);
 		} else if (readAgg != null) {
 			mixedRes = readAgg;

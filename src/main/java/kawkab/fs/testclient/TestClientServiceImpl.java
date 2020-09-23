@@ -3,6 +3,7 @@ package kawkab.fs.testclient;
 import kawkab.fs.testclient.thrift.TResult;
 import kawkab.fs.testclient.thrift.TSyncResponse;
 import kawkab.fs.testclient.thrift.TestClientService;
+import kawkab.fs.utils.AccumulatorMap;
 import org.apache.thrift.TException;
 
 import java.util.Arrays;
@@ -82,10 +83,17 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	}
 
 	private TSyncResponse response(Result aggRes, boolean stopAll) {
-		List<Long> latHist = Arrays.stream(aggRes.latHist()).boxed().collect(Collectors.toUnmodifiableList());
-		List<Long> tputLog = Arrays.stream(aggRes.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
-		return new TSyncResponse(new TResult(latHist, aggRes.count(), aggRes.latMin(), aggRes.latMax(),
-				aggRes.dataTput(), aggRes.opsTput(), tputLog, aggRes.recsTput()), stopAll);
+		//List<Long> latHist = Arrays.stream(aggRes.latHist()).boxed().collect(Collectors.toUnmodifiableList());
+		//List<Long> tputLog = Arrays.stream(aggRes.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
+
+		List<Integer> latHistKeys = Arrays.stream(aggRes.latHistKeys()).boxed().collect(Collectors.toUnmodifiableList());
+		List<Long> latHistValues = Arrays.stream(aggRes.latHistValues()).boxed().collect(Collectors.toUnmodifiableList());
+
+		List<Integer> tputLogKeys = Arrays.stream(aggRes.tputLogKeys()).boxed().collect(Collectors.toUnmodifiableList());
+		List<Long> tputLogValues = Arrays.stream(aggRes.tputLogValues()).boxed().collect(Collectors.toUnmodifiableList());
+
+		return new TSyncResponse(new TResult(aggRes.count(), aggRes.latMin(), aggRes.latMax(),
+				aggRes.dataTput(), aggRes.opsTput(), aggRes.recsTput(), tputLogKeys, tputLogValues, latHistKeys, latHistValues), stopAll);
 	}
 
 	@Override
@@ -140,10 +148,16 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	}
 
 	private void merge(Result dstResult, TResult tres) {
-		long[] latHist = tres.latHistogram.stream().mapToLong(i->i).toArray();
-		long[] tputLog = tres.tputLog.stream().mapToLong(i->i).toArray();
+		//long[] latHist = tres.latHistogram.stream().mapToLong(i->i).toArray();
+		//long[] tputLog = tres.tputLog.stream().mapToLong(i->i).toArray();
 
-		dstResult.merge(new Result(tres.totalCount, tres.opsTput, tres.dataTput, tres.minVal, tres.maxVal, latHist, tputLog, tres.recsTput));
+		int[] resLatHistKeys = tres.latHistKeys.stream().mapToInt(i->i).toArray();
+		long[] resLatHistVals = tres.latHistValues.stream().mapToLong(i->i).toArray();
+		int[] resTputLogKeys = tres.tputLogKeys.stream().mapToInt(i->i).toArray();
+		long[] resTputLogVals = tres.tputLogValues.stream().mapToLong(i->i).toArray();
+
+		dstResult.merge(new Result(tres.totalCount, tres.opsTput, tres.dataTput, tres.minVal, tres.maxVal,
+				new AccumulatorMap(resLatHistKeys, resLatHistVals), new AccumulatorMap(resTputLogKeys, resTputLogVals), tres.recsTput));
 	}
 
 	private void printResults(Result result) {

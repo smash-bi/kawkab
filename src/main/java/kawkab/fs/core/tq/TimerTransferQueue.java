@@ -20,6 +20,8 @@ public class TimerTransferQueue<T> {
 	private final static int defaultCapacity = 100;
 	
 	public TimerTransferQueue(int initCapacity) {
+		System.out.println("Initializing Timer Transfer Queue (Java), initCapacity = " + initCapacity);
+
 		backingQueue = new PriorityQueue<TimerTransferableWrapper<T>>(initCapacity);
 		completeQueue = new ResizeableCircularQueue<T>(initCapacity);
 	}

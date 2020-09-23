@@ -498,6 +498,9 @@ public class TestClient {
 		int recsPerSec = (int)Stats.meanOf(rps.buckets());
 		double thr = recsPerSec*recSize / (1024.0 * 1024.0);
 
-		return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats.buckets(), tputs.buckets(), recsPerSec);
+		//return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats.buckets(), tputs.buckets(), recsPerSec); //FIXME
+		assert false; //Need to update Result parameters
+
+		return null;
 	}
 }

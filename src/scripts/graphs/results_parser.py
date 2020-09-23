@@ -8,7 +8,7 @@ from pprint import pprint
 
 cols = {'opsThr': 'OpsTput', 'dataThr':'DataTput', 'meanLat':'Mean latency', 'lat50': 'Median latency',
         'lat95':'95% latency', 'lat99':'99% latency', 'minLat':'Min latency', 'maxLat':'Max latency',
-        'rpsThr':'Records per second'}
+        'rpsThr':'Records per second', 'latCDF':'Latency CDF'}
 
 
 def config_params():
