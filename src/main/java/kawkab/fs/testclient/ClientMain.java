@@ -105,8 +105,6 @@ public class ClientMain {
 			}
 		}
 
-		//double iat = 1000000 /*micros in sec*/ / (rps * 1000.0 / bs); // convert the target rps in thousands to inter-arrival time
-		params.append("Twup=").append(warmupsec).append("\ntdur=").append(td).append("\niat=").append(iat);
 		System.out.println(params);
 
 		Record recGen;

@@ -8,9 +8,9 @@ struct TResult {
     5: required double opsTput;
     6: required i32 recsTput;
     7: required list<i32> tputLogKeys; //Throughput timeline log keys
-    8: required list<i64> tputLogValues; //Throughput timeline log values
+    8: required list<i32> tputLogValues; //Throughput timeline log values
     9: required list<i32> latHistKeys; //Latency histogram keys
-    10: required list<i64> latHistValues; //Latency histogram values
+    10: required list<i32> latHistValues; //Latency histogram values
 }
 
 struct TSyncResponse {

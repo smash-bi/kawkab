@@ -6,6 +6,7 @@ import kawkab.fs.testclient.thrift.TestClientService;
 import kawkab.fs.utils.AccumulatorMap;
 import org.apache.thrift.TException;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -28,6 +29,10 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	public TestClientServiceImpl(int numClients, int masterID) {
 		this.numClients = numClients;
 		this.masterID = masterID;
+	}
+
+	public Result testResult() {
+		return aggResult;
 	}
 
 	@Override
@@ -83,17 +88,22 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 	}
 
 	private TSyncResponse response(Result aggRes, boolean stopAll) {
-		//List<Long> latHist = Arrays.stream(aggRes.latHist()).boxed().collect(Collectors.toUnmodifiableList());
-		//List<Long> tputLog = Arrays.stream(aggRes.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
+		return new TSyncResponse(new TResult(0,0,0,0,0,0,
+				new ArrayList<Integer>(), new ArrayList<Integer>(), new ArrayList<Integer>(), new ArrayList<Integer>()), stopAll);
+
+		/*if (aggRes == null) {
+			return new TSyncResponse(new TResult(0,0,0,0,0,0,
+					new ArrayList<Integer>(), new ArrayList<Integer>(), new ArrayList<Integer>(), new ArrayList<Integer>()), stopAll);
+		}
 
 		List<Integer> latHistKeys = Arrays.stream(aggRes.latHistKeys()).boxed().collect(Collectors.toUnmodifiableList());
-		List<Long> latHistValues = Arrays.stream(aggRes.latHistValues()).boxed().collect(Collectors.toUnmodifiableList());
+		List<Integer> latHistValues = Arrays.stream(aggRes.latHistValues()).boxed().collect(Collectors.toUnmodifiableList());
 
 		List<Integer> tputLogKeys = Arrays.stream(aggRes.tputLogKeys()).boxed().collect(Collectors.toUnmodifiableList());
-		List<Long> tputLogValues = Arrays.stream(aggRes.tputLogValues()).boxed().collect(Collectors.toUnmodifiableList());
+		List<Integer> tputLogValues = Arrays.stream(aggRes.tputLogValues()).boxed().collect(Collectors.toUnmodifiableList());
 
 		return new TSyncResponse(new TResult(aggRes.count(), aggRes.latMin(), aggRes.latMax(),
-				aggRes.dataTput(), aggRes.opsTput(), aggRes.recsTput(), tputLogKeys, tputLogValues, latHistKeys, latHistValues), stopAll);
+				aggRes.dataTput(), aggRes.opsTput(), aggRes.recsTput(), tputLogKeys, tputLogValues, latHistKeys, latHistValues), stopAll);*/
 	}
 
 	@Override
@@ -152,9 +162,9 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 		//long[] tputLog = tres.tputLog.stream().mapToLong(i->i).toArray();
 
 		int[] resLatHistKeys = tres.latHistKeys.stream().mapToInt(i->i).toArray();
-		long[] resLatHistVals = tres.latHistValues.stream().mapToLong(i->i).toArray();
+		int[] resLatHistVals = tres.latHistValues.stream().mapToInt(i->i).toArray();
 		int[] resTputLogKeys = tres.tputLogKeys.stream().mapToInt(i->i).toArray();
-		long[] resTputLogVals = tres.tputLogValues.stream().mapToLong(i->i).toArray();
+		int[] resTputLogVals = tres.tputLogValues.stream().mapToInt(i->i).toArray();
 
 		dstResult.merge(new Result(tres.totalCount, tres.opsTput, tres.dataTput, tres.minVal, tres.maxVal,
 				new AccumulatorMap(resLatHistKeys, resLatHistVals), new AccumulatorMap(resTputLogKeys, resTputLogVals), tres.recsTput));

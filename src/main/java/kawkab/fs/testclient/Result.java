@@ -61,13 +61,13 @@ public class Result {
 		return latHist.sortedKeys();
 	}
 
-	public long[] latHistValues() { return latHist.sortedBucketVals(); }
+	public int[] latHistValues() { return latHist.sortedBucketVals(); }
 
 	public int[] tputLogKeys() {
 		return tputLog.sortedKeys();
 	}
 
-	public long[] tputLogValues() {
+	public int[] tputLogValues() {
 		return tputLog.sortedBucketVals();
 	}
 

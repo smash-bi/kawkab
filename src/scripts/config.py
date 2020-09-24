@@ -40,9 +40,13 @@ def get_config():
                                     ('red',     [15]),
                                 ]
     conf['client_indexes'] =   [
-                                    ('red',     [5,6,7,8,9,10,11,6,
-                                                 5,6,7,8,9,10,11,11,
-                                                 7,8,9,10,
+                                    ('red',     [5,6,7,8,9,10,11,4,
+                                                 6,6,7,8,9,10,11,4,
+                                                 7,6,7,8,9,10,11,4,
+                                                 8,6,7,8,9,10,11,4,
+                                                 9,6,7,8,9,10,11,4,
+                                                 10,6,7,8,9,10,11,4,
+                                                 11,6,7,8,9,10,11,4,
                                                  ]),
                                 ]
 
@@ -70,7 +74,7 @@ def get_config():
     conf['client_base_port'] = 43567
 
     conf['test_type'] = ['rw']
-    conf['test_prefix' ] = ['kw14']
+    conf['test_prefix' ] = ['kw18']
     #conf['batch_size'] = [10000]
     conf['record_size'] = [16]
     conf['batch_writeratio_rps'] = [ # list of tuples (batch_size, write_ratio, [reqs_per_second list])
@@ -86,19 +90,27 @@ def get_config():
                 #(10000, 100, [10.5, 11, 11.5, 12, 12.5, 13, 7, 9, 9.5, 10, 13.5, 14]),
                 #(500, 90, [11, 11.25, 11.5, 11.75, 12, 8, 7, 6, 10, 10.5, 12.25, 13, 14]),
                 #(500, 50, [11, 11.25, 11.5, 11.75, 12, 8, 10, 10.5, 12.25, 13, 14]),
-                (500, 100, [9.85, 10, 10.15, 10.25, 6, 9, 9.5, 10.3, 7, 8, 10.5, 10.75, 11, 11.25, ]),
+
+                #(500, 100, [9.85, 10, 10.15, 10.25, 6, 9, 9.5, 10.3, 7, 8, 10.5, 10.75, 11, 11.25, ]),
+                #(10000, 100, [12, 12.5, 13, 7, 9, 9.5, 10, 13.5, 14]),
+
+                #(500, 100, [9.85]),
+
+                (500, 100, [16,15.75, 15.5,15.25]),
+                #(1000, 100, [20,19,18,17,16,15.5,14.5]),
+                #(10000, 100, [22,20,19,18, 17, 16]),
 
 ]
     conf['clients_per_machine'] = 10
     conf['files_per_client'] = [1]
 
-    conf['test_duration'] = 60
-    conf['warmup_sec'] = 120
+    conf['test_duration'] = 20
+    conf['warmup_sec'] = 20
 
-    conf['test_runs'] = [1, 2, 3, 4, 5]
+    conf['test_runs'] = [1]#, 2, 3, 4, 5]
 
     conf['server_jvm_params'] = '-ea -Xms12g -Xmx24g -XX:MaxDirectMemorySize=16684m -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'
-    conf['client_jvm_params'] = '-ea -Xms8g -Xmx12g -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'
+    conf['client_jvm_params'] = '-ea -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'
 
     conf['server_classpath'] = "/home/sm3rizvi/kawkab/src/main/resources:/home/sm3rizvi/kawkab/target/classes:repoDir/com/google/guava/guava/28.1-jre/guava-28.1-jre.jar:repoDir/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar:repoDir/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar:repoDir/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar:repoDir/org/checkerframework/checker-qual/2.8.1/checker-qual-2.8.1.jar:repoDir/com/google/errorprone/error_prone_annotations/2.3.2/error_prone_annotations-2.3.2.jar:repoDir/com/google/j2objc/j2objc-annotations/1.3/j2objc-annotations-1.3.jar:repoDir/org/codehaus/mojo/animal-sniffer-annotations/1.17/animal-sniffer-annotations-1.17.jar:repoDir/net/openhft/chronicle-core/2.17.31/chronicle-core-2.17.31.jar:repoDir/com/intellij/annotations/12.0/annotations-12.0.jar:repoDir/net/openhft/chronicle-bytes/2.17.42/chronicle-bytes-2.17.42.jar:repoDir/net/openhft/chronicle-wire/2.17.59/chronicle-wire-2.17.59.jar:repoDir/net/openhft/compiler/2.3.4/compiler-2.3.4.jar:repoDir/net/openhft/chronicle-threads/2.17.18/chronicle-threads-2.17.18.jar:repoDir/net/openhft/affinity/3.1.11/affinity-3.1.11.jar:repoDir/commons-cli/commons-cli/1.4/commons-cli-1.4.jar:repoDir/org/slf4j/slf4j-api/1.7.25/slf4j-api-1.7.25.jar:repoDir/net/openhft/chronicle-map/3.17.8/chronicle-map-3.17.8.jar:repoDir/net/openhft/chronicle-values/2.17.2/chronicle-values-2.17.2.jar:repoDir/com/squareup/javapoet/1.5.1/javapoet-1.5.1.jar:repoDir/net/openhft/chronicle-algorithms/2.17.0/chronicle-algorithms-2.17.0.jar:repoDir/net/java/dev/jna/jna/4.2.1/jna-4.2.1.jar:repoDir/net/java/dev/jna/jna-platform/4.2.1/jna-platform-4.2.1.jar:repoDir/com/thoughtworks/xstream/xstream/1.4.9/xstream-1.4.9.jar:repoDir/xmlpull/xmlpull/1.1.3.1/xmlpull-1.1.3.1.jar:repoDir/xpp3/xpp3_min/1.1.4c/xpp3_min-1.1.4c.jar:repoDir/org/codehaus/jettison/jettison/1.3.8/jettison-1.3.8.jar:repoDir/stax/stax-api/1.0.1/stax-api-1.0.1.jar:repoDir/org/ops4j/pax/url/pax-url-aether/2.4.5/pax-url-aether-2.4.5.jar:repoDir/org/slf4j/jcl-over-slf4j/1.6.6/jcl-over-slf4j-1.6.6.jar:repoDir/org/agrona/agrona/1.0.0/agrona-1.0.0.jar:repoDir/org/apache/curator/curator-framework/4.2.0/curator-framework-4.2.0.jar:repoDir/org/apache/curator/curator-client/4.2.0/curator-client-4.2.0.jar:repoDir/org/apache/zookeeper/zookeeper/3.5.4-beta/zookeeper-3.5.4-beta.jar:repoDir/log4j/log4j/1.2.17/log4j-1.2.17.jar:repoDir/org/apache/yetus/audience-annotations/0.5.0/audience-annotations-0.5.0.jar:repoDir/io/netty/netty/3.10.6.Final/netty-3.10.6.Final.jar:repoDir/com/amazonaws/aws-java-sdk-s3/1.11.553/aws-java-sdk-s3-1.11.553.jar:repoDir/com/amazonaws/aws-java-sdk-kms/1.11.553/aws-java-sdk-kms-1.11.553.jar:repoDir/com/amazonaws/aws-java-sdk-core/1.11.553/aws-java-sdk-core-1.11.553.jar:repoDir/commons-logging/commons-logging/1.1.3/commons-logging-1.1.3.jar:repoDir/software/amazon/ion/ion-java/1.0.2/ion-java-1.0.2.jar:repoDir/com/fasterxml/jackson/core/jackson-databind/2.6.7.2/jackson-databind-2.6.7.2.jar:repoDir/com/fasterxml/jackson/core/jackson-annotations/2.6.0/jackson-annotations-2.6.0.jar:repoDir/com/fasterxml/jackson/core/jackson-core/2.6.7/jackson-core-2.6.7.jar:repoDir/com/fasterxml/jackson/dataformat/jackson-dataformat-cbor/2.6.7/jackson-dataformat-cbor-2.6.7.jar:repoDir/joda-time/joda-time/2.8.1/joda-time-2.8.1.jar:repoDir/com/amazonaws/jmespath-java/1.11.553/jmespath-java-1.11.553.jar:repoDir/javax/annotation/javax.annotation-api/1.2/javax.annotation-api-1.2.jar:repoDir/org/apache/thrift/libthrift/0.12.0/libthrift-0.12.0.jar:repoDir/org/apache/httpcomponents/httpclient/4.5.6/httpclient-4.5.6.jar:repoDir/commons-codec/commons-codec/1.10/commons-codec-1.10.jar:repoDir/org/apache/httpcomponents/httpcore/4.4.1/httpcore-4.4.1.jar"
     conf['server_classpath'] = conf['server_classpath'].replace('repoDir', '/hdd1/sm3rizvi/maven-repos')

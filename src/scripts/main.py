@@ -46,54 +46,6 @@ def copy_files(conf):
     cmd = "cp -r %s/* %s"%(conf['run_dir'], conf['test_dir'])
     runCmdParallel(cmd, "all", conf, True)
     
-    #cmd = "cp -r %s %s"%(conf['results_dir'], conf['test_dir'])
-    #runCmdParallel(cmd, "servers", conf, True)
-    
-    # commands = []
-    # for i,host in enumerate(conf['clientMachines']):
-    #     cmd1 = "cp -r %s %s"%(conf['results_dir'], conf['test_dir'])
-    #     #run_cluster_cmd(cmd, host, conf, True)
-    #
-    #     cmd2 = "cp -r %s %s"%(conf['hists_dir'], conf['test_dir'])
-    #     #run_cluster_cmd(cmd, host, conf, True)
-    #
-    #     cmd3 = "cp -r %s %s"%(conf['clients_dir'], conf['test_dir'])
-    #     #run_cluster_cmd(cmd, host, conf, True)
-    #
-    #     commands.append({'host':host,'cmds':[cmd1, cmd2, cmd3]})
-    # runCommandsParallelForHost(commands, conf, True)
-        
-    # if conf['onEC2']:
-    #     #cmd = "cd %s/..; tar -zcf results.tgz results/%s/run_%s"%(conf['exp_dir'],conf['test_id'],conf['test_run'])
-    #     #print "cmd: ", cmd
-    #     #runCmdParallel(cmd, "all", conf, False)
-    #
-    #     commands = []
-    #     for i,host in enumerate(get_hosts_list(conf,"all")):
-    #         tgzFile = 'results-%d.tgz'%(i+1)
-    #         cmd1 = "cd %s/..; tar -zcf %s results/%s/run_%s"%(conf['exp_dir'],tgzFile,conf['test_id'],conf['test_run'])
-    #
-    #         commands.append({'host':host,'cmds':[cmd1]})
-    #     runCommandsParallelForHost(commands, conf, True)
-    #
-    #     commands = []
-    #     for i,host in enumerate(get_hosts_list(conf,"all")):
-    #         tgzFile = 'results-%d.tgz'%(i+1)
-    #
-    #         cmd2 = "scp -i %s %s@%s:%s/../%s %s/"%(
-    #                                 conf['rsaKeyFile'],conf['ssh_username'],host,
-    #                                 conf['exp_dir'],tgzFile,conf['allResultsDir'])
-    #         cmd3 = "cd %s; tar --overwrite --overwrite-dir -xf %s"%(conf['allResultsDir'],tgzFile)
-    #
-    #         cmd4 = "cd %s; cp %s /tmp; rm %s"%(conf['allResultsDir'],tgzFile,tgzFile)
-    #         #run_cmd(cmd, True)
-    #
-    #         commands.append({'host':host,'cmds':[cmd2,cmd3,cmd4]})
-    #
-    #         print "Commands %s"%([cmd2,cmd3,cmd4])
-    #
-    #     runCommandsParallelForHost(commands, conf, True,local=True)
-    
 def start_backend(conf):
     print 'Starting minio and zookeeper...'
 
@@ -144,12 +96,13 @@ def start_servers(conf):
     runCommandsParallelForHost(hostCmds, conf, True)
 
     print 'Waiting for servers to start completely ...'
-    stopwatch(25)
+    stopwatch(15)
 
 def start_clients(conf):
     print 'Starting clients...'
 
     jvmflags = conf['client_jvm_params']
+
 
     p = conf['test_params']
     wtMs = 0
@@ -172,35 +125,41 @@ def start_clients(conf):
     servers = get_servers_list(conf)
     numServers = len(servers)
     hostCmds = []
-    for i,clm in enumerate(get_clients_list(conf)):
-        cid = i*p['nc'] + 1
+    for i, clm in enumerate(get_clients_list(conf)):
+        cid = i * p['nc'] + 1
         clCount += 1
         sip = servers[cid % numServers]
 
-        #waitT = round((startTime - time.time())*1000)
+        # waitT = round((startTime - time.time())*1000)
 
-        outFile = '%s/client_%02d.out'%(conf['clients_dir'], cid)
+        outFile = '%s/client_%02d.out' % (conf['clients_dir'], cid)
+
+        heap_size = '-Xms4g'
 
         if cid == 1:
-            mid   = cid
-            mip   = clm
+            mid = cid
+            mip = clm
+            heap_size = '-Xms8g -Xmx30g '
 
         sport = conf['server_base_port'] + (cid % numServers)
 
         cmd = ('source ~/.bash_profile; '
                ' cd /tmp/kawkab; '
-               ' java %s '
-               ' -cp %s ' 
+               ' java %s %s '
+               ' -cp %s '
                ' kawkab.fs.testclient.ClientMain %s '
                ' cid=%d mid=%d mip=%s sip=%s sport=%d '
-               ' > %s 2>&1 & ')%( jvmflags, cp, opts,
-                                  cid, mid, mip, sip, sport,
-                                  outFile
-                )
+               ' > %s 2>&1 & ') % (jvmflags, heap_size, cp, opts,
+                                   cid, mid, mip, sip, sport,
+                                   outFile
+                                   )
 
-        run_cluster_cmd(cmd, [clm], conf, True)
-        #hostCmds.append({'host':clm,'cmds':[cmd]})
-    #runCommandsParallelForHost(hostCmds, conf, True)
+        if cid == mid:
+            run_cluster_cmd(cmd, [clm], conf, True)
+            stopwatch(5)
+        else:
+            hostCmds.append({'host': clm, 'cmds': [cmd]})
+    runCommandsParallelForHost(hostCmds, conf, True)
 
     print ''
     elapsed = time.time() - now
@@ -325,7 +284,7 @@ def run_batch(conf):
                                 start_clients(conf)
                                 stopwatch(3)
 
-                                duration = conf['warmup_sec'] + conf['test_duration'] + 60
+                                duration = conf['warmup_sec'] + conf['test_duration'] + 120
                                 wait_for_process(conf, "clients", 'java', duration)
                                 wait_for_process(conf, "servers", 'java', 5, True)
 

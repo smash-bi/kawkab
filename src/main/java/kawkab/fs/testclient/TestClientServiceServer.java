@@ -17,13 +17,15 @@ public class TestClientServiceServer {
 	private TServer server;
 	private boolean started = false;
 	private ExecutorService executor;
-	private final int maxBufferLen = 10 * 1024 * 1024;
+	private final int maxBufferLen = 4 * 1024 * 1024;
+	private final TestClientServiceImpl serviceImpl;
 
 	public TestClientServiceServer(int numClients, int svrPort, int masterID) throws KawkabException {
 		int numWorkers = numClients;
 		int ioThreads = 10;
 
-		TestClientService.Iface handler = new TestClientServiceImpl(numClients, masterID);
+		serviceImpl = new TestClientServiceImpl(numClients, masterID);
+		TestClientService.Iface handler = serviceImpl;
 
 		//server = hsHaServer(svrPort, handler, numWorkers, numWorkers*2);
 		//server = threadedSelectorServer(svrPort, handler, numWorkers, ioThreads);
@@ -110,5 +112,9 @@ public class TestClientServiceServer {
 
 		executor.shutdown();
 		started = false;
+	}
+
+	public synchronized Result testResult() {
+		return serviceImpl.testResult();
 	}
 }

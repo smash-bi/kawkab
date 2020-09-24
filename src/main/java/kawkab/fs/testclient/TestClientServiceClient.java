@@ -22,7 +22,7 @@ public class TestClientServiceClient {
 
 	public TestClientServiceClient(String serverIP, int port) throws KawkabException {
 		System.out.printf("[TCSC] Connecting to %s:%d\n",serverIP,port);
-		int maxBufferLen = 10 * 1024 * 1024;
+		int maxBufferLen = 4 * 1024 * 1024;
 		try {
 			transport = new TFastFramedTransport(new TSocket(serverIP, port), maxBufferLen, maxBufferLen);
 			transport.open();
@@ -39,10 +39,10 @@ public class TestClientServiceClient {
 		assert client != null;
 
 		List<Integer> latHistKeys = Arrays.stream(result.latHistKeys()).boxed().collect(Collectors.toUnmodifiableList());
-		List<Long> latHistValues = Arrays.stream(result.latHistValues()).boxed().collect(Collectors.toUnmodifiableList());
+		List<Integer> latHistValues = Arrays.stream(result.latHistValues()).boxed().collect(Collectors.toUnmodifiableList());
 
 		List<Integer> tputLogKeys = Arrays.stream(result.tputLogKeys()).boxed().collect(Collectors.toUnmodifiableList());
-		List<Long> tputLogValues = Arrays.stream(result.tputLogValues()).boxed().collect(Collectors.toUnmodifiableList());
+		List<Integer> tputLogValues = Arrays.stream(result.tputLogValues()).boxed().collect(Collectors.toUnmodifiableList());
 
 
 		//List<Long> tputTimeLog = Arrays.stream(result.tputLog()).boxed().collect(Collectors.toUnmodifiableList());
@@ -59,10 +59,10 @@ public class TestClientServiceClient {
 			//long[] tputLog = res.tputLog.stream().mapToLong(i->i).toArray();
 
 			int[] resLatHistKeys = res.latHistKeys.stream().mapToInt(i->i).toArray();
-			long[] resLatHistVals = res.latHistValues.stream().mapToLong(i->i).toArray();
+			int[] resLatHistVals = res.latHistValues.stream().mapToInt(i->i).toArray();
 
 			int[] resTputLogKeys = res.tputLogKeys.stream().mapToInt(i->i).toArray();
-			long[] resTputLogVals = res.tputLogValues.stream().mapToLong(i->i).toArray();
+			int[] resTputLogVals = res.tputLogValues.stream().mapToInt(i->i).toArray();
 
 			return new Result(res.totalCount, res.opsTput, res.dataTput, res.minVal, res.maxVal,
 					new AccumulatorMap(resLatHistKeys, resLatHistVals), new AccumulatorMap(resTputLogKeys, resTputLogVals), res.recsTput);

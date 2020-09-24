@@ -41,6 +41,10 @@ public class TestRunnerAsync {
 
 					if (res[0] != null) {
 						readAgg = client.sync(clid, testID, true, res[0]);
+						if (clid == mid) {
+							readAgg = tserver.testResult();
+						}
+
 					}
 					if (res[1] != null) {
 						if (clid == mid /*&& res[0] != null*/) {
@@ -48,6 +52,10 @@ public class TestRunnerAsync {
 						}
 						client.barrier(clid);
 						writeAgg = client.sync(clid, testID, true, res[1]);
+						if (clid == mid) {
+							writeAgg = tserver.testResult();
+						}
+
 					}
 
 					disconnectFromMaster(client);

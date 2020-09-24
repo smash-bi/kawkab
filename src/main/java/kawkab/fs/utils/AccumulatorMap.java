@@ -20,7 +20,7 @@ public class AccumulatorMap {
         reset();
     }
 
-    public AccumulatorMap(int[] indexVals, long[] counts) {
+    public AccumulatorMap(int[] indexVals, int[] counts) {
         assert indexVals.length == counts.length;
         int min = Integer.MAX_VALUE;
         int max = 0;
@@ -29,7 +29,7 @@ public class AccumulatorMap {
         buckets = new HashMap<>();
         for (int i=0; i<indexVals.length; i++) {
             int k = indexVals[i];
-            long v = counts[i];
+            int v = counts[i];
             buckets.put(k, new Count(v));
 
             if (min > k) min = k;
@@ -44,7 +44,7 @@ public class AccumulatorMap {
         minValue = min;
     }
 
-    public AccumulatorMap(int[] indexVals, long[] counts, long totalCnt, int min, int max) {
+    public AccumulatorMap(int[] indexVals, int[] counts, long totalCnt, int min, int max) {
         //this.buckets = histMap;
         assert indexVals.length == counts.length;
 
@@ -95,7 +95,11 @@ public class AccumulatorMap {
         int[] keys = sortedKeys();
         for (int ik = 0; ik < keys.length; ik++) {
             int x = keys[ik];
-            long cnt = buckets.get(x).count;
+            int cnt = buckets.get(x).count;
+
+            if (cnt ==0 ) continue;
+
+
             for (long j=0; j<cnt; j++) {
                 double toAdd = (x - avg) / n;
                 assert Double.MAX_VALUE - toAdd > avg;
@@ -243,7 +247,7 @@ public class AccumulatorMap {
                 buckets.put(k, c);
             }
 
-            assert Long.MAX_VALUE - c.count > fromCount.count;
+            assert Integer.MAX_VALUE - c.count > fromCount.count;
             c.count += fromCount.count;
         }
 
@@ -261,8 +265,8 @@ public class AccumulatorMap {
         return keys;
     }
 
-    private synchronized long[] unsortedBucketVals() {
-        long[] counts = new long[buckets.size()];
+    private synchronized int[] unsortedBucketVals() {
+        int[] counts = new int[buckets.size()];
         int i = 0;
         for (Count c : buckets.values()) {
             counts[i++] = c.count;
@@ -271,9 +275,9 @@ public class AccumulatorMap {
         return counts;
     }
 
-    public synchronized long[] sortedBucketVals() {
+    public synchronized int[] sortedBucketVals() {
         int[] keys = sortedKeys();
-        long[] counts = new long[buckets.size()];
+        int[] counts = new int[buckets.size()];
 
         for (int i=0; i<keys.length; i++) {
             counts[i] = buckets.get(keys[i]).count;
@@ -283,9 +287,9 @@ public class AccumulatorMap {
     }
 
     private class Count {
-        private long count;
+        private int count;
         private Count(){}
-        private Count(long c) { count = c; }
+        private Count(int c) { count = c; }
     }
 
     public AccumulatorMap copyOf(){

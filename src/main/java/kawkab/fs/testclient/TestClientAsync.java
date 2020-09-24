@@ -115,10 +115,10 @@ public class TestClientAsync {
 				busyWaitMicros(waitTimeMicros);
 			}
 
-			/*int size = rq.size();
-			if (size > 0) {
+			int size = rq.size();
+			if ((size % 100) == 1) {
 				System.out.print(size +" ");
-			}*/
+			}
 
 			for (int i=0; i<toSend; i++) {
 				rq.add(clock.instant());
@@ -158,6 +158,8 @@ public class TestClientAsync {
 		while((now = apClock.currentTime()) < et) {
 			try {
 				Instant ts = rq.take();
+				//ts = clock.instant();
+
 				boolean isAppend = (reqRand.nextInt(100)+1) <= writeRatio;
 
 				int batchSize = -1;
