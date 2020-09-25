@@ -41,7 +41,7 @@ def get_config():
                                 ]
     conf['client_indexes'] =   [
                                     ('red',     [5,6,7,8,9,10,11,4,
-                                                 6,6,7,8,9,10,11,4,
+                                                 5,6,6,7,8,9,10,11,
                                                  7,6,7,8,9,10,11,4,
                                                  8,6,7,8,9,10,11,4,
                                                  9,6,7,8,9,10,11,4,
@@ -74,7 +74,7 @@ def get_config():
     conf['client_base_port'] = 43567
 
     conf['test_type'] = ['rw']
-    conf['test_prefix' ] = ['kw18']
+    conf['test_prefix' ] = ['kw21']
     #conf['batch_size'] = [10000]
     conf['record_size'] = [16]
     conf['batch_writeratio_rps'] = [ # list of tuples (batch_size, write_ratio, [reqs_per_second list])
@@ -96,18 +96,24 @@ def get_config():
 
                 #(500, 100, [9.85]),
 
-                (500, 100, [16,15.75, 15.5,15.25]),
-                #(1000, 100, [20,19,18,17,16,15.5,14.5]),
-                #(10000, 100, [22,20,19,18, 17, 16]),
+                #(500, 100, [10])
+                #(500, 100, [15, 13.85, 12, 11, 10, 8]),
+                #(1000, 100, [12.75, 13]),
+                #(10000, 100, [13]),
+                (100, 100, [4])#6, 8, 10, 12, 14])
+
+                #(500, 90, [8, 10, 15, 16, 17, 18]),
+                #(500, 50, [8, 10, 15, 17, 18, 19, 20]),
+                #(500, 10, [8, 15, 20, 22, 23, 24, 25]),
 
 ]
     conf['clients_per_machine'] = 10
     conf['files_per_client'] = [1]
 
-    conf['test_duration'] = 20
-    conf['warmup_sec'] = 20
+    conf['test_duration'] = 60
+    conf['warmup_sec'] = 60
 
-    conf['test_runs'] = [1]#, 2, 3, 4, 5]
+    conf['test_runs'] = [3,4]
 
     conf['server_jvm_params'] = '-ea -Xms12g -Xmx24g -XX:MaxDirectMemorySize=16684m -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'
     conf['client_jvm_params'] = '-ea -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'

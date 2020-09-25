@@ -108,7 +108,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 
 	@Override
 	public void setup(int testID) throws TException {
-		System.out.printf("[TCSI Setting up for test %d, client=%d\n", testID, numClients);
+		System.out.printf("[TCSI Setting up for test %d, total clients=%d\n", testID, numClients);
 		this.testID = testID;
 		received = 0;
 		aggResult = new Result();

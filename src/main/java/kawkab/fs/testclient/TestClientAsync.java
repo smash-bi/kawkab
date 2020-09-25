@@ -82,14 +82,19 @@ public class TestClientAsync {
 
 		//rpcClient.barrier(cid);
 
+		System.out.println(cid+" closing...");
+
 		if (isController) {
 			work = false;
 			ctrlThr.interrupt();
 			try {
-				ctrlThr.join();
+				ctrlThr.join(2000);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
+				ctrlThr.interrupt();
 			}
+
+			System.out.println("Generator signaled.");
 		}
 
 		return res;
@@ -175,7 +180,8 @@ public class TestClientAsync {
 				} else {
 					//batchSize = sendReadRequest(recGen, apClock.currentTime());
 
-					batchSize = sendFixedWindowReadRequest(recGen, reqBatchSize, timestamps);
+					//batchSize = sendFixedWindowReadRequest(recGen, reqBatchSize, timestamps);
+					batchSize = sendFixedRandomWindowReadRequest(recGen, reqBatchSize, timestamps);
 
 					//batchSize = sendHistoricalReadRequest(recGen, readRecordTS, readRecordTS+reqBatchSize);
 					//readRecordTS += batchSize;

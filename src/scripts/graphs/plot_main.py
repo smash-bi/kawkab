@@ -154,7 +154,7 @@ def thr_lat_bs(conf, figParams):
     config['metric'] = [
         { 'type':'kawkab', 'label':'Kawkab',
           'name':'batch_size', 'points':[
-            #{'res_file':'all-results.json', 'prefix':'rw-kw11', 'val':100, 'num_clients':200, 'iat':[3, 5, 6, 6.2, 6.4, 6.6, 6.7, 6.8, 6.9, 7, 7.2]},
+            {'res_file':'all-results.json', 'prefix':'rw-kw11', 'val':100, 'num_clients':200, 'iat':[3, 5, 6, 6.2, 6.4, 6.6, 6.7, 6.8, 6.9, 7, 7.2]},
             #{'res_file':'all-results.json', 'prefix':'rw-kw10', 'val':500, 'num_clients':200, 'iat':[9,9.5,10, 10.1,10.25, 10.3,10.5,11,]},
             #{'res_file':'write-results.json', 'prefix':'rw-kw14', 'val':1000, 'num_clients':200, 'iat':[9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75]},
             #{'res_file':'write-results.json', 'prefix':'rw-kw12', 'val':1000, 'num_clients':200, 'iat':[9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75]},
@@ -169,8 +169,15 @@ def thr_lat_bs(conf, figParams):
 
             #{'res_file':'all-results.json', 'prefix':'rw-kw10', 'val':500, 'num_clients':200, 'iat':[11]},
             #{'res_file':'write-results.json', 'prefix':'rw-kw17', 'val':500, 'num_clients':400, 'iat':[11.25, 11.5, 11.75]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw18', 'val':500, 'num_clients':560, 'iat':[10,11,12.25,12.5,12.75,13,14,15]},
+            #{'res_file':'write-results.json', 'prefix':'rw-kw18', 'val':500, 'num_clients':560, 'iat':[10,11,12.25,12.5,12.75,13,14,15]},
             #{'res_file':'write-results.json', 'prefix':'rw-kw18', 'val':1000, 'num_clients':560, 'iat':[15]},
+
+            {'res_file':'write-results.json', 'prefix':'rw-kw18', 'val':500, 'num_clients':560, 'iat':[8, 10, 11, 12, 12.5, 13, 13.4,13.7, 13.85,14, 14.5, 15,]}, #<<<<<<
+            {'res_file':'write-results.json', 'prefix':'rw-kw19', 'val':1000, 'num_clients':560, 'iat':[8, 11, 12, 12.75, 13, 13.4, 13.7, 14, 14.25, 14.5, 15, 16]}, #<<<<
+            {'res_file':'write-results.json', 'prefix':'rw-kw20', 'val':10000, 'num_clients':560, 'iat':[8, 10, 13, 14.5, 15, 15.25, 15.5, 15.75, 16, 16.5]},
+
+
+
         ]},
         # { 'type':'kawkab', 'label':'Kawkab',
         #   'name':'batch_size', 'points':[
@@ -207,7 +214,7 @@ def thr_lat_bs(conf, figParams):
     title = "Throughput and latency (Batch Size)"
     fig_prefix = "batch-size"
 
-    batch_size_lat_thr(config, results, fgp, fig_prefix, title, False, None, None, False, True)
+    batch_size_lat_thr(config, results, fgp, fig_prefix, title, False, None, None, True, True)
 
 def results_bs(conf, figParams):
     config = {}
@@ -288,7 +295,7 @@ def thr_lat_wr(conf, figParams):
     config['record_size'] = [16]
     config['files_per_client'] = [1]
     #config['iat'] = [925, 875, 825, 775, 750]
-    config['test_runs'] = [1, 2, 3, 4, 5]
+    config['test_runs'] = [1, 2, 4, 5]
 
     fgp = {}
     fgp.update(figParams)

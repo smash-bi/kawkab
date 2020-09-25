@@ -139,7 +139,7 @@ def start_clients(conf):
         if cid == 1:
             mid = cid
             mip = clm
-            heap_size = '-Xms8g -Xmx30g '
+            heap_size = '-Xms8g -Xmx40g '
 
         sport = conf['server_base_port'] + (cid % numServers)
 
@@ -284,7 +284,7 @@ def run_batch(conf):
                                 start_clients(conf)
                                 stopwatch(3)
 
-                                duration = conf['warmup_sec'] + conf['test_duration'] + 120
+                                duration = conf['warmup_sec'] + conf['test_duration'] + 240
                                 wait_for_process(conf, "clients", 'java', duration)
                                 wait_for_process(conf, "servers", 'java', 5, True)
 

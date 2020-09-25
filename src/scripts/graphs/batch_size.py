@@ -61,7 +61,7 @@ def batch_size_lat_thr(conf, results, fig_params, figPrefix="", title="", barGra
         if barGraph:
             plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params, yMax=yMax, xMax=xMax, logy=logY)
         else:
-            plotTimeSeries(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params, yMax=yMax, xMax=xMax, logy=logY)
+            plotTimeSeries(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params, yMax=yMax, xMax=xMax, logy=logY, )
 
         if save_fig:
             plt.savefig("%s/%s-%s.pdf" % (conf["fig_dir"], figPrefix,latType))
