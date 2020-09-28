@@ -7,9 +7,6 @@ import kawkab.fs.utils.AccumulatorMap;
 import org.apache.thrift.TException;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class TestClientServiceImpl implements TestClientService.Iface {
 	private int received = 0;
@@ -77,7 +74,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 					assert received == numClients : String.format(" rcvd (%d) != (%d) numClients", received, numClients);
 					ready = false;
 					received = 0;
-					//printResults(aggResult);
+					printResults(aggResult);
 				}
 				return resp;
 			} catch (Exception | AssertionError e) {
@@ -166,8 +163,24 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 		int[] resTputLogKeys = tres.tputLogKeys.stream().mapToInt(i->i).toArray();
 		int[] resTputLogVals = tres.tputLogValues.stream().mapToInt(i->i).toArray();
 
+//		if (dstResult.tputLogValues() != null) {
+//			System.out.print("Prev: ");
+//			dstResult.printTputLog();
+//		}
+
+		AccumulatorMap latHist = new AccumulatorMap(resLatHistKeys, resLatHistVals);
+		AccumulatorMap resTputLog = new AccumulatorMap(resTputLogKeys, resTputLogVals);
+
+//		System.out.print("New: ");
+//		resTputLog.printPairs();
+
 		dstResult.merge(new Result(tres.totalCount, tres.opsTput, tres.dataTput, tres.minVal, tres.maxVal,
-				new AccumulatorMap(resLatHistKeys, resLatHistVals), new AccumulatorMap(resTputLogKeys, resTputLogVals), tres.recsTput));
+				latHist, resTputLog, tres.recsTput));
+//
+//		System.out.print("Merged: ");
+//		dstResult.printTputLog();
+//		System.out.println();
+
 	}
 
 	private void printResults(Result result) {

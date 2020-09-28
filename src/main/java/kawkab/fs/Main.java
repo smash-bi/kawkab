@@ -34,7 +34,8 @@ public class Main {
 		System.out.println("-------------------------------");
 
 		int nodeID = Configuration.getNodeID();
-		Properties props = Configuration.getProperties(Configuration.propsFileCluster);
+		String propsFile = System.getProperty("conf", Configuration.propsFileCluster);
+		Properties props = Configuration.getProperties(propsFile);
 		Filesystem.bootstrap(nodeID, props);
 
 		GCMonitor.initialize();

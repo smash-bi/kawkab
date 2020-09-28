@@ -1,6 +1,5 @@
 package kawkab.fs.testclient;
 
-import com.google.common.math.Stats;
 import kawkab.fs.api.Record;
 import kawkab.fs.client.KClient;
 import kawkab.fs.core.ApproximateClock;
@@ -11,9 +10,11 @@ import kawkab.fs.utils.AccumulatorMap;
 import kawkab.fs.utils.LatHistogram;
 import org.apache.commons.math3.distribution.PoissonDistribution;
 
+import java.text.SimpleDateFormat;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -35,6 +36,8 @@ public class TestClientAsync {
 
 	private long[] timestamps;
 
+	private static Instant nullInstant = Instant.ofEpochMilli(0);
+
 	TestClientAsync(int id) {
 		this.cid = id;
 		fileRand = new Random();
@@ -45,7 +48,11 @@ public class TestClientAsync {
 	Result[] runTest(boolean isController, double repRateMPS, int writeRatio, int totalClients, int clientsPerMachine, int testDurSec, int filesPerclient, int batchSize,
 						   int warmupSecs, Record recGen, final LinkedBlockingQueue<Instant> rq, TestClientServiceClient rpcClient) throws KawkabException {
 		int offset = (cid-1)*filesPerclient;
-		openFiles(offset, filesPerclient, recGen.size(), writeRatio);
+		if (writeRatio > 0)
+			openFiles(offset, filesPerclient, recGen.size());
+		else
+			openFilesForReads(offset, filesPerclient, recGen.size());
+
 		timestamps = new long[files.length];
 
 		rpcClient.barrier(cid);
@@ -66,13 +73,13 @@ public class TestClientAsync {
 
 		Result[] res = null;
 		try {
-			System.out.printf("Ramp-up for %d seconds...\n", warmupSecs);
+			System.out.printf("Ramp-up for %d seconds..., %s \n", warmupSecs, new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
 			test(warmupSecs, recGen.newRecord(), batchSize, writeRatio, rq, false, isController);
 
-			System.out.printf("Running test for %d seconds...\n", testDurSec);
+			System.out.printf("Running test for %d seconds... %S\n", testDurSec, new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
 			res = test(testDurSec, recGen.newRecord(), batchSize, writeRatio, rq, true, isController);
 
-			System.out.printf("Ramp-down for %d seconds...\n", rampDownSec);
+			System.out.printf("Ramp-down for %d seconds... %S\n", rampDownSec, new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
 			test(rampDownSec, recGen.newRecord(), batchSize, writeRatio, rq, false, isController);
 		}catch (AssertionError | Exception e) {
 			e.printStackTrace();
@@ -80,9 +87,9 @@ public class TestClientAsync {
 			closeFiles();
 		}
 
-		//rpcClient.barrier(cid);
-
 		System.out.println(cid+" closing...");
+
+		//rpcClient.barrier(cid); //This is needed before closing the controller
 
 		if (isController) {
 			work = false;
@@ -129,6 +136,11 @@ public class TestClientAsync {
 				rq.add(clock.instant());
 			}
 		}
+
+		//To let anyone finish if waiting to receive an item
+		for (int i=0; i<2*clientsPerMachine; i++) {
+			rq.add(nullInstant);
+		}
 	}
 
 
@@ -140,13 +152,13 @@ public class TestClientAsync {
 
 		AccumulatorMap wLats = new AccumulatorMap(1000000);
 		AccumulatorMap rLats = new AccumulatorMap(1000000);
-		AccumulatorMap rTputs = new AccumulatorMap(durSec+1);
+		AccumulatorMap rOpsThr = new AccumulatorMap(durSec+1);
 		AccumulatorMap wTputs = new AccumulatorMap(durSec+1);
 		AccumulatorMap rRps = new AccumulatorMap(durSec+1);
 		AccumulatorMap wRps = new AccumulatorMap(durSec+1);
 
 		String[] fnames = new String[reqBatchSize]; //Random files used in a batch. Actual file name is populated from files class variable.
-		//int[] timestamps = new int[reqBatchSize];
+		long[] histReadTS = new long[files.length];
 		Record[] records = new Record[reqBatchSize];
 		for (int i=0; i<records.length; i++) {
 			records[i] = recGen.newRandomRecord(new Random(), 0);
@@ -163,6 +175,10 @@ public class TestClientAsync {
 		while((now = apClock.currentTime()) < et) {
 			try {
 				Instant ts = rq.take();
+				if (ts.equals(nullInstant)) {
+					System.out.printf("[TCA] %d received stop signal\n", cid);
+					break;
+				}
 				//ts = clock.instant();
 
 				boolean isAppend = (reqRand.nextInt(100)+1) <= writeRatio;
@@ -181,9 +197,8 @@ public class TestClientAsync {
 					//batchSize = sendReadRequest(recGen, apClock.currentTime());
 
 					//batchSize = sendFixedWindowReadRequest(recGen, reqBatchSize, timestamps);
-					batchSize = sendFixedRandomWindowReadRequest(recGen, reqBatchSize, timestamps);
-
-					//batchSize = sendHistoricalReadRequest(recGen, readRecordTS, readRecordTS+reqBatchSize);
+					//batchSize = sendFixedRandomWindowReadRequest(recGen, reqBatchSize, timestamps);
+					batchSize = sendHistoricalReadRequest(recGen, histReadTS, reqBatchSize);
 					//readRecordTS += batchSize;
 
 					if (batchSize == 0) {
@@ -209,9 +224,9 @@ public class TestClientAsync {
 					wRps.put(elapsed, batchSize);
 				} else {
 					rLats.put(lat, 1);
-					rBatchSize += batchSize;
-					rTputs.put(elapsed, 1);
+					rOpsThr.put(elapsed, 1);
 					rRps.put(elapsed, batchSize);
+					rBatchSize += batchSize;
 				}
 			} catch (InterruptedException e) {
 				//e.printStackTrace();
@@ -226,7 +241,7 @@ public class TestClientAsync {
 			//rBatchSize = rBatchSize / rLats.count(); // Take the average number of records read per operation
 			System.out.println("rBatchSize = " + (rBatchSize/rLats.count()));
 			//rBatchSize = 1; // Take the average number of records read per operation
-			readRes = prepareResult(rLats, rTputs, rRps, recGen.size());
+			readRes = prepareResult(rLats, rOpsThr, rRps, recGen.size());
 		}
 
 		if (wLats.count() > 0) {
@@ -312,16 +327,22 @@ public class TestClientAsync {
 		return res.size();
 	}
 
-	private int sendHistoricalReadRequest(Record recGen, long minTs, long maxTs) throws KawkabException {
-		String fn = files[fileRand.nextInt(files.length)];
-		List<Record> res = client.readRecords(fn, minTs, maxTs, recGen, false);
+	private int sendHistoricalReadRequest(Record recGen, long[] timestamps, int batchSize) throws KawkabException {
+		int iFile = fileRand.nextInt(files.length);
+		String fn = files[iFile];
+
+		long minTS = timestamps[iFile];
+		long maxTS = minTS + batchSize;
+		timestamps[iFile] += batchSize;
+
+		List<Record> res = client.readRecords(fn, minTS, maxTS, recGen, false);
 		if (res == null)
 			return 0;
 
 		return res.size();
 	}
 
-	void openFiles(int offset, int numFiles, int recSize, int writeRatio) throws KawkabException {
+	void openFiles(int offset, int numFiles, int recSize) throws KawkabException {
 		assert client.isConnected();
 		assert files == null : "Files are already open";
 
@@ -333,10 +354,28 @@ public class TestClientAsync {
 
 		for (int i=0; i<files.length; i++) {
 			files[i] = String.format("tf-%d",offset+i);
-			if (writeRatio > 0)
-				modes[i] = Filesystem.FileMode.APPEND;
-			else
-				modes[i] = Filesystem.FileMode.READ;
+			modes[i] = Filesystem.FileMode.APPEND;
+			recSizes[i] = recSize;
+		}
+
+		int n = client.bulkOpen(files, modes, recSizes);
+
+		assert n == numFiles;
+	}
+
+	void openFilesForReads(int offset, int numFiles, int recSize) throws KawkabException {
+		assert client.isConnected();
+		assert files == null : "Files are already open";
+
+		System.out.printf("Opening files for append: offset=%d, nf=%d, cid=%d\n", offset, numFiles, cid);
+
+		files = new String[numFiles];
+		Filesystem.FileMode[] modes = new Filesystem.FileMode[numFiles];
+		int[] recSizes = new int[numFiles];
+
+		for (int i=0; i<files.length; i++) {
+			files[i] = String.format("tf-%d",offset+i);
+			modes[i] = Filesystem.FileMode.READ;
 			recSizes[i] = recSize;
 		}
 
@@ -364,15 +403,15 @@ public class TestClientAsync {
 		client.disconnect();
 	}
 
-	private Result prepareResult(AccumulatorMap lats, AccumulatorMap tputs, AccumulatorMap rps, int recSize) {
+	private Result prepareResult(AccumulatorMap lats, AccumulatorMap opTputs, AccumulatorMap rps, int recSize) {
 		long cnt = lats.count();
 		//double sizeMB = recSize*cnt / (1024.0 * 1024.0);
 		//double thr = sizeMB * 1000.0 / durMsec;
-		double opThr = Stats.meanOf(tputs.sortedBucketVals());
-		int recsPerSec = (int)Stats.meanOf(rps.sortedBucketVals());
-		double thr = recsPerSec*recSize / (1024.0 * 1024.0);
+		double opThr = opTputs.countsMean(); //Stats.meanOf(tputs.sortedBucketVals());
+		double recsPerSec = rps.countsMean(); //(int)Stats.meanOf(rps.sortedBucketVals());
+		double dataThr = recsPerSec*recSize / (1024.0 * 1024.0);
 
-		return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats, tputs, recsPerSec);
+		return new Result(cnt, opThr, dataThr, lats.min(), lats.max(), lats, rps, recsPerSec);
 		//return new Result(cnt, opThr, thr, lats.min(), lats.max(), lats.buckets(), rps.buckets(), recsPerSec);
 	}
 

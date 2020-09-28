@@ -51,7 +51,7 @@ public final class S3Backend implements GlobalBackend{
 	}
 	
 	@Override
-	public void loadFromGlobal(final Block dstBlock, final int offset, final int length) throws FileNotExistException, IOException{
+	public void bulkLoadFromGlobal(final Block dstBlock, final int offset, final int length) throws FileNotExistException, IOException{
 		//TODO: Take a ByteBuffer as an input argument. Load the fetched data in the given ByteBuffer instead of calling block.load().
 
 		long rangeStart = offset;
@@ -103,6 +103,58 @@ public final class S3Backend implements GlobalBackend{
 			}
 		}
 		
+		//System.out.println("[S3] Loading from global: " + id.name());
+	}
+
+	@Override
+	public void bulkLoadFromGlobal(final BlockLoader bl) throws FileNotExistException, IOException{
+		//TODO: Take a ByteBuffer as an input argument. Load the fetched data in the given ByteBuffer instead of calling block.load().
+
+		long rangeStart = bl.offset();
+		long rangeEnd = rangeStart + bl.length() - 1; //end range is inclusive
+
+		// System.out.printf("\t\t[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n", dstBlock.id(), rangeStart, rangeEnd, length, dstBlock.id().localPath());
+
+		String path = bl.blockPath();
+		GetObjectRequest getReq = new GetObjectRequest(rootBucket, path);
+		getReq.setRange(rangeStart, rangeEnd);
+
+		int retries = 3;
+		Random rand = new Random();
+
+		//System.out.printf("[S3 Bulk load: %s. start=%d, end=%d, len=%d\n", bl.blockPath(), rangeStart, rangeEnd, rangeEnd-rangeStart+1);
+
+		while(retries-- > 0) {
+			try (
+					S3Object obj = client.getObject(getReq); // client is an S3 client
+					S3ObjectInputStream is = obj.getObjectContent();
+					ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(is));
+			) {
+				int read = bl.loadFrom(chan);
+				assert read == rangeEnd - rangeStart + 1 :
+						String.format("[S3] Not all bytes read from channel: read=%d, expected=%d",read, rangeEnd-rangeStart+1);
+				break;
+			} catch (SdkBaseException | IOException ae) { // If the block does not exist in S3, it throws NoSucKey error code
+				if (ae instanceof AmazonS3Exception) {
+					if (((AmazonS3Exception)ae).getErrorCode().equals("NoSuchKey")) {
+						throw new FileNotExistException("S3 NoSuckKey: " + path);
+					}
+				}
+
+				if (retries == 1)
+					throw new IOException(ae.getMessage()+", failed to complete the request after retires");
+
+				try {
+					long sleepMs = (100+(Math.abs(rand.nextLong())%400));
+					System.out.println(String.format("[S3] Load from the global store failed for %s, retrying in %d ms...",
+							bl.blockPath(), sleepMs));
+					Thread.sleep(sleepMs);
+				} catch (InterruptedException e) {
+					return;
+				}
+			}
+		}
+
 		//System.out.println("[S3] Loading from global: " + id.name());
 	}
 	

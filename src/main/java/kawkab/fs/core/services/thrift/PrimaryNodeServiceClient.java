@@ -23,7 +23,8 @@ public class PrimaryNodeServiceClient {
 	private static PrimaryNodeServiceClient instance;
 	private static NodesRegister nodesRegister = NodesRegister.instance();
 	//private final int BUFLEN = 500*1024;
-	private final int BUFLEN = 2*1024*1024; //500*1024;
+	//private final int BUFLEN = 2097152; //2*1024*1024; //500*1024;
+	private final int BUFLEN = Configuration.instance().maxBufferLen;
 
 	private PrimaryNodeServiceClient() {
 		clients = new HashMap<>();

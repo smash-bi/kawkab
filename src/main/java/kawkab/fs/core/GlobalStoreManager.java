@@ -82,14 +82,22 @@ public class GlobalStoreManager {
 	 * @throws FileNotExistException
 	 * @throws KawkabException
 	 */
-	public void load(Block block, int offset, int length) throws FileNotExistException, IOException {
+	public void bulkLoad(Block block, int offset, int length) throws FileNotExistException, IOException {
 		//TODO: Limit the number of load requests, probably using semaphore
 		//TODO: Make it a blocking function and use a threadpool for the load requests
 
 		int backend = Math.abs(block.id().perBlockTypeKey()) % loadBackends.length;
 
 		synchronized(loadBackends[backend]) {
-			loadBackends[backend].loadFromGlobal(block, offset, length);
+			loadBackends[backend].bulkLoadFromGlobal(block, offset, length);
+		}
+	}
+
+	public void bulkLoad(BlockLoader bl) throws FileNotExistException, IOException {
+		int backend = Math.abs(bl.perBlockTypeKey()) % loadBackends.length;
+
+		synchronized(loadBackends[backend]) {
+			loadBackends[backend].bulkLoadFromGlobal(bl);
 		}
 	}
 	

@@ -30,7 +30,7 @@ public class FilesystemServiceImpl implements Iface {
 
 	private static Configuration conf = Configuration.instance();
 
-	private static ThreadLocal<ByteBuffer> thrLocalBuf = ThreadLocal.withInitial(() -> ByteBuffer.allocate(conf.maxBufferLen));
+	private static ThreadLocal<ByteBuffer> thrLocalBuf = ThreadLocal.withInitial(() -> ByteBuffer.allocate(conf.maxBufferLen+1024));
 
 	public FilesystemServiceImpl(Filesystem fs) {
 		this.fs = fs;

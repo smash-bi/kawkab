@@ -9,15 +9,15 @@ import kawkab.fs.core.index.poh.PostOrderHeapIndex;
 import kawkab.fs.core.timerqueue.DeferredWorkReceiver;
 import kawkab.fs.core.timerqueue.TimerQueueIface;
 import kawkab.fs.core.timerqueue.TimerQueueItem;
-import kawkab.fs.utils.LatHistogram;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -37,6 +37,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	private static final Cache cache = Cache.instance();
 	private static final ApproximateClock clock = ApproximateClock.instance();
 	private static final LocalStoreManager localStore = LocalStoreManager.instance();
+	private static final GlobalStoreManager globalStore = GlobalStoreManager.instance();
 	private static final Configuration conf = Configuration.instance();
 	private TimerQueueIface timerQ;
 
@@ -258,11 +259,22 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (offsets == null)
 			return null;
 
+		//isContiguous(offsets);
+
+		if (Commons.onPrimaryNode(inumber) || loadFromPrimary) {
+			return readRecordsPrimary(offsets, minTS, maxTS, loadFromPrimary);
+		}
+
+		return readRecordsNonPrimary(offsets, minTS, maxTS);
+	}
+
+	private List<ByteBuffer> readRecordsPrimary(final List<long[]> offsets, final long minTS, final long maxTS, boolean loadFromPrimary) throws KawkabException, IOException {
 		ByteBuffer dstBuf = thrLocalBuf.get();
 		dstBuf.clear();
 
 		int length = offsets.size();
 		List<ByteBuffer> results = new ArrayList<>(); //The lists contains offsets to unique segments.
+
 		for (int i=0; i<length; i++) {
 			long[] segNums = offsets.get(i);
 			for (int j=0; j<segNums.length; j++) {
@@ -308,7 +320,47 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 	}
 
-	public List<Record> readAll(long minTS, long maxTS, final Record recFactory, boolean loadFromPrimary) throws IOException, KawkabException {
+	private List<ByteBuffer> readRecordsNonPrimary(List<long[]> offsets, final long minTS, final long maxTS) throws KawkabException, IOException {
+		LinkedList<DataSegment> segments = acquireSegments(offsets);
+		try {
+			loadBlocks(segments);
+		} catch (IOException | FileNotExistException e) {
+			for (DataSegment seg : segments) {
+				cache.releaseBlock(seg.id());
+			}
+
+			throw e;
+		}
+
+		ByteBuffer dstBuf = thrLocalBuf.get();
+		dstBuf.clear();
+
+		List<ByteBuffer> results = new ArrayList<>(); //The lists contains offsets to unique segments.
+		//ByteBuffer dstBuf = ByteBuffer.allocate(conf.maxBufferLen);
+		for (DataSegment seg : segments) {
+			/*if (dstBuf.remaining() < conf.segmentSizeBytes) {
+				dstBuf.flip();
+				results.add(dstBuf);
+				dstBuf = ByteBuffer.allocate(conf.maxBufferLen);
+			}*/
+
+			seg.readRecords(minTS, maxTS, dstBuf);
+			cache.releaseBlock(seg.id());
+		}
+
+		if (dstBuf.position() > 0) {
+			results.add(dstBuf);
+			dstBuf.flip();
+		}
+
+		if (results.size() == 0)
+			return null;
+
+		return results;
+	}
+
+	public List<Record> readAll(long minTS, long maxTS, final Record recFactory, boolean loadFromPrimary)
+			throws IOException, KawkabException {
 		if (recFactory.size() != recordSize) {
 			throw new KawkabException(String.format("Record sizes do not match. Given %d, expected %d", recFactory.size(), recordSize));
 		}
@@ -322,6 +374,15 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 		//System.out.println(offsets.size());
 
+		if (loadFromPrimary || Commons.onPrimaryNode(inumber))
+			return readAllRecords(offsets, minTS, maxTS, recFactory, loadFromPrimary);
+
+		return readAllOnNonPrimary(offsets, minTS, maxTS, recFactory);
+
+	}
+
+	private List<Record> readAllRecords(List<long[]> offsets, long minTS, long maxTS, Record recFactory, boolean loadFromPrimary)
+			throws FileNotExistException, IOException, OutOfMemoryException {
 		int length = offsets.size();
 		List<Record> results = new ArrayList<>(); //The lists contains offsets to unique segments.
 		for (int i=0; i<length; i++) {
@@ -350,6 +411,133 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			return null;
 
 		return results;
+	}
+
+	private List<Record> readAllOnNonPrimary(List<long[]> offsets, long minTS, long maxTS, Record recFactory)
+			throws IOException, OutOfMemoryException, FileNotExistException {
+		LinkedList<DataSegment> segments = acquireSegments(offsets);
+
+		try {
+			loadBlocks(segments);
+		} catch (IOException | FileNotExistException e) {
+			for (DataSegment seg : segments) {
+				cache.releaseBlock(seg.id());
+			}
+
+			throw e;
+		}
+
+		List<Record> results = new ArrayList<>(segments.size()); //The lists contains offsets to unique segments.
+
+		for (DataSegment seg : segments) {
+			seg.readAll(minTS, maxTS, recFactory, results);
+			cache.releaseBlock(seg.id());
+		}
+
+		if (results.size() == 0)
+			return null;
+
+		return results;
+	}
+
+	private LinkedList<DataSegment> acquireSegments(List<long[]> offsets) throws IOException, OutOfMemoryException {
+		LinkedList<DataSegment> segs = new LinkedList<>();
+		int length = offsets.size();
+		for (int i=0; i<length; i++) {
+			long[] segNums = offsets.get(i);
+			for (int j = 0; j < segNums.length; j++) {
+				long segInFile = segNums[j];
+
+				BlockID curSegId = idBySegInFile(segInFile);
+				try {
+					segs.add((DataSegment)cache.acquireBlock(curSegId));
+				} catch(IOException | OutOfMemoryException e) {
+					for(DataSegment seg : segs) {
+						cache.releaseBlock(seg.id());
+					}
+
+					throw e;
+				}
+			}
+		}
+
+		return segs;
+	}
+
+	private synchronized void loadBlocks(List<DataSegment> dss) throws FileNotExistException, IOException {
+		assert dss.size() > 0;
+
+		//DataSegmentID f = (DataSegmentID)(dss.get(0).id());
+		//DataSegmentID l = (DataSegmentID)(dss.get(dss.size()-1).id());
+		//System.out.printf("[I] F=%d: Loading blocks from %d:%d to %d:%d\n",
+		//		inumber, f.blockInFile(),f.segmentInBlock(),l.blockInFile(),l.segmentInBlock());
+
+		long curBlock = -1;
+		int lastSIB = -1;
+		BlockLoader bl = null;
+
+		int cnt = 0;
+
+		for (DataSegment ds : dss) {
+			DataSegmentID dsid = (DataSegmentID) ds.id;
+			long blockInFile = dsid.blockInFile();
+			int sib = dsid.segmentInBlock();
+
+			if (blockInFile != curBlock || lastSIB != sib+1) {
+				if (curBlock != -1) { //If not the first iteration
+					//bl.printSegsInLoader();
+					globalStore.bulkLoad(bl);
+				}
+
+				curBlock = blockInFile;
+				bl = new BlockLoader(blockInFile, dsid.localPath(), dsid.perBlockTypeKey());
+			}
+
+			cnt++;
+			bl.add(ds);
+			lastSIB = sib;
+		}
+
+		//bl.printSegsInLoader();
+		globalStore.bulkLoad(bl);
+
+		if (cnt != dss.size())
+			System.out.printf("[I] F=%d: Total segments loaded %d, expected %d\n", inumber, cnt, dss.size());
+	}
+
+	private boolean isContiguous(List<long[]> offsets) {
+		//printOffsets(offsets);
+		int length = offsets.size();
+		long last = -1;
+		for (int i=0; i<length; i++) {
+			long[] segNums = offsets.get(i);
+			for (int j = 0; j < segNums.length; j++) {
+				long segInFile = segNums[j];
+				if (last == -1) {
+					last = segInFile;
+					continue;
+				}
+
+				if (last != segInFile + 1) {
+					System.out.printf("[I] Error: Index search results not contiguous. Last=%d, current=%d\n", last, segInFile);
+					return false;
+				}
+
+				last = segInFile;
+			}
+		}
+
+		return true;
+	}
+
+	private void printOffsets(List<long[]> offsets) {
+		System.out.print("Offsets: ");
+		int length = offsets.size();
+		for (int i=0; i<length; i++) {
+			long[] segNums = offsets.get(i);
+			System.out.print(Arrays.toString(segNums) + ", ");
+		}
+		System.out.println();
 	}
 
 	/**
@@ -474,7 +662,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (isFirstRec) { // If the current record is the first record in the data segment
 			try {
 				index.appendMinTS(timestamp, segInFile, indexLength(fileSizeBuffered));
-			}catch(OutOfMemoryException | OutOfDiskSpaceException e) {
+			} catch(OutOfMemoryException | OutOfDiskSpaceException e) {
 				ds.rollback(appended);
 
 				if (acquiredFromCache) {
@@ -485,6 +673,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 					localStore.evictFromLocal(ds.id());
 
 				}
+
+				e.printStackTrace();
 
 				throw e;
 			}
@@ -546,7 +736,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 
 		while (remaining > 0) {
-			if (acquiredSeg == null || (!timerQ.tryDisable(acquiredSeg))) { //If null, no need to synchronize because the TimerQueue thread will never synchronize with this timer
+			//If null, no need to synchronize because the TimerQueue thread will never synchronize with this timer
+			if (acquiredSeg == null || (!timerQ.tryDisable(acquiredSeg))) {
 				boolean createNew = (fileSizeBuffered % conf.dataBlockSizeBytes) == 0L;
 				acquiredSeg = acquireSegment(fileSizeBuffered, createNew);
 				//acquiredSeg.getItem().setIsLoaded();

@@ -262,7 +262,8 @@ public class PartitionedBufferedCache extends Cache {
 			cache[i].shutdown();
 		}
 
-		System.out.println("Closing PartitionedBufferedCache cache. Current size = "+size);
+		System.out.println("Closing PartitionedBufferedCache cache. Current total size = "+size);
+		System.out.println("Pinned map size = " + pinnedMap.size());
 		//System.out.printf("AcquireStats (us): %s\n", acquireStats);
 		//System.out.printf("ReleaseStats (us): %s\n", releaseStats);
 		//System.out.printf("LoadStats (us): %s\n", loadStats);

@@ -154,7 +154,7 @@ def thr_lat_bs(conf, figParams):
     config['metric'] = [
         { 'type':'kawkab', 'label':'Kawkab',
           'name':'batch_size', 'points':[
-            {'res_file':'all-results.json', 'prefix':'rw-kw11', 'val':100, 'num_clients':200, 'iat':[3, 5, 6, 6.2, 6.4, 6.6, 6.7, 6.8, 6.9, 7, 7.2]},
+            # {'res_file':'all-results.json', 'prefix':'rw-kw11', 'val':100, 'num_clients':200, 'iat':[3, 5, 6, 6.2, 6.4, 6.6, 6.7, 6.8, 6.9, 7, 7.2]}, #<<<<<<<<<<<<
             #{'res_file':'all-results.json', 'prefix':'rw-kw10', 'val':500, 'num_clients':200, 'iat':[9,9.5,10, 10.1,10.25, 10.3,10.5,11,]},
             #{'res_file':'write-results.json', 'prefix':'rw-kw14', 'val':1000, 'num_clients':200, 'iat':[9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75]},
             #{'res_file':'write-results.json', 'prefix':'rw-kw12', 'val':1000, 'num_clients':200, 'iat':[9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75]},
@@ -163,7 +163,7 @@ def thr_lat_bs(conf, figParams):
             #{'res_file':'all-results.json', 'prefix':'rw-kw14', 'val':500, 'num_clients':200, 'iat':[6, 7, 8, 9, 9.5, 9.85, 10, 10.15, 10.25, 10.3, 10.5, 10.75, 11, 11.25,]},
             #{'res_file':'write-results.json', 'prefix':'rw-kw14', 'val':1000, 'num_clients':200, 'iat':[7, 7.5, 8, 8.5, 9, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75]},
             #{'res_file':'write-results.json', 'prefix':'rw-kw14', 'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14]},
-            
+
             #{'res_file':'write-results.json', 'prefix':'rw-kw15', 'val':500, 'num_clients':400, 'iat':[10, 10.3, 10.5, 10.75, 11, 11.25]},
             #{'res_file':'write-results.json', 'prefix':'rw-kw15', 'val':10000, 'num_clients':400, 'iat':[12, 12.5, 13, 14]},
 
@@ -172,11 +172,23 @@ def thr_lat_bs(conf, figParams):
             #{'res_file':'write-results.json', 'prefix':'rw-kw18', 'val':500, 'num_clients':560, 'iat':[10,11,12.25,12.5,12.75,13,14,15]},
             #{'res_file':'write-results.json', 'prefix':'rw-kw18', 'val':1000, 'num_clients':560, 'iat':[15]},
 
-            {'res_file':'write-results.json', 'prefix':'rw-kw18', 'val':500, 'num_clients':560, 'iat':[8, 10, 11, 12, 12.5, 13, 13.4,13.7, 13.85,14, 14.5, 15,]}, #<<<<<<
-            {'res_file':'write-results.json', 'prefix':'rw-kw19', 'val':1000, 'num_clients':560, 'iat':[8, 11, 12, 12.75, 13, 13.4, 13.7, 14, 14.25, 14.5, 15, 16]}, #<<<<
-            {'res_file':'write-results.json', 'prefix':'rw-kw20', 'val':10000, 'num_clients':560, 'iat':[8, 10, 13, 14.5, 15, 15.25, 15.5, 15.75, 16, 16.5]},
+            # {'res_file':'all-results.json', 'prefix':'rw-kw21',   'val':100, 'num_clients':640,  'iat':[6, 8, 9, 10, 10.5, 12.5, 13]},# 6, 8, 9, {10}
+            # {'res_file':'all-results.json', 'prefix':'rw-kw21',   'val':100, 'num_clients':560,  'iat':[3, 4, 11, 11.5, 12]}, # 3, 4
 
+            #{'res_file':'write-results.json', 'prefix':'rw-kw18', 'val':500, 'num_clients':640,  'iat':[8, 10, 11, 11.25, 13.7, 13.85,14, 14.5, 15, 15.5,]},
 
+            #{'res_file':'write-results.json', 'prefix':'rw-kw18', 'val':500, 'num_clients':560,  'iat':[8, 10, 11, 11.5, 12, 12.5, 13, 13.4,13.7, 13.85,14, 14.5, 15,]},
+            #{'res_file':'write-results.json', 'prefix':'rw-kw19', 'val':1000, 'num_clients':560, 'iat':[8, 11, 12, 12.75, 13, 13.4, 13.7, 14, 14.25, 14.5, 15, 16]},
+            #{'res_file':'write-results.json', 'prefix':'rw-kw20', 'val':10000, 'num_clients':560, 'iat':[8, 10, 13, 14.5, 15, 15.25, 15.5, 15.75, 16, 16.5]},
+            # -------------------------------------------------------------
+            #{'res_file':'write-results.json', 'prefix':'rw-kw22', 'val':500, 'num_clients':200, 'iat':[8, 10, 11, 11.5, 12, 12.5, 13]},
+            #{'res_file':'write-results.json', 'prefix':'rw-kw22', 'val':1000, 'num_clients':200, 'iat':[8, 11, 12, 12.75, 13]},
+
+            # ===============================
+            #{'res_file':'all-results.json', 'prefix':'rw-kw11', 'val':100, 'num_clients':200, 'iat':[3, 5, 6, 6.2, 6.4, 6.6, 6.7, 6.8, 6.9, 7, 7.2]}
+            {'res_file':'write-results.json', 'prefix':'rw-kw22', 'val':500, 'num_clients':200, 'iat':[8, 10, 11, 11.5, 12, 12.5, 13]},
+            #{'res_file':'write-results.json', 'prefix':'rw-kw22', 'val':1000, 'num_clients':200, 'iat':[8, 9, 10, 11, 12, 12.75, 13]},
+            #{'res_file':'write-results.json', 'prefix':'rw-kw14', 'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5]},
 
         ]},
         # { 'type':'kawkab', 'label':'Kawkab',
@@ -192,6 +204,17 @@ def thr_lat_bs(conf, figParams):
         #     #{'res_file':'all-results.json','prefix':'btrdb-btr18','val':500, 'num_clients':200, 'num_clients':200, 'iat':[1, 3, 3.25, 3.5, 3.75, 4, 4.2, 4.3, 4.4, 4.6, 5]},
         #     #{'res_file':'all-results.json','prefix':'btrdb-btr18','val':1000, 'num_clients':200, 'iat':[1, 4.5, 4.75, 5, 5.2, 5.4, 5.6, 5.8, 6, 7]},
         #     #{'res_file':'all-results.json','prefix':'btrdb-btr18','val':10000, 'num_clients':200, 'iat':[1,2,3,4,5,6, 7, 8, 9, 10, 11, 12]},
+        #
+        #     #{'res_file':'results.json','prefix':'btrdb-btr22-clp4','val':10000, 'num_clients':40, 'iat':[6, 6.5, 7, 7.5]},
+        #     #{'res_file':'results.json','prefix':'btrdb-btr22-clp8','val':10000, 'num_clients':80, 'iat':[6, 6.5, 7, 7.5]},
+        #     #{'res_file':'results.json','prefix':'btrdb-btr22-clp12','val':10000, 'num_clients':120, 'iat':[6, 6.5, 7, 7.5]},
+        #     #{'res_file':'results.json','prefix':'btrdb-btr22-clp24','val':10000, 'num_clients':240, 'iat':[6, 6.5, 7, 7.5]},
+        #     #{'res_file':'results.json','prefix':'btrdb-btr18-clp20','val':10000, 'num_clients':200, 'iat':[1,3,4,5,6, 6.5, 7, 7.5, 8, 8.5, 9, 9.15, 9.3, 9.5]}, #<<<<<<<<
+        #     # ------------------------
+        #     #{'res_file':'results.json','prefix':'btrdb-btr18-clp20','val':100, 'num_clients':200, 'iat':[0.4, 0.6, 0.8, 1, 1.2, 1.3, 1.5, 1.6, 1.8]},
+        #     {'res_file':'results.json','prefix':'btrdb-btr18-clp20','val':500, 'num_clients':200, 'iat':[1, 2, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.2, 4.3, 4.5, 4.75, 5]},
+        #     #{'res_file':'results.json','prefix':'btrdb-btr18-clp20','val':1000, 'num_clients':200, 'iat':[1,2, 3, 3.5, 3.75, 4, 4.5, 4.75, 5, 5.25, 5.5, 6]},
+        #     #{'res_file':'results.json','prefix':'btrdb-btr18-clp20','val':10000, 'num_clients':200, 'iat':[1,3,4,5,6, 6.5, 7, 7.5, 8, 8.5, 8.65, 8.85, 9, 9.15, 9.3, 9.5]},
         # ]},
     ]
     config['write_ratio'] = [100]
@@ -201,17 +224,18 @@ def thr_lat_bs(conf, figParams):
     config['record_size'] = [16]
     config['files_per_client'] = [1]
     #config['iat'] = [925, 875, 825, 775, 750]
-    config['test_runs'] = [1,2,3,4,5]
+    config['test_runs'] = [1,2,3]
 
     fgp = {}
     fgp.update(figParams)
-    fgp.update({"legend_cols": 4, 'markers': True})
+    fgp.update({"legend_cols": 3, 'markers': True})
 
     #metric = ('write_ratio', config['write_ratio'])
 
     results = load_results(config)
 
-    title = "Throughput and latency (Batch Size)"
+    #title = "Throughput and latency (Batch Size)"
+    title = ""
     fig_prefix = "batch-size"
 
     batch_size_lat_thr(config, results, fgp, fig_prefix, title, False, None, None, True, True)

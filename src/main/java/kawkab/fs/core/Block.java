@@ -10,7 +10,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
 
 /**
  * This is a parent class for Ibmap, InodeBlock, and DataSegment classes. It provides a common interface for the subclasses
@@ -254,7 +253,7 @@ public abstract class Block extends AbstractTransferItem {
 	protected void loadFromGlobal(int offset, int length) throws FileNotExistException, IOException {
 		//System.out.printf("[B] Loading %s from GS\n",id);
 
-		globalStoreManager.load(this, offset, length);
+		globalStoreManager.bulkLoad(this, offset, length);
 	}
 	
 	/**

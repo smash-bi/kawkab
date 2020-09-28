@@ -132,7 +132,7 @@ def get_runs_data(res_dir, file_prefix):
 
         lines = ""
         for i,line in enumerate(data):
-            if line.startswith("\"Median"):
+            if line.startswith("\"Median") and not line.endswith(","):
                 line = '%s,'%(line)
 
             lines += line + '\n'
@@ -165,6 +165,7 @@ def get_and_parse_runs_data(res_dir, file_prefix):
                         k, v = kv.split(':')
                         k = k.replace('"', '')
                         v = _num(v.replace(',',''))
+
                         if k == 'opsPs': k = 'OpsTput'
                         elif k == 'thrMBps': k = 'DataTput'
                         elif k == '50%Lat': k = 'Median latency'

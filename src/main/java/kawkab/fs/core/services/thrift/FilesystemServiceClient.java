@@ -24,7 +24,7 @@ public class FilesystemServiceClient {
 	//private TNonblockingTransport aTransport;
 	private final int MAX_TRIES = 30;
 	private Random rand = new Random();
-	private final int BUFLEN = 2*1024*1024; //500*1024;
+	private final int DEFAULT_BUFLEN = 2097152;  ///Match with config.properties maxBufferLen parameter
 
 	/**
 	 * @param serverIP IP of the server to connect
@@ -33,8 +33,17 @@ public class FilesystemServiceClient {
 	 */
 	public FilesystemServiceClient(String serverIP, int port) throws KawkabException {
 		System.out.printf("[FSC] Connecting to %s:%d\n",serverIP,port);
+		int buflen = DEFAULT_BUFLEN;
 		try {
-			sTransport = new TFastFramedTransport(new TSocket(serverIP, port), BUFLEN, BUFLEN);
+			buflen = Integer.parseInt(System.getProperty("rpcbufferlen", ""+DEFAULT_BUFLEN));
+		} catch (NumberFormatException e) {
+			buflen = DEFAULT_BUFLEN;
+		}
+
+		System.out.println("RPC message buffer size bytes: " + buflen);
+
+		try {
+			sTransport = new TFastFramedTransport(new TSocket(serverIP, port), buflen, buflen);
 			sTransport.open();
 
 			TNonblockingTransport aTransport = new TNonblockingSocket(serverIP, port);

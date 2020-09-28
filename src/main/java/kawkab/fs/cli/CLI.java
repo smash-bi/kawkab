@@ -16,6 +16,7 @@ import kawkab.fs.records.BytesRecord;
 import kawkab.fs.records.SampleRecord;
 import kawkab.fs.records.SixteenRecord;
 import kawkab.fs.testclient.Result;
+import kawkab.fs.utils.AccumulatorMap;
 import kawkab.fs.utils.GCMonitor;
 import kawkab.fs.utils.LatHistogram;
 
@@ -535,6 +536,8 @@ public final class CLI {
 				client.flush();
 			}
 
+			System.out.printf("Reading records: min=%d, max=%d\n", tsMin[i], tsMax[i]);
+
 			latHist.start();
 			List<Record> recs = client.readRecords(fname, tsMin[i], tsMax[i], recgen, loadFromPrimary);
 			long lat = latHist.end(1);
@@ -547,6 +550,11 @@ public final class CLI {
 			dur += lat;
 			lats[i] = lat;
 
+			if (recs == null) {
+				System.out.println("[CLI] No records read");
+				continue;
+			}
+
 			//To ensure that we have same number of results for the correct results
 			assert recs.size() == interval : String.format("Expected %d results, got %d", interval, recs.size());
 
@@ -556,10 +564,10 @@ public final class CLI {
 		double durSec = unit.toSeconds(dur);
 
 		Result res = getResults(latHist, durSec, numRecs, recSize, interval, "Range query test");
-		System.out.println(res.csvHeader());
-		System.out.println(res.csv());
+		//System.out.println(res.csvHeader());
+		//System.out.println(res.csv());
 
-		printResults(lats, recSize, interval, durSec);
+		//printResults(lats, recSize, interval, durSec);
 	}
 
 	private void clientExactReadTest(String fname, int recSize, long t1, long t2, int numRecs, Record recgen,
@@ -660,8 +668,9 @@ public final class CLI {
 		System.out.printf("%s: recSize=%d, numRecs=%d, rTput=%,.0f MB/s, opsTput=%,.0f OPS, Lat %s\n",
 				tag, recSize, cnt, thr, opThr, latHist.getStats());
 
+		//return new Result(latHist.sampled(), opThr, thr, (int)latHist.min(), (int)latHist.max(), new AccumulatorMap(latHist.accumulator().buckets()), null, 0); //FIXME
 		//return new Result(latHist.sampled(), opThr, thr, latHist.min(), latHist.max(), latHist.accumulator().buckets(), null, 0); //FIXME
-		assert false : "Need to update the params of Result";
+		//assert false : "Need to update the params of Result";
 		return null;
 	}
 

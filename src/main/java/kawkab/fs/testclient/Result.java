@@ -1,7 +1,5 @@
 package kawkab.fs.testclient;
 
-import com.google.common.math.Stats;
-import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.AccumulatorMap;
 import kawkab.fs.utils.Latency;
 
@@ -9,7 +7,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.Arrays;
 
 public class Result {
 	private long reqsCount; //Total requests
@@ -19,14 +16,14 @@ public class Result {
 	private int latMax;
 	private AccumulatorMap latHist;
 	private AccumulatorMap tputLog;
-	private int recsTput;
+	private double recsTput;
 
 	public Result() {
 		latMin = Integer.MAX_VALUE;
 	}
 
 	public Result(long reqsCount_, double opsThr_, double dataThr_,
-				  int lMin, int lMax, AccumulatorMap latHist_, AccumulatorMap tputLog_, int recsTput_) {
+				  int lMin, int lMax, AccumulatorMap latHist_, AccumulatorMap tputLog_, double recsTput_) {
 		reqsCount = reqsCount_; opsThr = opsThr_; dataThr = dataThr_;
 		latMin = lMin; latMax=lMax;
 		latHist = latHist_;
@@ -68,6 +65,9 @@ public class Result {
 	}
 
 	public int[] tputLogValues() {
+		if (tputLog == null)
+			return null;
+
 		return tputLog.sortedBucketVals();
 	}
 
@@ -95,7 +95,7 @@ public class Result {
 		return tputLog;
 	}*/
 
-	public int recsTput() { return recsTput; }
+	public double recsTput() { return recsTput; }
 
 	/*public AccumulatorMap latAccumulator() {
 		return new AccumulatorMap(latHist.buckets(), reqsCount, latMin, latMax);
@@ -116,6 +116,9 @@ public class Result {
 		assert Double.MAX_VALUE - dataThr > from.dataThr;
 		assert Double.MAX_VALUE - recsTput > from.recsTput;
 
+		double lastOps = opsThr;
+		double lastThr = recsTput;
+
 		reqsCount += from.reqsCount;
 		opsThr += from.opsThr;
 		dataThr += from.dataThr;
@@ -132,6 +135,10 @@ public class Result {
 
 		if (tputLog == null) tputLog = new AccumulatorMap();
 		tputLog.merge(from.tputLog);
+
+		System.out.printf("prevOps=%.2f, newOps=%.2f, mergedOps=%.2f, prevThr=%.2f, newThr=%.2f, mergedThr=%.2f\n",
+				lastOps, from.opsThr, opsThr, lastThr, from.recsTput, recsTput);
+
 
 		/*for(int i=0; i<latHist.length; i++) {
 			latHist[i] += from.latHist[i];
@@ -161,7 +168,8 @@ public class Result {
 		json.append(String.format("  \"99%%Lat\":%.2f, ", lats.p99));
 		json.append(String.format("  \"minLat\":%d, ", latMin));
 		json.append(String.format("  \"maxLat\":%d, ", latMax));
-		json.append(String.format("  \"recsPs\":%d, ", recsTput));
+		json.append(String.format("  \"recsPs1\":%.0f, ", recsTput));
+		json.append(String.format("  \"recsPs2\":%d, ", (long)tputLog.countsMean()));
 		json.append(String.format("  \"25%%Lat\":%.2f, ", lats.p25));
 		json.append(String.format("  \"75%%Lat\":%.2f", lats.p75));
 
@@ -278,7 +286,7 @@ public class Result {
 		csv.append(String.format("%.0f, ", lats.p99));
 		csv.append(String.format("%d, ", latMin));
 		csv.append(String.format("%d, ", latMax));
-		csv.append(String.format(  "%d, ", recsTput));
+		csv.append(String.format(  "%d, ", (long)tputLog.countsMean()));
 		csv.append(String.format("%.0f, ", lats.p25));
 		csv.append(String.format("%.0f\n", lats.p75));
 
@@ -313,5 +321,12 @@ public class Result {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	public void printTputLog() {
+		if (tputLog == null)
+			return;
+
+		tputLog.printPairs();
 	}
 }

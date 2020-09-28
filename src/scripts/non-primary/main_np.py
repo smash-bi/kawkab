@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import sys
-from config import *
+from config_np import *
 from utils import *
 import time
 from sets import Set
@@ -86,7 +86,6 @@ def start_servers(conf):
                ' -DoutFolder=%s ' # Used in kawkab.fs.core.PartitionedBufferedCache class
                ' %s '
                ' -cp %s '
-               #' kawkab.fs.cli.CLI '
                ' kawkab.fs.Main '
                ' > %s 2>&1 & ')%( jvmflags, sid, conf['servers_dir'], conf_file, cp, outFile)
 
@@ -96,7 +95,7 @@ def start_servers(conf):
     runCommandsParallelForHost(hostCmds, conf, True)
 
     print 'Waiting for servers to start completely ...'
-    stopwatch(15)
+    stopwatch(25)
 
 def start_clients(conf):
     print 'Starting clients...'
@@ -105,8 +104,9 @@ def start_clients(conf):
 
 
     p = conf['test_params']
-    wtMs = 0
     mport = conf['client_base_port']
+    wtMs = 0 if 'init_wait_msec' not in conf else conf['init_wait_msec']
+    buflen = "" if 'rpc_buf_len' not in conf else " -Drpcbufferlen=%d "%conf['rpc_buf_len']
 
     opts = ' mport=%d wt=%d nc=%d bs=%d rs=%d nf=%d fp=%s typ=%s tc=%d td=%d wr=%d iat=%f wmup=%d '%(
         mport, wtMs, p['nc'], p['bs'], p['rs'], p['fpc'], conf['run_dir'], p['typ'], p['tc'], p['td'], p['wr'], p['iat'], p['wmup'])
@@ -145,11 +145,11 @@ def start_clients(conf):
 
         cmd = ('source ~/.bash_profile; '
                ' cd /tmp/kawkab; '
-               ' java %s %s '
+               ' java %s %s %s '
                ' -cp %s '
                ' kawkab.fs.testclient.ClientMain %s '
                ' cid=%d mid=%d mip=%s sip=%s sport=%d '
-               ' > %s 2>&1 & ') % (jvmflags, heap_size, cp, opts,
+               ' > %s 2>&1 & ') % (jvmflags, heap_size, buflen, cp, opts,
                                    cid, mid, mip, sip, sport,
                                    outFile
                                    )
@@ -177,7 +177,8 @@ def kill_processes(conf):
             ]
 
     for cmd in cmds:
-        runCmdParallel(cmd, "all", conf, True, True)
+        runCmdParallel(cmd, "clients", conf, True, True)
+        runCmdParallel(cmd, "servers", conf, True, True)
     
 def cleanup(conf):
     print '-------'
@@ -187,7 +188,10 @@ def cleanup(conf):
     kill_processes(conf)
     
     cmd2 = 'rm -r %s/*'%(conf['run_dir'])
-    runCmdParallel(cmd2, "all", conf, True)
+    runCmdParallel(cmd2, "clients", conf, True)
+
+    cmd2 = 'rm -r %s/*'%(conf['run_dir'])
+    runCmdParallel(cmd2, "servers", conf, True)
 
     cmd2 = 'rm -r %s/fs0/fs/* %s/fs1/fs/* %s/fs/*'%(conf['kawkab_dir'], conf['kawkab_dir'], conf['kawkab_dir'])
     runCmdParallel(cmd2, "servers", conf, True)
@@ -195,8 +199,8 @@ def cleanup(conf):
     cmd2 = 'rm -r /tmp/fs0/fs/* /tmp/fs1/fs/* /tmp/fs/*'
     runCmdParallel(cmd2, "servers", conf, True)
     
-    cmd = 'rm -r %s/*'%(conf['test_dir'])
-    run_cmd(cmd, True)
+    #cmd = 'rm -r %s/*'%(conf['test_dir'])
+    #run_cmd(cmd, True)
 
 def get_results(conf):
     p = conf['test_params']
@@ -278,8 +282,8 @@ def run_batch(conf):
                                 cleanup(conf)
                                 stopwatch(3)
                                 prepare_folders(conf)
-                                start_backend(conf)
-                                stopwatch(2)
+                                #start_backend(conf)
+                                #stopwatch(2)
                                 start_servers(conf)
                                 start_clients(conf)
                                 stopwatch(3)

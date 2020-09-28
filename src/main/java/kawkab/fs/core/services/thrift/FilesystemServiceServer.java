@@ -42,9 +42,11 @@ public class FilesystemServiceServer {
 			// For transmitting data to wire
 			TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
 
+			int bufLen = conf.maxBufferLen;
+
 			// Uses Java's ThreadPool to create concurrent worker threads
 			return new THsHaServer(new THsHaServer.Args(transport)
-					.transportFactory(new TFastFramedTransport.Factory(conf.maxBufferLen, conf.maxBufferLen))
+					.transportFactory(new TFastFramedTransport.Factory(bufLen, bufLen))
 					.protocolFactory(new TBinaryProtocol.Factory())
 					.processor(new Processor<>(handler))
 					.minWorkerThreads(minThreads)

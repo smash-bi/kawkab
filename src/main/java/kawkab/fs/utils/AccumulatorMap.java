@@ -20,7 +20,23 @@ public class AccumulatorMap {
         reset();
     }
 
+    public AccumulatorMap(long[] counts) {
+        int[] indexVal = new int[counts.length];
+        int[] cnts = new int[counts.length];
+        for (int i=0; i<indexVal.length; i++) {
+            indexVal[i] = i;
+            assert counts[i] <= Long.MAX_VALUE;
+            cnts[i] = (int)counts[i];
+        }
+
+        from(indexVal, cnts);
+    }
+
     public AccumulatorMap(int[] indexVals, int[] counts) {
+        from(indexVals, counts);
+    }
+
+    private void from (int[] indexVals, int[] counts) {
         assert indexVals.length == counts.length;
         int min = Integer.MAX_VALUE;
         int max = 0;
@@ -63,7 +79,7 @@ public class AccumulatorMap {
             c.count = 0;
 
         totalCnt = 0;
-        maxValue = 0;
+        maxValue = -1;
         minValue = Integer.MAX_VALUE;
     }
 
@@ -88,7 +104,7 @@ public class AccumulatorMap {
             minValue = value;
     }
 
-    public synchronized double mean() {
+    public synchronized double weightedMean() {
         double avg = 0;
         int n = 1;
 
@@ -97,15 +113,33 @@ public class AccumulatorMap {
             int x = keys[ik];
             int cnt = buckets.get(x).count;
 
-            if (cnt ==0 ) continue;
-
-
             for (long j=0; j<cnt; j++) {
                 double toAdd = (x - avg) / n;
                 assert Double.MAX_VALUE - toAdd > avg;
                 avg += toAdd;
                 ++n;
             }
+        }
+        return avg;
+    }
+
+    public synchronized double countsMean() {
+        double avg = 0;
+        int n = 1;
+
+        int maxKey = maxKey();
+        for (int i = 0; i < maxKey; i++) {
+            Count c = buckets.get(i);
+            if (c == null || c.count == 0) {
+                ++n;
+                continue;
+            }
+
+            int cnt = c.count;
+            double toAdd = (cnt - avg) / n;
+            assert Double.MAX_VALUE - toAdd > avg;
+            avg += toAdd;
+            ++n;
         }
         return avg;
     }
@@ -159,7 +193,7 @@ public class AccumulatorMap {
         }
         
         //return new double[]{ medianBucket, perc95Bucket, perc99Bucket };
-        return new Latency(minValue, maxValue, p25, p50, p75, p95, p99, mean());
+        return new Latency(minValue, maxValue, p25, p50, p75, p95, p99, weightedMean());
     }
     
     @Override
@@ -199,6 +233,18 @@ public class AccumulatorMap {
 
         System.out.println();
     }
+    public synchronized void printPairs(){
+        int[] keys = sortedKeys();
+
+        for (int i=0; i<keys.length; i++){
+            Count c = buckets.get(keys[i]);
+
+            if (c.count > 0)
+                System.out.printf("%d:%d, ",keys[i], c.count);
+        }
+
+        System.out.println();
+    }
     
     public synchronized Map<Integer, Count> buckets(){
         return Collections.unmodifiableMap(buckets);
@@ -217,17 +263,11 @@ public class AccumulatorMap {
             cdf[(int)(Math.ceil((cnt*1.0/totalCnt)*100.0))] = keys[i];
         }
 
-        for (int i=0; i<cdf.length; i++) {
-            if (cdf[i] == 0)
-                cdf[i] = minValue;
-            else
-                break;
-        }
-
         return cdf;
     }
 
     public synchronized void merge(AccumulatorMap from) {
+        long prevCount = totalCnt;
         assert Long.MAX_VALUE - totalCnt > from.totalCnt;
         totalCnt += from.totalCnt;
 
@@ -237,6 +277,7 @@ public class AccumulatorMap {
         if (minValue > from.minValue)
             minValue = from.minValue;
 
+        long newCount = 0;
         for (Map.Entry<Integer, Count> kv : from.buckets.entrySet()){
             int k = kv.getKey();
             Count fromCount = kv.getValue();
@@ -249,9 +290,13 @@ public class AccumulatorMap {
 
             assert Integer.MAX_VALUE - c.count > fromCount.count;
             c.count += fromCount.count;
+            newCount += fromCount.count;
         }
 
         assert totalCnt > 0;
+        assert totalCnt == prevCount + newCount :
+                String.format("Counts mismatch: prevTotal=%d, rcvdTotal=%d, newTotal=%d, sum=%d, added=%d addCorrect=%s",
+                        prevCount, from.totalCnt, totalCnt, prevCount+newCount, newCount, newCount == from.totalCnt);
     }
 
     public int[] sortedKeys() {
@@ -265,7 +310,15 @@ public class AccumulatorMap {
         return keys;
     }
 
-    private synchronized int[] unsortedBucketVals() {
+    public int maxKey() {
+        int mx = -1;
+        for(int key : buckets.keySet()){
+            if (mx < key) mx = key;
+        }
+        return mx;
+    }
+
+    /*private synchronized int[] unsortedBucketVals() {
         int[] counts = new int[buckets.size()];
         int i = 0;
         for (Count c : buckets.values()) {
@@ -273,7 +326,7 @@ public class AccumulatorMap {
         }
 
         return counts;
-    }
+    }*/
 
     public synchronized int[] sortedBucketVals() {
         int[] keys = sortedKeys();
@@ -314,6 +367,6 @@ public class AccumulatorMap {
         }
 
         indexVals.append(keys[i]);
-        counts.append(buckets.get(keys[i]));
+        counts.append(buckets.get(keys[i]).count);
     }
 }
