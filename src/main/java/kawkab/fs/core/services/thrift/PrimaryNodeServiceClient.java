@@ -59,6 +59,29 @@ public class PrimaryNodeServiceClient {
 		}
 	}
 
+	public ByteBuffer bulkReadSegments(int primaryNodeID, long fileID, long blockInFile, int firstSegment, int lastSegment, int recordSize)
+			throws FileNotExistException, IOException {
+
+		Client client = acquireClient(primaryNodeID);
+		try {
+			//return client.getSegment(id.inumber(), id.blockInFile(), id.segmentInBlock(), id.recordSize(), offset);
+			return client.bulkReadSegments(fileID, blockInFile, firstSegment, lastSegment, recordSize);
+		} catch (kawkab.fs.core.services.thrift.TFileNotExistException e) {
+			throw new FileNotExistException();
+		} catch (TTransportException e) {
+			System.out.println("==> Thrift transport exception: " + e.getType());
+			e.printStackTrace();
+			throw new IOException(e);
+		} catch (TException e) {
+			e.printStackTrace();
+			throw new IOException(e);
+		} finally {
+			releaseClient(client, primaryNodeID);
+		}
+
+
+	}
+
 	public ByteBuffer getInodesBlock(InodesBlockID id) throws FileNotExistException, IOException {
 		//System.out.println("[PC] getInodesBlock: " + id);
 

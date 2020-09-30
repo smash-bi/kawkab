@@ -23,7 +23,7 @@ public class PrimaryNodeServiceServer {
 	public PrimaryNodeServiceServer() throws KawkabException {
 		System.out.println("[PNS] Creating Primary Node Service");
 
-		int workerThreads = 4;
+		int workerThreads = 8;
 		//int maxThreads = 1000;
 		int ioThreads = 2;
 

@@ -1,21 +1,30 @@
 package kawkab.fs.utils;
 
+import java.util.Arrays;
+import java.util.Collections;
+
 public class Accumulator {
-    private long[] buckets;
+    private int[] buckets;
     private long totalCnt;
     private int maxValue;
     private int minValue = Integer.MAX_VALUE;
 
     public Accumulator(int numBuckets) {
-        buckets = new long[numBuckets];
+        buckets = new int[numBuckets];
         reset();
     }
 
-    public Accumulator(long[] histogram, long totalCnt, int min, int max) {
-        this.buckets = histogram;
-        this.totalCnt = totalCnt;
-        this.minValue = min;
-        this.maxValue = max;
+    public Accumulator(int[] buckets) {
+        this.buckets = buckets;
+        for (int i=0; i<buckets.length; i++) {
+            int c = buckets[i];
+
+            assert Long.MAX_VALUE - totalCnt >= c;
+
+            totalCnt += c;
+            if (minValue > c) minValue = c;
+            if (maxValue < c) maxValue = c;
+        }
     }
     
     public synchronized void reset() {
@@ -38,6 +47,7 @@ public class Accumulator {
         }
 
         assert Long.MAX_VALUE - totalCnt >= count;
+        assert Integer.MAX_VALUE - buckets[bucket] >= count;
 
         buckets[bucket] += count;
         totalCnt += count;
@@ -68,26 +78,35 @@ public class Accumulator {
     /**
      * @return Returns [median lat, 95 %ile lat, 99 %ile lat]
      * */
-    public synchronized double[] getLatencies() {
-        int medianBucket = -1;
-        int perc95Bucket = -1;
-        int perc99Bucket = -1;
+    public synchronized Latency getLatencies() {
+        int p25 = -1;
+        int p50 = -1;
+        int p95 = -1;
+        int p75 = -1;
+        int p99 = -1;
         long sum = 0;
         for (int i = 0; i < buckets.length; i++) {
             if (buckets[i] <= 0)
                 continue;
+
+            assert Long.MAX_VALUE - sum > buckets[i];
+
             sum += buckets[i];
-            if (sum <= 0.5 * totalCnt)
-                medianBucket = i;
+            if (sum <= 0.25 * totalCnt)
+                p25 = i;
+            else if (sum <= 0.5 * totalCnt)
+                p50 = i;
+            else if (sum <= 0.75 * totalCnt)
+                p75 = i;
             else if (sum <= 0.95 * totalCnt)
-                perc95Bucket = i;
+                p95 = i;
             else if (sum <= 0.99 * totalCnt)
-                perc99Bucket = i;
+                p99 = i;
             else if (sum == buckets[i])
-                medianBucket = perc95Bucket = perc99Bucket = i;
+                p25 = p50 = p75 = p95 = p99 = i;
         }
         
-        return new double[]{ medianBucket, perc95Bucket, perc99Bucket };
+        return new Latency(min(), max(), p25, p50, p75, p95, p99, mean());
     }
     
     /*Adapted from the book "Digital Image Processing: An Algorithmic Introduction Using Java", 
@@ -115,8 +134,9 @@ public class Accumulator {
         if (totalCnt == 0)
             return "No stats";
 
-        double[] lats = getLatencies();
-        return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%d, max=%d, mean=%.2f", lats[0],lats[1],lats[2], min(), max(), mean());
+        Latency lats = getLatencies();
+        return String.format("50%%=%.2f, 95%%=%.2f, 99%%=%.2f, min=%d, max=%d, mean=%.2f, 25%%=%.2f, 75%%=%.2f",
+                        lats.p50,lats.p95,lats.p99, min(), max(), mean(), lats.p25, lats.p75);
     }
     
     public synchronized void printCDF() {
@@ -141,8 +161,17 @@ public class Accumulator {
 
         System.out.println();
     }
+
+    public synchronized void printPairs(){
+        System.out.print("[");
+        for (int i=0; i<buckets.length; i++){
+            if (buckets[i] > 0)
+                System.out.print((i+1)+":"+buckets[i]+", ");
+        }
+        System.out.println("]");
+    }
     
-    public synchronized long[] buckets(){
+    public synchronized int[] buckets(){
         return buckets;
     }
     
@@ -150,6 +179,7 @@ public class Accumulator {
         long[] cdf = new long[101];
         long cnt = 0; 
         for(int i=0; i<buckets.length; i++){
+            assert Long.MAX_VALUE + cnt >= buckets[i];
             cnt += buckets[i];
             cdf[(int)(Math.ceil(cnt*1.0/totalCnt*100.0))] = i;
         }
@@ -159,8 +189,10 @@ public class Accumulator {
 
     public synchronized void merge(Accumulator from) {
         assert buckets.length == from.buckets.length;
+        assert Long.MAX_VALUE - totalCnt >= from.totalCnt;
 
         for (int i=0; i<buckets.length; i++) {
+            assert  Integer.MAX_VALUE - buckets[i] >= from.buckets[i];
             buckets[i] += from.buckets[i];
         }
 
@@ -173,7 +205,7 @@ public class Accumulator {
             minValue = from.minValue;
     }
 
-    private double mean(long[] hist) {
+    private double mean(int[] hist) {
         double avg = 0;
         int n = 1;
         for (int x=0; x<hist.length; x++) {
@@ -183,5 +215,54 @@ public class Accumulator {
             }
         }
         return avg;
+    }
+
+    public double countsMean() {
+        double avg = 0;
+        int n = 1;
+        for (int i=0; i<buckets.length; i++) {
+            int bc = buckets[i];
+            avg += (bc - avg) / n;
+            ++n;
+        }
+
+        //System.out.printf("Mean=%.2f, len=%d, : %s\n", avg, buckets.length, Arrays.toString(buckets));
+        return avg;
+    }
+
+    public Accumulator copyOf() {
+        Accumulator accm = new Accumulator(buckets.length);
+        for (int i=0; i<buckets.length; i++) {
+            accm.buckets[i] = buckets[i];
+        }
+
+        accm.totalCnt = totalCnt;
+        accm.maxValue = maxValue;
+        accm.minValue = minValue;
+
+        return accm;
+    }
+
+    public int[] values() {
+        int[] vals = new int[buckets.length];
+        for (int i=0; i<vals.length; i++) {
+            vals[i] = buckets[i];
+        }
+        return vals;
+    }
+
+    public int numBuckets() {
+        return buckets.length;
+    }
+
+    public void sortedBucketPairs(StringBuilder indexVals, StringBuilder counts){
+        int i;
+        for (i = 0; i < buckets.length-1; i++) {
+            indexVals.append(i+", ");
+            counts.append(buckets[i]+", ");
+        }
+
+        indexVals.append(i);
+        counts.append(buckets[i]);
     }
 }

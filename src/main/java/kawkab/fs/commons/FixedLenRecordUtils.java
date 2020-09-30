@@ -15,7 +15,11 @@ public interface FixedLenRecordUtils {
 	static int recordsPerSegment(final int recordSize) {
 		return segmentSizeBytes / recordSize;
 	}
-	
+
+	static int bytesPerSegment(final int recordSize) {
+		return recordsPerSegment(recordSize)*recordSize;
+	}
+
 	/**
 	 * Is the given segment the last segment in the block
 	 */

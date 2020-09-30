@@ -76,6 +76,7 @@ def start_servers(conf):
 
         sid = conf['server_ids'][sidx]
         outFile = '%s/server_%02d.out'%(conf['servers_dir'], sid)
+        gc = '-Xlog:gc*=info:file=%s/server-%d-gc.log'%(conf['out_dir'], sid) if conf['logGC'] else ""
 
         conf_file = "" if 'svr_config_file' not in conf else "-Dconf=%s"%conf['svr_config_file']
 
@@ -84,11 +85,11 @@ def start_servers(conf):
                ' java %s '
                ' -DnodeID=%d '
                ' -DoutFolder=%s ' # Used in kawkab.fs.core.PartitionedBufferedCache class
-               ' %s '
+               ' %s %s '
                ' -cp %s '
                #' kawkab.fs.cli.CLI '
                ' kawkab.fs.Main '
-               ' > %s 2>&1 & ')%( jvmflags, sid, conf['servers_dir'], conf_file, cp, outFile)
+               ' > %s 2>&1 & ')%( jvmflags, sid, conf['servers_dir'], conf_file, gc, cp, outFile)
 
         #run_cluster_cmd(cmd, clMachName, conf, True)
         hostCmds.append({'host':svr,'cmds':[cmd]})
@@ -105,7 +106,7 @@ def start_clients(conf):
 
 
     p = conf['test_params']
-    wtMs = 0
+    wtMs = 0 if 'init_wait_msec' not in conf else conf['init_wait_msec']
     mport = conf['client_base_port']
 
     opts = ' mport=%d wt=%d nc=%d bs=%d rs=%d nf=%d fp=%s typ=%s tc=%d td=%d wr=%d iat=%f wmup=%d '%(
@@ -133,6 +134,7 @@ def start_clients(conf):
         # waitT = round((startTime - time.time())*1000)
 
         outFile = '%s/client_%02d.out' % (conf['clients_dir'], cid)
+        gc = '-Xlog:gc*=info:file=%s/client-%d-gc.log'%(conf['out_dir'], cid) if conf['logGC'] else ""
 
         heap_size = '-Xms4g'
 
@@ -146,10 +148,11 @@ def start_clients(conf):
         cmd = ('source ~/.bash_profile; '
                ' cd /tmp/kawkab; '
                ' java %s %s '
+               ' %s '
                ' -cp %s '
                ' kawkab.fs.testclient.ClientMain %s '
                ' cid=%d mid=%d mip=%s sip=%s sport=%d '
-               ' > %s 2>&1 & ') % (jvmflags, heap_size, cp, opts,
+               ' > %s 2>&1 & ') % (jvmflags, heap_size, gc, cp, opts,
                                    cid, mid, mip, sip, sport,
                                    outFile
                                    )

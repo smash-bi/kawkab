@@ -76,6 +76,7 @@ def start_servers(conf):
 
         sid = conf['server_ids'][sidx]
         outFile = '%s/server_%02d.out'%(conf['servers_dir'], sid)
+        gc = '-Xlog:gc*=info:file=%s/server-%d-gc.log'%(conf['out_dir'], sid) if conf['logGC'] else ""
 
         conf_file = "" if 'svr_config_file' not in conf else "-Dconf=%s"%conf['svr_config_file']
 
@@ -84,10 +85,10 @@ def start_servers(conf):
                ' java %s '
                ' -DnodeID=%d '
                ' -DoutFolder=%s ' # Used in kawkab.fs.core.PartitionedBufferedCache class
-               ' %s '
+               ' %s %s '
                ' -cp %s '
                ' kawkab.fs.Main '
-               ' > %s 2>&1 & ')%( jvmflags, sid, conf['servers_dir'], conf_file, cp, outFile)
+               ' > %s 2>&1 & ')%( jvmflags, sid, conf['servers_dir'], conf_file, gc, cp, outFile)
 
         #run_cluster_cmd(cmd, clMachName, conf, True)
         hostCmds.append({'host':svr,'cmds':[cmd]})
@@ -95,7 +96,7 @@ def start_servers(conf):
     runCommandsParallelForHost(hostCmds, conf, True)
 
     print 'Waiting for servers to start completely ...'
-    stopwatch(25)
+    stopwatch(15)
 
 def start_clients(conf):
     print 'Starting clients...'
@@ -134,22 +135,25 @@ def start_clients(conf):
 
         outFile = '%s/client_%02d.out' % (conf['clients_dir'], cid)
 
-        heap_size = '-Xms4g'
+        heap_size = '-Xms2g'
 
         if cid == 1:
             mid = cid
             mip = clm
-            heap_size = '-Xms8g -Xmx25g '
+            #heap_size = '-Xms8g -Xmx25g '
 
         sport = conf['server_base_port'] + (cid % numServers)
+
+        gc = '-Xlog:gc*=info:file=%s/client-%d-gc.log'%(conf['out_dir'], cid) if conf['logGC'] else ""
 
         cmd = ('source ~/.bash_profile; '
                ' cd /tmp/kawkab; '
                ' java %s %s %s '
+               ' %s '
                ' -cp %s '
                ' kawkab.fs.testclient.ClientMain %s '
                ' cid=%d mid=%d mip=%s sip=%s sport=%d '
-               ' > %s 2>&1 & ') % (jvmflags, heap_size, buflen, cp, opts,
+               ' > %s 2>&1 & ') % (jvmflags, heap_size, buflen, gc, cp, opts,
                                    cid, mid, mip, sip, sport,
                                    outFile
                                    )

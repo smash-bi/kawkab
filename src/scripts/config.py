@@ -48,9 +48,9 @@ def get_config():
                                     #              4,5,6,7,8,
                                     #              ]),
                                     ('red',     [4,5,6,7,8,
-                                                 4,5,6,7,8,
-                                                 4,5,6,7,8,
-                                                 4,5,6,7,8,
+                                                 4,5,6#,7,8,
+                                                 #4,5,6,7,8,
+                                                 #4,5,6,7,8,
                                                  ]),
 
                                 ]
@@ -79,7 +79,7 @@ def get_config():
     conf['client_base_port'] = 43567
 
     conf['test_type'] = ['rw']
-    conf['test_prefix' ] = ['temphq2']
+    conf['test_prefix' ] = ['hq12w']
     #conf['batch_size'] = [10000]
     conf['record_size'] = [16]
     conf['batch_writeratio_rps'] = [ # list of tuples (batch_size, write_ratio, [reqs_per_second list])
@@ -88,15 +88,18 @@ def get_config():
                 #(10000, 100, [11, 12, 13.5, 14]),
                 #(100, 100, [13])
 
-                (500, 100, [6])
-]
+                (1000, 100, [5])
+    ]
     conf['clients_per_machine'] = 10
     conf['files_per_client'] = [1]
 
-    conf['test_duration'] = 180
+    conf['test_duration'] = 300
     conf['warmup_sec'] = 0
+    conf['init_wait_msec'] = 7000
 
     conf['test_runs'] = [1]
+
+    conf['logGC'] = False
 
     conf['server_jvm_params'] = '-ea -Xms12g -Xmx24g -XX:MaxDirectMemorySize=16684m -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'
     conf['client_jvm_params'] = '-ea -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'

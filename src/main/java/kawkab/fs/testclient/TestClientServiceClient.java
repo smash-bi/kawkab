@@ -4,6 +4,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.testclient.thrift.TResult;
 import kawkab.fs.testclient.thrift.TSyncResponse;
 import kawkab.fs.testclient.thrift.TestClientService;
+import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.AccumulatorMap;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -40,8 +41,6 @@ public class TestClientServiceClient {
 
 		List<Integer> latHistKeys = Arrays.stream(result.latHistKeys()).boxed().collect(Collectors.toUnmodifiableList());
 		List<Integer> latHistValues = Arrays.stream(result.latHistValues()).boxed().collect(Collectors.toUnmodifiableList());
-
-		List<Integer> tputLogKeys = Arrays.stream(result.tputLogKeys()).boxed().collect(Collectors.toUnmodifiableList());
 		List<Integer> tputLogValues = Arrays.stream(result.tputLogValues()).boxed().collect(Collectors.toUnmodifiableList());
 
 
@@ -49,7 +48,7 @@ public class TestClientServiceClient {
 		//List<Long> latKeys = Arrays.stream(result.latHist()).boxed().collect(Collectors.toUnmodifiableList());
 
 		TResult taccm = new TResult(result.count(), result.latMin(), result.latMax(),
-				result.dataTput(), result.opsTput(), result.recsTput(), tputLogKeys, tputLogValues, latHistKeys, latHistValues);
+				result.dataTput(), result.opsTput(), result.recsTput(), tputLogValues, latHistKeys, latHistValues);
 
 		try {
 			TSyncResponse resp = client.sync(clid, testID, stopAll, taccm);
@@ -61,11 +60,10 @@ public class TestClientServiceClient {
 			int[] resLatHistKeys = res.latHistKeys.stream().mapToInt(i->i).toArray();
 			int[] resLatHistVals = res.latHistValues.stream().mapToInt(i->i).toArray();
 
-			int[] resTputLogKeys = res.tputLogKeys.stream().mapToInt(i->i).toArray();
 			int[] resTputLogVals = res.tputLogValues.stream().mapToInt(i->i).toArray();
 
 			return new Result(res.totalCount, res.opsTput, res.dataTput, res.minVal, res.maxVal,
-					new AccumulatorMap(resLatHistKeys, resLatHistVals), new AccumulatorMap(resTputLogKeys, resTputLogVals), res.recsTput);
+					new AccumulatorMap(resLatHistKeys, resLatHistVals), new Accumulator(resTputLogVals), res.recsTput);
 		} catch (Exception | AssertionError e) {
 			e.printStackTrace();
 		}

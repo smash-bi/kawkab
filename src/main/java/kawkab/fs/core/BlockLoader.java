@@ -1,21 +1,28 @@
 package kawkab.fs.core;
 
+import kawkab.fs.commons.Commons;
+import kawkab.fs.commons.Configuration;
+import kawkab.fs.core.exceptions.FileNotExistException;
+import kawkab.fs.core.services.thrift.PrimaryNodeServiceClient;
+
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.util.LinkedList;
 
 public class BlockLoader {
+	private final long fileID;
 	private final long blockInFile;
-	private final String blockPath;
-	private final int perBlockTypeKey;
 	private LinkedList<DataSegment> segs;
 	private final static GlobalStoreManager globalStoreManager = GlobalStoreManager.instance(); // Backend store such as S3
 	private int last = -1;
+	protected final static PrimaryNodeServiceClient primaryNode = PrimaryNodeServiceClient.instance();
+	private static final GlobalStoreManager globalStore = GlobalStoreManager.instance();
+	private static int segmentSizeBytes = Configuration.instance().segmentSizeBytes;
 
-	public BlockLoader(long blockInFile, String blockPath, int perBlockTypeKey) {
+	public BlockLoader(long fileID, long blockInFile) {
+		this.fileID = fileID;
 		this.blockInFile = blockInFile;
-		this.blockPath = blockPath;
-		this.perBlockTypeKey = perBlockTypeKey;
 		segs = new LinkedList<>();
 	}
 
@@ -24,6 +31,9 @@ public class BlockLoader {
 	 * @param ds
 	 */
 	public void add(DataSegment ds) {
+		assert ds.fileID() == fileID;
+		assert ds.blockInFile() == blockInFile;
+
 		segs.addFirst(ds);
 		int sib = ds.segmentInBlock();
 		if (last == -1) {
@@ -39,7 +49,7 @@ public class BlockLoader {
 	}
 
 	public int perBlockTypeKey() {
-		return perBlockTypeKey;
+		return segs.peekFirst().id().perBlockTypeKey();
 	}
 
 	public int offset() {
@@ -60,7 +70,7 @@ public class BlockLoader {
 	}
 
 	public String blockPath() {
-		return blockPath;
+		return segs.peekFirst().id().localPath();
 	}
 
 	public int loadFrom(ReadableByteChannel channel)  throws IOException {
@@ -105,5 +115,42 @@ public class BlockLoader {
 		s.append("]");
 
 		System.out.println(s.toString());
+	}
+
+	public int size() {
+		return segs.size();
+	}
+
+	public void load() throws IOException, FileNotExistException {
+		try {
+			globalStore.bulkLoad(this);
+		} catch (FileNotExistException e){
+			bulkLoadFromPrimary();
+			//loadFromPrimary();
+		}
+	}
+
+	private void loadFromPrimary() throws FileNotExistException, IOException {
+		for(DataSegment ds : segs) {
+			ds.loadBlock(true);
+		}
+	}
+
+	private void bulkLoadFromPrimary() throws FileNotExistException, IOException {
+		DataSegment fds = segs.peekFirst();
+		ByteBuffer buffer = primaryNode.bulkReadSegments(Commons.primaryWriterID(fileID), fileID, blockInFile,
+				fds.segmentInBlock(), segs.peekLast().segmentInBlock(), fds.recordSize());
+
+		int pos = buffer.position();
+		int initLimit = buffer.limit();
+		for(DataSegment ds : segs) {
+			buffer.position(pos);
+			buffer.limit(pos+segmentSizeBytes);
+
+			ds.loadFromWithSkips(buffer);
+
+			assert pos+segmentSizeBytes <= initLimit;
+			pos += segmentSizeBytes;
+		}
 	}
 }

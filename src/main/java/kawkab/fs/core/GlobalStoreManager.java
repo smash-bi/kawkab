@@ -89,7 +89,7 @@ public class GlobalStoreManager {
 		int backend = Math.abs(block.id().perBlockTypeKey()) % loadBackends.length;
 
 		synchronized(loadBackends[backend]) {
-			loadBackends[backend].bulkLoadFromGlobal(block, offset, length);
+			loadBackends[backend].loadFromGlobal(block, offset, length);
 		}
 	}
 

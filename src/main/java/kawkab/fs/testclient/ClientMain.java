@@ -5,18 +5,7 @@ import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.records.BytesRecord;
 import kawkab.fs.records.SampleRecord;
 import kawkab.fs.records.SixteenRecord;
-import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.GCMonitor;
-import org.apache.commons.math3.distribution.PoissonDistribution;
-import org.apache.commons.math3.distribution.ZipfDistribution;
-
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.Arrays;
-
-import static kawkab.fs.testclient.TestRunner.*;
 
 public class ClientMain {
 	public enum TestType {

@@ -123,7 +123,7 @@ public class AccumulatorMap {
         return avg;
     }
 
-    public synchronized double countsMean() {
+    /*public synchronized double countsMean() {
         double avg = 0;
         int n = 1;
 
@@ -142,7 +142,7 @@ public class AccumulatorMap {
             ++n;
         }
         return avg;
-    }
+    }*/
     
     public synchronized int min(){
         return minValue;

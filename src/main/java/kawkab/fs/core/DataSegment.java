@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.api.Record;
 import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
+import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
 
@@ -17,7 +18,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static kawkab.fs.commons.FixedLenRecordUtils.offsetInSegment;
+import static kawkab.fs.commons.FixedLenRecordUtils.*;
 
 public final class DataSegment extends Block {
 	private final static Configuration conf = Configuration.instance();
@@ -281,16 +282,22 @@ public final class DataSegment extends Block {
 		// FIXME: The timestamps are read based on the assumption that the first 8 bytes of a record is a timestamp.
 		// We need a systematic way to parse and read a record.
 
-
 		int limit = writePos.get();
 		buf.limit(limit);
 
-		assert buf.remaining() >= recordSize : String.format("[DS] No records in segment: ds=%s, remaining=%d, limit=%d, minTS=%d, maxTS=%d",id, buf.remaining(), limit, minTS, maxTS); // at least have one record
+		assert buf.remaining() >= recordSize :
+				String.format("[DS] No records in segment: ds=%s, remaining=%d, limit=%d, minTS=%d, maxTS=%d",
+						id, buf.remaining(), limit, minTS, maxTS); // at least have one record
+
 		if (maxTS < buf.getLong(0)) { // if the records in this segment are all greater than the given range
+			System.out.printf("[DS] %s: maxTS (%d) is smaller than the first record minTS(%d). Buf rem=%d, pos=%d, lim=%d, writepos=%d\n",
+					id, maxTS, buf.getLong(0), dstBuf.remaining(), dstBuf.position(), dstBuf.limit(), writePos.get());
 			return 0;
 		}
 
 		if (buf.getLong(limit-recordSize) < minTS) { // All the records in this segment are smaller than the given range
+			System.out.printf("[DS] %s: minTS (%d) is larger than the last record maxTS(%d)\n",
+					id, minTS, buf.getLong(limit-recordSize));
 			return 0;
 		}
 
@@ -430,45 +437,37 @@ public final class DataSegment extends Block {
 	}
 
 	public synchronized int loadFromWithSkips(ReadableByteChannel channel) throws IOException {
-		int bytesLoaded = 0;
-		/*int alreadyLoaded = writePos.get();
-
-		if (alreadyLoaded > 0) {
-			ByteBuffer skipBuffer = ByteBuffer.allocate(alreadyLoaded);
-			int n = channel.read(skipBuffer);
-			if (n == -1) return 0;
-			bytesLoaded += n;
-		}
-
-		if (bytesLoaded == SEGMENT_SIZE_BYTES)
-			return bytesLoaded;
-
-		bytesLoaded +=  loadFrom(channel);
-
-		if (bytesLoaded < SEGMENT_SIZE_BYTES) {
-			ByteBuffer skipBuffer = ByteBuffer.allocate(SEGMENT_SIZE_BYTES - bytesLoaded);
-			int n = channel.read(skipBuffer);
-			if (n > 0)
-				bytesLoaded += n;
-		}
-
-		if (bytesLoaded == 0) {
-			System.out.printf("[DS] %s zero bytes loaded\n",id);
-		}
-
-		return bytesLoaded;*/
-
 		ByteBuffer buffer = dataBuf.duplicate();
 		buffer.clear();
+
+		buffer.limit(bytesPerSegment(recordSize));
+
 		int bytesRead = Commons.readFrom(channel, buffer);
 		dirtyOffset = bytesRead;
 		writePos.set(bytesRead);
-		isSegFull = bytesRead == conf.segmentSizeBytes;
+		isSegFull = bytesRead >= bytesPerSegment(recordSize);
 		initialAppendPos = bytesRead;
 		dataBuf.position(initialAppendPos);
 		initedForAppends = true;
+
+		//printTimestamps();
+
 		return bytesRead;
 	}
+
+	/*private final static Object printLock = new Object();
+	private void printTimestamps() {
+		synchronized (printLock) {
+			ByteBuffer buf = dataBuf.duplicate();
+			buf.clear();
+			int max = recordsPerSegment(recordSize);
+			System.out.printf("[DS] %s: Records: [", id);
+			for (int i = 0; i < max; i++) {
+				System.out.printf("%d:%d, ", i, buf.getLong(i * recordSize));
+			}
+			System.out.println("]");
+		}
+	}*/
 
 	@Override
 	public synchronized int loadFrom(ReadableByteChannel channel) throws IOException {
@@ -498,7 +497,7 @@ public final class DataSegment extends Block {
 		if (bytesRead > 0 && !initedForAppends) {
 			dirtyOffset = bytesRead;
 			writePos.set(bytesRead);
-			isSegFull = bytesRead == conf.segmentSizeBytes;
+			isSegFull = bytesRead >= bytesPerSegment(recordSize);
 			initialAppendPos = bytesRead;
 			dataBuf.position(initialAppendPos);
 			initedForAppends = true; //FIXME: This will result in problems if a segment is loaded before init for appends, and then again loaded partially.
@@ -555,9 +554,30 @@ public final class DataSegment extends Block {
 		return bytesRead;
 	}
 
-	public synchronized void storeTo(ByteBuffer dstBuffer, int offset) {
+	/**
+	 * srcBuffer remaining capacity must not be larger than segmentSizeBytes. Moreover, srcBuffer should have segment
+	 * bytes from beginning.
+	 *
+	 * @param srcBuffer
+	 * @return
+	 * @throws IOException
+	 */
+	public synchronized int loadFromWithSkips(ByteBuffer srcBuffer) throws IOException {
+		int pos = dataBuf.position();
+
+		int srcLimitInit = srcBuffer.limit();
+		int srcPos = srcBuffer.position();
+		if (pos > 0) {
+			assert srcPos + pos <= srcLimitInit;
+			srcBuffer.position(srcPos+pos); //Skipping some bytes from reading
+		}
+
+		return loadFrom(srcBuffer);
+	}
+
+	public synchronized int storeTo(ByteBuffer dstBuffer, int offset) {
 		if (offset == writePos.get())
-			return;
+			return 0;
 
 		int limit = isSegFull ? SEGMENT_SIZE_BYTES : writePos.get();
 
@@ -565,6 +585,7 @@ public final class DataSegment extends Block {
 		storeBuffer.position(offset);
 		storeBuffer.limit(limit);
 
+		int stored = storeBuffer.remaining();
 		dstBuffer.put(storeBuffer);
 
 		//System.out.printf("[DS] ByteBuffer store %s: pos=%d, limit=%d, rem=%d, offset=%d, rec0TSSRC=%d, rec0TSDST=%d\n",
@@ -572,7 +593,7 @@ public final class DataSegment extends Block {
 		//		dstBuffer.getLong(dstBuffer.position() - (limit-offset)), storeBuffer.getLong(offset));
 
 
-		return;
+		return stored;
 	}
 
 	//public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "DS load", 100, 100000);
@@ -705,9 +726,22 @@ public final class DataSegment extends Block {
 		}
 	}
 
+	public int recordSize() {
+		return recordSize;
+	}
+
 	public int segmentInBlock() {
 		return ((DataSegmentID)id).segmentInBlock();
 	}
+
+	public long blockInFile() {
+		return ((DataSegmentID)id).blockInFile();
+	}
+
+	public long fileID() {
+		return ((DataSegmentID)id).inumber();
+	}
+
 
 	@Override
 	public int sizeWhenSerialized() {

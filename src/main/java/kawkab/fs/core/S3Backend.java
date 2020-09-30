@@ -51,7 +51,7 @@ public final class S3Backend implements GlobalBackend{
 	}
 	
 	@Override
-	public void bulkLoadFromGlobal(final Block dstBlock, final int offset, final int length) throws FileNotExistException, IOException{
+	public void loadFromGlobal(final Block dstBlock, final int offset, final int length) throws FileNotExistException, IOException{
 		//TODO: Take a ByteBuffer as an input argument. Load the fetched data in the given ByteBuffer instead of calling block.load().
 
 		long rangeStart = offset;

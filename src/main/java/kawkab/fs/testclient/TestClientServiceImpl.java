@@ -3,6 +3,7 @@ package kawkab.fs.testclient;
 import kawkab.fs.testclient.thrift.TResult;
 import kawkab.fs.testclient.thrift.TSyncResponse;
 import kawkab.fs.testclient.thrift.TestClientService;
+import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.AccumulatorMap;
 import org.apache.thrift.TException;
 
@@ -86,7 +87,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 
 	private TSyncResponse response(Result aggRes, boolean stopAll) {
 		return new TSyncResponse(new TResult(0,0,0,0,0,0,
-				new ArrayList<Integer>(), new ArrayList<Integer>(), new ArrayList<Integer>(), new ArrayList<Integer>()), stopAll);
+				new ArrayList<Integer>(), new ArrayList<Integer>(), new ArrayList<Integer>()), stopAll);
 
 		/*if (aggRes == null) {
 			return new TSyncResponse(new TResult(0,0,0,0,0,0,
@@ -160,7 +161,6 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 
 		int[] resLatHistKeys = tres.latHistKeys.stream().mapToInt(i->i).toArray();
 		int[] resLatHistVals = tres.latHistValues.stream().mapToInt(i->i).toArray();
-		int[] resTputLogKeys = tres.tputLogKeys.stream().mapToInt(i->i).toArray();
 		int[] resTputLogVals = tres.tputLogValues.stream().mapToInt(i->i).toArray();
 
 //		if (dstResult.tputLogValues() != null) {
@@ -169,7 +169,7 @@ public class TestClientServiceImpl implements TestClientService.Iface {
 //		}
 
 		AccumulatorMap latHist = new AccumulatorMap(resLatHistKeys, resLatHistVals);
-		AccumulatorMap resTputLog = new AccumulatorMap(resTputLogKeys, resTputLogVals);
+		Accumulator resTputLog = new Accumulator(resTputLogVals);
 
 //		System.out.print("New: ");
 //		resTputLog.printPairs();

@@ -1,5 +1,6 @@
 package kawkab.fs.testclient;
 
+import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.AccumulatorMap;
 import kawkab.fs.utils.Latency;
 
@@ -15,7 +16,7 @@ public class Result {
 	private int latMin;
 	private int latMax;
 	private AccumulatorMap latHist;
-	private AccumulatorMap tputLog;
+	private Accumulator tputLog;
 	private double recsTput;
 
 	public Result() {
@@ -23,7 +24,7 @@ public class Result {
 	}
 
 	public Result(long reqsCount_, double opsThr_, double dataThr_,
-				  int lMin, int lMax, AccumulatorMap latHist_, AccumulatorMap tputLog_, double recsTput_) {
+				  int lMin, int lMax, AccumulatorMap latHist_, Accumulator tputLog_, double recsTput_) {
 		reqsCount = reqsCount_; opsThr = opsThr_; dataThr = dataThr_;
 		latMin = lMin; latMax=lMax;
 		latHist = latHist_;
@@ -60,15 +61,15 @@ public class Result {
 
 	public int[] latHistValues() { return latHist.sortedBucketVals(); }
 
-	public int[] tputLogKeys() {
-		return tputLog.sortedKeys();
-	}
+	//public int[] tputLogKeys() {
+	//	return tputLog.sortedKeys();
+	//}
 
 	public int[] tputLogValues() {
 		if (tputLog == null)
 			return null;
 
-		return tputLog.sortedBucketVals();
+		return tputLog.values();
 	}
 
 	/*public long[] latHist() {
@@ -133,11 +134,11 @@ public class Result {
 		if (latHist == null) latHist = new AccumulatorMap();
 		latHist.merge(from.latHist);
 
-		if (tputLog == null) tputLog = new AccumulatorMap();
+		if (tputLog == null) tputLog = new Accumulator(from.tputLog.numBuckets());
 		tputLog.merge(from.tputLog);
 
-		System.out.printf("prevOps=%.2f, newOps=%.2f, mergedOps=%.2f, prevThr=%.2f, newThr=%.2f, mergedThr=%.2f\n",
-				lastOps, from.opsThr, opsThr, lastThr, from.recsTput, recsTput);
+		//System.out.printf("prevOps=%.2f, newOps=%.2f, mergedOps=%.2f, prevThr=%.2f, newThr=%.2f, mergedThr=%.2f\n",
+		//		lastOps, from.opsThr, opsThr, lastThr, from.recsTput, recsTput);
 
 
 		/*for(int i=0; i<latHist.length; i++) {
@@ -168,8 +169,7 @@ public class Result {
 		json.append(String.format("  \"99%%Lat\":%.2f, ", lats.p99));
 		json.append(String.format("  \"minLat\":%d, ", latMin));
 		json.append(String.format("  \"maxLat\":%d, ", latMax));
-		json.append(String.format("  \"recsPs1\":%.0f, ", recsTput));
-		json.append(String.format("  \"recsPs2\":%d, ", (long)tputLog.countsMean()));
+		json.append(String.format("  \"recsPs\":%.0f, ", recsTput));
 		json.append(String.format("  \"25%%Lat\":%.2f, ", lats.p25));
 		json.append(String.format("  \"75%%Lat\":%.2f", lats.p75));
 
@@ -246,8 +246,8 @@ public class Result {
 		latHist.sortedBucketPairs(lats, counts);
 
 		sb.append(",  \"Latency Histogram\":{");
-		sb.append("\"count\":[").append(counts.toString()).append("]");
 		sb.append(", \"latency\":[").append(lats.toString()).append("]");
+		sb.append("\"count\":[").append(counts.toString()).append("]");
 		sb.append("}\n");
 	}
 
@@ -286,7 +286,7 @@ public class Result {
 		csv.append(String.format("%.0f, ", lats.p99));
 		csv.append(String.format("%d, ", latMin));
 		csv.append(String.format("%d, ", latMax));
-		csv.append(String.format(  "%d, ", (long)tputLog.countsMean()));
+		csv.append(String.format( "%.0f, ", recsTput));
 		csv.append(String.format("%.0f, ", lats.p25));
 		csv.append(String.format("%.0f\n", lats.p75));
 
@@ -323,10 +323,10 @@ public class Result {
 		}
 	}
 
-	public void printTputLog() {
+	/*public void printTputLog() {
 		if (tputLog == null)
 			return;
 
 		tputLog.printPairs();
-	}
+	}*/
 }

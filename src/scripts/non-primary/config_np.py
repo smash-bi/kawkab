@@ -42,10 +42,11 @@ def get_config():
     conf['server_ids'] =   [1]
 
     conf['client_indexes'] =   [
-                                    ('red',     [9, 10, 12, 13, 14,
+                                    ('red',     [
                                                  9, 10, 12, 13, 14,
-                                                 9, 10, 12, 13, 14,
-                                                 9, 10, 12, 13, 14,
+                                                 9, 10, 12, #13, 14,
+                                                 #9, 10, 12, 13, 14,
+                                                 #9, 10, 12, 13, 14,
                                                  ]),
                                 ]
 
@@ -73,26 +74,28 @@ def get_config():
     conf['client_base_port'] = 43567
 
     conf['test_type'] = ['rw']
-    conf['test_prefix' ] = ['temphq2']
+    conf['test_prefix' ] = ['hq12r']
     #conf['batch_size'] = [10000]
     conf['record_size'] = [16]
     conf['batch_writeratio_rps'] = [ # list of tuples (batch_size, write_ratio, [reqs_per_second list])
                 #(500, 100, [11.5]),
-                (50000, 0, [3]),
+                (10000, 0, [0]),
                 # (10000, 100, [11, 12, 13.5, 14]),
                 #(100, 100, [13])
 
 ]
-    conf['clients_per_machine'] = 10
+    conf['clients_per_machine'] = 1
     conf['files_per_client'] = [1]
 
-    conf['test_duration'] = 10
+    conf['test_duration'] = 120
     conf['warmup_sec'] = 0
-    conf['init_wait_msec'] = 35000
+    conf['init_wait_msec'] = 60000
 
     conf['test_runs'] = [1]
     #conf['svr_config_file'] ['config-non-primary.properties']
-    conf['rpc_buf_len'] = 16*1024*1024 #16MiB
+    conf['rpc_buf_len'] = 6*1024*1024
+
+    conf['logGC'] = False
 
     conf['server_jvm_params'] = '-ea -Xms12g -Xmx24g -XX:MaxDirectMemorySize=16684m -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'
     conf['client_jvm_params'] = '-ea -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'

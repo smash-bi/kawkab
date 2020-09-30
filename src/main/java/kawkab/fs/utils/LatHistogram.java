@@ -74,6 +74,9 @@ public class LatHistogram {
 		return lastDur;
 	}
 
+	public void printHistorgram() {
+		stats.print();
+	}
 	
 	public void printStats() {
 		System.out.printf("\t%s\n", getStats());
@@ -109,7 +112,7 @@ public class LatHistogram {
 		return stats.count();
 	}
 
-	public double[] stats() {
+	public Latency stats() {
 		return stats.getLatencies();
 	}
 

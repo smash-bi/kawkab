@@ -340,6 +340,37 @@ public class KClient {
 		return recs;
 	}
 
+	public int readRecordsCounts(String fn, long minTS, long maxTS, Record recFactory, boolean loadFromPrimary) throws KawkabException {
+		assert client != null;
+		Session session = sessions.get(fn);
+		if (session == null)
+			throw new KawkabException(String.format("File %s is not opened",fn));
+
+		List<ByteBuffer> results = client.readRecords(session.id, minTS, maxTS, recFactory.size(), loadFromPrimary);
+
+		//printBuffers(results, recFactory);
+
+		if (results.size() == 0)
+			return 0;
+
+		int count = 0;
+		int recSize = recFactory.size();
+		for (ByteBuffer buf : results) {
+			int initPos = buf.position();
+			int initLimit = buf.limit();
+
+			int offset = initPos;
+			while (offset+recSize <= initLimit) {
+				buf.position(offset);
+				buf.limit(offset+recSize);
+				offset += recSize;
+				count++;
+			}
+		}
+
+		return count;
+	}
+
 	/*public void readRecordsAsync(String fn, long minTS, long maxTS, Record recFactory, boolean loadFromPrimary,
 								 AsyncMethodCallback<List<ByteBuffer>> resultHandler) throws KawkabException {
 		assert client != null;

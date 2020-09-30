@@ -7,7 +7,6 @@ struct TResult {
     4: required double dataTput;
     5: required double opsTput;
     6: required double recsTput;
-    7: required list<i32> tputLogKeys; //Throughput timeline log keys
     8: required list<i32> tputLogValues; //Throughput timeline log values
     9: required list<i32> latHistKeys; //Latency histogram keys
     10: required list<i32> latHistValues; //Latency histogram values

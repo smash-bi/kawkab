@@ -6,6 +6,7 @@ import kawkab.fs.core.ApproximateClock;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
+import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.AccumulatorMap;
 import kawkab.fs.utils.LatHistogram;
 import org.apache.commons.math3.distribution.PoissonDistribution;
@@ -45,8 +46,9 @@ public class TestClientAsync {
 		//clock = ApproximateClock.instance();
 	}
 
-	Result[] runTest(boolean isController, double repRateMPS, int writeRatio, int totalClients, int clientsPerMachine, int testDurSec, int filesPerclient, int batchSize,
+	Result[] runTest(boolean isController, double reqRateMPS, int writeRatio, int totalClients, int clientsPerMachine, int testDurSec, int filesPerclient, int batchSize,
 						   int warmupSecs, Record recGen, final LinkedBlockingQueue<Instant> rq, TestClientServiceClient rpcClient) throws KawkabException {
+
 		int offset = (cid-1)*filesPerclient;
 		if (writeRatio > 0)
 			openFiles(offset, filesPerclient, recGen.size());
@@ -58,7 +60,7 @@ public class TestClientAsync {
 		rpcClient.barrier(cid);
 
 		Thread ctrlThr = null;
-		if (isController) {
+		if (isController && reqRateMPS > 0) {
 			try {
 				Thread.sleep(500);
 			} catch (InterruptedException e) {
@@ -67,20 +69,23 @@ public class TestClientAsync {
 			}
 
 			work = true;
-			ctrlThr = new Thread(() -> generateReqs(repRateMPS, totalClients, clientsPerMachine, batchSize, rq));
+			ctrlThr = new Thread(() -> generateReqs(reqRateMPS, totalClients, clientsPerMachine, batchSize, rq));
 			ctrlThr.start();
 		}
+
+		if (reqRateMPS == 0)
+			System.out.println("Sending requests synchronously");
 
 		Result[] res = null;
 		try {
 			System.out.printf("Ramp-up for %d seconds..., %s \n", warmupSecs, new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
-			test(warmupSecs, recGen.newRecord(), batchSize, writeRatio, rq, false, isController);
+			test(warmupSecs, recGen.newRecord(), batchSize, writeRatio, rq, false, isController, reqRateMPS);
 
 			System.out.printf("Running test for %d seconds... %S\n", testDurSec, new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
-			res = test(testDurSec, recGen.newRecord(), batchSize, writeRatio, rq, true, isController);
+			res = test(testDurSec, recGen.newRecord(), batchSize, writeRatio, rq, true, isController, reqRateMPS);
 
 			System.out.printf("Ramp-down for %d seconds... %S\n", rampDownSec, new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
-			test(rampDownSec, recGen.newRecord(), batchSize, writeRatio, rq, false, isController);
+			test(rampDownSec, recGen.newRecord(), batchSize, writeRatio, rq, false, isController, reqRateMPS);
 		}catch (AssertionError | Exception e) {
 			e.printStackTrace();
 		} finally {
@@ -91,7 +96,10 @@ public class TestClientAsync {
 
 		//rpcClient.barrier(cid); //This is needed before closing the controller
 
-		if (isController) {
+		if (isController && reqRateMPS > 0) {
+			try {
+				Thread.sleep(3000);
+			} catch (InterruptedException e) {}
 			work = false;
 			ctrlThr.interrupt();
 			try {
@@ -143,19 +151,37 @@ public class TestClientAsync {
 		}
 	}
 
+	private void generateReqsSynchronous(int totalCleints, int clientsPerMachine,
+							  int batchSize, final LinkedBlockingQueue<Instant> rq) {
+		System.out.println("Generating requests synchronously");
+
+		while(work) {
+			try {
+				rq.offer(clock.instant(), 100, TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				break;
+			}
+		}
+
+		//To let anyone finish if waiting to receive an item
+		for (int i=0; i<2*clientsPerMachine; i++) {
+			rq.add(nullInstant);
+		}
+	}
+
 
 	private Result[] test(int durSec, Record recGen, final int reqBatchSize, final int writeRatio, final LinkedBlockingQueue<Instant> rq,
-						  boolean logStats, boolean isController)
+						  boolean logStats, boolean isController, double repRateMPS)
 			throws OutOfMemoryException, KawkabException {
 		long now = System.currentTimeMillis();
 		long et = now + durSec*1000;
 
 		AccumulatorMap wLats = new AccumulatorMap(1000000);
 		AccumulatorMap rLats = new AccumulatorMap(1000000);
-		AccumulatorMap rOpsThr = new AccumulatorMap(durSec+1);
-		AccumulatorMap wTputs = new AccumulatorMap(durSec+1);
-		AccumulatorMap rRps = new AccumulatorMap(durSec+1);
-		AccumulatorMap wRps = new AccumulatorMap(durSec+1);
+		Accumulator rOpsThr = new Accumulator(durSec);
+		Accumulator wTputs = new Accumulator(durSec);
+		Accumulator rRps = new Accumulator(durSec);
+		Accumulator wRps = new Accumulator(durSec);
 
 		String[] fnames = new String[reqBatchSize]; //Random files used in a batch. Actual file name is populated from files class variable.
 		long[] histReadTS = new long[files.length];
@@ -174,12 +200,16 @@ public class TestClientAsync {
 		long startT = System.currentTimeMillis();
 		while((now = apClock.currentTime()) < et) {
 			try {
-				Instant ts = rq.take();
-				if (ts.equals(nullInstant)) {
-					System.out.printf("[TCA] %d received stop signal\n", cid);
-					break;
+				Instant ts = null;
+				if (repRateMPS > 0) {
+					ts = rq.take();
+					if (ts.equals(nullInstant)) {
+						System.out.printf("[TCA] %d received stop signal\n", cid);
+						break;
+					}
+				} else {
+					ts = clock.instant();
 				}
-				//ts = clock.instant();
 
 				boolean isAppend = (reqRand.nextInt(100)+1) <= writeRatio;
 
@@ -199,6 +229,7 @@ public class TestClientAsync {
 					//batchSize = sendFixedWindowReadRequest(recGen, reqBatchSize, timestamps);
 					//batchSize = sendFixedRandomWindowReadRequest(recGen, reqBatchSize, timestamps);
 					batchSize = sendHistoricalReadRequest(recGen, histReadTS, reqBatchSize);
+					//batchSize = sendHistoricalReadRandomWindowRequest(recGen, histReadTS, reqBatchSize);
 					//readRecordTS += batchSize;
 
 					if (batchSize == 0) {
@@ -218,15 +249,17 @@ public class TestClientAsync {
 					continue;
 
 				int elapsed = (int)((apClock.currentTime()-startT)/1000.0);
-				if (isAppend) {
-					wLats.put(lat, 1);
-					wTputs.put(elapsed, 1);
-					wRps.put(elapsed, batchSize);
-				} else {
-					rLats.put(lat, 1);
-					rOpsThr.put(elapsed, 1);
-					rRps.put(elapsed, batchSize);
-					rBatchSize += batchSize;
+				if (elapsed < durSec) {
+					if (isAppend) {
+						wLats.put(lat, 1);
+						wTputs.put(elapsed, 1);
+						wRps.put(elapsed, batchSize);
+					} else {
+						rLats.put(lat, 1);
+						rOpsThr.put(elapsed, 1);
+						rRps.put(elapsed, batchSize);
+						rBatchSize += batchSize;
+					}
 				}
 			} catch (InterruptedException e) {
 				//e.printStackTrace();
@@ -331,15 +364,41 @@ public class TestClientAsync {
 		int iFile = fileRand.nextInt(files.length);
 		String fn = files[iFile];
 
-		long minTS = timestamps[iFile];
+		long minTS = timestamps[iFile]+1;
 		long maxTS = minTS + batchSize;
-		timestamps[iFile] += batchSize;
 
-		List<Record> res = client.readRecords(fn, minTS, maxTS, recGen, false);
-		if (res == null)
-			return 0;
+		long fs = client.size(fn)/recGen.size();
 
-		return res.size();
+		int numRead = client.readRecordsCounts(fn, minTS, maxTS, recGen, false);
+
+		timestamps[iFile] += numRead;
+
+		//System.out.printf("[f%d-m%d-x%d-r%d-fs%d]",iFile,minTS,maxTS,numRead,fs);
+
+		return numRead;
+
+		//List<Record> res = client.readRecords(fn, minTS, maxTS, recGen, false);
+		//if (res == null)
+		//	return 0;
+		//return res.size();
+	}
+
+	private int sendHistoricalReadRandomWindowRequest(Record recGen, long[] timestamps, int batchSize) throws KawkabException {
+		int iFile = fileRand.nextInt(files.length);
+		String fn = files[iFile];
+
+		long fs = client.size(fn);
+
+		long maxTS = (long)(fs/100.0*(10+reqRand.nextInt(50)));
+		long minTS = maxTS - batchSize;
+		if (minTS < 0) minTS = 0;
+
+		return client.readRecordsCounts(fn, minTS, maxTS, recGen, false);
+
+		//List<Record> res = client.readRecords(fn, minTS, maxTS, recGen, false);
+		//if (res == null)
+		//	return 0;
+		//return res.size();
 	}
 
 	void openFiles(int offset, int numFiles, int recSize) throws KawkabException {
@@ -367,7 +426,7 @@ public class TestClientAsync {
 		assert client.isConnected();
 		assert files == null : "Files are already open";
 
-		System.out.printf("Opening files for append: offset=%d, nf=%d, cid=%d\n", offset, numFiles, cid);
+		System.out.printf("Opening files for reads: offset=%d, nf=%d, cid=%d\n", offset, numFiles, cid);
 
 		files = new String[numFiles];
 		Filesystem.FileMode[] modes = new Filesystem.FileMode[numFiles];
@@ -403,7 +462,7 @@ public class TestClientAsync {
 		client.disconnect();
 	}
 
-	private Result prepareResult(AccumulatorMap lats, AccumulatorMap opTputs, AccumulatorMap rps, int recSize) {
+	private Result prepareResult(AccumulatorMap lats, Accumulator opTputs, Accumulator rps, int recSize) {
 		long cnt = lats.count();
 		//double sizeMB = recSize*cnt / (1024.0 * 1024.0);
 		//double thr = sizeMB * 1000.0 / durMsec;

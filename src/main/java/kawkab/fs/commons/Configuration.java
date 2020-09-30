@@ -250,6 +250,7 @@ public final class Configuration {
 		assert powerOfTwo(indexNodeSizeBytes) : "indexBlockSizeBytes should be power of 2, currently it is: "+ indexNodeSizeBytes;
 
 		assert nodesPerBlockPOH > 0 : "nodesPerBlockPOH should be greater than zero, currently it is " + nodesPerBlockPOH;
+		assert maxBufferLen >= dataBlockSizeBytes : "Buffer length should be greater than data block size due to bulkLoad in PrimaryNodeService";
 	}
 	
 	private boolean powerOfTwo(long val){
