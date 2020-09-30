@@ -27,7 +27,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	private Inode inode; // Not final because we set it to null in the close() in order to free the memory
 	private InodesBlock inodesBlock; // Not final because we set it to null in the close() in order to free the memory
 	private final boolean onPrimaryNode; //Indicates whether this file is opened on its primary node or not
-	private final TimerQueueIface fsQ;
+	private final TimerQueueIface inodesQ;
 	private TimerQueueItem<InodesBlock> inbAcquired;
 
 	private final static Cache cache = Cache.instance();
@@ -38,10 +38,10 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	//private final LatHistogram rLog;
 	private final LatHistogram wLog;
 
-	public FileHandle(long inumber, FileMode mode, TimerQueueIface fsQ, TimerQueueIface segsQ) throws IOException, KawkabException {
+	public FileHandle(long inumber, FileMode mode, TimerQueueIface inodesQ, TimerQueueIface segsQ, TimerQueueIface indexQ) throws IOException, KawkabException {
 		this.inumber = inumber;
 		this.fileMode = mode;
-		this.fsQ = fsQ;
+		this.inodesQ = inodesQ;
 
 		onPrimaryNode = Configuration.instance().thisNodeID == Commons.primaryWriterID(inumber); //Is this reader or writer on the primary node?
 
@@ -53,7 +53,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 
 		inodesBlock = inb;
 		inode = inb.getInode(inumber);
-		inode.prepare(fsQ, segsQ);
+		inode.prepare(indexQ, segsQ);
 		if (mode == FileMode.APPEND) //Pre-fetch the last block for writes
 			inode.loadLastBlock();
 
@@ -307,12 +307,12 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 
 		int appendedBytes = inode.appendBuffered(data, offset, length);
 
-		if (inbAcquired == null || !fsQ.tryDisable(inbAcquired)) {
+		if (inbAcquired == null || !inodesQ.tryDisable(inbAcquired)) {
 			inbAcquired = new TimerQueueItem<>(inodesBlock, this);
 		}
 
 		inbAcquired.getItem().markLocalDirty();
-		fsQ.enableAndAdd(inbAcquired, clock.currentTime() + bufferTimeLimitMs);
+		inodesQ.enableAndAdd(inbAcquired, clock.currentTime() + bufferTimeLimitMs);
 
 		//wLog.end();
 		return appendedBytes;
@@ -347,12 +347,12 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 
 		int appendedBytes = inode.appendRecords(srcBuf, recSize);
 
-		if (inbAcquired == null || !fsQ.tryDisable(inbAcquired)) {
+		if (inbAcquired == null || !inodesQ.tryDisable(inbAcquired)) {
 			inbAcquired = new TimerQueueItem<>(inodesBlock, this);
 		}
 
 		inbAcquired.getItem().markLocalDirty();
-		fsQ.enableAndAdd(inbAcquired, clock.currentTime() + bufferTimeLimitMs);
+		inodesQ.enableAndAdd(inbAcquired, clock.currentTime() + bufferTimeLimitMs);
 
 		wLog.end(1);
 		return appendedBytes;
@@ -455,7 +455,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	}
 	
 	synchronized void close() throws KawkabException {
-		if (inbAcquired != null && fsQ.tryDisable(inbAcquired)) {
+		if (inbAcquired != null && inodesQ.tryDisable(inbAcquired)) {
 			deferredWork(inbAcquired.getItem());
 		}
 

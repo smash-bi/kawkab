@@ -30,18 +30,20 @@ public final class Filesystem {
 
 	private static Map<Long, FileHandle> openFiles; //FIXME: We should pass on a unique number to the FileHandle and use that as the key
 
-	private TimerQueueIface fsQ;
+	private TimerQueueIface inodesQ;
 	private TimerQueueIface segsQ;
+	private TimerQueueIface indexQ;
 
 	private Filesystem() throws KawkabException, IOException {
 		conf = Configuration.instance();
 		namespace = Namespace.instance();
+		inodesQ = new TimerQueue("InodeTQ");
+		segsQ = new TimerQueue("SegsTQ");
+		indexQ = new TimerQueue("IdxTQ");
 		pns = new PrimaryNodeServiceServer();
 		pns.startServer();
 		fss = new FilesystemServiceServer(this, conf.fsServerListenPort, 8, 8);
 		fss.startServer();
-		fsQ = new TimerQueue("FS Timer Queue");
-		segsQ = new TimerQueue("Segs Timer Queue");
 		openFiles = new HashMap<>();
 		cache = Cache.instance();
 	}
@@ -82,7 +84,7 @@ public final class Filesystem {
 
 		//long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber + ", mode: " + mode);
-		FileHandle file = new FileHandle(inumber, mode, fsQ, segsQ);
+		FileHandle file = new FileHandle(inumber, mode, inodesQ, segsQ, indexQ);
 		verify(inumber, opts.recordSize());
 		openFiles.put(file.inumber(), file);
 		return file;
@@ -115,7 +117,7 @@ public final class Filesystem {
 	}
 
 	public TimerQueueIface getTimerQueue() {
-		return fsQ;
+		return inodesQ;
 	}
 	
 	/**
@@ -161,7 +163,8 @@ public final class Filesystem {
 		pns.stopServer();
 		namespace.shutdown();
 		segsQ.shutdown();
-		fsQ.shutdown();
+		indexQ.shutdown();
+		inodesQ.shutdown();
 		Cache.instance().shutdown();
 		ApproximateClock.instance().shutdown();
 
@@ -188,8 +191,9 @@ public final class Filesystem {
 	}
 
 	public void flush() throws KawkabException {
-		fsQ.waitUntilEmpty();
 		segsQ.waitUntilEmpty();
+		indexQ.waitUntilEmpty();
+		inodesQ.waitUntilEmpty();
 
 		for(FileHandle fh : openFiles.values()) {
 			try {

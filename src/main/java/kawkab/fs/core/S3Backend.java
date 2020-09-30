@@ -160,14 +160,15 @@ public final class S3Backend implements GlobalBackend{
 	
 	@Override
 	public void storeToGlobal(final BlockID id, final ByteBuffer buffer) throws KawkabException {
-		//System.out.println("[S3] Storing to global: " + id.localPath());
-		
+		if (id.type == BlockID.BlockType.INDEX_BLOCK)
+			System.out.println("[S3] Storing to global: " + id.localPath());
+
 		int length = 0;
 		try(
 				RandomAccessFile raf = new RandomAccessFile(id.localPath(), "r");
 				FileChannel chan = raf.getChannel();
             ) {
-			
+
 			length = (int)raf.length(); //Block size in Kawkab is an integer
 
 			Lock lock = fileLocks.grabLock(id);
@@ -189,7 +190,7 @@ public final class S3Backend implements GlobalBackend{
 			e.printStackTrace();
 			throw new KawkabException(e);
 		}
-		
+
 		try (InputStream istream = new ByteBufferInputStream(buffer)) {
 			ObjectMetadata metadata = new ObjectMetadata();
 			metadata.setContentLength(length);
@@ -203,7 +204,7 @@ public final class S3Backend implements GlobalBackend{
 		} catch (IOException e) {
 			throw new KawkabException(e);
 		}
-		
+
 		//if (id.type() == BlockID.BlockType.DATA_SEGMENT && ((DataSegmentID)id).inumber() == 0)
 			//System.out.println("\t[S3] >>> Finished store to global: " + id + " rec0TS: " + buffer.getLong(0));
 	}

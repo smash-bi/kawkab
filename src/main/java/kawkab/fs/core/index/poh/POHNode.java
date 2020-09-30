@@ -894,10 +894,11 @@ public class POHNode extends Block {
 	@Override
 	protected boolean shouldStoreGlobally() {
 		if (isFull() && isLastNodeInBlock) {
+			System.out.printf("[POHN]%s, %b, %d, %d, %d\n", id, isFull(), tsCount.get(), entries.length*2, id.numNodeInIndexBlock()+1);
 			return true;
 		}
 
-		//System.out.printf("%s, %b, %d, %d, %d\n", id, isFull(), tsCount.get(), entries.length*2, id.numNodeInIndexBlock()+1);
+		System.out.printf("[POHN] %s, %b, %d, %d, %d\n", id, isFull(), tsCount.get(), entries.length*2, id.numNodeInIndexBlock()+1);
 
 		return false;
 	}

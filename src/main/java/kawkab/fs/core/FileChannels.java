@@ -172,7 +172,8 @@ public class FileChannels implements DeferredWorkReceiver<FileChannels.FileChann
 		
 		@Override
 		public  String toString() {
-			return filePath;
+			return channel.toString();
+			//return filePath;
 		}
 	}
 }

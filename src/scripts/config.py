@@ -93,9 +93,9 @@ def get_config():
     conf['clients_per_machine'] = 10
     conf['files_per_client'] = [1]
 
-    conf['test_duration'] = 300
+    conf['test_duration'] = 360
     conf['warmup_sec'] = 0
-    conf['init_wait_msec'] = 7000
+    conf['init_wait_msec'] = 0
 
     conf['test_runs'] = [1]
 

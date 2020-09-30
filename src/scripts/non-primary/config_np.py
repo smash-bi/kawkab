@@ -79,12 +79,12 @@ def get_config():
     conf['record_size'] = [16]
     conf['batch_writeratio_rps'] = [ # list of tuples (batch_size, write_ratio, [reqs_per_second list])
                 #(500, 100, [11.5]),
-                (10000, 0, [0]),
+                (10000, 0, [2]),
                 # (10000, 100, [11, 12, 13.5, 14]),
                 #(100, 100, [13])
 
 ]
-    conf['clients_per_machine'] = 1
+    conf['clients_per_machine'] = 10
     conf['files_per_client'] = [1]
 
     conf['test_duration'] = 120

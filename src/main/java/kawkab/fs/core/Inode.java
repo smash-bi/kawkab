@@ -65,7 +65,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * Prepare after opening the file.
 	 * This function should be called after the inode has been loaded from the file or the remote node or the global store.
 	 */
-	synchronized void prepare(TimerQueueIface fsQ, TimerQueueIface segsQ) {
+	synchronized void prepare(TimerQueueIface indexQ, TimerQueueIface segsQ) {
 		thrLocalBuf.get(); //FIXME: To warmup the thread for the readers. This is not a good approach.
 		if (isInited) {
 			initCount.incrementAndGet();
@@ -83,18 +83,18 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		assert recordSize >= 1;
 		recsPerSeg = conf.segmentSizeBytes / recordSize;
 		if (recordSize > 1)
-			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, fsQ);
+			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, indexQ);
 
 		idxLog = new LatHistogram(TimeUnit.MILLISECONDS, "Index search", 100, 1000);
 		//loadLog = new Accumulator(500);
 		//fileOpenTime = System.currentTimeMillis();
 		//tl = new LatHistogram(TimeUnit.MILLISECONDS, "segLoadLog", 100, 1000);
 
-		/*try {
+		try {
 			index.loadAndInit(indexLength(fileSize.get()));
 		} catch (IOException | KawkabException e) {
 			e.printStackTrace();
-		}*/
+		}
 	}
 
 	synchronized void loadLastBlock() throws KawkabException, IOException {

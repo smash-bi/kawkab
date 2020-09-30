@@ -12,14 +12,16 @@ public class TimerQueue implements TimerQueueIface {
 	private final Thread processorThr;
 	private TransferQueue<TimerQueueItem> trnsfrQ;
 	private volatile boolean working = true;
+	private final String name;
 
 	/**
 	 * @param name Name of the queue for debugging and tracing purposes.
 	 */
 	public TimerQueue(String name) {
-		System.out.println("Initializing Timer Queue: " + name);
-		trnsfrQ = new TransferQueue<>(name+"-TrnsfrQ");
-		processorThr = new Thread(name+"Thread") {
+		System.out.println("[TQ] Initializing Timer Queue: " + name);
+		this.name = name;
+		trnsfrQ = new TransferQueue<>(name+"-TfrQ");
+		processorThr = new Thread(name+"Worker") {
 			public void run() {
 				processSegments();
 			}
@@ -60,6 +62,7 @@ public class TimerQueue implements TimerQueueIface {
 	 */
 	private void processSegments() {
 		TimerQueueItem next;
+		System.out.println("[TQ] Starting TQ worker: " + Thread.currentThread().getName());
 		
 		while(working) {
 			next = trnsfrQ.poll();
@@ -69,7 +72,9 @@ public class TimerQueue implements TimerQueueIface {
 				} catch (InterruptedException e) {}
 				continue;
 			}
-		
+
+			//debugPrint(next, "        <-- ");
+
 			try {
 				process(next);
 			} catch (KawkabException e) {
@@ -87,18 +92,25 @@ public class TimerQueue implements TimerQueueIface {
 				e.printStackTrace();
 			}
 		}
+
+		System.out.println("[TQ] TImer Queue worker exit: " + name);
 	}
 	
 	private void process(TimerQueueItem item) throws KawkabException {
 		long ret = item.tryExpire();
-		while (ret > 0) { //While (!EXPIRED && !DISABLED), which implies VALID, which implies a positive value greater than zero
+
+		if (ret > 0) { //While (!EXPIRED && !DISABLED), which implies VALID, which implies a positive value greater than zero
 			try {
+				//debugPrint(item, "Sleep:" + ret);
 				Thread.sleep(ret);
 			} catch (InterruptedException e) {}
 			
 			ret = item.tryExpire();
 		}
-		
+
+		if (ret > 0)
+			trnsfrQ.add(item);
+
 		if (ret == ItemTimer.EXPIRED) {
 			item.deferredWork();
 		}
@@ -130,4 +142,26 @@ public class TimerQueue implements TimerQueueIface {
 		
 		trnsfrQ.shutdown();
 	}
+
+	/*private void debugPrint(TimerQueueItem item, String prefix) {
+		if (!name.equals("FSTQ"))
+			return;
+
+		try {
+			Block b = null;
+			if (item.getItem() instanceof Block) {
+				b = (Block) item.getItem();
+			} else if (item.getItem() instanceof FileChannels.FileChannelWrap) {
+				FileChannels.FileChannelWrap fcw = (FileChannels.FileChannelWrap)item.getItem();
+				System.out.printf("[%s] %s %s\n", name, prefix, fcw);
+				return;
+			} else {
+				System.out.println(item.getItem().getClass());
+			}
+
+			if (b != null && b.id().type() != BlockID.BlockType.DATA_SEGMENT) {
+				System.out.printf("[%s] %s %s\n", name, prefix, b.id());
+			}
+		} catch(Exception e){e.getMessage();}
+	}*/
 }

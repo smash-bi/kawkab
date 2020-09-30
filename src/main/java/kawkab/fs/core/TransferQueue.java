@@ -24,6 +24,7 @@ public class TransferQueue <T extends AbstractTransferItem> {
 	private final String name;
 	
 	public TransferQueue(String name) {
+		System.out.println("[TrQ] Initializing Transfer Queue: " + name);
 		this.name = name;
 		unifiedQueue = new ConcurrentLinkedQueue<>();
 	}
@@ -37,9 +38,11 @@ public class TransferQueue <T extends AbstractTransferItem> {
 		if (item.getAndSetInQueue(true)) { // The item is already in the queue
 			return;
 		}
-		
+
 		//item.inQCount++;
-		
+
+		//debugPrint(item, ">> ");
+
 		unifiedQueue.add(item);
 	}
 	
@@ -71,12 +74,14 @@ public class TransferQueue <T extends AbstractTransferItem> {
 			return null;
 		
 		item.getAndSetInQueue(false);
-		
+
+		//debugPrint(item, "    << ");
+
 		//inTriesAgg += item.inTries;
 		//inQCountAgg += item.inQCount;
 		//item.inTries = 0;
 		//item.inQCount = 0;
-		
+
 		return item;
 	}
 	
@@ -87,5 +92,24 @@ public class TransferQueue <T extends AbstractTransferItem> {
 	public void shutdown() {
 		//System.out.printf("\t"+name+"] Total tries = %d, Total added in Q = %d, ratio = %.2f%%\n", inTriesAgg, inQCountAgg, 100.0*inQCountAgg/inTriesAgg);
 	}
+
+	/*private void debugPrint(T item, String prefix) {
+		if (!name.equals("FSTQ-TfrQ"))
+			return;
+
+		try {
+			Block b = null;
+			if (item instanceof TimerQueueItem) {
+				b = (Block) ((TimerQueueItem) (item)).getItem();
+			} else if (item instanceof Block) {
+				b = (Block)item;
+			} else {
+				System.out.println(prefix + item.getClass());
+			}
+
+			if (b != null && b.id().type() != BlockID.BlockType.DATA_SEGMENT)
+				System.out.printf("[%s] %s %s s=%d\n", name, prefix,b.id(), size());
+		} catch(Exception e){e.getMessage();}
+	}*/
 }
 

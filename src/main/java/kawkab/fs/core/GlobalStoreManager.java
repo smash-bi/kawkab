@@ -115,6 +115,9 @@ public class GlobalStoreManager {
 		
 		//Load balance between workers, but assign same worker to the same block.
 		//int queueNum = Math.abs(blockID.perBlockTypeKey()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
+
+		if (blockID.type == BlockID.BlockType.INDEX_BLOCK)
+			System.out.println("[GSM] Store to global: " + blockID.localPath());
 		
 		//storeQs[queueNum].add(new Task(blockID, listener));
 		storeQ.add(new Task(blockID, listener));

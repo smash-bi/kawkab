@@ -27,7 +27,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 	private final TimerQueueIface timerQ;
 	private volatile TimerQueueItem<POHNode> acquiredNode;
 	private static final ApproximateClock clock = ApproximateClock.instance();
-	private static final int bufferTimeOffsetMs = 10; //Giving some time for buffering
+	private static final int bufferTimeOffsetMs = 1000; //Giving some time for buffering
 
 	private final double logBase;
 	private ConcurrentHashMap<Integer, POHNode> nodes;	//This is an append-only list. The readers should read but not modify the list. Only a single writer should append new nodes.
@@ -126,7 +126,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		//long len = length.get();
 		int nodesCount = (int)Math.ceil((indexLength + 1) / 2 / ((double)entriesPerNode)); // Ceil value of ( Total number of entries / entries per node )
 
-		//System.out.printf("[POHI] Loading %d nodes, index length %d\n",nodesCount, len);
+		System.out.printf("[POHI] Loading %d nodes, index length %d\n",nodesCount, indexLength);
 
 		for (int i=1; i<=nodesCount; i++) {
 			acquireNode(i, true, true);
@@ -171,6 +171,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		if (loadData) {
 			// System.out.printf("[POH] Load node %d\n", nodeNum);
 
+			loadFromPrimary = true; //FIXME: For debugging purposes
 			try {
 				node.loadBlock(loadFromPrimary);
 			} catch (FileNotExistException | IOException e) {
@@ -798,6 +799,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 
 	@Override
 	public void deferredWork(POHNode node) {
+		//System.out.println("[POHN] Storing node: " + node.id());
 		localStore.store(node);
 	}
 }
