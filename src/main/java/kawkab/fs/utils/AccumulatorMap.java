@@ -1,5 +1,11 @@
 package kawkab.fs.utils;
 
+import kawkab.fs.commons.Commons;
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -251,6 +257,10 @@ public class AccumulatorMap {
     }
 
     public synchronized long[] cdf() {
+        if (!isDataConsistent()){
+            return new long[]{};
+        }
+
         int[] keys = sortedKeys();
         long[] cdf = new long[101];
         long cnt = 0;
@@ -269,6 +279,7 @@ public class AccumulatorMap {
     public synchronized void merge(AccumulatorMap from) {
         long prevCount = totalCnt;
         assert Long.MAX_VALUE - totalCnt > from.totalCnt;
+
         totalCnt += from.totalCnt;
 
         if (maxValue < from.maxValue)
@@ -289,6 +300,7 @@ public class AccumulatorMap {
             }
 
             assert Integer.MAX_VALUE - c.count > fromCount.count;
+
             c.count += fromCount.count;
             newCount += fromCount.count;
         }
@@ -308,6 +320,20 @@ public class AccumulatorMap {
         Arrays.sort(keys);
 
         return keys;
+    }
+
+    public boolean isDataConsistent() {
+        long cnt = 0;
+        for (Count c : buckets.values()){
+            cnt += c.count;
+        }
+
+        if (cnt != totalCnt) {
+            System.out.printf("Counts don't match: butcket counts (%d) don't sum to total count (%d)\n", cnt, totalCnt);
+            return false;
+        }
+
+        return true;
     }
 
     public int maxKey() {
@@ -357,8 +383,13 @@ public class AccumulatorMap {
         return map;
     }
 
-    public void sortedBucketPairs(StringBuilder indexVals, StringBuilder counts){
+    public int sortedBucketPairs(StringBuilder indexVals, StringBuilder counts){
         int[] keys = sortedKeys();
+
+        if (keys == null || keys.length == 0) {
+            return 0;
+        }
+
         int i;
         for (i = 0; i < keys.length-1; i++) {
             int k = keys[i];
@@ -368,5 +399,38 @@ public class AccumulatorMap {
 
         indexVals.append(keys[i]);
         counts.append(buckets.get(keys[i]).count);
+
+        return keys.length;
     }
+
+    public synchronized void exportJson(String outFile) {
+        StringBuilder json = new StringBuilder();
+        json.append("[\n");
+        json.append(toJsonSB());
+        json.append("\n]");
+
+        Commons.writeToFile(json.toString(), outFile);
+    }
+
+    private StringBuilder toJsonSB(){
+        StringBuilder json = new StringBuilder();
+        json.append("{ ");
+
+        StringBuilder index = new StringBuilder();
+        StringBuilder counts = new StringBuilder();
+
+        int added = sortedBucketPairs(index, counts);
+
+        if (added > 0) {
+            json.append("\"TputLog\":{");
+            json.append("\"TimeSec\":[").append(index.toString()).append("]");
+            json.append(",\n\"Counts\":[").append(counts.toString()).append("]");
+            json.append("}\n");
+        }
+
+        json.append("}");
+
+        return json;
+    }
+
 }

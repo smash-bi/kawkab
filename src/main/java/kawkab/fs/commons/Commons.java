@@ -1,6 +1,8 @@
 package kawkab.fs.commons;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
@@ -125,5 +127,18 @@ public final class Commons {
     public static int ibmapOwner(long ibmapNum) {
     	return (int)(ibmapNum / ibmapsPerMachine); //TODO: Get this number from ZooKeeper
     }
+
+	public static synchronized void writeToFile(String lines, String outFile) {
+		File file = new File(outFile).getParentFile();
+		if (!file.exists()) {
+			file.mkdirs();
+		}
+
+		try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile));) {
+			writer.write(lines);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
 }
 

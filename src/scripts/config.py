@@ -34,7 +34,7 @@ def get_config():
     # The tuples and the number of machines in each tuple can be larger than
     # the super-leaves configuration that will be used in the experiment.
     conf['backend_indexes'] =   [
-                                    ('red',     [1,2,3]),
+                                    ('red',     [1,2,3,8,14]),
                                 ]
     conf['server_indexes'] =   [
                                     ('red',     [15]),
@@ -42,12 +42,11 @@ def get_config():
     conf['server_ids'] =   [0]
 
     conf['client_indexes'] =   [
-                                    # ('red',     [4,5,6,7,8,
-                                    #              4,5,6,7,8,
-                                    #              4,5,6,7,8,
-                                    #              4,5,6,7,8,
+                                    # ('red',     [4,5,6,7,8,9,10,11,
+                                    #              4,5,6,7,8,9,10,11,
+                                    #              4,5,6,7,
                                     #              ]),
-                                    ('red',     [4,5,6,7,8,
+                                    ('red',     [4,5,6,7,7,
                                                  4,5,6#,7,8,
                                                  #4,5,6,7,8,
                                                  #4,5,6,7,8,
@@ -79,28 +78,35 @@ def get_config():
     conf['client_base_port'] = 43567
 
     conf['test_type'] = ['rw']
-    conf['test_prefix' ] = ['hq12w']
+    conf['test_prefix' ] = ['hq19w']
     #conf['batch_size'] = [10000]
     conf['record_size'] = [16]
     conf['batch_writeratio_rps'] = [ # list of tuples (batch_size, write_ratio, [reqs_per_second list])
                 #(500, 100, [11.5]),
                 #(1000, 100, [11, 11.5, 12.5]),
                 #(10000, 100, [11, 12, 13.5, 14]),
-                #(100, 100, [13])
+                #(100, 100, [8, 9, 10, 11, 12, 12.75, 13, 14, 6, 4]),
 
-                (1000, 100, [5])
+                #(1000, 100, [12.75, 13, 13.25]),
+
+               (1000, 80, [10])
     ]
     conf['clients_per_machine'] = 10
     conf['files_per_client'] = [1]
 
-    conf['test_duration'] = 360
+    conf['test_duration'] = 2700
     conf['warmup_sec'] = 0
     conf['init_wait_msec'] = 0
 
     conf['test_runs'] = [1]
 
-    conf['logGC'] = False
+    conf['high_mps'] = 0
+    conf['burst_dur_sec'] = 0
+    conf['burst_prob_perc'] = 0
+    conf['is_synchronous'] = "false"
+    conf['read_recent'] = "true"
 
+    conf['logGC'] = False
     conf['server_jvm_params'] = '-ea -Xms12g -Xmx24g -XX:MaxDirectMemorySize=16684m -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'
     conf['client_jvm_params'] = '-ea -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'
 

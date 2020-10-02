@@ -125,7 +125,7 @@ public class POHNode extends Block {
 	 * @throws IllegalArgumentException if the preconditions are not met
 	 * @throws IndexBlockFullException if the block is already full with the index entries
 	 */
-	void appendEntryMinTS(final long minTS, final long segmentInFile)
+	synchronized void appendEntryMinTS(final long minTS, final long segmentInFile)
 			throws IllegalArgumentException, IndexBlockFullException {
 
 		assert pointerIdx == 0 || pointerIdx == children.length :
@@ -178,7 +178,7 @@ public class POHNode extends Block {
 	 * @param maxTS timestamp of the last record in the segment
 	 * @param segmentInFile This must be equal to the segmentInFile that was provided in the last appendEntryMinTS().
 	 */
-	void appendEntryMaxTS(final long maxTS, final long segmentInFile) {
+	synchronized void appendEntryMaxTS(final long maxTS, final long segmentInFile) {
 		assert entryIdx > 0;
 		assert entryIdx <= entries.length;
 
@@ -194,7 +194,7 @@ public class POHNode extends Block {
 		markLocalDirty();
 	}
 
-	void appendEntry(final long minTS, final long maxTS, final long segmentInFile) throws IndexBlockFullException {
+	synchronized void appendEntry(final long minTS, final long maxTS, final long segmentInFile) throws IndexBlockFullException {
 		assert pointerIdx == 0 || pointerIdx == children.length :
 				"Either the pointers should not exist or they all be appended before the entries; pointerIdx="
 						+pointerIdx+", limit="+ children.length;
@@ -257,7 +257,7 @@ public class POHNode extends Block {
 	 * @param child Child node
 	 * @throws IndexBlockFullException if the node is already full with the pointers
 	 */
-	void appendChild(final POHNode child) throws IndexBlockFullException {
+	synchronized void appendChild(final POHNode child) throws IndexBlockFullException {
 		assert entryIdx == 0; //The pointers must be added before the entries to make this node append-only
 		assert height > 0;
 
@@ -465,6 +465,10 @@ public class POHNode extends Block {
 		return nodeNumber;
 	}
 
+	int numNodeInIndexBlock() {
+		return id.numNodeInIndexBlock();
+	}
+
 	boolean isFull () {
 		return tsCount.get() == entries.length*2;
 	}
@@ -486,7 +490,7 @@ public class POHNode extends Block {
 	}
 
 	@Override
-	public int loadFromFile() throws IOException {
+	public synchronized int loadFromFile() throws IOException {
 		try (
 				RandomAccessFile file = new RandomAccessFile(id.localPath(), "r");
 				SeekableByteChannel channel = file.getChannel()
@@ -505,7 +509,7 @@ public class POHNode extends Block {
 	 * @throws IOException
 	 */
 	@Override
-	public int loadFrom(ReadableByteChannel channel) throws IOException {
+	public synchronized int loadFrom(ReadableByteChannel channel) throws IOException {
 		//System.out.printf("[IN] Loading %s from channel\n",id);
 
 		// System.out.println("\t[IN] Bytes to load from the buffer = " + srcBuffer.remaining() + ", storeBuffer pos = " + srcBuffer.position());
@@ -559,7 +563,7 @@ public class POHNode extends Block {
 		return  count;
 	}
 
-	private int loadHeaderFrom(ByteBuffer buffer, int nodeSizeBytes, int numEntries, int numChildren) {
+	private synchronized int loadHeaderFrom(ByteBuffer buffer, int nodeSizeBytes, int numEntries, int numChildren) {
 		int padding = nodeSizeBytes - numEntries*POHEntry.sizeBytes() - numChildren*POHChild.sizeBytes() - headerSizeBytes();
 		buffer.position(buffer.position() + padding);
 
@@ -576,7 +580,7 @@ public class POHNode extends Block {
 		return padding + Integer.BYTES*2;
 	}
 
-	private int loadChildrenFrom(ByteBuffer buffer, boolean withPadding) {
+	private synchronized int loadChildrenFrom(ByteBuffer buffer, boolean withPadding) {
 		//System.out.printf("[IN] Before load children: rem=%d\n", buffer.remaining());
 
 		int count = 0;
@@ -604,7 +608,7 @@ public class POHNode extends Block {
 	 * @param atTSOffset TSCount offset.
 	 * @return
 	 */
-	private int loadEntriesFrom(ByteBuffer buffer, int atTSOffset) {
+	private synchronized int loadEntriesFrom(ByteBuffer buffer, int atTSOffset) {
 
 
 		boolean loadedLastMax = false; //The last entry in the buffer has the max value or not
@@ -640,7 +644,7 @@ public class POHNode extends Block {
 		return count;
 	}
 
-	private int storeHeaderTo(ByteBuffer buffer, int nodeSizeBytes, int numEntries, int numChildren) {
+	private synchronized int storeHeaderTo(ByteBuffer buffer, int nodeSizeBytes, int numEntries, int numChildren) {
 		int padding = nodeSizeBytes - numEntries*POHEntry.sizeBytes() - numChildren*POHChild.sizeBytes() - headerSizeBytes();
 		buffer.position(buffer.position() + padding);
 
@@ -659,7 +663,7 @@ public class POHNode extends Block {
 	 *                    the buffer is not modified
 	 * @return
 	 */
-	private int storeChildrenTo(ByteBuffer buffer, boolean withPadding) {
+	private synchronized int storeChildrenTo(ByteBuffer buffer, boolean withPadding) {
 		int count = 0;
 		if (height > 0) { // The leaf nodes have no children. Therefore, we don't need to save the min/max timestamps
 			for (int i = 0; i < children.length; i++) {
@@ -681,7 +685,7 @@ public class POHNode extends Block {
 	 * @param buffer
 	 * @return Number of timestamps stored in the buffer.
 	 */
-	private int storeEntriesTo(ByteBuffer buffer, int tsIdxOffset) {
+	private synchronized int storeEntriesTo(ByteBuffer buffer, int tsIdxOffset) {
 		//System.out.printf("\t  [IN] pos=%d, rem=%d, entriesCount=%d, lastIdx=%d, dirtyIdx=%d\n", storeBuffer.position(),
 		// storeBuffer.remaining(), numEntries, lastIdx, dirtyIdx);
 
@@ -700,7 +704,7 @@ public class POHNode extends Block {
 	}
 
 	@Override
-	protected int storeTo(FileChannel channel) throws IOException {
+	protected synchronized int storeTo(FileChannel channel) throws IOException {
 		//System.out.printf("[IN] Storing %s in channel\n",id);
 
 		assert isOnPrimary;
@@ -755,7 +759,7 @@ public class POHNode extends Block {
 	}
 
 	@Override
-	protected int storeToFile() throws IOException {
+	protected synchronized int storeToFile() throws IOException {
 		FileChannel channel = FileChannel.open(new File(id().localPath()).toPath(), StandardOpenOption.APPEND);
 		//channel.position(id.numNodeInIndexBlock() * nodeSizeBytes);
 
@@ -776,7 +780,7 @@ public class POHNode extends Block {
 	 * @return Number of TS stored in the buffer
 	 * @throws IOException
 	 */
-	public int storeTo(ByteBuffer buffer, int fromTSIdx) {
+	public synchronized int storeTo(ByteBuffer buffer, int fromTSIdx) {
 
 		boolean withHeader = fromTSIdx % 2 == 0;
 
@@ -791,13 +795,13 @@ public class POHNode extends Block {
 	}
 
 	@Override
-	public int loadFrom(ByteBuffer buffer) {
+	public synchronized int loadFrom(ByteBuffer buffer) {
 		assert false;
 
 		return 0;
 	}
 
-	public int loadFrom(ByteBuffer buffer, int atTSOffset) throws IOException {
+	public synchronized int loadFrom(ByteBuffer buffer, int atTSOffset) throws IOException {
 		// System.out.printf("[IN] Loading %s from buffer at offset %d\n",id, atTSOffset);
 
 		assert !isOnPrimary;
@@ -811,7 +815,7 @@ public class POHNode extends Block {
 	}
 
 	//public static LatHistogram dbgHist = new LatHistogram(TimeUnit.MICROSECONDS, "IN load", 100, 100000);
-	private void loadBlockFromPrimary() throws FileNotExistException, IOException {
+	private synchronized void loadBlockFromPrimary() throws FileNotExistException, IOException {
 		// System.out.printf("[IN] Loading %s from the primary at offset %d\n",id, dirtyOffsetStart);
 
 		//dbgHist.start();
@@ -894,11 +898,11 @@ public class POHNode extends Block {
 	@Override
 	protected boolean shouldStoreGlobally() {
 		if (isFull() && isLastNodeInBlock) {
-			System.out.printf("[POHN]%s, %b, %d, %d, %d\n", id, isFull(), tsCount.get(), entries.length*2, id.numNodeInIndexBlock()+1);
+			//System.out.printf("[POHN]%s, %b, %d, %d, %d\n", id, isFull(), tsCount.get(), entries.length*2, id.numNodeInIndexBlock()+1);
 			return true;
 		}
 
-		System.out.printf("[POHN] %s, %b, %d, %d, %d\n", id, isFull(), tsCount.get(), entries.length*2, id.numNodeInIndexBlock()+1);
+		//System.out.printf("[POHN] %s, %b, %d, %d, %d\n", id, isFull(), tsCount.get(), entries.length*2, id.numNodeInIndexBlock()+1);
 
 		return false;
 	}

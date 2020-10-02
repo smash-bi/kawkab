@@ -113,7 +113,7 @@ public final class DataSegment extends Block {
 	 * @return number of bytes appended starting from the offset
 	 * @throws IOException
 	 */
-	int append(byte[] data, int offset, int length, long offsetInFile) throws IOException {
+	synchronized int append(byte[] data, int offset, int length, long offsetInFile) throws IOException {
 		assert offset >= 0;
 		assert offset < data.length;
 		
@@ -157,7 +157,7 @@ public final class DataSegment extends Block {
 	 * @return number of bytes appended starting from the offset
 	 * @throws IOException
 	 */
-	int append(final ByteBuffer srcBuffer, long offsetInFile) throws IOException {
+	synchronized int append(final ByteBuffer srcBuffer, long offsetInFile) throws IOException {
 		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
 		
 		assert writePos.get() == offsetInSegment :
@@ -191,7 +191,7 @@ public final class DataSegment extends Block {
 	 * @return number of bytes read starting from the offsetInFile
 	 * @throws IOException
 	 */
-	int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile)
+	synchronized int read(byte[] dstBuffer, int dstBufferOffset, int length, long offsetInFile)
 			throws InvalidFileOffsetException {
 		int blockSize = SEGMENT_SIZE_BYTES;
 		int offsetInSegment = (int)(offsetInFile% SEGMENT_SIZE_BYTES);
@@ -218,7 +218,7 @@ public final class DataSegment extends Block {
 	 * @return number of bytes read starting from the offsetInFile
 	 * @throws IOException
 	 */
-	int read(final ByteBuffer dstBuffer, long offsetInFile) {
+	synchronized int read(final ByteBuffer dstBuffer, long offsetInFile) {
 		assert dstBuffer.remaining() >= recordSize;
 
 		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
@@ -235,7 +235,7 @@ public final class DataSegment extends Block {
 		return buf.position() - offsetInSegment;
 	}
 
-	boolean readRecord(final ByteBuffer dstBuf, final long timestamp) {
+	synchronized boolean readRecord(final ByteBuffer dstBuf, final long timestamp) {
 		ByteBuffer buf = dataBuf.duplicate();
 		buf.rewind(); //To read the first record
 
@@ -275,7 +275,7 @@ public final class DataSegment extends Block {
 	 * @param dstBuf
 	 * @return the number of records added in the list
 	 */
-	int readRecords(long minTS, long maxTS, ByteBuffer dstBuf) {
+	synchronized int readRecords(long minTS, long maxTS, ByteBuffer dstBuf) {
 		ByteBuffer buf = dataBuf.duplicate();
 		buf.rewind(); //To read the first record
 
@@ -328,7 +328,7 @@ public final class DataSegment extends Block {
 	 * @param results
 	 * @return the number of records added in the list
 	 */
-	int readAll(long minTS, long maxTS, Record recordFactory, List<Record> results) {
+	synchronized int readAll(long minTS, long maxTS, Record recordFactory, List<Record> results) {
 		ByteBuffer buf = dataBuf.duplicate();
 		buf.rewind(); //To read the first record
 
@@ -371,7 +371,7 @@ public final class DataSegment extends Block {
 		return cnt;
 	}
 
-	private int binarySearch(ByteBuffer buf, long maxTS) {
+	synchronized private int binarySearch(ByteBuffer buf, long maxTS) {
 		int limit = buf.limit();
 		int lowRecNum=0;
 		int numRecords = limit/recordSize;
@@ -631,26 +631,24 @@ public final class DataSegment extends Block {
 		//channel.position(appendOffsetInBlock());
 		channel.position(channel.size());
 
-		synchronized (storeBuffer) {
-			int limit = isSegFull ? SEGMENT_SIZE_BYTES : writePos.get();
+		int limit = isSegFull ? SEGMENT_SIZE_BYTES : writePos.get();
 
-			storeBuffer.clear();
-			storeBuffer.position(dirtyOffset);
-			storeBuffer.limit(limit);
+		storeBuffer.clear();
+		storeBuffer.position(dirtyOffset);
+		storeBuffer.limit(limit);
 
-			//System.out.printf("[DS] Storing %s in channel: bufRem=%d, bufPos=%d, dirtyOffset=%d, limit=%d, toWrite=%d, chanPos=%d\n",
-			//		id, storeBuffer.remaining(), storeBuffer.position(), dirtyOffset, limit, limit-dirtyOffset, channel.position());
+		//System.out.printf("[DS] Storing %s in channel: bufRem=%d, bufPos=%d, dirtyOffset=%d, limit=%d, toWrite=%d, chanPos=%d\n",
+		//		id, storeBuffer.remaining(), storeBuffer.position(), dirtyOffset, limit, limit-dirtyOffset, channel.position());
 
-			int size = limit-dirtyOffset;
+		int size = limit-dirtyOffset;
 
-			assert channel.position() + size <= conf.dataBlockSizeBytes;
+		assert channel.position() + size <= conf.dataBlockSizeBytes;
 
-			while (bytesWritten < size) {
-				bytesWritten += channel.write(storeBuffer);
-			}
-
-			dirtyOffset += bytesWritten;
+		while (bytesWritten < size) {
+			bytesWritten += channel.write(storeBuffer);
 		}
+
+		dirtyOffset += bytesWritten;
 
 		//System.out.printf("[DS] After storing %s in channel: written=%d, dirtyOffset=%d, writePos=%d, chanPos=%d\n",
 		//		id, bytesWritten, dirtyOffset, writePos.get(), channel.position());

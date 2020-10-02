@@ -12,7 +12,8 @@ public class TestRunnerAsync {
 
 	void  runTest(int testID, double iat, int writeRatio, int testDurSec, int totalClients, int clientsPerMachine,
 				  int cidOffset, int nf, String sip, int sport, int apBatchSize, Record recGen,
-					  int warmupSecs, int mid, String mip, int mport, String outFolder) {
+					  int warmupSecs, int mid, String mip, int mport, String outFolder,
+				      double highMPS, int burstProb, int burstDurSec, boolean isSynchronous, boolean readRecent) {
 		final Result[][] results = new Result[clientsPerMachine][];
 
 		final LinkedBlockingQueue<Instant> rq = new LinkedBlockingQueue<>();
@@ -33,7 +34,8 @@ public class TestRunnerAsync {
 					client.barrier(clid);
 
 					Result[] res = runTest(clid, sip, sport, idx == 0, iat, writeRatio, totalClients,
-							clientsPerMachine, testDurSec, nf, apBatchSize, warmupSecs, recGen, rq, client);
+							clientsPerMachine, testDurSec, nf, apBatchSize, warmupSecs, recGen, rq, client,
+							highMPS, burstProb, burstDurSec, isSynchronous, readRecent);
 					results[idx] = res;
 
 					System.out.printf("Client %d finished\n", clid);
@@ -88,7 +90,7 @@ public class TestRunnerAsync {
 	}
 
 	private void processResults(Result readAgg, Result writeAgg, String outFolder) {
-		assert readAgg != null || writeAgg != null;
+		//assert readAgg != null || writeAgg != null;
 
 		if (readAgg != null) {
 			System.out.println("Read results:");
@@ -116,8 +118,11 @@ public class TestRunnerAsync {
 			printStats(mixedRes);
 		} else if (readAgg != null) {
 			mixedRes = readAgg;
-		} else {
+		} else if (writeAgg != null) {
 			mixedRes = writeAgg;
+		} else {
+			System.out.println("No read and write results gathered.");
+			return;
 		}
 
 		if (readAgg != null) { System.out.printf("Reads, %s", readAgg.csv()); }
@@ -150,11 +155,15 @@ public class TestRunnerAsync {
 
 	private Result[] runTest(int cid, String sip, int sport, boolean isController, double iat, int writeRatio,
 							 int totalClients, int clientsPerMachine, int testDurSec, int filesPerclient, int apBatchSize,
-							 int warmupSecs, Record recGen, final LinkedBlockingQueue<Instant> rq, TestClientServiceClient rpcClient) throws KawkabException {
+							 int warmupSecs, Record recGen, final LinkedBlockingQueue<Instant> rq, TestClientServiceClient rpcClient,
+							 double highMPS, int burstProb, int burstDurSec, boolean isSynchrounous, boolean readRecent)
+							throws KawkabException {
 
 		TestClientAsync client = new TestClientAsync(cid);
 		client.connect(sip, sport);
-		Result[] res = client.runTest(isController, iat, writeRatio, totalClients, clientsPerMachine, testDurSec, filesPerclient, apBatchSize, warmupSecs, recGen, rq, rpcClient);
+		Result[] res = client.runTest(isController, iat, writeRatio, totalClients, clientsPerMachine, testDurSec,
+				filesPerclient, apBatchSize, warmupSecs, recGen, rq, rpcClient,
+				highMPS, burstProb, burstDurSec, isSynchrounous, readRecent);
 		client.disconnect();
 
 		return res;

@@ -1,10 +1,10 @@
 #!/usr/bin/python
 
-from plotutils import get_mean_and_conf
-import numpy as np
-import string
 import json
 from pprint import pprint
+
+import numpy as np
+from plotutils import get_mean_and_conf
 
 cols = {'opsThr': 'OpsTput', 'dataThr':'DataTput', 'meanLat':'Mean latency', 'lat50': 'Median latency',
         'lat95':'95% latency', 'lat99':'99% latency', 'minLat':'Min latency', 'maxLat':'Max latency',

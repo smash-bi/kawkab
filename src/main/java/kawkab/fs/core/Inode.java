@@ -90,11 +90,11 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		//fileOpenTime = System.currentTimeMillis();
 		//tl = new LatHistogram(TimeUnit.MILLISECONDS, "segLoadLog", 100, 1000);
 
-		try {
+		/*try {
 			index.loadAndInit(indexLength(fileSize.get()));
 		} catch (IOException | KawkabException e) {
 			e.printStackTrace();
-		}
+		}*/
 	}
 
 	synchronized void loadLastBlock() throws KawkabException, IOException {
@@ -871,7 +871,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		long fs = buffer.getLong();
 		int recSize = buffer.getInt();
 
-		assert fileSize.get() <= fs;
+		assert fileSize.get() <= fs : String.format("Received file size (%d) is smaller than existing (%d)",fs, fileSize.get());
 
 		fileSize.set(fs);
 		if (!isInited) {

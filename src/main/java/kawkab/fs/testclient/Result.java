@@ -189,8 +189,13 @@ public class Result {
 	}
 
 	private void appendLatCDF(StringBuilder sb) {
-		sb.append(",  \"Latency CDF\":[");
 		long[] cdf = latHist.cdf();
+		if (cdf == null || cdf.length == 0) {
+			sb.append(",  \"Latency CDF\":[]\n");
+			return;
+		}
+
+		sb.append(",  \"Latency CDF\":[");
 		int i;
 		for(i=0; i<cdf.length-1; i++){
 			sb.append(cdf[i]).append(", ");
@@ -243,11 +248,13 @@ public class Result {
 		lats.append(i);
 		counts.append(latHist[i]);*/
 
-		latHist.sortedBucketPairs(lats, counts);
+		int added = latHist.sortedBucketPairs(lats, counts);
+		if (added == 0)
+			return;
 
 		sb.append(",  \"Latency Histogram\":{");
-		sb.append(", \"latency\":[").append(lats.toString()).append("]");
-		sb.append("\"count\":[").append(counts.toString()).append("]");
+		sb.append("\"latency\":[").append(lats.toString()).append("]");
+		sb.append(", \"count\":[").append(counts.toString()).append("]");
 		sb.append("}\n");
 	}
 

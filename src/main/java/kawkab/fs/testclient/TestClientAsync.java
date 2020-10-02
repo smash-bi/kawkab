@@ -47,7 +47,8 @@ public class TestClientAsync {
 	}
 
 	Result[] runTest(boolean isController, double reqRateMPS, int writeRatio, int totalClients, int clientsPerMachine, int testDurSec, int filesPerclient, int batchSize,
-						   int warmupSecs, Record recGen, final LinkedBlockingQueue<Instant> rq, TestClientServiceClient rpcClient) throws KawkabException {
+						   int warmupSecs, Record recGen, final LinkedBlockingQueue<Instant> rq, TestClientServiceClient rpcClient,
+					 	double highMPS, int burstProb, int burstDurSec, boolean isSynchronous, boolean readRecent) throws KawkabException {
 
 		int offset = (cid-1)*filesPerclient;
 		if (writeRatio > 0)
@@ -59,8 +60,10 @@ public class TestClientAsync {
 
 		rpcClient.barrier(cid);
 
+		boolean isBursty = burstProb > 0 && burstDurSec > 0;
+		BurstGenerator bg = null;
 		Thread ctrlThr = null;
-		if (isController && reqRateMPS > 0) {
+		if (isController && !isSynchronous) {
 			try {
 				Thread.sleep(500);
 			} catch (InterruptedException e) {
@@ -69,23 +72,29 @@ public class TestClientAsync {
 			}
 
 			work = true;
-			ctrlThr = new Thread(() -> generateReqs(reqRateMPS, totalClients, clientsPerMachine, batchSize, rq));
+			if (isBursty)
+				ctrlThr = new Thread(() -> generateReqsBursty(reqRateMPS, highMPS, burstProb, burstDurSec, totalClients, clientsPerMachine, batchSize, rq));
+			else
+				ctrlThr = new Thread(() -> generateReqs(reqRateMPS, totalClients, clientsPerMachine, batchSize, rq));
 			ctrlThr.start();
 		}
 
-		if (reqRateMPS == 0)
-			System.out.println("Sending requests synchronously");
+		if (isBursty && isSynchronous) {
+			bg = new BurstGenerator(reqRateMPS, highMPS, burstProb, burstDurSec, totalClients, clientsPerMachine, batchSize);
+		}
+
+		System.out.printf("Is synchronous = %s and bursty = %s\n", isSynchronous, isBursty);
 
 		Result[] res = null;
 		try {
 			System.out.printf("Ramp-up for %d seconds..., %s \n", warmupSecs, new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
-			test(warmupSecs, recGen.newRecord(), batchSize, writeRatio, rq, false, isController, reqRateMPS);
+			test(warmupSecs, recGen.newRecord(), batchSize, writeRatio, rq, false, isController, reqRateMPS, isSynchronous, isBursty, bg, readRecent);
 
 			System.out.printf("Running test for %d seconds... %S\n", testDurSec, new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
-			res = test(testDurSec, recGen.newRecord(), batchSize, writeRatio, rq, true, isController, reqRateMPS);
+			res = test(testDurSec, recGen.newRecord(), batchSize, writeRatio, rq, true, isController, reqRateMPS, isSynchronous, isBursty, bg, readRecent);
 
 			System.out.printf("Ramp-down for %d seconds... %S\n", rampDownSec, new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
-			test(rampDownSec, recGen.newRecord(), batchSize, writeRatio, rq, false, isController, reqRateMPS);
+			test(rampDownSec, recGen.newRecord(), batchSize, writeRatio, rq, false, isController, reqRateMPS, isSynchronous, isBursty, bg, readRecent);
 		}catch (AssertionError | Exception e) {
 			e.printStackTrace();
 		} finally {
@@ -96,7 +105,7 @@ public class TestClientAsync {
 
 		//rpcClient.barrier(cid); //This is needed before closing the controller
 
-		if (isController && reqRateMPS > 0) {
+		if (isController && !isSynchronous) {
 			try {
 				Thread.sleep(3000);
 			} catch (InterruptedException e) {}
@@ -128,12 +137,7 @@ public class TestClientAsync {
 		while(work) {
 			int toSend = 1;
 			int waitTimeMicros = arrRand.sample();
-
-			if (waitTimeMicros > 60) { //It sleeps for at least 60us.
-				LockSupport.parkNanos(waitTimeMicros*1000);
-			} else {
-				busyWaitMicros(waitTimeMicros);
-			}
+			sleep(waitTimeMicros);
 
 			int size = rq.size();
 			if ((size % 100) == 1) {
@@ -148,6 +152,78 @@ public class TestClientAsync {
 		//To let anyone finish if waiting to receive an item
 		for (int i=0; i<2*clientsPerMachine; i++) {
 			rq.add(nullInstant);
+		}
+	}
+
+	private void generateReqsBursty(final double lowMPS, final double highMPS, final int burstProb, final int burstDurSec,
+									int totalClients, int clientsPerMachine, int batchSize, final LinkedBlockingQueue<Instant> rq) {
+
+
+
+		//double targetMPS = reqRateMPS/((double)totalCleints/(double)clientsPerMachine)/(double)batchSize; //total / ratePerMachine / batchSize
+		//double iatMicros = 1 / (targetMPS);  //Convert millions per second to nano second wait interval
+
+		/*double iatMicrosLow = iatMicros(lowMPS, totalClients, clientsPerMachine, batchSize);
+		double iatMicrosHigh = iatMicros(highMPS, totalClients, clientsPerMachine, batchSize);
+
+		System.out.printf("iatMicros low = %f, iatMicros high = %f, burstProb=%d, burstDurSec=%d, tc=%d, cpm=%d, bs=%d, mpsLow=%f, mpsHigh=%f\n",
+				iatMicrosLow, iatMicrosHigh, burstProb, burstDurSec, totalClients, clientsPerMachine, batchSize, lowMPS, highMPS);
+
+		Random burstRand = new Random(1);
+		PoissonDistribution lowRand = new PoissonDistribution(iatMicrosLow); //arrival time for the next request
+		PoissonDistribution highRand = new PoissonDistribution(iatMicrosHigh); //arrival time for the next request
+
+		int elapsedSec = 0;
+		int lastSet = 0;
+		int waitTimeMicros = lowRand.sample();
+		ApproximateClock apClock = ApproximateClock.instance();
+		long startT = apClock.currentTime();*/
+
+		BurstGenerator bgen = new BurstGenerator(lowMPS, highMPS, burstProb, burstDurSec, totalClients, clientsPerMachine, batchSize);
+		while(work) {
+			/*elapsedSec = (int)((apClock.currentTime()-startT)/1000.0);
+			if (elapsedSec > lastSet) {
+				lastSet = elapsedSec;
+				if (elapsedSec % burstDurSec == 0) {
+					int prob = burstRand.nextInt(100);
+					if (prob < burstProb)
+						waitTimeMicros = lowRand.sample();
+					else
+						waitTimeMicros = highRand.sample();
+				}
+			}
+
+			sleep(waitTimeMicros);*/
+
+			bgen.sleepNext();
+
+			int size = rq.size();
+			if ((size % 100) == 1) {
+				System.out.print(size +" ");
+			}
+
+			rq.add(clock.instant());
+		}
+
+		//To let anyone finish if waiting to receive an item
+		for (int i=0; i<2*totalClients; i++) {
+			rq.add(nullInstant);
+		}
+
+		System.out.println("Request generator closed...");
+	}
+
+	private double iatMicros(double rateMPS, int totalClients, int clientsPerMachine, int batchSize) {
+		double targetMPS = rateMPS/((double)totalClients/(double)clientsPerMachine)/(double)batchSize; //total / ratePerMachine / batchSize
+		double iatMicros = 1 / (targetMPS);  //Convert millions per second to nano second wait interval
+		return iatMicros;
+	}
+
+	private void sleep(int waitTimeMicros) {
+		if (waitTimeMicros > 60) { //It sleeps for at least 60us.
+			LockSupport.parkNanos(waitTimeMicros*1000);
+		} else {
+			busyWaitMicros(waitTimeMicros);
 		}
 	}
 
@@ -170,12 +246,11 @@ public class TestClientAsync {
 	}
 
 
-	private Result[] test(int durSec, Record recGen, final int reqBatchSize, final int writeRatio, final LinkedBlockingQueue<Instant> rq,
-						  boolean logStats, boolean isController, double repRateMPS)
+	private Result[] test(int durSec, Record recGen, final int reqBatchSize, final int writeRatio,
+						  final LinkedBlockingQueue<Instant> rq, boolean logStats, boolean isController,
+						  double repRateMPS, boolean isSynchronous, boolean isBursty, BurstGenerator bg,
+						  boolean readRecent)
 			throws OutOfMemoryException, KawkabException {
-		long now = System.currentTimeMillis();
-		long et = now + durSec*1000;
-
 		AccumulatorMap wLats = new AccumulatorMap(1000000);
 		AccumulatorMap rLats = new AccumulatorMap(1000000);
 		Accumulator rOpsThr = new Accumulator(durSec);
@@ -198,16 +273,23 @@ public class TestClientAsync {
 		ApproximateClock apClock = ApproximateClock.instance();
 		Random reqRand = new Random();
 		long startT = System.currentTimeMillis();
+		long now = System.currentTimeMillis();
+		long et = now + durSec*1000;
 		while((now = apClock.currentTime()) < et) {
 			try {
 				Instant ts = null;
-				if (repRateMPS > 0) {
-					ts = rq.take();
+				if (!isSynchronous) {
+					//ts = rq.take();
+					ts = rq.poll(5, TimeUnit.SECONDS);
+					if (ts == null)
+						continue;
+
 					if (ts.equals(nullInstant)) {
 						System.out.printf("[TCA] %d received stop signal\n", cid);
 						break;
 					}
 				} else {
+					if (isBursty) bg.sleepNext();
 					ts = clock.instant();
 				}
 
@@ -224,11 +306,15 @@ public class TestClientAsync {
 					if (isController)
 						wLog.end(1);
 				} else {
-					//batchSize = sendReadRequest(recGen, apClock.currentTime());
+					if (readRecent)
+						batchSize = sendFixedRandomWindowReadRequest(recGen, reqBatchSize, timestamps);
+					else
+						batchSize = sendHistoricalReadRequest(recGen, histReadTS, reqBatchSize);
 
+					//batchSize = sendReadRequest(recGen, apClock.currentTime());
 					//batchSize = sendFixedWindowReadRequest(recGen, reqBatchSize, timestamps);
 					//batchSize = sendFixedRandomWindowReadRequest(recGen, reqBatchSize, timestamps);
-					batchSize = sendHistoricalReadRequest(recGen, histReadTS, reqBatchSize);
+					//batchSize = sendHistoricalReadRequest(recGen, histReadTS, reqBatchSize);
 					//batchSize = sendHistoricalReadRandomWindowRequest(recGen, histReadTS, reqBatchSize);
 					//readRecordTS += batchSize;
 
@@ -325,6 +411,9 @@ public class TestClientAsync {
 			return 0;
 
 		int winSizeRecords = 10000;
+		if (winSizeRecords < batchSize)
+			winSizeRecords = 10*batchSize;
+
 		long minLimit = maxLimit - winSizeRecords;
 		if (minLimit < 0) minLimit = 0;
 
@@ -335,11 +424,7 @@ public class TestClientAsync {
 
 		long maxTS = minTS + batchSize;
 
-		List<Record> res = client.readRecords(fn, minTS, maxTS, recGen, true);
-		if (res == null)
-			return 0;
-
-		return res.size();
+		return client.readRecordsCounts(fn, minTS, maxTS, recGen, true);
 	}
 
 	private int sendFixedWindowReadRequest(Record recGen, int batchSize, long[] timestamps) throws KawkabException {
@@ -353,11 +438,7 @@ public class TestClientAsync {
 
 		//System.out.printf("minTs=%d, maxTs=%d\n", minTs, maxTs);
 
-		List<Record> res = client.readRecords(fn, minTs, maxTs, recGen, true);
-		if (res == null)
-			return 0;
-
-		return res.size();
+		return client.readRecordsCounts(fn, minTs, maxTs, recGen, true);
 	}
 
 	private int sendHistoricalReadRequest(Record recGen, long[] timestamps, int batchSize) throws KawkabException {
@@ -479,7 +560,69 @@ public class TestClientAsync {
 		while(waitUntil > System.nanoTime()){ ; }
 	}
 
-	private void waitMicros(int micros) {
+	private class BurstGenerator {
+		private int elapsedSec;
+		private long startT;
+		private int waitTimeMicros;
+		private int burstEndSec;
+		private boolean bursting;
 
+		private final int burstDurSec;
+		//private Random burstRand;
+		private final int burstProb;
+		//private final PoissonDistribution lowRand;
+		//private final PoissonDistribution highRand;
+		private final int iatMicrosLow;
+		private final int iatMicrosHigh;
+		private ApproximateClock apClock = ApproximateClock.instance();
+		private boolean inited = false;
+
+		private BurstGenerator(final double lowMPS, final double highMPS, final int burstProb, final int burstDurSec,
+							   int totalClients, int clientsPerMachine, int batchSize) {
+			this.burstDurSec = burstDurSec;
+			this.burstProb = burstProb;
+
+			iatMicrosLow = (int)(iatMicros(lowMPS, totalClients, clientsPerMachine, batchSize));
+			iatMicrosHigh = (int)(iatMicros(highMPS, totalClients, clientsPerMachine, batchSize));
+			//lowRand = new PoissonDistribution(iatMicrosLow); //arrival time for the next request
+			//highRand = new PoissonDistribution(iatMicrosHigh); //arrival time for the next request
+
+			System.out.printf("iatMicros low = %d, iatMicros high = %d, burstProb=%d, burstDurSec=%d, tc=%d, cpm=%d, bs=%d, mpsLow=%f, mpsHigh=%f\n",
+					iatMicrosLow, iatMicrosHigh, burstProb, burstDurSec, totalClients, clientsPerMachine, batchSize, lowMPS, highMPS);
+
+		}
+
+		private void reset() {
+			inited = true;
+			//burstRand = new Random(1);
+			elapsedSec = 0;
+			waitTimeMicros = iatMicrosLow; //lowRand.sample();
+			startT = apClock.currentTime();
+			bursting = false;
+			burstEndSec = burstDurSec;
+		}
+
+		private void sleepNext() {
+			if (!inited)
+				reset();
+
+			elapsedSec = (int)((apClock.currentTime()-startT)/1000.0);
+			boolean windowEnd = elapsedSec > burstEndSec;
+			if (windowEnd) {
+				if (bursting) {
+					bursting = false;
+					waitTimeMicros = iatMicrosLow;
+					burstEndSec = elapsedSec + burstDurSec;
+					System.out.printf("No burst window from %d to %d\n", elapsedSec, burstEndSec);
+				} else {// if (burstRand.nextInt(100) < burstProb) {
+					waitTimeMicros = iatMicrosHigh;
+					bursting = true;
+					burstEndSec = elapsedSec + burstDurSec;
+					System.out.printf("Burst window from %d to %d\n", elapsedSec, burstEndSec);
+				}
+			}
+
+			sleep(waitTimeMicros);
+		}
 	}
 }

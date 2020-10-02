@@ -3,6 +3,7 @@ package kawkab.fs.core;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.utils.AccumulatorMap;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -19,7 +20,7 @@ public class GlobalStoreManager {
 	private final int numWorkers = Configuration.instance().numWorkersStoreToGlobal; // Number of worker threads and number of reqsQs
 	private volatile boolean working = true;    // To stop accepting new requests after working is false
 
-	private final int numBackends = 3;
+	private final int numBackends = Configuration.instance().minioServers.length;
 	
 	private static GlobalStoreManager instance;
 
@@ -175,6 +176,8 @@ public class GlobalStoreManager {
 		for (int i=0; i<storeBackends.length; i++) {
 			storeBackends[i].shutdown();
 		}
+
+		saveDataRates(storeBackends, true);
 	}
 	
 	private void storeToGlobal(Task task, GlobalBackend[] backends, ByteBuffer buffer) throws KawkabException {
@@ -273,7 +276,11 @@ public class GlobalStoreManager {
 			assert storeQs[i].size() == 0;
 		}*/
 
-		assert storeQ.size() == 0;
+		saveDataRates(loadBackends, false);
+
+		if (storeQ.size() != 0) {
+			System.out.println("[GSM] Error: storeQ is not empty: " + storeQ.size());
+		}
 		
 		System.out.println("Closed GlobalStoreManager");
 	}
@@ -295,5 +302,26 @@ public class GlobalStoreManager {
 
 		return size;*/
 		return storeQ.size();
+	}
+
+	public synchronized void saveDataRates(GlobalBackend[] backends, boolean isUpload) {
+		try {
+			String uldl = isUpload ? "upload" : "download";
+
+			String outFolder = System.getProperty("outFolder", "/home/sm3rizvi/kawkab/experiments/logs");
+			String outFile = String.format("%s/server-%d-%s.txt", outFolder, Configuration.instance().thisNodeID, uldl);
+
+			for (GlobalBackend be : backends) {
+				AccumulatorMap am;
+				if (isUpload)
+					am = be.getUploadStats();
+				else
+					am = be.getDownloadStats();
+
+				am.exportJson(outFile);
+			}
+		}catch (Exception | AssertionError e) {
+			e.printStackTrace();
+		}
 	}
 }

@@ -25,8 +25,7 @@ public class ClientMain {
 		String usage = "Usage: TestClient cid=clientID sip=svrIP sport=svrPort " +
 				"mid=masterID mip=masterIP mport=masterPort wt=waitTimeMs [mgc=true|false nc=numClients" +
 				"bs=batchSize rs=16|50 fp=filePrefix type=apnd|noop tc=totalClients td=tesdDurSec " +
-				"rps=reqsPerSecx1000 wr=writeRatio]";
-
+				"rps=reqsPerSecx1000 wr=writeRatio hmps=highMPS bp=burstProb bd=burstDurSec rr=doReadRecent ]";
 
 		/*double[] exp = {1250000};
 		for (double param : exp) {
@@ -63,7 +62,12 @@ public class ClientMain {
 		String fp = "test-";
 		int testID = 1;
 		int wr = 100; //write ratio
-		double iat = 100; // inter-arrival time in microseonds
+		double iat = 100; // request rate in millions per second
+		double highMPS = 5;
+		int burstProb = 0;
+		int burstDurSec = 10;
+		boolean isSynchronous = false;
+		boolean readRecent = false;
 
 		StringBuilder params = new StringBuilder();
 		for (String iArg : args) {
@@ -90,6 +94,11 @@ public class ClientMain {
 				case "wr": wr = Integer.parseInt(arg[1]); break;
 				case "iat": iat = Double.parseDouble(arg[1]); break;
 				case "wmup": warmupsec = Integer.parseInt(arg[1]); break;
+				case "hmps" : highMPS = Double.parseDouble(arg[1]); break;
+				case "bp": burstProb = Integer.parseInt(arg[1]); break;
+				case "bd": burstDurSec = Integer.parseInt(arg[1]); break;
+				case "sync": isSynchronous = Boolean.parseBoolean(arg[1]); break;
+				case "rr": readRecent = Boolean.parseBoolean(arg[1]); break;
 				default: System.out.printf("Invalid argument %s.\n%s",iArg,usage); return;
 			}
 		}
@@ -121,7 +130,8 @@ public class ClientMain {
 		pr.print("Starting client " + cid);
 
 		if (type.equals("rw"))
-			runRWTest(testID, iat, wr, bs, cid, td, nc, nf, sip, sport, recGen, warmupsec, tc, mid, mip, mport, wtMs, fp);
+			runRWTest(testID, iat, wr, bs, cid, td, nc, nf, sip, sport, recGen, warmupsec, tc, mid, mip, mport, wtMs,
+					fp, highMPS, burstProb, burstDurSec, isSynchronous, readRecent);
 		else {
 			runTest(testID, cid, td, nc, nf, sip, sport, bs, recGen, warmupsec, type, tc, mid, mip, mport, wtMs, fp);
 		}
@@ -165,7 +175,8 @@ public class ClientMain {
 
 	private void runRWTest(int testID, double intArrTime, int writeRatio, int apBatchSize, int cidOffset, int testDurSec,
 						   int clientsPerMachine, int filesPerClient, String svrIP, int sport, Record recGen, int warmupsec,
-						   int totalClients, int mid, String mip, int mport, int initWaitMs, String filePrefix)
+						   int totalClients, int mid, String mip, int mport, int initWaitMs, String filePrefix,
+						   double highMPS, int burstProb, int burstDurSec, boolean isSynchronous, boolean readRecent)
 								throws KawkabException, InterruptedException {
 		TestRunnerAsync at = new TestRunnerAsync();
 
@@ -178,7 +189,8 @@ public class ClientMain {
 		}
 
 		at.runTest(testID, intArrTime, writeRatio, testDurSec, totalClients, clientsPerMachine, cidOffset, filesPerClient,
-				svrIP, sport, apBatchSize, recGen, warmupsec, mid, mip, mport, filePrefix);
+				svrIP, sport, apBatchSize, recGen, warmupsec, mid, mip, mport, filePrefix,
+				highMPS, burstProb, burstDurSec, isSynchronous, readRecent);
 
 		if (cidOffset == mid) {
 			at.stopServer();

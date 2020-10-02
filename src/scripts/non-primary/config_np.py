@@ -34,7 +34,7 @@ def get_config():
     # The tuples and the number of machines in each tuple can be larger than
     # the super-leaves configuration that will be used in the experiment.
     conf['backend_indexes'] =   [
-                                    ('red',     [1,2,3]),
+                                    ('red',     [1,2,3,8,14]),
                                 ]
     conf['server_indexes'] =   [
                                     ('red',     [11]),
@@ -43,7 +43,7 @@ def get_config():
 
     conf['client_indexes'] =   [
                                     ('red',     [
-                                                 9, 10, 12, 13, 14,
+                                                 9, 10, 12, 13, 13,
                                                  9, 10, 12, #13, 14,
                                                  #9, 10, 12, 13, 14,
                                                  #9, 10, 12, 13, 14,
@@ -74,12 +74,12 @@ def get_config():
     conf['client_base_port'] = 43567
 
     conf['test_type'] = ['rw']
-    conf['test_prefix' ] = ['hq12r']
+    conf['test_prefix' ] = ['hq19r']
     #conf['batch_size'] = [10000]
     conf['record_size'] = [16]
     conf['batch_writeratio_rps'] = [ # list of tuples (batch_size, write_ratio, [reqs_per_second list])
                 #(500, 100, [11.5]),
-                (10000, 0, [2]),
+                (10000, 0, [1]),
                 # (10000, 100, [11, 12, 13.5, 14]),
                 #(100, 100, [13])
 
@@ -87,16 +87,21 @@ def get_config():
     conf['clients_per_machine'] = 10
     conf['files_per_client'] = [1]
 
-    conf['test_duration'] = 120
+    conf['test_duration'] = 900
     conf['warmup_sec'] = 0
-    conf['init_wait_msec'] = 60000
+    conf['init_wait_msec'] = 1500000
 
     conf['test_runs'] = [1]
     #conf['svr_config_file'] ['config-non-primary.properties']
     conf['rpc_buf_len'] = 6*1024*1024
 
-    conf['logGC'] = False
+    conf['high_mps'] = 10
+    conf['burst_dur_sec'] = 30
+    conf['burst_prob_perc'] = 2
+    conf['is_synchronous'] = "false"
+    conf['read_recent'] = "false"
 
+    conf['logGC'] = False
     conf['server_jvm_params'] = '-ea -Xms12g -Xmx24g -XX:MaxDirectMemorySize=16684m -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'
     conf['client_jvm_params'] = '-ea -XX:+UnlockExperimentalVMOptions -XX:+UseZGC'
 

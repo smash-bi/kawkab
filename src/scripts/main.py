@@ -109,8 +109,9 @@ def start_clients(conf):
     wtMs = 0 if 'init_wait_msec' not in conf else conf['init_wait_msec']
     mport = conf['client_base_port']
 
-    opts = ' mport=%d wt=%d nc=%d bs=%d rs=%d nf=%d fp=%s typ=%s tc=%d td=%d wr=%d iat=%f wmup=%d '%(
-        mport, wtMs, p['nc'], p['bs'], p['rs'], p['fpc'], conf['run_dir'], p['typ'], p['tc'], p['td'], p['wr'], p['iat'], p['wmup'])
+    opts = ' mport=%d wt=%d nc=%d bs=%d rs=%d nf=%d fp=%s typ=%s tc=%d td=%d wr=%d iat=%f wmup=%d bp=%d bd=%d hmps=%f sync=%s rr=%s '%(
+        mport, wtMs, p['nc'], p['bs'], p['rs'], p['fpc'], conf['run_dir'], p['typ'], p['tc'], p['td'], p['wr'], p['iat'], p['wmup'],
+        p['bp'], p['bd'], p['hmps'], p['sync'], p['rr'])
     cp = ".:%s:%s/bin:%s"%(conf['kawkab_dir'],conf['kawkab_dir'],conf['client_classpath'])
 
     now = time.time()
@@ -183,16 +184,16 @@ def kill_processes(conf):
         runCmdParallel(cmd, "all", conf, True, True)
     
 def cleanup(conf):
-    print '-------'
-    print 'Cleanup'
-    print '-------'
-    
+    print('-------')
+    print('Cleanup')
+    print('-------')
+
     kill_processes(conf)
     
     cmd2 = 'rm -r %s/*'%(conf['run_dir'])
     runCmdParallel(cmd2, "all", conf, True)
 
-    cmd2 = 'rm -r %s/fs0/fs/* %s/fs1/fs/* %s/fs/*'%(conf['kawkab_dir'], conf['kawkab_dir'], conf['kawkab_dir'])
+    cmd2 = 'rm -r %s/fs0/fs/* %s/fs1/fs/* %s/fs2/fs/* %s/fs/*'%(conf['kawkab_dir'], conf['kawkab_dir'], conf['kawkab_dir'], conf['kawkab_dir'])
     runCmdParallel(cmd2, "servers", conf, True)
 
     cmd2 = 'rm -r /tmp/fs0/fs/* /tmp/fs1/fs/* /tmp/fs/*'
@@ -266,15 +267,20 @@ def run_batch(conf):
                                     'tc'    : numClients,
                                     'td'    : conf['test_duration'],
                                     'wmup'  : conf['warmup_sec'],
+                                    'hmps'  : conf['high_mps'],
+                                    'bd'    : conf['burst_dur_sec'],
+                                    'bp'    : conf['burst_prob_perc'],
+                                    'sync'  : conf['is_synchronous'],
+                                    'rr'    : conf['read_recent'],
                                 }
 
                                 #---------------------------------------------------
 
                                 run_n += 1
-                                print '-------------------------------------'
-                                print 'Experiment %d of %d'%(run_n, run_t)
-                                print 'Test ID: %s, Run=%d'%(conf['test_id'], test_run)
-                                print '-------------------------------------'
+                                print('-------------------------------------')
+                                print('Experiment %d of %d' % (run_n, run_t))
+                                print('Test ID: %s, Run=%d' % (conf['test_id'], test_run))
+                                print('-------------------------------------')
 
                                 #---------------------------------------------------
 
@@ -298,14 +304,15 @@ def run_batch(conf):
                                 try:
                                     copy_files(conf)
                                 except IOError as e:
-                                    print "I/O error({0}): {1}".format(e.errno, e.strerror)
+                                    print("I/O error({0}): {1}".format(e.errno, e.strerror))
 
                                 get_results(conf)
 
                                 time.sleep(3)
 
     kill_processes(conf)
-    print 'Finished...'
+    print('Finished...')
+
 
 if __name__ == '__main__':
     conf = get_config()

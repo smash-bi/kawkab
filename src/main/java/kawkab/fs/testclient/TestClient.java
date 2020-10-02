@@ -292,7 +292,6 @@ public class TestClient {
 		ApproximateClock clock = ApproximateClock.instance();
 		long startT = clock.currentTime();
 		int elapsed = 0;
-
 		int lastSet = 0;
 		while(now < et) {
 			if (elapsed > lastSet) {

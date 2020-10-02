@@ -13,6 +13,8 @@ import com.amazonaws.services.s3.model.*;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.utils.Accumulator;
+import kawkab.fs.utils.AccumulatorMap;
 import org.apache.zookeeper.server.ByteBufferInputStream;
 
 import java.io.BufferedInputStream;
@@ -23,6 +25,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.locks.Lock;
@@ -35,7 +39,11 @@ public final class S3Backend implements GlobalBackend{
 	private FileLocks fileLocks;
 	private static final String contentType = "application/octet-stream";
 	private int id;
-	boolean working;
+	private boolean working;
+	private AccumulatorMap dlRateLog;
+	private AccumulatorMap ulRateLog;
+	private ApproximateClock clock;
+	private final long startTime;
 	
 	public S3Backend(int id) {
 		this.id = id;
@@ -44,8 +52,13 @@ public final class S3Backend implements GlobalBackend{
 		createRootBucket();
 		listExistingBuckets();
 		fileLocks = FileLocks.instance();
-		
-		Configuration conf = Configuration.instance();
+		clock = ApproximateClock.instance();
+		startTime = clock.currentTime();
+
+		dlRateLog = new AccumulatorMap(10000); //Number of seconds we will run
+		ulRateLog = new AccumulatorMap(10000);// FIXME: Use AccumulatorMap instead of fixed length Accumulator
+
+		//Configuration conf = Configuration.instance();
 		//buffer = ByteBuffer.allocateDirect((Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes)));
 		//bufferWrap = ByteBuffer.wrap(buffer);
 	}
@@ -75,11 +88,15 @@ public final class S3Backend implements GlobalBackend{
 		
 		while(retries-- > 0) {
 			try (
-					S3Object obj = client.getObject(getReq); // client is an S3 client
-					S3ObjectInputStream is = obj.getObjectContent();
-					ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(is));
-				) {
-					dstBlock.loadFrom(chan);
+				S3Object obj = client.getObject(getReq); // client is an S3 client
+				S3ObjectInputStream is = obj.getObjectContent();
+				ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(is));) {
+
+				int loaded = dstBlock.loadFrom(chan);
+
+				int elapsed = (int)(clock.currentTime() - startTime)/1000;
+				dlRateLog.put(elapsed, loaded);
+
 				break;
 			} catch (SdkBaseException | IOException ae) { // If the block does not exist in S3, it throws NoSucKey error code
 				if (ae instanceof AmazonS3Exception) {
@@ -104,6 +121,11 @@ public final class S3Backend implements GlobalBackend{
 		}
 		
 		//System.out.println("[S3] Loading from global: " + id.name());
+	}
+
+	private double rateMBps(int numBytes, int durMillis) {
+		double durSec = durMillis / 1000.0;
+		return numBytes/1048576.0/durSec;
 	}
 
 	@Override
@@ -131,6 +153,11 @@ public final class S3Backend implements GlobalBackend{
 					ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(is));
 			) {
 				int read = bl.loadFrom(chan);
+
+				int elapsed = (int)(clock.currentTime() - startTime)/1000;
+
+				dlRateLog.put(elapsed, read);
+
 				assert read == rangeEnd - rangeStart + 1 :
 						String.format("[S3] Not all bytes read from channel: read=%d, expected=%d",read, rangeEnd-rangeStart+1);
 				break;
@@ -196,7 +223,14 @@ public final class S3Backend implements GlobalBackend{
 			metadata.setContentLength(length);
 			metadata.setContentType(contentType);
 			try {
+
 				client.putObject(rootBucket, id.localPath(), istream, metadata);
+
+				int elapsed = (int)(clock.currentTime() - startTime)/1000;
+				ulRateLog.put(elapsed, length);
+
+				//System.out.printf("[S3] Upload %d bps at %d\n", ulBps, elapsed);
+
 			} catch (AmazonServiceException ase) {
 				System.out.println("Failed to upload block: " + id);
 				throw ase;
@@ -252,8 +286,25 @@ public final class S3Backend implements GlobalBackend{
 		if (!working)
 			return;
 
+		printStats();
 		working = false;
 		System.out.println("Closing S3 backend ...");
 		client.shutdown();
+	}
+
+	public void printStats() {
+		System.out.printf("[S3] S3 backend start time ..., %s\n", new SimpleDateFormat("HH:mm:ss.SSS").format(new Date(startTime)));
+		System.out.printf("[S3] Upload rates (bytes per sec): "); ulRateLog.printPairs();
+		System.out.printf("[S3] Download rates (bytes per sec):"); dlRateLog.printPairs();
+	}
+
+	@Override
+	public AccumulatorMap getUploadStats() {
+		return ulRateLog;
+	}
+
+	@Override
+	public AccumulatorMap getDownloadStats() {
+		return dlRateLog;
 	}
 }

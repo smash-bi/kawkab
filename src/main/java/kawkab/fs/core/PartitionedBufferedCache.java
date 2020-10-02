@@ -431,9 +431,7 @@ public class PartitionedBufferedCache extends Cache {
 
 					try {
 						Thread.sleep(1000);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
+					} catch (InterruptedException e) {}
 				}
 
 				writer.write("\n");

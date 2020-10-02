@@ -67,7 +67,7 @@ comments = ""
 # ===============================================================================
 
 # Borrowed from someone else
-def lineSpecGenerator(blank=False):
+def lineSpecGenerator(lines=None, blank=False):
     """
         Return cycling list of lines
         [8, 4, 2, 4, 2, 4] means
@@ -79,14 +79,15 @@ def lineSpecGenerator(blank=False):
         4 points off.
     """
 
-    lines = [
-        [10, 0.00001],  # solid
-        [4, 2, 4, 2],  # dash dash
-        [2, 2, 2, 2],  # dot dot
-        [6, 4, 2, 4],  # ,4,8]
-        [6, 4, 2, 4, 2, 4],  # dash dot dot
-        [7, 5, 7, 5],  # dash dash
-    ]
+    if not lines:
+        lines = [
+            [10, 0.00001],  # solid
+            [4, 2, 4, 2],  # dash dash
+            [2, 2, 2, 2],  # dot dot
+            [6, 4, 2, 4],  # ,4,8]
+            [6, 4, 2, 4, 2, 4],  # dash dot dot
+            [7, 5, 7, 5],  # dash dash
+        ]
     index = 0
     while True:
         yield lines[index] if not blank else [0.00001, 1]
@@ -94,7 +95,7 @@ def lineSpecGenerator(blank=False):
 
 
 # Borrowed from someone else
-def lineGenerator(blank=False):
+def lineGenerator():
     "Return cycling list of lines"
     spec = ["-", "--", "-.", ":"]
     index = 0
@@ -132,9 +133,10 @@ def colorGeneratorGrey(colors=None):
     # Borrowed from someone else
 
 
-def markerGenerator():
+def markerGenerator(markers=None):
     "Return cycling list of colors"
-    markers = ["o", "s", "^", "*", "d", "v", "3", "4", "+"]
+    if not markers:
+        markers = ["o", "s", "^", "*", "d", "v", "3", "4", "+"]
     index = 0
     while True:
         yield markers[index]
@@ -199,10 +201,9 @@ def xyMarkGenerator():
         cIdx = (cIdx + 1) % len(colors)
 
 
-def plotTimeSeries(data, title, xlabel, ylabel, fp=fp_default, annotations=None, step=False,
-                   hline=False, N=0, yMin0=True, exact_ticks=False,
-                   show_legend=True, legend_loc=0, xticks=True, yticks=True, yMax=None, xMax=None, xMin=None,
-                   subplot=None, first_plot=True, logx=False, logy=False, colors=None, sharey=None):
+def plotTimeSeries(data, title, xlabel, ylabel, fp=fp_default, annotations=None, step=False, hline=False, yMin=None,
+                   exact_ticks=False, show_legend=True, xticks=True, yticks=True, yMax=None, xMax=None, xMin=None,
+                   subplot=None, first_plot=True, logx=False, logy=False, colors=None, sharey=None, lspec=None, markers=None):
     """Plot a time series.
 
     Input: data, a list of dicts.
@@ -229,8 +230,8 @@ def plotTimeSeries(data, title, xlabel, ylabel, fp=fp_default, annotations=None,
     else:
         cgen = colorGeneratorGrey(colors)
 
-    lgen = lineSpecGenerator()
-    mgen = markerGenerator()
+    lgen = lineSpecGenerator(lspec)
+    mgen = markerGenerator(markers)
 
     if logx:
         plt.xscale("log")
@@ -275,7 +276,7 @@ def plotTimeSeries(data, title, xlabel, ylabel, fp=fp_default, annotations=None,
     plt.xlabel(xlabel, fontsize=fp["xylabels_font_size"], multialignment="center", labelpad=fp["xlabelpad"])
     plt.ylabel(ylabel, fontsize=fp["xylabels_font_size"], multialignment="center", labelpad=fp["ylabelpad"])
 
-    if yMin0: plt.ylim(ymin=0)
+    if yMin: plt.ylim(ymin=yMin)
     if yMax: plt.ylim(ymax=yMax)
     if xMax: plt.xlim(xmax=xMax)
     if xMin: plt.xlim(xmin=xMin)

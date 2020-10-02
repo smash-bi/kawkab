@@ -2,6 +2,8 @@ package kawkab.fs.core;
 
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
+import kawkab.fs.utils.Accumulator;
+import kawkab.fs.utils.AccumulatorMap;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -11,4 +13,6 @@ public interface GlobalBackend {
 	void bulkLoadFromGlobal(BlockLoader bl) throws FileNotExistException, IOException;
 	void storeToGlobal(BlockID srcBlock, ByteBuffer stageBuf) throws KawkabException;
 	void shutdown();
+	AccumulatorMap getUploadStats();
+	AccumulatorMap getDownloadStats();
 }
