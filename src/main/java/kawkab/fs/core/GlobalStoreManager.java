@@ -304,7 +304,7 @@ public class GlobalStoreManager {
 		return storeQ.size();
 	}
 
-	public synchronized void saveDataRates(GlobalBackend[] backends, boolean isUpload) {
+	private synchronized void saveDataRates(GlobalBackend[] backends, boolean isUpload) {
 		try {
 			String uldl = isUpload ? "upload" : "download";
 

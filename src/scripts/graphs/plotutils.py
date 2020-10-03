@@ -52,6 +52,7 @@ fp_default["colored"] = False
 fp_default["axis_tick_pad"] = 7
 fp_default["markers"] = True
 fp_default["yAxesBothSides"] = False
+fp_default["bar_edge_color"] = 'black'
 
 comments = ""
 
@@ -406,7 +407,7 @@ def plotBars(res, title="", xlabel="", ylabel="", N=4, show_legend=True,
             #        barsabove=True,zorder=4)
 
             rects = ax.bar(left_blank + ind + (i * width), r["y"], width,
-                           color=color, capsize=3, label=r["label"],
+                           color=color, capsize=3, label=r["label"],edgecolor=fp['bar_edge_color'],
                            hatch=hatch, align="center", zorder=3)
             ax.errorbar(left_blank + ind + (i * width), r["y"], yerr=r["conf_ival"],
                         ecolor="#5c5c5c", zorder=4, barsabove=True, fmt="none", capsize=3)

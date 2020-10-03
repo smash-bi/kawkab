@@ -171,7 +171,8 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		if (loadData) {
 			// System.out.printf("[POH] Load node %d\n", nodeNum);
 
-			//loadFromPrimary = true; //FIXME: For debugging purposes
+			//We should try index blocks first from primary because they are unlikely to be in the global store
+			loadFromPrimary = true; //FIXME: For debugging purposes.
 			try {
 				node.loadBlock(loadFromPrimary);
 			} catch (FileNotExistException | IOException e) {

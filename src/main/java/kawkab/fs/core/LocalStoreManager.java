@@ -1,13 +1,18 @@
 package kawkab.fs.core;
 
+import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfDiskSpaceException;
+import kawkab.fs.utils.Accumulator;
+import kawkab.fs.utils.AccumulatorMap;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.Lock;
 
@@ -24,7 +29,11 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private final Semaphore storePermits; // To limit the number of files in the local storage
 	private volatile boolean working = true;
 	private final FileLocks fileLocks;
-	
+	private AccumulatorMap readRateLog;
+	private AccumulatorMap[] writeRateLog;
+	private final static long START_TIME = System.currentTimeMillis();
+	private ApproximateClock clock = ApproximateClock.instance();
+
 	private static LocalStoreManager instance;
 	//private LocalEvictQueue leq;
 	private LocalStoreCache lc;
@@ -73,6 +82,13 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * work based on the blocks, which is not easily achievable using ExecutorService.
 	 */
 	private void startWorkers() {
+		readRateLog = new AccumulatorMap(3000);
+		writeRateLog = new AccumulatorMap[numWorkers];
+
+		for (int i=0; i<numWorkers; i++) {
+			writeRateLog[i] = new AccumulatorMap(3000);
+		}
+
 		storeQs = new TransferQueue[numWorkers];
 		for(int i=0; i<numWorkers; i++) {
 			storeQs[i] = new TransferQueue<>("LSM-TrnsfrQ-"+i);
@@ -112,7 +128,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			}
 
 			try {
-				processStoreRequest(block, channels);
+				int synced = processStoreRequest(block, channels);
+				int elapsed = (int)(clock.currentTime() - START_TIME)/1000;
+				writeRateLog[workerID].put(elapsed, synced);
 			} catch (KawkabException e) {
 				e.printStackTrace();
 			}
@@ -218,7 +236,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 			//block.markGlobalDirty();
 		} catch (IOException e) {
-			System.out.printf("Unbale to store data for ID: %s, dirty bytes = %d\n", bid, block.decAndGetLocalDirty(0));
+			System.out.printf("[LSM] Unbale to store data for ID: %s, dirty bytes = %d\n", bid, block.decAndGetLocalDirty(0));
 			//FIXME: What should we do here? Should we return?
 			throw new KawkabException(e);
 		} finally {
@@ -353,8 +371,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 		if (!storePermits.tryAcquire()) { // This provides an upper limit on the number of blocks that can be created locally.
 			throw new OutOfDiskSpaceException (
-					String.format("Local store is full. Available store permits = %d, local store map size = %d, configured capacity = %d\n",
-							storePermits.availablePermits(), storedFilesMap.size(), Configuration.instance().maxBlocksPerLocalDevice));
+					String.format("[LSM] Local store is full. Available store permits = %d, local store map size = %d, configured capacity = %d, time=%s\n",
+							storePermits.availablePermits(), storedFilesMap.size(), Configuration.instance().maxBlocksPerLocalDevice, Commons.currentTime()));
 		}
 		File file = new File(blockID.localPath());
 		File parent = file.getParentFile();
@@ -392,13 +410,16 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 		lc.touch(id);
 		
-		block.loadFromFile();
+		int loaded = block.loadFromFile();
+
+		int elapsed = (int)(clock.currentTime() - START_TIME)/1000;
+		readRateLog.put(elapsed, loaded);
 
 		return true;
 	}
 	
 	public void shutdown() {
-		System.out.println("Closing LocalStoreManager...");
+		System.out.println("[LSM] Closing LocalStoreManager...");
 		
 		if (workers == null)
 			return;
@@ -412,7 +433,14 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				e.printStackTrace();
 			}
 		}
-		System.out.println("Stopped workers, checking for any remaining jobs.");
+
+		System.out.println("[LSM] Stopped workers, saving read/write rates before checking for any remaining jobs.");
+		saveDataRates(writeRateLog, true);
+		saveDataRates(new AccumulatorMap[]{readRateLog}, false);
+
+		System.out.printf("[LSM] LocalStore start time ..., %s\n", new SimpleDateFormat("HH:mm:ss.SSS").format(new Date(START_TIME)));
+
+		System.out.println("[LSM] Stopped workers, checking for any remaining jobs.");
 		for (int i=0; i<storeQs.length; i++) {
 			Block block = null;
 			while( (block = storeQs[i].poll()) != null) {
@@ -436,8 +464,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		for (int i=0; i<fileChannels.length; i++) {
 			fileChannels[i].shutdown();
 		}
-		
-		System.out.println("Closed LocalStoreManager");
+
+		System.out.println("[LSM] Closed LocalStoreManager");
 	}
 
 	public boolean exists(BlockID id) { // FIXME: This function needs to be synchronized with the createNewBlock and evictFromLocal functions
@@ -469,5 +497,20 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 	public int canEvict() {
 		return lc.size();
+	}
+
+	public synchronized void saveDataRates(AccumulatorMap[] accms, boolean isWritesMap) {
+		try {
+			String uldl = isWritesMap ? "lswrites" : "lsreads";
+
+			String outFolder = System.getProperty("outFolder", "/home/sm3rizvi/kawkab/experiments/logs");
+			String outFile = String.format("%s/server-%d-%s.txt", outFolder, Configuration.instance().thisNodeID, uldl);
+
+			for (AccumulatorMap am : accms) {
+				am.exportJson(outFile);
+			}
+		}catch (Exception | AssertionError e) {
+			e.printStackTrace();
+		}
 	}
 }

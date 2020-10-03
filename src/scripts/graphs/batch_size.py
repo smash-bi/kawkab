@@ -176,7 +176,7 @@ def batch_size_results_lines(conf, results, fig_params, figPrefix="", title="", 
         'markers': False,
     })
 
-    for latType in ["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
+    for latType in [ "lat50", "lat95"]: #["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
         res_bundle = []
         for metric in conf['metric']:
             metric_name = metric['name']

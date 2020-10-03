@@ -10,7 +10,7 @@ def _read_results(fname):
         data = json.load(data_file)
     return data
 
-def hist_read_results(conf, figp):
+def hist_read_results(conf, figparams):
     readsFile = '/home/sm3rizvi/kawkab/experiments/results/kawkab/rw-hq13r-nc80-bs10000-rs16-nf1-wr0-iat1/run_1/read-results-hists.json'
     writesFile = '/home/sm3rizvi/kawkab/experiments/results/kawkab/rw-hq13w-nc80-bs1000-rs16-nf1-wr100-iat5/run_1/write-results-hists.json'
 
@@ -40,6 +40,8 @@ def hist_read_results(conf, figp):
     wres["y"] = wy
     wres["label"] = 'Writes on primary'
 
+    figp = {}
+    figp.update(figparams)
     figp['figsize'] = (6, 2.5)
     figp['dimensions'] = (0.08, 0.975, 0.85, 0.19)
     figp['legend_cols'] = 2

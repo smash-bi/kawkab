@@ -195,7 +195,8 @@ public class TestClientAsync {
 
 			sleep(waitTimeMicros);*/
 
-			bgen.sleepNext();
+			//bgen.sleepNext();
+			bgen.sleepNextProbabilistic();
 
 			int size = rq.size();
 			if ((size % 100) == 1) {
@@ -220,11 +221,14 @@ public class TestClientAsync {
 	}
 
 	private void sleep(int waitTimeMicros) {
+		//long t1 = System.nanoTime();
 		if (waitTimeMicros > 60) { //It sleeps for at least 60us.
 			LockSupport.parkNanos(waitTimeMicros*1000);
 		} else {
 			busyWaitMicros(waitTimeMicros);
 		}
+
+		//System.out.print((System.nanoTime() - t1) + " ");
 	}
 
 	private void generateReqsSynchronous(int totalCleints, int clientsPerMachine,
@@ -289,7 +293,11 @@ public class TestClientAsync {
 						break;
 					}
 				} else {
-					if (isBursty) bg.sleepNext();
+					if (isBursty) {
+						bg.sleepNext();
+					} else {
+						System.out.println("Should not be here as sending request without sleep.");
+					}
 					ts = clock.instant();
 				}
 
@@ -562,13 +570,14 @@ public class TestClientAsync {
 
 	private class BurstGenerator {
 		private int elapsedSec;
+		private int lastSet;
 		private long startT;
 		private int waitTimeMicros;
 		private int burstEndSec;
 		private boolean bursting;
 
 		private final int burstDurSec;
-		//private Random burstRand;
+		private Random burstRand;
 		private final int burstProb;
 		//private final PoissonDistribution lowRand;
 		//private final PoissonDistribution highRand;
@@ -581,11 +590,14 @@ public class TestClientAsync {
 							   int totalClients, int clientsPerMachine, int batchSize) {
 			this.burstDurSec = burstDurSec;
 			this.burstProb = burstProb;
+			burstRand = new Random(2);
 
 			iatMicrosLow = (int)(iatMicros(lowMPS, totalClients, clientsPerMachine, batchSize));
 			iatMicrosHigh = (int)(iatMicros(highMPS, totalClients, clientsPerMachine, batchSize));
 			//lowRand = new PoissonDistribution(iatMicrosLow); //arrival time for the next request
 			//highRand = new PoissonDistribution(iatMicrosHigh); //arrival time for the next request
+
+			reset();
 
 			System.out.printf("iatMicros low = %d, iatMicros high = %d, burstProb=%d, burstDurSec=%d, tc=%d, cpm=%d, bs=%d, mpsLow=%f, mpsHigh=%f\n",
 					iatMicrosLow, iatMicrosHigh, burstProb, burstDurSec, totalClients, clientsPerMachine, batchSize, lowMPS, highMPS);
@@ -594,12 +606,14 @@ public class TestClientAsync {
 
 		private void reset() {
 			inited = true;
-			//burstRand = new Random(1);
+			burstRand = new Random(2);
+			lastSet = 0;
 			elapsedSec = 0;
 			waitTimeMicros = iatMicrosLow; //lowRand.sample();
 			startT = apClock.currentTime();
 			bursting = false;
 			burstEndSec = burstDurSec;
+
 		}
 
 		private void sleepNext() {
@@ -621,6 +635,33 @@ public class TestClientAsync {
 					System.out.printf("Burst window from %d to %d\n", elapsedSec, burstEndSec);
 				}
 			}
+
+			sleep(waitTimeMicros);
+		}
+
+		private void sleepNextProbabilistic() {
+			if (!inited)
+				reset();
+
+			int prob = -1;
+			elapsedSec = (int)((apClock.currentTime()-startT)/1000.0);
+			if (elapsedSec > lastSet) {
+				lastSet = elapsedSec;
+				if (elapsedSec % burstDurSec == 0) {
+					prob = burstRand.nextInt(100);
+					if (prob < burstProb) {
+						waitTimeMicros = iatMicrosHigh;
+						//System.out.print("H");
+					} else {
+						waitTimeMicros = iatMicrosLow;
+						//System.out.print("L");
+					}
+				}
+			}
+
+//			System.out.printf("elsdsec=%d, lastset=%d, prob=%d, burstprob=%d, low=%d, high=%d, cur=%d\n",
+//					elapsedSec, lastSet, prob, burstProb, iatMicrosLow, iatMicrosHigh, waitTimeMicros);
+
 
 			sleep(waitTimeMicros);
 		}

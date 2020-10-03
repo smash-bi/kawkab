@@ -295,7 +295,7 @@ def run_batch(conf):
 
                                 duration = conf['warmup_sec'] + conf['test_duration'] + 240
                                 wait_for_process(conf, "clients", 'java', duration)
-                                wait_for_process(conf, "servers", 'java', 5, True)
+                                wait_for_process(conf, "servers", 'java', 30, True)
 
                                 #---------------------------------------------------
 

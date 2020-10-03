@@ -77,7 +77,8 @@ public final class S3Backend implements GlobalBackend{
 			rangeEnd = rangeStart + dstBlock.sizeWhenSerialized() - 1; //end range is inclusive
 		}*/
 		
-		// System.out.printf("\t\t[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n", dstBlock.id(), rangeStart, rangeEnd, length, dstBlock.id().localPath());
+		// System.out.printf("\t\t[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n",
+	// dstBlock.id(), rangeStart, rangeEnd, length, dstBlock.id().localPath());
 		
 		String path = dstBlock.id().localPath();
 		GetObjectRequest getReq = new GetObjectRequest(rootBucket, path);
@@ -135,7 +136,8 @@ public final class S3Backend implements GlobalBackend{
 		long rangeStart = bl.offset();
 		long rangeEnd = rangeStart + bl.length() - 1; //end range is inclusive
 
-		// System.out.printf("\t\t[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n", dstBlock.id(), rangeStart, rangeEnd, length, dstBlock.id().localPath());
+		// System.out.printf("\t\t[S3] Loading from GS %s: stIdx=%d, endIdx=%d, len=%d, path=%s\n",
+		// dstBlock.id(), rangeStart, rangeEnd, length, dstBlock.id().localPath());
 
 		String path = bl.blockPath();
 		GetObjectRequest getReq = new GetObjectRequest(rootBucket, path);
@@ -155,7 +157,6 @@ public final class S3Backend implements GlobalBackend{
 				int read = bl.loadFrom(chan);
 
 				int elapsed = (int)(clock.currentTime() - startTime)/1000;
-
 				dlRateLog.put(elapsed, read);
 
 				assert read == rangeEnd - rangeStart + 1 :

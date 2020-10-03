@@ -7,7 +7,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
+import java.text.SimpleDateFormat;
 import java.util.Base64;
+import java.util.Date;
 
 public final class Commons {
 	private static final int ibmapBlockSizeBytes;
@@ -139,6 +141,10 @@ public final class Commons {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	public static String currentTime() {
+    	return new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
 	}
 }
 
