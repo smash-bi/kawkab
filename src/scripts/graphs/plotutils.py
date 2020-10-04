@@ -33,7 +33,9 @@ fp_default["hspace_subplots"] = 0.12
 fp_default["wspace_subplots"] = 0.5
 fp_default["legend_handle_length"] = 2
 fp_default["legend_handle_height"] = 1.6
-fp_default["legend_label_spacing"] = 0.5
+fp_default["legend_label_spacing"] = 0.5 #The vertical space between the legend entries
+fp_default["legend_handle_textpad"] = 0.5
+fp_default["legend_column_spacing"] = 2 #The spacing between columns
 fp_default["marker_size"] = 6
 fp_default["line_width"] = 1
 fp_default["grid_color"] = "#D0D0D0"
@@ -308,7 +310,8 @@ def plotTimeSeries(data, title, xlabel, ylabel, fp=fp_default, annotations=None,
                             prop={"size": fp["legend_size"]}, bbox_to_anchor=fp["legend_position"],
                             ncol=ncols, handlelength=fp["legend_handle_length"], numpoints=1,
                             handleheight=fp["legend_handle_height"], frameon=fp["legendFrame"],
-                            labelspacing=fp["legend_label_spacing"])
+                            labelspacing=fp["legend_label_spacing"], handletextpad=fp['legend_handle_textpad'],
+                            columnspacing=fp['legend_column_spacing'],)
         if fp["legendFrame"]: legend.get_frame().set_color("white")
     else:
         plt.legend().set_visible(False)
@@ -481,8 +484,8 @@ def plotBars(res, title="", xlabel="", ylabel="", N=4, show_legend=True,
         legend = plt.legend(handles, labels, loc=9,
                             prop={"size": fp["legend_size"]}, bbox_to_anchor=fp["legend_position"],
                             ncol=ncols, frameon=fp["legendFrame"], handlelength=fp["legend_handle_length"],
-                            handleheight=fp["legend_handle_height"],
-                            labelspacing=fp["legend_label_spacing"])
+                            handleheight=fp["legend_handle_height"], handletextpad=fp['legend_handle_textpad'],
+                            labelspacing=fp["legend_label_spacing"], columnspacing=fp['legend_column_spacing'],)
         if fp["legendFrame"]: legend.get_frame().set_color("white")
     else:
         plt.legend().set_visible(False)

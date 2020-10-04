@@ -7,15 +7,18 @@ import kawkab.fs.commons.Configuration;
 import net.openhft.chronicle.map.ChronicleMap;
 
 public final class LocalStoreDB {
+	private final int id;
 	private final int maxSize;
-	private static final String mapFilePath = Configuration.instance().basePath + "/localStoreDB/chroniclemap-"+Configuration.instance().thisNodeID;
+	private final String mapFilePath;
 	private static final String mapName = "localStoreDB";
 	private ChronicleMap<String, String> map; // Path to ID map. A key is a block's path because the data segments belonging
 	                                          // to the same block have the same path. In this way, we save the number of
 	                                          // entries in the map.
-	
-	public LocalStoreDB(int maxSize) {
+
+	public LocalStoreDB(int id, int maxSize) {
+		this.id = id;
 		this.maxSize = maxSize;
+		mapFilePath = Configuration.instance().basePath + "/localStoreDB/chroniclemap-"+Configuration.instance().thisNodeID+"-"+id;
 		initMap();
 	}
 	
@@ -59,7 +62,6 @@ public final class LocalStoreDB {
 	}
 	
 	/**
-	 * @param blockName
 	 * @return Whether the blockName entry exists in the DB or not
 	 */
 	public synchronized boolean exists(BlockID id) {
@@ -68,7 +70,6 @@ public final class LocalStoreDB {
 	}
 	
 	/**
-	 * @param blockName
 	 * @return Location of the blockName, or null if blockName entry was not in the DB.
 	 */
 	public synchronized String removeEntry(BlockID id) {

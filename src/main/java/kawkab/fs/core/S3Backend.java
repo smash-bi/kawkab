@@ -10,6 +10,7 @@ import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.*;
+import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
@@ -170,7 +171,7 @@ public final class S3Backend implements GlobalBackend{
 				}
 
 				if (retries == 1)
-					throw new IOException(ae.getMessage()+", failed to complete the request after retires");
+					throw new IOException(ae.getMessage()+", failed to complete the request after retires at " + Commons.currentTime()+"");
 
 				try {
 					long sleepMs = (100+(Math.abs(rand.nextLong())%400));
@@ -214,7 +215,7 @@ public final class S3Backend implements GlobalBackend{
 				lock.unlock();
 			}
 		} catch (IOException e) {
-			System.out.println("[S3] Unable to upload to S3: " + id);
+			System.out.println("[S3] Unable to upload to S3: " + id + " " + Commons.currentTime());
 			e.printStackTrace();
 			throw new KawkabException(e);
 		}
@@ -233,7 +234,7 @@ public final class S3Backend implements GlobalBackend{
 				//System.out.printf("[S3] Upload %d bps at %d\n", ulBps, elapsed);
 
 			} catch (AmazonServiceException ase) {
-				System.out.println("Failed to upload block: " + id);
+				System.out.println("[S3] Failed to upload block: " + id + " " + Commons.currentTime());
 				throw ase;
 			}
 		} catch (IOException e) {
@@ -295,8 +296,8 @@ public final class S3Backend implements GlobalBackend{
 
 	public void printStats() {
 		System.out.printf("[S3] S3 backend start time ..., %s\n", new SimpleDateFormat("HH:mm:ss.SSS").format(new Date(startTime)));
-		System.out.printf("[S3] Upload rates (bytes per sec): "); ulRateLog.printPairs();
-		System.out.printf("[S3] Download rates (bytes per sec):"); dlRateLog.printPairs();
+		//System.out.printf("[S3] Upload rates (bytes per sec): "); ulRateLog.printPairs();
+		//System.out.printf("[S3] Download rates (bytes per sec):"); dlRateLog.printPairs();
 	}
 
 	@Override

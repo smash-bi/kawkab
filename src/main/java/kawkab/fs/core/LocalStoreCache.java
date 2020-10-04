@@ -18,8 +18,10 @@ public class LocalStoreCache {
 	private Semaphore storePermits;
 	private int cacheSize;
 	private int toEvict;
+	private int id;
 
-	public LocalStoreCache(int cacheSize, LocalStoreDB lsd, Semaphore permits) {
+	public LocalStoreCache(int id, int cacheSize, LocalStoreDB lsd, Semaphore permits) {
+		this.id = id;
 		cache = new LocalCache(cacheSize);
 		this.lsd = lsd;
 		this.storePermits = permits;

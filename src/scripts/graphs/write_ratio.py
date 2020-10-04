@@ -6,17 +6,8 @@ import pprint as pp
 
 
 def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=None, yMax=None, logY=False, save_fig=False, show_ci=True):
-    lat_label = {
-        'meanLat': "Average",
-        'lat50': 'Median',
-        'lat95': '95 percentile',
-        'lat99': '99 percentile',
-        'maxLat': 'Max'
-    }
-
-    colors = ["#2b8cbe",
-              "#cc4c02",
-              ]
+    #colors = ["#2b8cbe", "#cc4c02", "#E08655", "#ED3232", "#CC00CC", "#008837", ]
+    colors = ["#2b8cbe","#cc4c02", "#fe9929",]
 
     markers = ["s", "o", "^", "v", "o", "s", "^", "v"]
 
@@ -32,12 +23,13 @@ def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=
     fgp = {}
     fgp.update(fig_params)
     fgp.update({
-        'figsize':      (6, 2.5),
-        'dimensions':   (0.096, 0.975, 0.85, 0.19),
-        'legend_cols':  4,
-        'legend_position':  (0.5, 1.29),
+        'figsize':      (3.5, 2.5),
+        'dimensions':   (0.21, 0.975, 0.85, 0.19),
+        'legend_cols':  3,
+        'legend_position':  (0.4, 1.26),
         'markers': False,
     })
+
 
     for latType in [ "lat50", "lat95"]: #["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
         res_bundle = []
@@ -66,7 +58,7 @@ def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=
                 yVals = [val / 1000.0 for val in yVals]
                 yci = [val/1000.0 for val in yci]
 
-                label = "%s %d" % (metric['label'], metric_point)
+                label = "%d%%\nwrites" % (metric_point)
 
                 N = len(yVals)
                 res = {}
@@ -77,10 +69,10 @@ def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=
                 res_bundle.append(res)
 
         xlabel = "Records per second (x$10^6$)"
-        ylabel = "%s response time (ms)" % (lat_label[latType])
+        ylabel = "%s request\ncompletion time (ms)" % (conf['labels'][latType])
 
         print(title)
-        print(lat_label[latType])
+        print(conf['labels'][latType])
         pp.pprint(res_bundle)
 
         plotTimeSeries(res_bundle, title, xlabel, ylabel, show_legend=True, fp=fgp, yMax=yMax, xMax=xMax, logy=logY, yMin=0, xMin=-0.001,

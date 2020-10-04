@@ -5,7 +5,6 @@ import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfDiskSpaceException;
-import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.AccumulatorMap;
 
 import java.io.File;
@@ -21,12 +20,11 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	
 	private static final int maxBlocks = Configuration.instance().maxBlocksPerLocalDevice; // Number of blocks that can be created locally
 	private static final int numWorkers = Configuration.instance().numLocalDevices; // Number of worker threads and number of reqsQs
+	private static final int numDevices = Configuration.instance().numLocalDevices;
 	
 	private TransferQueue<Block> storeQs[]; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks locally
 	private FileChannels[] fileChannels;
-	private final LocalStoreDB storedFilesMap;        // Contains the paths and IDs of the blocks that are currently stored locally
-	private final Semaphore storePermits; // To limit the number of files in the local storage
 	private volatile boolean working = true;
 	private final FileLocks fileLocks;
 	private AccumulatorMap readRateLog;
@@ -35,10 +33,35 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private ApproximateClock clock = ApproximateClock.instance();
 
 	private static LocalStoreManager instance;
-	//private LocalEvictQueue leq;
-	private LocalStoreCache lc;
 
-	//private final Object syncWaitMutex;
+	//private LocalStoreCache lc;
+	//private final LocalStoreDB storedFilesMap;        // Contains the paths and IDs of the blocks that are currently stored locally
+	//private final Semaphore storePermits; // To limit the number of files in the local storage
+	private final LSDevice[] devices;
+
+	private class LSDevice {
+		private final LocalStoreDB storedFilesMap;
+		private final Semaphore storePermits;
+		private final LocalStoreCache lscache;
+		private final int id;
+		private final int maxBlocks;
+
+		private LSDevice(int id, int maxBlocks) {
+			this.id = id;
+			this.maxBlocks = maxBlocks;
+			storedFilesMap = new LocalStoreDB(id, maxBlocks);
+			storePermits = new Semaphore(maxBlocks);
+			lscache = new LocalStoreCache(id, maxBlocks, storedFilesMap, storePermits);
+
+			int inLocalSystem = storedFilesMap.size();
+			assert inLocalSystem <= maxBlocks;
+			try {
+				storePermits.acquire(inLocalSystem);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+	}
 
 	public synchronized static LocalStoreManager instance() {
 		if (instance == null) {
@@ -51,13 +74,15 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private LocalStoreManager() {
 		//workers = Executors.newFixedThreadPool(numWorkers);
 		globalProc = GlobalStoreManager.instance();
-		
-		storedFilesMap = new LocalStoreDB(maxBlocks);
-		storePermits = new Semaphore(maxBlocks);
-		
 		fileLocks = FileLocks.instance();
 
-		//leq = new LocalEvictQueue("LocalEvictQueue", storedFilesMap, storePermits);
+		devices = new LSDevice[numDevices];
+		for (int i = 0; i< devices.length; i++) {
+			devices[i] = new LSDevice(i, maxBlocks);
+		}
+
+		/*storedFilesMap = new LocalStoreDB(maxBlocks);
+		storePermits = new Semaphore(maxBlocks);
 		lc = new LocalStoreCache(maxBlocks, storedFilesMap, storePermits);
 		
 		int inLocalSystem = storedFilesMap.size();
@@ -66,7 +91,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			storePermits.acquire(inLocalSystem);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
-		}
+		}*/
 
 		//syncWaitMutex = new Object();
 
@@ -355,7 +380,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		storePermits.release();*/
 		//leq.evict(id);
-		lc.evict(id);
+
+		LSDevice dev = devices[Math.abs(id.perBlockTypeKey()) % numDevices];
+		dev.lscache.evict(id);
+		//lc.evict(id);
 	}
 	
 	/**
@@ -365,14 +393,16 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * The function assumes that the caller prevents multiple writers from creating the same new block.
 	 */
 	public void createBlock(BlockID blockID) throws IOException, OutOfDiskSpaceException {
-		if (storePermits.availablePermits() <= 64) { //This number should be more than the number of worker threads.
-			lc.makeSpace();
+		LSDevice dev = devices[Math.abs(blockID.perBlockTypeKey()) % numDevices];
+
+		if (dev.storePermits.availablePermits() <= 64) { //This number should be more than the number of worker threads.
+			dev.lscache.makeSpace();
 		}
 
-		if (!storePermits.tryAcquire()) { // This provides an upper limit on the number of blocks that can be created locally.
+		if (!dev.storePermits.tryAcquire()) { // This provides an upper limit on the number of blocks that can be created locally.
 			throw new OutOfDiskSpaceException (
-					String.format("[LSM] Local store is full. Available store permits = %d, local store map size = %d, configured capacity = %d, time=%s\n",
-							storePermits.availablePermits(), storedFilesMap.size(), Configuration.instance().maxBlocksPerLocalDevice, Commons.currentTime()));
+					String.format("[LSM] Local store %d is full. Available store permits = %d, local store map size = %d, configured capacity = %d, time=%s\n",
+							dev.id, dev.storePermits.availablePermits(), dev.storedFilesMap.size(), dev.maxBlocks, Commons.currentTime()));
 		}
 		File file = new File(blockID.localPath());
 		File parent = file.getParentFile();
@@ -381,11 +411,11 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 		
 		if (!file.createNewFile()) {
-			storePermits.release();
+			dev.storePermits.release();
 			throw new IOException("Unable to create the file: " + blockID.localPath());
 		}
 		
-		storedFilesMap.put(blockID);
+		dev.storedFilesMap.put(blockID);
 	}
 	
 	/**
@@ -400,15 +430,17 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * from the local store.
 	 */
 	public boolean load(Block block) throws FileNotExistException, IOException {
+		LSDevice dev = devices[Math.abs(block.id().perBlockTypeKey()) % numDevices];
 		BlockID id = block.id();
-		System.out.println("[LSM] Load block: " + id);
-		
-		if (!storedFilesMap.exists(id)) {
+		System.out.println("[LSM] Load block: " + id + " from device " + dev.id);
+
+
+		if (!dev.storedFilesMap.exists(id)) {
 			System.out.println("[LSM] Block is not available locally: " + id);
 			return false;
 		}
 
-		lc.touch(id);
+		dev.lscache.touch(id);
 		
 		int loaded = block.loadFromFile();
 
@@ -425,6 +457,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			return;
 		
 		working = false;
+
+		System.out.println("[LSM] Saving read/write rates before checking for any remaining jobs.");
+		saveDataRates(writeRateLog, true);
+		saveDataRates(new AccumulatorMap[]{readRateLog}, false);
 		
 		for (int i=0; i<numWorkers; i++) {
 			try {
@@ -433,10 +469,6 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				e.printStackTrace();
 			}
 		}
-
-		System.out.println("[LSM] Stopped workers, saving read/write rates before checking for any remaining jobs.");
-		saveDataRates(writeRateLog, true);
-		saveDataRates(new AccumulatorMap[]{readRateLog}, false);
 
 		System.out.printf("[LSM] LocalStore start time ..., %s\n", new SimpleDateFormat("HH:mm:ss.SSS").format(new Date(START_TIME)));
 
@@ -458,8 +490,10 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}
 		
 		globalProc.shutdown();
-		
-		storedFilesMap.shutdown();
+
+		for (LSDevice dev : devices) {
+			dev.storedFilesMap.shutdown();
+		}
 		
 		for (int i=0; i<fileChannels.length; i++) {
 			fileChannels[i].shutdown();
@@ -471,8 +505,9 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	public boolean exists(BlockID id) { // FIXME: This function needs to be synchronized with the createNewBlock and evictFromLocal functions
 		if (!working)
 			return false;
-		
-		return storedFilesMap.exists(id);
+
+		LSDevice dev = devices[Math.abs(id.perBlockTypeKey()) % numDevices];
+		return dev.storedFilesMap.exists(id);
 	}
 
 	/*private void notifyLocalSynced() {
@@ -488,15 +523,30 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	}*/
 
 	public int size() {
-		return storedFilesMap.size();
+		int cnt = 0;
+		for (LSDevice dev : devices) {
+			cnt += dev.storedFilesMap.size();
+		}
+		return cnt;
+		//return storedFilesMap.size();
 	}
 
 	public int permits() {
-		return storePermits.availablePermits();
+		//return storePermits.availablePermits();
+		int cnt = 0;
+		for (LSDevice dev : devices) {
+			cnt += dev.storePermits.availablePermits();
+		}
+		return cnt;
 	}
 
 	public int canEvict() {
-		return lc.size();
+		int cnt = 0;
+		for (LSDevice dev : devices) {
+			cnt += dev.lscache.size();
+		}
+		return cnt;
+		//return lc.size();
 	}
 
 	public synchronized void saveDataRates(AccumulatorMap[] accms, boolean isWritesMap) {

@@ -102,11 +102,9 @@ def stream_scale_results_bars(conf, results, fig_params, figPrefix="", title="",
     fgp = {}
     fgp.update(fig_params)
     fgp.update({
-        'figsize':      (6, 2.5),
-        'dimensions':   (0.096, 0.975, 0.85, 0.19),
-        'legend_cols':  4,
-        'legend_position':  (0.5, 1.29),
-        'markers': False,
+        'dimensions':   (0.19, 0.975, 0.85, 0.19),
+        'legend_cols':  2,
+        'legend_position':  (0.5, 1.2),
     })
 
     res_bundle = []
@@ -149,7 +147,7 @@ def stream_scale_results_bars(conf, results, fig_params, figPrefix="", title="",
     print(title)
     pp.pprint(res_bundle)
 
-    plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params, yMax=yMax, xMax=xMax, show_improvement=False)
+    plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fgp, yMax=yMax, xMax=xMax, show_improvement=False)
 
     if save_fig:
         plt.savefig("%s/%s.pdf" % (conf["fig_dir"], figPrefix))

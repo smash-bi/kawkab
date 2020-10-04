@@ -162,6 +162,8 @@ public class GlobalStoreManager {
 			//int ms = storeLog.end();
 			//System.out.printf("Upload (ms): %d, qlen=%d\n", ms, reqs.size());
 		}
+
+		saveDataRates(storeBackends, true);
 		
 		// Perform the remaining tasks in the queue
 		Task task = null;
@@ -176,8 +178,6 @@ public class GlobalStoreManager {
 		for (int i=0; i<storeBackends.length; i++) {
 			storeBackends[i].shutdown();
 		}
-
-		saveDataRates(storeBackends, true);
 	}
 	
 	private void storeToGlobal(Task task, GlobalBackend[] backends, ByteBuffer buffer) throws KawkabException {
@@ -235,9 +235,11 @@ public class GlobalStoreManager {
 	
 	public void shutdown() {
 		System.out.println("Closing global store manager");
-		
+
 		working = false;
-		
+
+		saveDataRates(loadBackends, false);
+
 		if (workers == null)
 			return;
 		
@@ -275,8 +277,6 @@ public class GlobalStoreManager {
 		/*for (int i=0; i<storeQs.length; i++) {
 			assert storeQs[i].size() == 0;
 		}*/
-
-		saveDataRates(loadBackends, false);
 
 		if (storeQ.size() != 0) {
 			System.out.println("[GSM] Error: storeQ is not empty: " + storeQ.size());

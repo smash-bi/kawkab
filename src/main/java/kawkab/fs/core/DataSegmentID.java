@@ -67,9 +67,9 @@ public final class DataSegmentID extends BlockID {
 						//which is 262144. This may slow down the underlying filesystem.
 		
 		assert wordSize * levels < uuidLen-1;
-		
+
 		StringBuilder path = new StringBuilder(blocksPath.length()+uuidLen+levels+4); //4 for extra head-room
-		path.append("fs").append(perBlockTypeKey() % numDevices).append(File.separator).append(blocksPath).append(File.separator);
+		path.append("fs").append(Math.abs(perBlockTypeKey()) % numDevices).append(File.separator).append(blocksPath).append(File.separator);
 		
 		int rootLen = uuidLen - levels*wordSize; // The root folder can have more characters than wordSize
 		path.append(uuid, 0, rootLen);

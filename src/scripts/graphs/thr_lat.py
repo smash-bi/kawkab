@@ -51,7 +51,7 @@ def thr_lat_iat(conf, results, metric, fig_params, figPrefix="", title="", barGr
 
                 [print('%s, %.2f, %.2f'%(x, y, z)) for x,y,z in zip(xVals, yVals, yci)]
         xlabel = "Records per second (x$10^6$)"
-        ylabel = "%s latency (ms)" % (lat_label[latType])
+        ylabel = "%s request completion time (ms)" % (lat_label[latType])
 
         print(title)
         print(lat_label[latType])

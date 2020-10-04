@@ -34,8 +34,8 @@ def get_config():
     # The tuples and the number of machines in each tuple can be larger than
     # the super-leaves configuration that will be used in the experiment.
     conf['backend_indexes'] =   [
-                                    #('red',     [1,2,3,8,14]),
-                                    ('red',     [1,2,3]),
+                                    ('red',     [1,2,3,8,14]),
+                                    #('red',     [1,2,3]),
                                 ]
     conf['server_indexes'] =   [
                                     ('red',     [15]),
@@ -44,8 +44,8 @@ def get_config():
 
     conf['client_indexes'] =   [
                                     ('red',     [
-                                                4,5,6,7,8,9,10,11,
-                                                4,5,6,7,8,9,10,11,
+                                                4,5,6,7,9,10,11,12,
+                                                4,5,6,7,9,10,11,12,
                                                 4,5,6,7,
                                                  ]),
                                     # ('red',     [4,5,6,7,7,
@@ -80,27 +80,27 @@ def get_config():
     conf['client_base_port'] = 43567
 
     conf['test_type'] = ['rw']
-    conf['test_prefix' ] = ['kw32']
+    conf['test_prefix' ] = ['kw36']
     conf['record_size'] = [16]
     conf['batch_writeratio_rps'] = [ # list of tuples (batch_size, write_ratio, [reqs_per_second list])
-                (500, 100, [9, 10.25, 10.5, 10.75, 11, 8, 10, 11.25, 11.5, 11.75]),
+                #(500, 100, [9, 10.25, 10.5, 10.75, 11, 8, 10, 11.25, 11.5, 11.75]),
                 #(500, 90, [11.75, 11.25, 11, 10.5, 9]),
                 #(500, 50, [13, 14, 15, 16, 17, 18, 19, 20, 21, 22]),
                 #(500, 10, [22, 24, 26, 28, 28.5, 33, 33.5, 34, 34.5]),
-                #(500, 100, [3]),
+                (500, 100, [3]),
     ]
     conf['clients_per_machine'] = 10
     conf['files_per_client'] = [1]#[2, 4, 12, 24, 36, 28]
 
-    conf['test_duration'] = 60
-    conf['warmup_sec'] = 90
+    conf['test_duration'] = 7200
+    conf['warmup_sec'] = 0#90
     conf['init_wait_msec'] = 0
 
-    conf['test_runs'] = [1,2,3,4,5]
+    conf['test_runs'] = [1]#[1,2,3,4,5]
 
-    conf['high_mps'] = 0#9
-    conf['burst_dur_sec'] = 0#1
-    conf['burst_prob_perc'] = 0#20
+    conf['high_mps'] = 10
+    conf['burst_dur_sec'] = 1#1
+    conf['burst_prob_perc'] = 20
     conf['is_synchronous'] = "false"
     conf['read_recent'] = "true"
 
