@@ -85,7 +85,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (recordSize > 1)
 			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, indexQ);
 
-		idxLog = new LatHistogram(TimeUnit.MILLISECONDS, "Index search", 100, 1000);
+		idxLog = new LatHistogram(TimeUnit.MICROSECONDS, "Index search", 100, 10000);
 		//loadLog = new Accumulator(500);
 		//fileOpenTime = System.currentTimeMillis();
 		//tl = new LatHistogram(TimeUnit.MILLISECONDS, "segLoadLog", 100, 1000);

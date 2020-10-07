@@ -32,7 +32,7 @@ public class LatHistogram {
 		this.samplePercent = samplePercent;
 		stats = new Accumulator(numBuckets);
 
-		int numRands = 100000;
+		int numRands = 5000;
 		rand = new int[numRands];
 		Random r = new Random();
 		for(int i=0; i<numRands; i++) {

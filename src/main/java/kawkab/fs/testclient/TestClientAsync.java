@@ -179,6 +179,9 @@ public class TestClientAsync {
 		ApproximateClock apClock = ApproximateClock.instance();
 		long startT = apClock.currentTime();*/
 
+		ApproximateClock apClock = ApproximateClock.instance();
+		long startTime = apClock.currentTime();
+		long lastTime = startTime;
 		BurstGenerator bgen = new BurstGenerator(lowMPS, highMPS, burstProb, burstDurSec, totalClients, clientsPerMachine, batchSize);
 		while(work) {
 			/*elapsedSec = (int)((apClock.currentTime()-startT)/1000.0);
@@ -204,6 +207,11 @@ public class TestClientAsync {
 			}
 
 			rq.add(clock.instant());
+			long elapsed = apClock.currentTime() - startTime;
+			if (elapsed > lastTime) {
+				lastTime = elapsed;
+				System.out.println("Time: " + new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
+			}
 		}
 
 		//To let anyone finish if waiting to receive an item
@@ -255,8 +263,9 @@ public class TestClientAsync {
 						  double repRateMPS, boolean isSynchronous, boolean isBursty, BurstGenerator bg,
 						  boolean readRecent)
 			throws OutOfMemoryException, KawkabException {
-		AccumulatorMap wLats = new AccumulatorMap(1000000);
-		AccumulatorMap rLats = new AccumulatorMap(1000000);
+		AccumulatorMap wLats = new AccumulatorMap(1000);
+		AccumulatorMap rLats = new AccumulatorMap(1000);
+
 		Accumulator rOpsThr = new Accumulator(durSec);
 		Accumulator wTputs = new Accumulator(durSec);
 		Accumulator rRps = new Accumulator(durSec);
@@ -358,6 +367,9 @@ public class TestClientAsync {
 			} catch (InterruptedException e) {
 				//e.printStackTrace();
 				break;
+			} catch (OutOfMemoryException e) {
+				System.out.print("o");
+				continue;
 			}
 		}
 
@@ -387,6 +399,20 @@ public class TestClientAsync {
 	private void sendAppendRequest(String[] fnames, Record[] records, long[] timestamps) throws KawkabException {
 		for (int i=0; i<records.length; i++) {
 			int iFile = fileRand.nextInt(files.length);
+			fnames[i] = files[iFile];
+			records[i].timestamp(++timestamps[iFile]);
+
+			//if (iFile == 0 && cid == 0)
+			//	System.out.printf("cid=%d, file=%s, TS=%d\n", cid, fnames[i], records[i].timestamp());
+		}
+
+		//client.appendRecords(fnames, records);
+		client.appendRecordsUnpacked(fnames, records);
+	}
+
+	private void sendAppendRequestSameFile(String[] fnames, Record[] records, long[] timestamps) throws KawkabException {
+		int iFile = fileRand.nextInt(files.length);
+		for (int i=0; i<records.length; i++) {
 			fnames[i] = files[iFile];
 			records[i].timestamp(++timestamps[iFile]);
 

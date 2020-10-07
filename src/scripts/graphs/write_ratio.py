@@ -31,25 +31,27 @@ def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=
     })
 
 
-    for latType in [ "lat50", "lat95"]: #["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
-        res_bundle = []
-        for metric in conf['metric']:
-            metric_name = metric['name']
-            metric_points = metric['points']
-            typ = metric['type']
+    for metric in conf['metric']:
+        metric_name = metric['name']
+        metric_points = metric['points']
+        mlabel = metric['label']
+        typ = metric['type']
+        for latType in ["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
+            res_bundle = []
             for point in metric_points:
                 xVals = []
                 yVals = []
                 yci = []
                 metric_point = point['val']
                 prefix = point['prefix']
+                res_file = point['res_file']
                 if 'num_clients' in point: clients = point['num_clients']
                 for iat in point['iat']:
                     params = {"test_type": typ, 'test_prefix':prefix, metric_name: metric_point, 'iat':iat, 'num_clients':clients}
                     test_id = get_test_id(conf, params)
                     print(test_id)
-                    x, _ = results[test_id]['agg_data']["rpsThr"]
-                    y, y_ci = results[test_id]['agg_data'][latType]
+                    x, _ = results[test_id+res_file]['agg_data']["rpsThr"]
+                    y, y_ci = results[test_id+res_file]['agg_data'][latType]
                     xVals.append(x)
                     yVals.append(y)
                     yci.append(y_ci)
@@ -58,7 +60,9 @@ def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=
                 yVals = [val / 1000.0 for val in yVals]
                 yci = [val/1000.0 for val in yci]
 
-                label = "%d%%\nwrites" % (metric_point)
+                label = "%d%% %s" % (metric_point,mlabel)
+                if mlabel is 'reads':
+                    label = "%d%% %s" % (100-metric_point,mlabel)
 
                 N = len(yVals)
                 res = {}
@@ -68,16 +72,16 @@ def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=
                 res["label"] = label
                 res_bundle.append(res)
 
-        xlabel = "Records per second (x$10^6$)"
-        ylabel = "%s request\ncompletion time (ms)" % (conf['labels'][latType])
+            xlabel = "Records per second (x$10^6$)"
+            ylabel = "%s request\ncompletion time (ms)" % (conf['labels'][latType])
 
-        print(title)
-        print(conf['labels'][latType])
-        pp.pprint(res_bundle)
+            print(title)
+            print(conf['labels'][latType])
+            pp.pprint(res_bundle)
 
-        plotTimeSeries(res_bundle, title, xlabel, ylabel, show_legend=True, fp=fgp, yMax=yMax, xMax=xMax, logy=logY, yMin=0, xMin=-0.001,
-                       colors=colors, markers=markers, lspec=lines)
+            plotTimeSeries(res_bundle, title, xlabel, ylabel, show_legend=True, fp=fgp, yMax=yMax, xMax=xMax, logy=logY, yMin=0, xMin=-0.001,
+                           colors=colors, markers=markers, lspec=lines)
 
-        if save_fig:
-            plt.savefig("%s/%s-%s.pdf" % (conf["fig_dir"], figPrefix,latType))
-            plt.savefig("%s/%s-%s.eps" % (conf["fig_dir"], figPrefix,latType))
+            if save_fig:
+                plt.savefig("%s/%s-%s.pdf" % (conf["fig_dir"], figPrefix,latType))
+                plt.savefig("%s/%s-%s.eps" % (conf["fig_dir"], figPrefix,latType))

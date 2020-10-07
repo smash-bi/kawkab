@@ -285,10 +285,10 @@ def run_batch(conf):
                                 #---------------------------------------------------
 
                                 cleanup(conf)
-                                stopwatch(3)
+                                #stopwatch(3)
                                 prepare_folders(conf)
                                 start_backend(conf)
-                                stopwatch(2)
+                                stopwatch(3)
                                 start_servers(conf)
                                 start_clients(conf)
                                 stopwatch(3)

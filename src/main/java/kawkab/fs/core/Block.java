@@ -171,7 +171,7 @@ public abstract class Block extends AbstractTransferItem {
 	public int decAndGetLocalDirty(int delta) {
 		int cnt = localDirtyCnt.addAndGet(-delta);
 
-		assert cnt >= 0;
+		assert cnt >= 0 : String.format("[B] %s dirty count is negative: cnt=%d, delta=%d", id, cnt, -delta);
 
 		return cnt;
 

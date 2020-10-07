@@ -56,8 +56,8 @@ public final class S3Backend implements GlobalBackend{
 		clock = ApproximateClock.instance();
 		startTime = clock.currentTime();
 
-		dlRateLog = new AccumulatorMap(10000); //Number of seconds we will run
-		ulRateLog = new AccumulatorMap(10000);// FIXME: Use AccumulatorMap instead of fixed length Accumulator
+		dlRateLog = new AccumulatorMap(1000); //Number of seconds we will run
+		ulRateLog = new AccumulatorMap(1000);
 
 		//Configuration conf = Configuration.instance();
 		//buffer = ByteBuffer.allocateDirect((Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes)));

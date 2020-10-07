@@ -172,6 +172,7 @@ public class GlobalStoreManager {
 				storeToGlobal(task, storeBackends, buffer);
 			} catch (KawkabException e) {
 				e.printStackTrace();
+				break;
 			}
 		}
 
@@ -222,6 +223,7 @@ public class GlobalStoreManager {
 		}*/
 
 		int backend = Math.abs(task.blockID.perBlockTypeKey()) % backends.length;
+
 		backends[backend].storeToGlobal(task.blockID, buffer);
 
 		//backend.storeToGlobal(task.blockID, buffer);

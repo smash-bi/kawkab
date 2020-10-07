@@ -264,7 +264,7 @@ def plotTimeSeries(data, title, xlabel, ylabel, fp=fp_default, annotations=None,
             plt.plot(x, y, label=d["label"], color=next(cgen), dashes=next(lgen), lw=fp["line_width"])
 
         if "conf_ival" in d:
-            plt.errorbar(x, y, yerr=d["conf_ival"], linestyle="None", marker="None", elinewidth=1, color="#5c5c5c", capsize=3)
+            plt.errorbar(x, y, yerr=d["conf_ival"], linestyle="None", marker="None", elinewidth=1, color="#9e9e9e", capsize=3)
         if annotations != None:
             for idx in range(len(annotations)):
                 ax.annotate(annotations[idx], xy=(x[idx], y[idx]), xytext=(x[idx] + 0.1, y[idx] + 0.1))

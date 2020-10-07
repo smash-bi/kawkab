@@ -16,23 +16,24 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.Lock;
 
 public final class LocalStoreManager implements SyncCompleteListener {
-	private GlobalStoreManager globalProc;
-	
 	private static final int maxBlocks = Configuration.instance().maxBlocksPerLocalDevice; // Number of blocks that can be created locally
 	private static final int numWorkers = Configuration.instance().numLocalDevices; // Number of worker threads and number of reqsQs
 	private static final int numDevices = Configuration.instance().numLocalDevices;
+
+	private GlobalStoreManager globalProc;
+	private static LocalStoreManager instance;
 	
 	private TransferQueue<Block> storeQs[]; // Buffer to queue block store requests
 	private Thread[] workers;                   // Pool of worker threads that store blocks locally
 	private FileChannels[] fileChannels;
 	private volatile boolean working = true;
 	private final FileLocks fileLocks;
+
 	private AccumulatorMap readRateLog;
 	private AccumulatorMap[] writeRateLog;
-	private final static long START_TIME = System.currentTimeMillis();
-	private ApproximateClock clock = ApproximateClock.instance();
 
-	private static LocalStoreManager instance;
+	private ApproximateClock clock = ApproximateClock.instance();
+	private final static long START_TIME = System.currentTimeMillis();
 
 	//private LocalStoreCache lc;
 	//private final LocalStoreDB storedFilesMap;        // Contains the paths and IDs of the blocks that are currently stored locally
@@ -252,9 +253,12 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 				assert channel.isOpen();
 
-				syncedCnt = block.storeTo(channel);
+				syncedCnt += block.storeTo(channel);
 
-				dirtyCnt = block.decAndGetLocalDirty(dirtyCnt);
+				dirtyCnt = block.decAndGetLocalDirty(dirtyCnt); //DirtyCnt is counting the number of updates, not the number of dirty bytes.
+
+				if (bid.type() != BlockID.BlockType.DATA_SEGMENT)
+					break;
 			}
 
 			//channel.force(true);

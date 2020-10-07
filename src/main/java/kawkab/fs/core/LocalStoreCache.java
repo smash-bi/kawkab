@@ -1,6 +1,7 @@
 package kawkab.fs.core;
 
 import com.google.common.base.Stopwatch;
+import kawkab.fs.utils.AccumulatorMap;
 import kawkab.fs.utils.LatHistogram;
 
 import java.io.File;
@@ -19,6 +20,10 @@ public class LocalStoreCache {
 	private int cacheSize;
 	private int toEvict;
 	private int id;
+	private LatHistogram evictLatLog;
+	private AccumulatorMap evictCountLog;
+	private final static long START_TIME = System.currentTimeMillis();
+	private final static ApproximateClock clock = ApproximateClock.instance();
 
 	public LocalStoreCache(int id, int cacheSize, LocalStoreDB lsd, Semaphore permits) {
 		this.id = id;
@@ -31,10 +36,13 @@ public class LocalStoreCache {
 		highMark = (int)(0.8*cacheSize);
 		toEvict = (int)(0.005*cacheSize);
 
+		evictLatLog = new LatHistogram(TimeUnit.MICROSECONDS, "Local store cache", 100, 5000);
+		evictCountLog = new AccumulatorMap(100);
 		runEvictor();
 	}
 
 	public void evict(BlockID id) {
+
 		synchronized (cache) {
 			/*if (cache.size() == cacheSize) {
 				deleteBlock(id);
@@ -56,6 +64,7 @@ public class LocalStoreCache {
 	}
 
 	private void deleteBlock(BlockID id) {
+		evictLatLog.start();
 		if (lsd.removeEntry(id) == null) {
 			return;
 		}
@@ -66,6 +75,7 @@ public class LocalStoreCache {
 		}
 
 		storePermits.release();
+		evictLatLog.end(1);
 	}
 
 	public void makeSpace() {

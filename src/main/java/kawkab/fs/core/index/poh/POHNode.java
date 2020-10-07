@@ -141,7 +141,7 @@ public class POHNode extends Block {
 			POHEntry last = entries[entryIdx-1];
 
 			if (minTS < last.maxTS())
-				throw new IllegalArgumentException("Current minTS must be greater or equal to last entry's maxTS; minTS="
+				throw new IllegalArgumentException("Invalid timestamps: Current minTS must be greater or equal to last entry's maxTS; minTS="
 						+ minTS + ", last maxTS=" + last.maxTS());
 
 			if (segmentInFile <= last.segmentInFile()) {

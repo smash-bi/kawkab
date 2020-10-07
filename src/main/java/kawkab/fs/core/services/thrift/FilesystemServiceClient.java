@@ -171,7 +171,7 @@ public class FilesystemServiceClient {
 	public int appendRecords(ByteBuffer buffer, boolean isPacked) throws OutOfMemoryException, KawkabException {
 		int tries = 0;
 		int base = 1000;
-		int maxTries = 100;
+		int maxTries = 10;
 		while(++tries < maxTries) {
 			try {
 				if (isPacked) {
@@ -207,6 +207,9 @@ public class FilesystemServiceClient {
 			} catch (TException e) {
 				if (e.getMessage().contains("Unable to create the file")) {
 					System.out.println("*");
+					continue;
+				} else if (e.getMessage().contains("Invalid timestamps")) {
+					System.out.println("ILA");
 					continue;
 				}
 				throw new KawkabException(e);

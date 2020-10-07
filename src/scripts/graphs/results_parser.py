@@ -260,6 +260,9 @@ def load_results(conf):
                                         all_results[test_id] = {'runs_data': run_data,
                                                             'agg_data': summarize_data(run_data),
                                                             }
+                                        all_results[test_id+res_file] = {'runs_data': run_data,
+                                                                'agg_data': summarize_data(run_data),
+                                                                }
     return all_results
 
 

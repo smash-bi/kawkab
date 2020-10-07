@@ -16,6 +16,8 @@ public class AccumulatorMap {
     private long totalCnt;
     private int maxValue;
     private int minValue = Integer.MAX_VALUE;
+    private Count lastCounter;
+    private int lastKey;
 
     public AccumulatorMap() {
         this(1000);
@@ -94,7 +96,12 @@ public class AccumulatorMap {
         assert value >= 0 : "Bucket number is negative: " + count;
         assert Long.MAX_VALUE - totalCnt >= count : "Total count overflow" ;
 
-        Count c = buckets.get(value);
+        Count c = lastCounter;
+        if (lastKey != value || lastCounter == null) {
+            c = buckets.get(value);
+            lastKey = value;
+        }
+
         if (c == null) {
             c = new Count();
             buckets.put(value, c);

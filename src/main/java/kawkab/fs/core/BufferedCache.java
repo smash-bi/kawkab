@@ -68,11 +68,12 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 
 		//FIXME: The size of cache is not what is reflected from the configuration
 		MAX_BLOCKS_IN_CACHE = numSegmentsInCache; // + conf.inodeBlocksPerMachine + conf.ibmapsPerMachine;
+		//MAX_BLOCKS_IN_CACHE = (int) (numSegmentsInCache * 0.98); //FIXME: IT should be equal to numSegmentsInCache
 
 		acqLog = new LatHistogram(TimeUnit.NANOSECONDS, "Cache acquire", 1, 10000);
 		relLog = new LatHistogram(TimeUnit.NANOSECONDS, "Cache release", 1, 10000);
 
-		highMark = (int) (numSegmentsInCache * 0.99);
+		highMark = (int) (numSegmentsInCache * 0.98);
 		midMark = (int) (numSegmentsInCache * 0.95);
 		lowMark = (int) (numSegmentsInCache * 0.90);
 
@@ -166,11 +167,12 @@ public class BufferedCache extends Cache implements BlockEvictionListener {
 			CachedItem cachedItem = cache.get(blockID); // Try acquiring the block from the memory
 
 			if (cachedItem == null) { // If the block is not cached
+				//if (cache.size() == MAX_BLOCKS_IN_CACHE-1) {
 				if (cache.size() == MAX_BLOCKS_IN_CACHE-1) {
-					int removed = cache.bulkRemove(1);
-					//waitUntilSynced();
+					throw new OutOfMemoryException("Cache is full. Current cache size: " + cache.size());
+					/*int removed = cache.bulkRemove(1);
 					if (removed == 0)
-						throw new OutOfMemoryException("Cache is full. Current cache size: " + cache.size());
+						throw new OutOfMemoryException("Cache is full. Current cache size: " + cache.size());*/
 				}
 
 				missed++;

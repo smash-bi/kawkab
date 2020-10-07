@@ -14,17 +14,19 @@ def batch_size_lat_thr(conf, results, fig_params, figPrefix="", title="", xMax=N
         'maxLat': 'Max'
     }
 
-    colors = ["#2b8cbe", "#2b8cbe", "#2b8cbe", "#2b8cbe",
-              "#cc4c02", "#cc4c02", "#cc4c02", "#cc4c02",
+    colors = ["#2b8cbe", "#2b8cbe", "#2b8cbe", #"#2b8cbe",
+              "#cc4c02", "#cc4c02", "#cc4c02", #"#cc4c02",
               ]
 
-    markers = ["s", "o", "^", "v", "o", "s", "^", "v"]
+    markers = ["s", "o", "^", #"v",
+               "o", "s", "^", #"v"
+               ]
 
     lines = [
         [5, 2, 5, 2],  # dash dash
         [2, 2, 2, 2],  # dot dot
         [5, 1.5, 1.5, 1.5],
-        [10, 0.00001],  # solid
+        #[10, 0.00001],  # solid
         #[6, 4, 2, 4, 2, 4],  # dash dot dot
         #[7, 5, 7, 5],  # dash dash
     ]
@@ -36,10 +38,10 @@ def batch_size_lat_thr(conf, results, fig_params, figPrefix="", title="", xMax=N
         'dimensions':   (0.096, 0.975, 0.85, 0.19),
         'legend_cols':  4,
         'legend_position':  (0.5, 1.29),
-        'markers': False,
+        'markers': True,
     })
 
-    for latType in ["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
+    for latType in ["lat50", "lat95"]:# ["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
         res_bundle = []
         for metric in conf['metric']:
             metric_name = metric['name']
@@ -91,6 +93,19 @@ def batch_size_lat_thr(conf, results, fig_params, figPrefix="", title="", xMax=N
             plt.savefig("%s/%s-%s.eps" % (conf["fig_dir"], figPrefix,latType))
 
 def batch_size_bars(conf, results, fig_params, figPrefix="", title="", barGraph=True, xMax=None, yMax=None, save_fig=False):
+    fgp = {}
+    fgp.update(fig_params)
+    fgp.update({
+        'dimensions':   (0.19, 0.975, 0.85, 0.19),
+        'legend_cols':  2,
+        'legend_position':  (0.5, 1.2),
+    })
+
+    colors = ["#2b8cbe", "#2b8cbe", "#2b8cbe", #"#2b8cbe",
+              "#cc4c02", "#cc4c02", "#cc4c02", #"#cc4c02",
+              ]
+
+
     res_bundle = []
     for metric in conf['metric']:
         metric_name = metric['name']
@@ -127,33 +142,41 @@ def batch_size_bars(conf, results, fig_params, figPrefix="", title="", barGraph=
         res["label"] = label
         res_bundle.append(res)
 
-    xlabel = "Batch Size"
+    xlabel = "Batch size"
     ylabel = "Records per second(x$10^6$)"
 
     print(title)
     pp.pprint(res_bundle)
 
     if barGraph:
-        plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params, yMax=yMax, xMax=xMax)
+        plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fgp, yMax=yMax, xMax=xMax)
     else:
-        plotTimeSeries(res_bundle, title, xlabel, ylabel, show_legend=True, fp=fig_params, xMin=0.01, yMax=yMax, xMax=xMax)
+        plotTimeSeries(res_bundle, title, xlabel, ylabel, show_legend=True, fp=fgp, xMin=0.01, yMax=yMax, xMax=xMax)
 
     if save_fig:
         plt.savefig("%s/%s.pdf" % (conf["fig_dir"], figPrefix))
         plt.savefig("%s/%s.eps" % (conf["fig_dir"], figPrefix))
 
 def batch_size_results_lines(conf, results, fig_params, figPrefix="", title="", xMax=None, yMax=None, logY=False, save_fig=False, show_ci=True):
-    colors = ["#2b8cbe", "#2b8cbe", "#2b8cbe", "#2b8cbe",
-              "#cc4c02", "#cc4c02", "#cc4c02", "#cc4c02",
+    colors = ["#2b8cbe", "#2b8cbe", "#2b8cbe", #"#2b8cbe",
+              "#cc4c02", "#cc4c02", "#cc4c02", #"#cc4c02",
               ]
 
-    markers = ["s", "o", "^", "v", "o", "s", "^", "v"]
+    markers = ["s", "o", "^", #"v",
+               "o", "s", "^", #"v"
+               ]
 
     lines = [
         [5, 2, 5, 2],  # dash dash
         [2, 2, 2, 2],  # dot dot
-        [5, 1.5, 1.5, 1.5],
+        #[5, 1.5, 1.5, 1.5],
         [10, 0.00001],  # solid
+        [5, 2, 5, 2],  # dash dash
+        [2, 2, 2, 2],  # dot dot
+        #[5, 1.5, 1.5, 1.5],
+        [10, 0.00001],  # solid
+
+
         #[6, 4, 2, 4, 2, 4],  # dash dot dot
         #[7, 5, 7, 5],  # dash dash
     ]
@@ -163,12 +186,12 @@ def batch_size_results_lines(conf, results, fig_params, figPrefix="", title="", 
     fgp.update({
         'figsize':      (6, 2.5),
         'dimensions':   (0.125, 0.975, 0.85, 0.19),
-        'legend_cols':  4,
+        'legend_cols':  3,
         'legend_position':  (0.5, 1.29),
         'markers': False,
     })
 
-    for latType in [ "lat50", "lat95"]: #["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
+    for latType in ["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
         res_bundle = []
         for metric in conf['metric']:
             metric_name = metric['name']
