@@ -70,11 +70,12 @@ def start_servers(conf):
 
     hostCmds = []
     commands = []
-    for sidx, svr in enumerate(get_servers_list(conf)):
+    svrcnt = conf['test_params']['svrcnt']
+    servers = get_servers_list(conf)
+    for sidx in range(svrcnt):
+        svr = servers[sidx]
 
-        #sport = conf['server_base_port'] + sidx
-
-        sid = conf['server_ids'][sidx]
+        sid = sidx
         outFile = '%s/server_%02d.out'%(conf['servers_dir'], sid)
         gc = '-Xlog:gc*=info:file=%s/server-%d-gc.log'%(conf['out_dir'], sid) if conf['logGC'] else ""
 
@@ -104,13 +105,13 @@ def start_clients(conf):
 
     jvmflags = conf['client_jvm_params']
 
-
     p = conf['test_params']
     wtMs = 0 if 'init_wait_msec' not in conf else conf['init_wait_msec']
     mport = conf['client_base_port']
+    numServers = p['svrcnt']
 
     opts = ' mport=%d wt=%d nc=%d bs=%d rs=%d nf=%d fp=%s typ=%s tc=%d td=%d wr=%d iat=%f wmup=%d bp=%d bd=%d hmps=%f sync=%s rr=%s '%(
-        mport, wtMs, p['nc'], p['bs'], p['rs'], p['fpc'], conf['run_dir'], p['typ'], p['tc'], p['td'], p['wr'], p['iat'], p['wmup'],
+        mport, wtMs, p['nc'], p['bs'], p['rs'], p['fpc'], conf['run_dir'], p['typ'], p['tc'], p['td'], p['wr'], p['iat']*numServers, p['wmup'],
         p['bp'], p['bd'], p['hmps'], p['sync'], p['rr'])
     cp = ".:%s:%s/bin:%s"%(conf['kawkab_dir'],conf['kawkab_dir'],conf['client_classpath'])
 
@@ -120,50 +121,53 @@ def start_clients(conf):
     cpm = conf['clients_per_machine'] #clients per machine
     clCount = 0
 
-    svrIdx = -1
-    cid = 0
     mip = ""
     mid = 1
     servers = get_servers_list(conf)
-    numServers = len(servers)
-    hostCmds = []
-    for i, clm in enumerate(get_clients_list(conf)):
-        cid = i * p['nc'] + 1
-        clCount += 1
-        sip = servers[cid % numServers]
+    clmachines = get_clients_list(conf)
+    sport = conf['server_base_port']
 
-        # waitT = round((startTime - time.time())*1000)
+    for sidx in range(numServers):
+        sip = servers[sidx]
+        hostCmds = []
+        for i in range(p['clprocs']):
+            clm = clmachines[i]
+            #cid = i * p['nc'] + 1
+            cid = clCount*p['nc'] + 1
+            clCount += 1
+            #sip = servers[cid % numServers]
 
-        outFile = '%s/client_%02d.out' % (conf['clients_dir'], cid)
-        gc = '-Xlog:gc*=info:file=%s/client-%d-gc.log'%(conf['out_dir'], cid) if conf['logGC'] else ""
+            # waitT = round((startTime - time.time())*1000)
 
-        heap_size = '-Xms4g'
+            outFile = '%s/client_%02d.out' % (conf['clients_dir'], cid)
+            gc = '-Xlog:gc*=info:file=%s/client-%d-gc.log'%(conf['out_dir'], cid) if conf['logGC'] else ""
 
-        if cid == 1:
-            mid = cid
-            mip = clm
-            heap_size = '-Xms8g -Xmx25g '
+            heap_size = '-Xms4g'
 
-        sport = conf['server_base_port'] + (cid % numServers)
+            if cid == 1:
+                mid = cid
+                mip = clm
+                heap_size = '-Xms8g -Xmx25g '
 
-        cmd = ('source ~/.bash_profile; '
-               ' cd /tmp/kawkab; '
-               ' java %s %s '
-               ' %s '
-               ' -cp %s '
-               ' kawkab.fs.testclient.ClientMain %s '
-               ' cid=%d mid=%d mip=%s sip=%s sport=%d '
-               ' > %s 2>&1 & ') % (jvmflags, heap_size, gc, cp, opts,
-                                   cid, mid, mip, sip, sport,
-                                   outFile
-                                   )
+            cmd = ('source ~/.bash_profile; '
+                   ' cd /tmp/kawkab; '
+                   ' java %s %s '
+                   ' %s '
+                   ' -cp %s '
+                   ' kawkab.fs.testclient.ClientMain %s '
+                   ' cid=%d mid=%d mip=%s sip=%s sport=%d '
+                   ' > %s 2>&1 & ') % (jvmflags, heap_size, gc, cp, opts,
+                                       cid, mid, mip, sip, sport,
+                                       outFile
+                                       )
 
-        if cid == mid:
-            run_cluster_cmd(cmd, [clm], conf, True)
-            stopwatch(5)
-        else:
-            hostCmds.append({'host': clm, 'cmds': [cmd]})
-    runCommandsParallelForHost(hostCmds, conf, True)
+            if cid == mid:
+                run_cluster_cmd(cmd, [clm], conf, True)
+                stopwatch(5)
+            else:
+                hostCmds.append({'host': clm, 'cmds': [cmd]})
+                stopwatch(1)
+        runCommandsParallelForHost(hostCmds, conf, True)
 
     print ''
     elapsed = time.time() - now
@@ -194,10 +198,11 @@ def cleanup(conf):
     runCmdParallel(cmd2, "all", conf, True)
 
     cmd2 = 'rm -r %s/fs0/fs/* %s/fs1/fs/* %s/fs2/fs/* %s/fs/*'%(conf['kawkab_dir'], conf['kawkab_dir'], conf['kawkab_dir'], conf['kawkab_dir'])
-    runCmdParallel(cmd2, "servers", conf, True)
+    #runCmdParallel(cmd2, "servers", conf, True)
+    run_cluster_cmd(cmd2, "servers", conf, True)
 
     cmd2 = 'rm -r /tmp/fs0/fs/* /tmp/fs1/fs/* /tmp/fs/*'
-    runCmdParallel(cmd2, "servers", conf, True)
+    run_cluster_cmd(cmd2, "servers", conf, True)
     
     cmd = 'rm -r %s/*'%(conf['test_dir'])
     run_cmd(cmd, True)
@@ -224,8 +229,8 @@ def run_batch(conf):
     res = ''
     run_n = 0
     run_t = len(conf['test_type'])*len(conf['test_prefix'])
-    run_t *= len(conf['record_size'])
-    run_t *= len(conf['files_per_client'])
+    run_t *= len(conf['record_size'])*len(conf['num_servers'])
+    run_t *= len(conf['files_per_client'])*len(conf['num_client_procs'])
     l = 0
     for _,_, iats in conf['batch_writeratio_rps']:
         l += len(iats)
@@ -236,79 +241,87 @@ def run_batch(conf):
             for nf in conf['files_per_client']:
                 for test_prefix in conf['test_prefix']:
                     #for batch_size in conf['batch_size']:
-                    for record_size in conf['record_size']:
-                        for iat in iats:
-                            for test_run in conf['test_runs']:
-                                #clients = degree*sl_size
-                                numClients = get_total_clients(conf) * conf['clients_per_machine']
-                                conf['test_id'] = '%s-%s-nc%d-bs%d-rs%d-nf%d-wr%d-iat%g'%(
-                                                                                        test_type,
-                                                                                        test_prefix,
-                                                                                        numClients,
-                                                                                        batch_size,
-                                                                                        record_size,
-                                                                                        nf,
-                                                                                        write_ratio,
-                                                                                        iat,
-                                                                                    )
-                                conf['test_dir'] = '%s/%s/run_%d'%(conf['exp_dir'],conf['test_id'],test_run)
-                                conf['run_dir' ] = '/tmp/kawkab'
+                    for num_svrs in conf['num_servers']:
+                        for clprocs in conf['num_client_procs']:
+                            for record_size in conf['record_size']:
+                                for iat in iats:
+                                    for test_run in conf['test_runs']:
+                                        #clients = degree*sl_size
+                                        numClients = get_total_clients(conf) * conf['clients_per_machine']
+                                        numClients = numClients * num_svrs
+                                        #conf['test_id'] = '%s-%s-clp%d-svrs%d-nc%d-bs%d-rs%d-nf%d-wr%d-iat%g'%(
+                                        conf['test_id'] = '%s-%s-nc%d-bs%d-rs%d-nf%d-wr%d-iat%g'%(
+                                                                                                test_type,
+                                                                                                test_prefix,
+                                                                                                #clprocs,
+                                                                                                #num_svrs,
+                                                                                                numClients,
+                                                                                                batch_size,
+                                                                                                record_size,
+                                                                                                nf,
+                                                                                                write_ratio,
+                                                                                                iat,
+                                                                                            )
+                                        conf['test_dir'] = '%s/%s/run_%d'%(conf['exp_dir'],conf['test_id'],test_run)
+                                        conf['run_dir' ] = '/tmp/kawkab'
 
-                                conf['test_params'] = {
-                                    'typ'   : test_type,
-                                    'wr'    : write_ratio,
-                                    'fpc'    : nf,
-                                    'test_prefix'   : test_prefix,
-                                    'bs'    : batch_size,
-                                    'rs'    : record_size,
-                                    'iat'   : iat,
-                                    'test_run'   : test_run,
-                                    'nc'    : conf['clients_per_machine'],
-                                    'tc'    : numClients,
-                                    'td'    : conf['test_duration'],
-                                    'wmup'  : conf['warmup_sec'],
-                                    'hmps'  : conf['high_mps'],
-                                    'bd'    : conf['burst_dur_sec'],
-                                    'bp'    : conf['burst_prob_perc'],
-                                    'sync'  : conf['is_synchronous'],
-                                    'rr'    : conf['read_recent'],
-                                }
+                                        conf['test_params'] = {
+                                            'typ'   : test_type,
+                                            'wr'    : write_ratio,
+                                            'fpc'    : nf,
+                                            'test_prefix'   : test_prefix,
+                                            'bs'    : batch_size,
+                                            'rs'    : record_size,
+                                            'iat'   : iat,
+                                            'test_run'   : test_run,
+                                            'nc'    : conf['clients_per_machine'],
+                                            'tc'    : numClients,
+                                            'td'    : conf['test_duration'],
+                                            'wmup'  : conf['warmup_sec'],
+                                            'hmps'  : conf['high_mps'],
+                                            'bd'    : conf['burst_dur_sec'],
+                                            'bp'    : conf['burst_prob_perc'],
+                                            'sync'  : conf['is_synchronous'],
+                                            'rr'    : conf['read_recent'],
+                                            'svrcnt': num_svrs,
+                                            'clprocs': clprocs,
+                                        }
 
-                                #---------------------------------------------------
+                                        #---------------------------------------------------
 
-                                run_n += 1
-                                print('-------------------------------------')
-                                print('Experiment %d of %d' % (run_n, run_t))
-                                print('Test ID: %s, Run=%d' % (conf['test_id'], test_run))
-                                print('-------------------------------------')
+                                        run_n += 1
+                                        print('-------------------------------------')
+                                        print('Experiment %d of %d' % (run_n, run_t))
+                                        print('Test ID: %s, Run=%d' % (conf['test_id'], test_run))
+                                        print('-------------------------------------')
 
-                                #---------------------------------------------------
+                                        #---------------------------------------------------
 
-                                cleanup(conf)
-                                #stopwatch(3)
-                                prepare_folders(conf)
-                                start_backend(conf)
-                                stopwatch(3)
-                                start_servers(conf)
-                                start_clients(conf)
-                                stopwatch(3)
+                                        cleanup(conf)
+                                        #stopwatch(3)
+                                        prepare_folders(conf)
+                                        start_backend(conf)
+                                        stopwatch(6)
+                                        start_servers(conf)
+                                        start_clients(conf)
+                                        stopwatch(3)
 
-                                duration = conf['warmup_sec'] + conf['test_duration'] + 240
-                                wait_for_process(conf, "clients", 'java', duration)
-                                wait_for_process(conf, "servers", 'java', 30, True)
+                                        duration = conf['warmup_sec'] + conf['test_duration'] + 240
+                                        wait_for_process(conf, "clients", 'java', duration)
+                                        wait_for_process(conf, "servers", 'java', 30, True)
 
-                                #---------------------------------------------------
+                                        #---------------------------------------------------
 
-                                time.sleep(3)
+                                        time.sleep(3)
 
-                                try:
-                                    copy_files(conf)
-                                except IOError as e:
-                                    print("I/O error({0}): {1}".format(e.errno, e.strerror))
+                                        try:
+                                            copy_files(conf)
+                                        except IOError as e:
+                                            print("I/O error({0}): {1}".format(e.errno, e.strerror))
 
-                                get_results(conf)
+                                        get_results(conf)
 
-                                time.sleep(3)
+                                        time.sleep(3)
 
     kill_processes(conf)
     print('Finished...')

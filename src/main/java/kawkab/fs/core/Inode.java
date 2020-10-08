@@ -36,7 +36,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	private static final Cache cache = Cache.instance();
 	private static final ApproximateClock clock = ApproximateClock.instance();
 	private static final LocalStoreManager localStore = LocalStoreManager.instance();
-	private static final GlobalStoreManager globalStore = GlobalStoreManager.instance();
+	//private static final GlobalStoreManager globalStore = GlobalStoreManager.instance();
 	private static final Configuration conf = Configuration.instance();
 	private TimerQueueIface timerQ;
 
@@ -56,10 +56,11 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		this.recordSize = recordSize;
 	}
 
-	private LatHistogram idxLog;
+	//private LatHistogram idxLog;
 	//private Accumulator loadLog;
 	//private long fileOpenTime;
 	//private LatHistogram tl;
+	private LatHistogram blkCrLog;
 
 	/**
 	 * Prepare after opening the file.
@@ -85,7 +86,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (recordSize > 1)
 			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, indexQ);
 
-		idxLog = new LatHistogram(TimeUnit.MICROSECONDS, "Index search", 100, 10000);
+		//idxLog = new LatHistogram(TimeUnit.MICROSECONDS, "Index search", 100, 10000);
+		blkCrLog = new LatHistogram(TimeUnit.MICROSECONDS, "Chunk create", 100, 10000);
 		//loadLog = new Accumulator(500);
 		//fileOpenTime = System.currentTimeMillis();
 		//tl = new LatHistogram(TimeUnit.MILLISECONDS, "segLoadLog", 100, 1000);
@@ -255,9 +257,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new KawkabException(String.format("Record sizes do not match. Given %d, expected %d", recSize, recordSize));
 		}
 
-		idxLog.start();
+		//idxLog.start();
 		List<long[]> offsets = index.findAll(minTS, maxTS, indexLength(fileSize.get()), loadFromPrimary); //Get the offsets
-		idxLog.end(1);
+		//idxLog.end(1);
 
 		if (offsets == null) {
 			System.out.printf("[I] F%d: No recs found between %d and %d. Recs in file = %d\n", inumber, minTS, maxTS, numRecords());
@@ -853,7 +855,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	 * @throws InterruptedException
 	 */
 	void createNewBlock(final DataSegmentID dsid) throws IOException, OutOfDiskSpaceException {
+		blkCrLog.start();
 		localStore.createBlock(dsid);
+		blkCrLog.end(1);
 	}
 
 	public long fileSize(){
@@ -952,7 +956,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		index = null;
 		isInited = false;
 
-		idxLog.printStats();
+		//idxLog.printStats();
+		blkCrLog.printStats();
 		//System.out.printf("Segments loading counts timeline: "); loadLog.printPairs();
 	}
 
@@ -970,7 +975,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	}
 
 	public void printStats() {
-		idxLog.printStats();
+		//idxLog.printStats();
+		blkCrLog.printStats();
 		//loadLog.printPairs();
 
 		if (index != null)

@@ -23,7 +23,7 @@ public class TestClientServiceClient {
 
 	public TestClientServiceClient(String serverIP, int port) throws KawkabException {
 		System.out.printf("[TCSC] Connecting to %s:%d\n",serverIP,port);
-		int maxBufferLen = 4 * 1024 * 1024;
+		int maxBufferLen = 3 * 1024 * 1024;
 		try {
 			transport = new TFastFramedTransport(new TSocket(serverIP, port), maxBufferLen, maxBufferLen);
 			transport.open();

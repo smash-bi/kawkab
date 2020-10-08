@@ -17,7 +17,7 @@ public class TestClientServiceServer {
 	private TServer server;
 	private boolean started = false;
 	private ExecutorService executor;
-	private final int maxBufferLen = 4 * 1024 * 1024;
+	private final int maxBufferLen = 256 * 1024;
 	private final TestClientServiceImpl serviceImpl;
 
 	public TestClientServiceServer(int numClients, int svrPort, int masterID) throws KawkabException {

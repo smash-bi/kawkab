@@ -444,7 +444,7 @@ public class TestClientAsync {
 		if (maxLimit < batchSize)
 			return 0;
 
-		int winSizeRecords = 10000;
+		int winSizeRecords = 50000;
 		if (winSizeRecords < batchSize)
 			winSizeRecords = 10*batchSize;
 
