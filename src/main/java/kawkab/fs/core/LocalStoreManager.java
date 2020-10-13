@@ -17,7 +17,7 @@ import java.util.concurrent.locks.Lock;
 
 public final class LocalStoreManager implements SyncCompleteListener {
 	private static final int maxBlocks = Configuration.instance().maxBlocksPerLocalDevice; // Number of blocks that can be created locally
-	private static final int numWorkers = Configuration.instance().numLocalDevices; // Number of worker threads and number of reqsQs
+	//private static final int numWorkers = Configuration.instance().numLocalDevices; // Number of worker threads and number of reqsQs
 	private static final int numDevices = Configuration.instance().numLocalDevices;
 
 	private GlobalStoreManager globalProc;
@@ -29,8 +29,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	private volatile boolean working = true;
 	private final FileLocks fileLocks;
 
-	private AccumulatorMap readRateLog;
-	private AccumulatorMap[] writeRateLog;
+	//private AccumulatorMap readRateLog;
+	//private AccumulatorMap[] writeRateLog;
 
 	private ApproximateClock clock = ApproximateClock.instance();
 	private final static long START_TIME = System.currentTimeMillis();
@@ -96,7 +96,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 		//syncWaitMutex = new Object();
 
-		System.out.println("Initializing local store manager. Workers = " + numWorkers);
+		System.out.println("Initializing local store manager. Workers = " + numDevices);
 		
 		startWorkers();
 	}
@@ -108,24 +108,24 @@ public final class LocalStoreManager implements SyncCompleteListener {
 	 * work based on the blocks, which is not easily achievable using ExecutorService.
 	 */
 	private void startWorkers() {
-		readRateLog = new AccumulatorMap(3000);
-		writeRateLog = new AccumulatorMap[numWorkers];
+		//readRateLog = new AccumulatorMap(3000);
+		//writeRateLog = new AccumulatorMap[numWorkers];
 
-		for (int i=0; i<numWorkers; i++) {
+		/*for (int i=0; i<numWorkers; i++) {
 			writeRateLog[i] = new AccumulatorMap(3000);
-		}
+		}*/
 
-		storeQs = new TransferQueue[numWorkers];
-		for(int i=0; i<numWorkers; i++) {
+		storeQs = new TransferQueue[numDevices];
+		for(int i=0; i<numDevices; i++) {
 			storeQs[i] = new TransferQueue<>("LSM-TrnsfrQ-"+i);
 		}
 		
-		fileChannels = new FileChannels[numWorkers];
+		fileChannels = new FileChannels[numDevices];
 		for (int i=0; i<fileChannels.length; i++) {
 			fileChannels[i] = new FileChannels("LSM-Chnls-"+i);
 		}
 		
-		workers = new Thread[numWorkers];
+		workers = new Thread[numDevices];
 		for (int i=0; i<workers.length; i++) {
 			final int workerID = i;
 			workers[i] = new Thread("LocalStoreThread-"+i) {
@@ -155,10 +155,11 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 			try {
 				int synced = processStoreRequest(block, channels);
-				int elapsed = (int)(clock.currentTime() - START_TIME)/1000;
-				writeRateLog[workerID].put(elapsed, synced);
+				//int elapsed = (int)(clock.currentTime() - START_TIME)/1000;
+				//writeRateLog[workerID].put(elapsed, synced);
 			} catch (KawkabException e) {
-				e.printStackTrace();
+				//e.printStackTrace();
+				System.out.printf("OOS ");
 			}
 		}
 
@@ -204,7 +205,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		}*/
 
 		//Load balance between workers, but assign same worker to the same block.
-		int queueNum = Math.abs(block.id().perBlockTypeKey()) % numWorkers; //TODO: convert hashcode to a fixed computed integer or int based key
+		int queueNum = Math.abs(block.id().perBlockTypeKey()) % numDevices; //TODO: convert hashcode to a fixed computed integer or int based key
 
 		storeQs[queueNum].add(block);
 	}
@@ -265,7 +266,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 			//block.markGlobalDirty();
 		} catch (IOException e) {
-			System.out.printf("[LSM] Unbale to store data for ID: %s, dirty bytes = %d\n", bid, block.decAndGetLocalDirty(0));
+			//System.out.printf("[LSM] Unable to store data for ID: %s, dirty bytes = %d\n", bid, block.decAndGetLocalDirty(0));
+			System.out.print("S ");
 			//FIXME: What should we do here? Should we return?
 			throw new KawkabException(e);
 		} finally {
@@ -448,8 +450,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		int loaded = block.loadFromFile();
 
-		int elapsed = (int)(clock.currentTime() - START_TIME)/1000;
-		readRateLog.put(elapsed, loaded);
+		//int elapsed = (int)(clock.currentTime() - START_TIME)/1000;
+		//readRateLog.put(elapsed, loaded);
 
 		return true;
 	}
@@ -462,11 +464,11 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		
 		working = false;
 
-		System.out.println("[LSM] Saving read/write rates before checking for any remaining jobs.");
-		saveDataRates(writeRateLog, true);
-		saveDataRates(new AccumulatorMap[]{readRateLog}, false);
+		//System.out.println("[LSM] Saving read/write rates before checking for any remaining jobs.");
+		//saveDataRates(writeRateLog, true);
+		//saveDataRates(new AccumulatorMap[]{readRateLog}, false);
 		
-		for (int i=0; i<numWorkers; i++) {
+		for (int i=0; i<numDevices; i++) {
 			try {
 				workers[i].join();
 			} catch (InterruptedException e) {
@@ -478,7 +480,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 
 		System.out.println("[LSM] Stopped workers, checking for any remaining jobs.");
 		for (int i=0; i<storeQs.length; i++) {
-			Block block = null;
+			Block block;
 			while( (block = storeQs[i].poll()) != null) {
 				try {
 					processStoreRequest(block, fileChannels[i]);

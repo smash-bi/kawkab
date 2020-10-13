@@ -7,27 +7,34 @@ import pprint as pp
 
 def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=None, yMax=None, logY=False, save_fig=False, show_ci=True):
     #colors = ["#2b8cbe", "#cc4c02", "#E08655", "#ED3232", "#CC00CC", "#008837", ]
-    colors = ["#2b8cbe","#cc4c02", "#fe9929",]
 
     markers = ["s", "o", "^", "v", "o", "s", "^", "v"]
-
+    #For writes
+    colors = ["#2b8cbe","#cc4c02", "#BF3B9E", "#3BBF9C",]
     lines = [
         [5, 2, 5, 2],  # dash dash
         [2, 2, 2, 2],  # dot dot
         [5, 1.5, 1.5, 1.5],
         [10, 0.00001],  # solid
-        #[6, 4, 2, 4, 2, 4],  # dash dot dot
-        #[7, 5, 7, 5],  # dash dash
     ]
+
+    #For reads
+    # colors = ["#BF3B9E", "#cc4c02", "#2b8cbe",]
+    # lines = [
+    #     [5, 1.5, 1.5, 1.5],
+    #     [2, 2, 2, 2],  # dot dot
+    #     [5, 2, 5, 2],  # dash dash
+    # ]
 
     fgp = {}
     fgp.update(fig_params)
     fgp.update({
-        'figsize':      (3.5, 2.5),
-        'dimensions':   (0.21, 0.975, 0.85, 0.19),
-        'legend_cols':  3,
-        'legend_position':  (0.4, 1.26),
+        #'dimensions':   (0.21, 0.975, 0.85, 0.19),
         'markers': False,
+        'figsize':      (3.5, 2.2),
+        'dimensions':   (0.215, 0.975, 0.835, 0.2),
+        "legend_cols": 4,
+        'legend_position':  (0.4, 1.33),
     })
 
 
@@ -36,7 +43,7 @@ def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=
         metric_points = metric['points']
         mlabel = metric['label']
         typ = metric['type']
-        for latType in ["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
+        for latType in ["lat50", "lat95"]:#["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
             res_bundle = []
             for point in metric_points:
                 xVals = []
@@ -60,7 +67,7 @@ def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=
                 yVals = [val / 1000.0 for val in yVals]
                 yci = [val/1000.0 for val in yci]
 
-                label = "%d%% %s" % (metric_point,mlabel)
+                label = "%d%%\n%s" % (metric_point,mlabel)
                 if mlabel is 'reads':
                     label = "%d%% %s" % (100-metric_point,mlabel)
 
@@ -79,7 +86,7 @@ def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=
             print(conf['labels'][latType])
             pp.pprint(res_bundle)
 
-            plotTimeSeries(res_bundle, title, xlabel, ylabel, show_legend=True, fp=fgp, yMax=yMax, xMax=xMax, logy=logY, yMin=0, xMin=-0.001,
+            plotTimeSeries(res_bundle, title, xlabel, ylabel, show_legend=True, fp=fgp, yMax=10000, xMax=xMax, logy=logY, yMin=0, xMin=-0.001,
                            colors=colors, markers=markers, lspec=lines)
 
             if save_fig:

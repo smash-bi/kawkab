@@ -140,7 +140,8 @@ def batch_size_bars(conf, results, fig_params, figPrefix="", title="", xMax=None
     print(title)
     pp.pprint(res_bundle)
 
-    plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params, yMax=yMax, xMax=xMax)
+    plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params,
+             yMax=yMax, xMax=xMax, show_improvement=False, show_height=False)
 
     if save_fig:
         plt.savefig("%s/%s.pdf" % (conf["fig_dir"], figPrefix))
@@ -195,7 +196,8 @@ def batch_size_bars_lat(conf, results, fig_params, figPrefix="", title="", xMax=
     print(title)
     pp.pprint(res_bundle)
 
-    plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params, yMax=yMax, xMax=xMax)
+    plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params, yMax=yMax, xMax=xMax,
+                show_improvement=True, show_height=False)
 
     if save_fig:
         plt.savefig("%s/%s.pdf" % (conf["fig_dir"], figPrefix))

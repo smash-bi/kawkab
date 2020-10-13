@@ -298,6 +298,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		assert (curIndexLen % 2) == 0;
 
 		boolean lastNodeFull = (curIndexLen % (entriesPerNode*2)) == 0;
+		boolean isAcquired = false;
 
 		//System.out.printf("[POH] lastNodeFull=%b, curIdxLen=%d, entriesPerNodd=%d\n", lastNodeFull, curIndexLen, entriesPerNode);
 
@@ -312,6 +313,7 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 			int lastNode = (int)Math.ceil((curIndexLen + 1) / 2 / ((double)entriesPerNode)); //ceil(entriesInIndex)/(entriesPerNode) gives the ceil value;
 			POHNode node = acquireNode(lastNode, false, false);
 			acquiredNode = new TimerQueueItem<>(node, this);
+			isAcquired = true;
 		}
 
 		POHNode currentNode = acquiredNode.getItem();
@@ -320,6 +322,10 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 			currentNode.appendEntryMinTS(minTS, segmentInFile);
 		} catch (IndexBlockFullException e) {
 			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			System.out.print("IAE "); //FIXME: We need to release the node.
+									  // Make sure that we don't delete the node from the map if a reader has acquired it.
+			throw e;
 		}
 
 		timerQ.enableAndAdd(acquiredNode, clock.currentTime()+bufferTimeOffsetMs);

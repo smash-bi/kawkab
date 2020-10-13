@@ -171,7 +171,7 @@ public class FilesystemServiceClient {
 	public int appendRecords(ByteBuffer buffer, boolean isPacked) throws OutOfMemoryException, KawkabException {
 		int tries = 0;
 		int base = 1000;
-		int maxTries = 10;
+		int maxTries = 50;
 		while(++tries < maxTries) {
 			try {
 				if (isPacked) {

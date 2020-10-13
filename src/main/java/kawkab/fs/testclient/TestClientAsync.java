@@ -317,8 +317,14 @@ public class TestClientAsync {
 					if (isController)
 						wLog.start();
 
-					sendAppendRequest(fnames, records, timestamps);
-					batchSize = reqBatchSize;
+					try {
+						sendAppendRequest(fnames, records, timestamps);
+						batchSize = reqBatchSize;
+					} catch (OutOfMemoryException e) {
+						System.out.print("o");
+						batchSize = 0;
+					}
+
 
 					if (isController)
 						wLog.end(1);

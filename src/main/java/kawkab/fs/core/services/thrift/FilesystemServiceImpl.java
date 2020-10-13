@@ -193,7 +193,7 @@ public class FilesystemServiceImpl implements Iface {
 
 		try {
 			return fh.append(data, recSize);
-		} catch (OutOfMemoryException | OutOfDiskSpaceException e) {
+		} catch (OutOfMemoryException | OutOfDiskSpaceException | IllegalArgumentException e) {
 			//e.getMessage();
 			throw new TOutOfMemoryException(e.getMessage());
 		} catch (Exception | AssertionError e) {
@@ -268,7 +268,7 @@ public class FilesystemServiceImpl implements Iface {
 
 			try {
 				fh.append(data, s.recSize);
-			} catch (OutOfMemoryException | OutOfDiskSpaceException e) {
+			} catch (OutOfMemoryException | OutOfDiskSpaceException | IllegalArgumentException e) {
 				//e.getMessage();
 				throw new TOutOfMemoryException(e.getMessage());
 			} catch (Exception | AssertionError e) {
@@ -316,7 +316,7 @@ public class FilesystemServiceImpl implements Iface {
 
 			try {
 				fh.append(data, s.recSize);
-			} catch (OutOfMemoryException | OutOfDiskSpaceException e) {
+			} catch (OutOfMemoryException | OutOfDiskSpaceException | IllegalArgumentException e) {
 				//e.getMessage();
 				throw new TOutOfMemoryException(e.getMessage());
 			} catch (Exception | AssertionError e) {
@@ -352,7 +352,7 @@ public class FilesystemServiceImpl implements Iface {
 			//data.position(offset);
 			try {
 				cnt += fh.append(srcBuf, recSize);
-			} catch (OutOfMemoryException | OutOfDiskSpaceException e) {
+			} catch (OutOfMemoryException | OutOfDiskSpaceException | IllegalArgumentException e) {
 				//e.getMessage();
 				throw new TOutOfMemoryException(e.getMessage());
 			} catch (Exception | AssertionError e) {

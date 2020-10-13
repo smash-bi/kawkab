@@ -688,7 +688,21 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		long timestamp = srcBuf.getLong(srcBuf.position());
 		DataSegment ds = acquiredSeg.getItem();
 
-		int appended = ds.append(srcBuf, fileSizeBuffered);
+		int appended = 0;
+		try {
+			appended = ds.append(srcBuf, fileSizeBuffered);
+		} catch (Exception e) {
+			if (acquiredFromCache) {
+				deferredWork(acquiredSeg.getItem());
+				acquiredSeg = null;
+			}
+			if (haveNewBlock) {
+				localStore.evictFromLocal(ds.id());
+			}
+
+			System.out.print("I1 ");
+			throw e;
+		}
 
 		long recInFile = fileSizeBuffered/recordSize;
 		boolean isFirstRec = recInFile % recsPerSeg == 0;
@@ -697,7 +711,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (isFirstRec) { // If the current record is the first record in the data segment
 			try {
 				index.appendMinTS(timestamp, segInFile, indexLength(fileSizeBuffered));
-			} catch(OutOfMemoryException | OutOfDiskSpaceException e) {
+			} catch(Exception e) {
 				ds.rollback(appended);
 
 				if (acquiredFromCache) {
@@ -709,8 +723,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 				}
 
-				e.printStackTrace();
-
+				//e.printStackTrace();
+				System.out.print("I2 ");
 				throw e;
 			}
 		}
@@ -731,7 +745,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 
 			try {
 				index.appendMaxTS(lastTS, segInFile, indexLength(fileSizeBuffered  + appended- recSize));
-			} catch(OutOfMemoryException e) {
+			} catch(Exception e) {
 				ds.rollback(appended);
 
 				if (acquiredFromCache) {
@@ -857,7 +871,10 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	void createNewBlock(final DataSegmentID dsid) throws IOException, OutOfDiskSpaceException {
 		blkCrLog.start();
 		localStore.createBlock(dsid);
-		blkCrLog.end(1);
+		int t = blkCrLog.end(1);
+		if (t > 1000000) {
+			System.out.printf("\t\t[I] Block creation took %d microseconds\n", t);
+		}
 	}
 
 	public long fileSize(){

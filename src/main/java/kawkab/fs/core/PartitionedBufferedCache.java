@@ -419,14 +419,15 @@ public class PartitionedBufferedCache extends Cache {
 					}
 
 					double cacheOcc = size * 100.0 / totalSegments;
-					double lsOcc = localStore.size() * 100.0 / lsCap;
+					int lss = localStore.size();
+					double lsOcc = lss * 100.0 / lsCap;
 					double canEvict = localStore.canEvict() * 100.0 / lsCap;
 					double gsQlen = gsm.qlen() * 100.0 / lsCap;
 
 					//accm.put((int) ((clock.currentTime() - startT) / 1000.0), occupancy);
 
 
-					System.out.println(String.format("%d: %.2f, %.2f, %.2f, %.2f\n",++n, cacheOcc, lsOcc, canEvict, gsQlen));
+					System.out.println(String.format("%d: %.2f, %.2f, %.2f, %.2f, t=%d\n",++n, cacheOcc, lsOcc, canEvict, gsQlen, lss));
 					writer.write(String.format("%.2f, %.2f, %.2f, %.2f\n",cacheOcc, lsOcc, canEvict, gsQlen));
 
 					try {

@@ -77,7 +77,7 @@ def start_servers(conf):
 
         sid = sidx
         outFile = '%s/server_%02d.out'%(conf['servers_dir'], sid)
-        gc = '-Xlog:gc*=info:file=%s/server-%d-gc.log'%(conf['out_dir'], sid) if conf['logGC'] else ""
+        gc = '-Xlog:gc*=info:file=%s/server-%d-gc.log -Xlog:safepoint'%(conf['out_dir'], sid) if conf['logGC'] else ""
 
         conf_file = "" if 'svr_config_file' not in conf else "-Dconf=%s"%conf['svr_config_file']
 
@@ -166,8 +166,8 @@ def start_clients(conf):
                 stopwatch(5)
             else:
                 hostCmds.append({'host': clm, 'cmds': [cmd]})
-                stopwatch(1)
         runCommandsParallelForHost(hostCmds, conf, True)
+        stopwatch(1)
 
     print ''
     elapsed = time.time() - now
@@ -195,7 +195,7 @@ def cleanup(conf):
     kill_processes(conf)
     
     cmd2 = 'rm -r %s/*'%(conf['run_dir'])
-    runCmdParallel(cmd2, "all", conf, True)
+    run_cluster_cmd(cmd2, "all", conf, True)
 
     cmd2 = 'rm -r %s/fs0/fs/* %s/fs1/fs/* %s/fs2/fs/* %s/fs/*'%(conf['kawkab_dir'], conf['kawkab_dir'], conf['kawkab_dir'], conf['kawkab_dir'])
     #runCmdParallel(cmd2, "servers", conf, True)
@@ -247,8 +247,9 @@ def run_batch(conf):
                                 for iat in iats:
                                     for test_run in conf['test_runs']:
                                         #clients = degree*sl_size
-                                        numClients = get_total_clients(conf) * conf['clients_per_machine']
-                                        numClients = numClients * num_svrs
+                                        #numClients = get_total_clients(conf) * conf['clients_per_machine']
+                                        #numClients = numClients * num_svrs
+                                        numClients = clprocs  * num_svrs * conf['clients_per_machine']
                                         #conf['test_id'] = '%s-%s-clp%d-svrs%d-nc%d-bs%d-rs%d-nf%d-wr%d-iat%g'%(
                                         conf['test_id'] = '%s-%s-nc%d-bs%d-rs%d-nf%d-wr%d-iat%g'%(
                                                                                                 test_type,
@@ -301,7 +302,7 @@ def run_batch(conf):
                                         #stopwatch(3)
                                         prepare_folders(conf)
                                         start_backend(conf)
-                                        stopwatch(6)
+                                        stopwatch(10)
                                         start_servers(conf)
                                         start_clients(conf)
                                         stopwatch(3)

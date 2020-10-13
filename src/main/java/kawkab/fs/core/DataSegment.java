@@ -6,6 +6,7 @@ import kawkab.fs.commons.Configuration;
 import kawkab.fs.commons.FixedLenRecordUtils;
 import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.InvalidFileOffsetException;
+import kawkab.fs.core.exceptions.OutOfMemoryException;
 
 import java.io.File;
 import java.io.IOException;
@@ -157,13 +158,21 @@ public final class DataSegment extends Block {
 	 * @return number of bytes appended starting from the offset
 	 * @throws IOException
 	 */
-	synchronized int append(final ByteBuffer srcBuffer, long offsetInFile) throws IOException {
+	synchronized int append(final ByteBuffer srcBuffer, long offsetInFile) throws IOException, OutOfMemoryException {
 		int offsetInSegment = offsetInSegment(offsetInFile, recordSize);
 		
-		assert writePos.get() == offsetInSegment :
-				String.format("writePos (%d) != OffsetInSeg (%d) for seg %s, fsLen=%d", writePos.get(), offsetInSegment, id(), offsetInFile);
-		assert dataBuf.position() == offsetInSegment :
-				String.format("%s: dataBuf pos %d is incorrect, expected %d", id, dataBuf.position(), offsetInSegment);
+		//assert writePos.get() == offsetInSegment :
+		//		String.format("writePos (%d) != OffsetInSeg (%d) for seg %s, fsLen=%d", writePos.get(), offsetInSegment, id(), offsetInFile);
+		//assert dataBuf.position() == offsetInSegment :
+		//		String.format("%s: dataBuf pos %d is incorrect, expected %d", id, dataBuf.position(), offsetInSegment);
+
+		if (writePos.get() != offsetInSegment) {
+			throw new OutOfMemoryException(String.format("writePos (%d) != OffsetInSeg (%d) for seg %s, fsLen=%d", writePos.get(), offsetInSegment, id(), offsetInFile));
+		}
+
+		if (dataBuf.position() != offsetInSegment) {
+			throw new OutOfMemoryException(String.format("%s: dataBuf pos %d is incorrect, expected %d", id, dataBuf.position(), offsetInSegment));
+		}
 		
 		int length = srcBuffer.remaining();
 

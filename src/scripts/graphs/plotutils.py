@@ -36,9 +36,9 @@ fp_default["legend_handle_height"] = 1.6
 fp_default["legend_label_spacing"] = 0.5 #The vertical space between the legend entries
 fp_default["legend_handle_textpad"] = 0.5
 fp_default["legend_column_spacing"] = 2 #The spacing between columns
-fp_default["marker_size"] = 6
+fp_default["marker_size"] = 2
 fp_default["line_width"] = 1
-fp_default["grid_color"] = "#D0D0D0"
+fp_default["grid_color"] = "#EAEAEA"
 fp_default["ticks_weight"] = "normal"  # "bold"
 fp_default["numpoints"] = 1
 fp_default["bars_width"] = 0.2
@@ -50,9 +50,9 @@ fp_default["titleFont"] = 8
 fp_default["title_x"] = 0
 fp_default["title_y"] = 1.0
 fp_default["legendFrame"] = False
-fp_default["colored"] = False
+fp_default["colored"] = True
 fp_default["axis_tick_pad"] = 7
-fp_default["markers"] = True
+fp_default["markers"] = False
 fp_default["yAxesBothSides"] = False
 fp_default["bar_edge_color"] = 'black'
 
@@ -264,7 +264,7 @@ def plotTimeSeries(data, title, xlabel, ylabel, fp=fp_default, annotations=None,
             plt.plot(x, y, label=d["label"], color=next(cgen), dashes=next(lgen), lw=fp["line_width"])
 
         if "conf_ival" in d:
-            plt.errorbar(x, y, yerr=d["conf_ival"], linestyle="None", marker="None", elinewidth=1, color="#9e9e9e", capsize=3)
+            plt.errorbar(x, y, yerr=d["conf_ival"], linestyle="None", marker="None", elinewidth=0.75, color="#B6B6B6", capsize=2)
         if annotations != None:
             for idx in range(len(annotations)):
                 ax.annotate(annotations[idx], xy=(x[idx], y[idx]), xytext=(x[idx] + 0.1, y[idx] + 0.1))
@@ -361,9 +361,9 @@ def plotCDF(data, title, xlabel, ylabel, fp=fp_default, annotations=None, step=F
     else:
         xxMax += 0.5
     return plotTimeSeries(data_mod, title, xlabel, ylabel,
-                          annotations=annotations, step=step, hline=hline, N=N,
-                          yMin0=yMin0, exact_ticks=exact_ticks, show_legend=show_legend,
-                          legend_loc=legend_loc, xticks=xticks, yMax=1.1, xMax=xxMax,
+                          annotations=annotations, step=step, hline=hline,
+                          exact_ticks=exact_ticks, show_legend=show_legend,
+                          xticks=xticks, yMax=1.1, xMax=xxMax,
                           first_plot=first_plot, subplot=subplot, logx=logx, colors=colors, fp=fp)
 
 
@@ -422,12 +422,12 @@ def plotBars(res, title="", xlabel="", ylabel="", N=4, show_legend=True,
             height = rect.get_height()
             if show_height and not np.isnan(height):
                 ax.text(rect.get_x() + rect.get_width(), height + text_height_offset, "%.3f" % (
-                    float(height)), ha="right", va="bottom", fontsize=15, rotation="vertical",
+                    float(height)), ha="right", va="bottom", fontsize=fp["xylabels_font_size"], rotation="vertical",
                         weight=fp["ticks_weight"])
             elif show_improvement:
                 improvement = float(height / base_line[rectI])
                 ax.text(rect.get_x() + rect.get_width() / 3.0, height + text_height_offset,
-                        "%.1gx" % improvement, ha="right", va="bottom", fontsize=14)
+                        "%.2gx" % improvement, ha="center", va="bottom", fontsize=fp["xylabels_font_size"])
             elif show_text:
                 text = r["text"][rectI]
                 ax.text(rect.get_x() + rect.get_width() / 2.0, height + text_height_offset, "%s" % text,

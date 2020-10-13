@@ -117,8 +117,8 @@ public class Result {
 		assert Double.MAX_VALUE - dataThr > from.dataThr;
 		assert Double.MAX_VALUE - recsTput > from.recsTput;
 
-		double lastOps = opsThr;
-		double lastThr = recsTput;
+		//double lastOps = opsThr;
+		//double lastThr = recsTput;
 
 		reqsCount += from.reqsCount;
 		opsThr += from.opsThr;
@@ -131,10 +131,12 @@ public class Result {
 		if (latMax < from.latMax)
 			latMax = from.latMax;
 
-		if (latHist == null) latHist = new AccumulatorMap();
+		if (latHist == null)
+			latHist = new AccumulatorMap();
 		latHist.merge(from.latHist);
 
-		if (tputLog == null) tputLog = new Accumulator(from.tputLog.numBuckets());
+		if (tputLog == null)
+			tputLog = new Accumulator(from.tputLog.numBuckets());
 		tputLog.merge(from.tputLog);
 
 		//System.out.printf("prevOps=%.2f, newOps=%.2f, mergedOps=%.2f, prevThr=%.2f, newThr=%.2f, mergedThr=%.2f\n",

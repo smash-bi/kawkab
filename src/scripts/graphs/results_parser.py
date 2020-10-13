@@ -142,7 +142,6 @@ def get_runs_data(res_dir, file_prefix):
     return data
 
 
-
 def _num(s):
     try:
         return int(s)
@@ -182,7 +181,7 @@ def get_and_parse_runs_data(res_dir, file_prefix):
             except ValueError:
                 continue
 
-    pprint(res)
+    #pprint(res)
     return res
 
 def summarize_data(runs_data):
@@ -219,6 +218,10 @@ def summarize_data(runs_data):
         'maxLat': (maxLat, 0)
     }
 
+    print('Lat50: ', res['lat50'], lat50)
+    print('Lat95: ', res['lat95'], lat95)
+
+    #import pdb; pdb.set_trace()
     return res
 
 def load_results(conf):
