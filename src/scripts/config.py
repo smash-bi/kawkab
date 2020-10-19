@@ -108,14 +108,15 @@ def get_config():
         #(1000, 20, [5, 15, 25, 30, 32, 33, 34, 35, 35.5, 36, 36.5, 37, 38.5, 39]),
 
         #(10000, 100, [9])
-        (1000, 100, [2, 4, 6, 8, 9, 10, 11, 12])
+        #(1000, 100, [2, 4, 6, 8, 9, 10, 11, 12])
+        (100, 100, [2])
 
         #(1000, 100, [10.25])
     ]
 
     conf['test_type'] = ['rw']
-    conf['test_prefix'] = ['kw48']#['hq21w']#['kw47']#['kw46']
-    conf['record_size'] = [64, 128, 256]#[16]#[16]
+    conf['test_prefix'] = ['stable4']#['hq21w']#['kw47']#['kw46']
+    conf['record_size'] = [64]#[64, 128, 256]#[16]#[16]
 
     conf['clients_per_machine'] = 10
     conf['num_client_procs'] = [20]#[40]#[20]#[10, 15, 40, 80, 5]
@@ -123,14 +124,14 @@ def get_config():
 
     conf['files_per_client'] = [1]  # [2, 4, 12, 24, 36, 28]
 
-    conf['test_duration'] = 60#600#1500#60
-    conf['warmup_sec'] = 120#0#120
+    conf['test_duration'] = 900#60#600#1500#60
+    conf['warmup_sec'] = 0#120#0#120
     conf['init_wait_msec'] = 0
 
     conf['test_runs'] = [1]#[1, 2, 3, 4, 5]
 
-    conf['high_mps'] = 0
-    conf['burst_dur_sec'] = 0
+    conf['high_mps'] = 8
+    conf['burst_dur_sec'] = 1
     conf['burst_prob_perc'] = 20
     conf['is_synchronous'] = "false"
     conf['read_recent'] = "true"

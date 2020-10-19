@@ -41,7 +41,7 @@ def batch_size_lat_thr(conf, results, fig_params, figPrefix="", title="", xMax=N
         'markers': True,
     })
 
-    for latType in ["lat50", "lat95"]:# ["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
+    for latType in ["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
         res_bundle = []
         for metric in conf['metric']:
             metric_name = metric['name']
@@ -141,7 +141,7 @@ def batch_size_bars(conf, results, fig_params, figPrefix="", title="", xMax=None
     pp.pprint(res_bundle)
 
     plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params,
-             yMax=yMax, xMax=xMax, show_improvement=False, show_height=False)
+             yMax=yMax, xMax=xMax, show_improvement=False, show_height=True)
 
     if save_fig:
         plt.savefig("%s/%s.pdf" % (conf["fig_dir"], figPrefix))
@@ -227,7 +227,7 @@ def batch_size_results_lines(conf, results, fig_params, figPrefix="", title="", 
         #[7, 5, 7, 5],  # dash dash
     ]
 
-    for latType in ["lat50"]:#["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
+    for latType in ["meanLat", "lat50", "lat95", "lat99", "maxLat"]:
         res_bundle = []
         for metric in conf['metric']:
             metric_name = metric['name']

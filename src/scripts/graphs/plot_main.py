@@ -130,36 +130,36 @@ def thr_lat_bs(conf, figParams):
         { 'type':'kawkab', 'label':'Kawkab',
           'name':'batch_size', 'points':[
             #------------------- Batch size -----------------------------------
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5, 8.5,  9.25, 10, 11, 11.75, 12]},#, 12.25, 12.5, 12.75, 13]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8, 9, 9.5, 10, 10.5, 10.75, 10.85, 11, 11.25, ]}, #, 13]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8, 9, 9.5, 10, 10.25, 10.5, 10.75]},#, 12, 12.25, 12.5, 12.75, 13]},#, 13.25]}, #, 13]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75,10, 10.2, 10.35, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25, 10.5, 11]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25, 10.75, 11]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5, 8.5,  9.25, 10, 11, 11.75, 12]},#, 12.25, 12.5, 12.75, 13]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8, 9, 9.5, 10, 10.5, 10.75, 10.85, 11, 11.25, ]}, #, 13]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75]},#, 12, 12.25, 12.5, 12.75, 13]},#, 13.25]}, #, 13]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75,10, 10.2, 10.35, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25, 10.5, 11]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25, 10.75, 11]},
             #-------------------- Scale nodes ----------------------------------
             # Tput: 200:10.2, 400:10.2, 600:10.5
-            {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75,10, 10.2, 10.35, ]},
-            {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':400, 'iat':[7, 9, 9.5, 9.75, 10.2, 10.5]},
-            {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':600, 'iat':[7, 9, 9.5, 9.75, 10, 10.2, 10.5, 11]},
-            {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':800, 'iat':[9.5, 9.75, 10, 10.2, 10.5, 11]},
+            # {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75,10, 10.2, 10.35, ]},
+            # {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':400, 'iat':[7, 9, 9.5, 9.75, 10.2, 10.5]},
+            # {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':600, 'iat':[7, 9, 9.5, 9.75, 10, 10.2, 10.5, 11]},
+            # {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':800, 'iat':[9.5, 9.75, 10, 10.2, 10.5, 11]},
             #------------------------ Scale Nodes 1000 --------------------
         ]},
         # { 'type':'btrdb', 'label':'BTrDB',
         #   'name':'batch_size', 'points':[
-        #     # Results for batch size test #<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-        #     #{'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':100, 'num_clients':200, 'iat':[0.4, 0.6, 1, 1.2, 1.3, 1.5, 1.6, 1.8]},
-        #     #{'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':500, 'num_clients':200, 'iat':[2, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.2, 4.3, 4.5, 4.75, 5]},
-        #     #{'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':1000, 'num_clients':200, 'iat':[1,2, 3, 3.5, 3.75, 4, 4.5, 4.75, 5, 5.25, 5.5, 6]},
-        #     # {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':10000, 'num_clients':200, 'iat':[6, 7, 8, 8.65, 8.85, 9, 9.15, 9.3, 9.5]},
-        #     #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':20000, 'num_clients':200, 'iat':[7, 7.5, 8, 8.5, 9, 9.15, 9.3, 9.4, 9.5]},
+        #     #Results for batch size test #<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        #     {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':100, 'num_clients':200, 'iat':[0.4, 0.6, 1, 1.2, 1.3, 1.5, 1.6, 1.8]},
+        #     {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':500, 'num_clients':200, 'iat':[2, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.2, 4.3, 4.5, 4.75, 5]},
+        #     {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':1000, 'num_clients':200, 'iat':[1,2, 3, 3.5, 3.75, 4, 4.5, 4.75, 5, 5.25, 5.5, 6]},
+        #     {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':10000, 'num_clients':200, 'iat':[6, 7, 8, 8.65, 8.85, 9, 9.15, 9.3, 9.5]},
+        #     {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':20000, 'num_clients':200, 'iat':[7, 7.5, 8, 8.5, 9, 9.15, 9.3, 9.4, 9.5]},
         #     #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':25000, 'num_clients':200, 'iat':[7, 7.5, 8, 8.5, 9, 9.3, 9.4, 9.5, 9.6, 9.7]},#, 10]},#, 10.2, 10.4, 10.6]}
-        #     #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':30000, 'num_clients':200, 'iat':[7, 7.5, 8, 8.5, 9, 9.2, 9.3, 9.37, 9.4, 9.46, 9.5]},#, 9.7]},#, 10]},#, 10.2]},#, 10.3, 10.4,]},
+        #     {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':30000, 'num_clients':200, 'iat':[7, 7.5, 8, 8.5, 9, 9.2, 9.3, 9.37, 9.4, 9.46, 9.5]},#, 9.7]},#, 10]},#, 10.2]},#, 10.3, 10.4,]},
         #     #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':40000, 'num_clients':200, 'iat':[7, 7.5, 8, 8.5, 9, 9.3, 9.4, 9.5, 9.7]},#, 10, 10.2, 10.4, 10.6]}
         #     #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':50000, 'num_clients':200, 'iat':[7, 7.5, 8, 8.5, 9, 9.3, 9.5, 9.7]},#, 10, 10.2, 10.4, 10.6]}
         #     #--------------- Scale nodes ----
         #     # Tput: 200:8.85, 400:4
         #     #{'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs1','val':500, 'num_clients':200, 'iat':[2.5, 2.75, 3, 3.25, 3.5, 3.75, 3.85, 4, 4.15, 4.30, ]},
-        #     {'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs2','val':500, 'num_clients':400, 'iat':[2.5, 2.75, 3, 3.25, 3.5, 3.75, 3.85, 4, 4.15, ]},
+        #     # {'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs2','val':500, 'num_clients':400, 'iat':[2.5, 2.75, 3, 3.25, 3.5, 3.75, 3.85, 4, 4.15, ]},
         #     #{'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs3','val':500, 'num_clients':600, 'iat':[2.5, 2.75, 3, 3.25, 3.5, 3.75, 3.85, 4, 4.15, 4.30, ]},
         #     #{'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs4','val':500, 'num_clients':800, 'iat':[2.5, 2.75, 3, 3.25, 3.5, 3.75, 3.85, 4, 4.15, 4.30, ]},
         #     #--------------------------
@@ -195,26 +195,26 @@ def results_bs_lines(conf, figParams):
     #Kawkab: 1000:10.75, 10000:10, 20000:10, 25000:, 30000:9.75
     fgp = {}
     config['metric'] = [
-        { 'type':'btrdb', 'label':'BTrDB',
-          'name':'batch_size', 'points':[
-            {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':100, 'num_clients':200, 'iat':[0.4, 0.6, 1, 1.2, 1.3, 1.5,]},
-            #{'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs1','val':500, 'num_clients':200, 'iat':[2.5, 3, 3.75, 4, 4.15, 4.3]},
-            #{'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':1000, 'num_clients':200, 'iat':[1,2, 4.5, 5, 5.5, 6]},
-            {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':10000, 'num_clients':200, 'iat':[6, 7, 8, 8.65, 8.85, 9]},
-            #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':20000, 'num_clients':200, 'iat':[7, 8.5, 9, 9.15, 9.3, 9.4]},
-            {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':25000, 'num_clients':200, 'iat':[7, 7.5, 8.5, 9, 9.4, 9.5, 9.6, ]},
-            {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':30000, 'num_clients':200, 'iat':[7, 8, 8.5, 9, 9.2, 9.3, 9.37]},
-            #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':40000, 'num_clients':200, 'iat':[7, 8, 9, 9.3, 9.4, 9.5, 9.7]},
-            #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':50000, 'num_clients':200, 'iat':[7, 8, 9, 9.5, 9.7]},
-        ]},
+        # { 'type':'btrdb', 'label':'BTrDB',
+        #   'name':'batch_size', 'points':[
+        #     {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':100, 'num_clients':200, 'iat':[0.4, 0.6, 1, 1.2, 1.3, 1.5,]},
+        #     #{'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs1','val':500, 'num_clients':200, 'iat':[2.5, 3, 3.75, 4, 4.15, 4.3]},
+        #     #{'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':1000, 'num_clients':200, 'iat':[1,2, 4.5, 5, 5.5, 6]},
+        #     {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':10000, 'num_clients':200, 'iat':[6, 7, 8, 8.65, 8.85, 9]},
+        #     #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':20000, 'num_clients':200, 'iat':[7, 8.5, 9, 9.15, 9.3, 9.4]},
+        #     {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':25000, 'num_clients':200, 'iat':[7, 7.5, 8.5, 9, 9.4, 9.5, 9.6, ]},
+        #     {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':30000, 'num_clients':200, 'iat':[7, 8, 8.5, 9, 9.2, 9.3, 9.37]},
+        #     #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':40000, 'num_clients':200, 'iat':[7, 8, 9, 9.3, 9.4, 9.5, 9.7]},
+        #     #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':50000, 'num_clients':200, 'iat':[7, 8, 9, 9.5, 9.7]},
+        # ]},
         { 'type':'kawkab', 'label':'Kawkab',
           'name':'batch_size', 'points':[
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5, 8.5,  9.25, 10, 11, 11.75, 12]},#, 12.25, 12.5, 12.75, 13]},
+            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5, 8.5,  9.25, 10, 11, 11.75, 12]},#, 12.25, 12.5, 12.75, 13]},
             #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8, 9, 10, 10.75, 10.85,]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8, 9, 10, 10.75]},#, 11, 11.75]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7,9, 9.5, 10, 10.35]},#, 10.5]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7,9, 9.5, 10, 10.25, 11]},#, 11.75, 12], 12.25, 12.5,12.75]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25]},#, 10.75, 11]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8, 9, 10, 10.75]},#, 11, 11.75]},
+            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7,9, 9.5, 10, 10.35]},#, 10.5]},
+            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7,9, 9.5, 10, 10.25, 11]},#, 11.75, 12], 12.25, 12.5,12.75]},
+            # {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25]},#, 10.75, 11]},
         ]},
     ]
     fgp.update(figParams)
@@ -264,7 +264,7 @@ def results_bs_lines(conf, figParams):
 
     title = ""
 
-    batch_size_results_lines(config, results, fgp, fig_prefix, title, None, 1000, True, True, False)
+    batch_size_results_lines(config, results, fgp, fig_prefix, title, None, 1000, True, True, True)
 
 def results_bs_bars(conf, figParams):
     config = {}
@@ -285,22 +285,22 @@ def results_bs_bars(conf, figParams):
     config['metric'] = [
         { 'type':'kawkab', 'label':'Kawkab',
           'name':'batch_size', 'points':[
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[11.75]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[10.75]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[10.25]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[10.2]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[10]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[10]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[9.25]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[9]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[9.5]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[9.5]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[9.5]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[9.5]},
         ]},
         { 'type':'btrdb', 'label':'BTrDB',
           'name':'batch_size', 'points':[
             {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':100, 'num_clients':200, 'iat':[1.3]},
             {'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs1','val':500, 'num_clients':200, 'iat':[3.75]},
             {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':1000, 'num_clients':200, 'iat':[5.5]},
-            {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':10000, 'num_clients':200, 'iat':[8.85]},
-            {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':20000, 'num_clients':200, 'iat':[9.3]},
+            {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':10000, 'num_clients':200, 'iat':[8.65]},
+            {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':20000, 'num_clients':200, 'iat':[9.15]},
             #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':25000, 'num_clients':200, 'iat':[9.5]},
-            {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':30000, 'num_clients':200, 'iat':[9.2]},
+            {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':30000, 'num_clients':200, 'iat':[9]},
             #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':40000, 'num_clients':200, 'iat':[9]},
             #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':50000, 'num_clients':200, 'iat':[9]},
         ]},
@@ -340,7 +340,7 @@ def results_bs_lat50_bars(conf, figParams):
     config['metric'] = [
         { 'type':'kawkab', 'label':'Kawkab',
           'name':'batch_size', 'points':[
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[8.5]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5]},
             {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8]},
             {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8]},
             {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7]},
@@ -717,9 +717,9 @@ def plot_graphs(conf, figParams):
 
     # Results
     #--------
-    results_write_ratio(conf, figParams)
-    #results_bs_bars(conf, figParams)
-    #results_bs_lat50_bars(conf, figParams)
+    #results_write_ratio(conf, figParams)
+    results_bs_bars(conf, figParams)
+    results_bs_lat50_bars(conf, figParams)
     #results_bs_lines(conf, figParams)
     #stream_scale_results(conf, figParams)
     #hist_read_results_hq16(conf, figParams) #<<< Historical read results
