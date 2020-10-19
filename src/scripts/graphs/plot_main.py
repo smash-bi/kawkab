@@ -502,29 +502,37 @@ def results_write_ratio(conf, figParams):
     config = {}
     config.update(conf)
 
-    # fig_prefix = "04-write-ratio-all"
-    # config['metric'] = [
-    #     { 'type':'kawkab', 'label':'writes',
-    #       'name':'write_ratio', 'points':[
-    #         #{'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7,9, 9.5, 9.75,10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
-    #         #{'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
-    #         #{'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
-    #         {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
-    #     ]},
-    #     # { 'type':'kawkab', 'label':'reads',
-    #     #   'name':'write_ratio', 'points':[
-    #     #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5, 13.75]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
-    #     #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
-    #     #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
-    #     # ]},
-    #     # { 'type':'kawkab', 'label':'writes',
-    #     #   'name':'write_ratio', 'points':[
-    #     #     {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7, 9, 9.75, 10.2, 10.5, 11.25]},
-    #     #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5]},
-    #     #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[10, 13, 15, 17, 18, 18.5, 19.5, 20]},
-    #     #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[30, 33, 36, 40, 41]},
-    #     # ]},
-    # ]
+    fig_prefix = "04-write-ratio-all"
+    config['metric'] = [
+        # { 'type':'kawkab', 'label':'writes',
+        #   'name':'write_ratio', 'points':[
+        #     #{'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7,9, 9.5, 9.75,10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
+        #     #{'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
+        #     #{'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
+        # ]},
+        { 'type':'kawkab', 'label':'writes',
+          'name':'write_ratio', 'points':[
+            {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7,9, 9.5, 9.75,10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
+            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
+            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
+        ]},
+
+        # { 'type':'kawkab', 'label':'reads',
+        #   'name':'write_ratio', 'points':[
+        #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5, 13.75]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
+        #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
+        #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
+        # ]},
+        # { 'type':'kawkab', 'label':'writes',
+        #   'name':'write_ratio', 'points':[
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7, 9, 9.75, 10.2, 10.5, 11.25]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[10, 13, 15, 17, 18, 18.5, 19.5, 20]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[30, 33, 36, 40, 41]},
+        # ]},
+    ]
 
     #--------------------------------------------
 
@@ -541,16 +549,16 @@ def results_write_ratio(conf, figParams):
 
     #--------------------------------------------
 
-    fig_prefix = "04-write-ratio-writes"
-    config['metric'] = [
-        { 'type':'kawkab', 'label':'writes',
-          'name':'write_ratio', 'points':[
-            {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[30, 33, 36, 40, 41]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[10, 13, 17, 18.5, 19.5, 20]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 12, 13, 13.5]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7, 9, 10.2, 10.5, 11.25]},
-        ]},
-    ]
+    # fig_prefix = "04-write-ratio-writes"
+    # config['metric'] = [
+    #     { 'type':'kawkab', 'label':'writes',
+    #       'name':'write_ratio', 'points':[
+    #         {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[30, 33, 36, 40, 41]},
+    #         {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[10, 13, 17, 18.5, 19.5, 20]},
+    #         {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 12, 13, 13.5]},
+    #         {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7, 9, 10.2, 10.5, 11.25]},
+    #     ]},
+    # ]
 
     config['write_ratio'] = [0]
     config['num_clients'] = [200]

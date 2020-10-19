@@ -86,7 +86,7 @@ def write_ratio_results(conf, results, fig_params, figPrefix="", title="", xMax=
             print(conf['labels'][latType])
             pp.pprint(res_bundle)
 
-            plotTimeSeries(res_bundle, title, xlabel, ylabel, show_legend=True, fp=fgp, yMax=10000, xMax=xMax, logy=logY, yMin=0, xMin=-0.001,
+            plotTimeSeries(res_bundle, title, xlabel, ylabel, show_legend=True, fp=fgp, yMax=10000, xMax=xMax, logy=logY, yMin=0.9999, xMin=-0.001,
                            colors=colors, markers=markers, lspec=lines)
 
             if save_fig:

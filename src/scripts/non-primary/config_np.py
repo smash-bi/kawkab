@@ -34,7 +34,7 @@ def get_config():
     # The tuples and the number of machines in each tuple can be larger than
     # the super-leaves configuration that will be used in the experiment.
     conf['backend_indexes'] =   [
-                                    ('red',     [1,2,3,8,14]),
+                                    ('red',     [1,2,3]),
                                 ]
     conf['server_indexes'] =   [
                                     ('red',     [11]),
@@ -43,10 +43,10 @@ def get_config():
 
     conf['client_indexes'] =   [
                                     ('red',     [
-                                                 9, 10, 12, 13, 13,
-                                                 9, 10, 12, #13, 14,
-                                                 #9, 10, 12, 13, 14,
-                                                 #9, 10, 12, 13, 14,
+                                                 9, 10, 12, 13, 14,
+                                                 9, 10, 12, 13, 14,
+                                                 9, 10, 12, 13, 14,
+                                                 9, 10, 12, 13, 14,
                                                  ]),
                                 ]
 
@@ -74,12 +74,12 @@ def get_config():
     conf['client_base_port'] = 43567
 
     conf['test_type'] = ['rw']
-    conf['test_prefix' ] = ['hq19r']
+    conf['test_prefix' ] = ['hq21r']
     #conf['batch_size'] = [10000]
     conf['record_size'] = [16]
     conf['batch_writeratio_rps'] = [ # list of tuples (batch_size, write_ratio, [reqs_per_second list])
                 #(500, 100, [11.5]),
-                (10000, 0, [1]),
+                (1000000, 0, [0.1]),
                 # (10000, 100, [11, 12, 13.5, 14]),
                 #(100, 100, [13])
 
@@ -87,17 +87,17 @@ def get_config():
     conf['clients_per_machine'] = 10
     conf['files_per_client'] = [1]
 
-    conf['test_duration'] = 900
+    conf['test_duration'] = 300
     conf['warmup_sec'] = 0
-    conf['init_wait_msec'] = 1500000
+    conf['init_wait_msec'] = 250000#900000
 
     conf['test_runs'] = [1]
     #conf['svr_config_file'] ['config-non-primary.properties']
-    conf['rpc_buf_len'] = 6*1024*1024
+    conf['rpc_buf_len'] = 16*1024*1024#6*1024*1024
 
-    conf['high_mps'] = 10
+    conf['high_mps'] = 20
     conf['burst_dur_sec'] = 30
-    conf['burst_prob_perc'] = 2
+    conf['burst_prob_perc'] = 5
     conf['is_synchronous'] = "false"
     conf['read_recent'] = "false"
 

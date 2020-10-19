@@ -1,5 +1,6 @@
 package kawkab.fs.core;
 
+import kawkab.fs.commons.Commons;
 import kawkab.fs.commons.Configuration;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.core.exceptions.OutOfMemoryException;
@@ -389,9 +390,7 @@ public class PartitionedBufferedCache extends Cache {
 	// fixme: For debugging only
 	public void runStatsCollector() {
 		collector = new Thread(() -> {
-			SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss:SSS");
-			Date date = new Date(System.currentTimeMillis());
-			System.out.println("Current time: " + formatter.format(date));
+			System.out.println("Current time: " + Commons.currentTime());
 
 			//Accumulator accm = new Accumulator(10000);
 			//ApproximateClock clock = ApproximateClock.instance();
@@ -406,12 +405,14 @@ public class PartitionedBufferedCache extends Cache {
 			}
 
 			GlobalStoreManager gsm = GlobalStoreManager.instance();
+			ApproximateClock clock = ApproximateClock.instance();
+			long st = clock.currentTime();
 
 			try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile));) {
-				writer.write(formatter.format(date) + "\n");
+				writer.write("# " + Commons.currentTime() + "\n");
 				writer.write("# cache occupancy, local store occupancy, canEvict, gsQlen\n");
 
-				int n = 0;
+				//int n = 0;
 				while (working) {
 					long size = 0;
 					for (int i = 0; i < numPartitions; i++) {
@@ -426,9 +427,10 @@ public class PartitionedBufferedCache extends Cache {
 
 					//accm.put((int) ((clock.currentTime() - startT) / 1000.0), occupancy);
 
+					long elpSec = (clock.currentTime() - st)/1000;
 
-					System.out.println(String.format("%d: %.2f, %.2f, %.2f, %.2f, t=%d\n",++n, cacheOcc, lsOcc, canEvict, gsQlen, lss));
-					writer.write(String.format("%.2f, %.2f, %.2f, %.2f\n",cacheOcc, lsOcc, canEvict, gsQlen));
+					System.out.println(String.format("%d: %.2f, %.2f, %.2f, %.2f, t=%d\n",elpSec, cacheOcc, lsOcc, canEvict, gsQlen, lss));
+					writer.write(String.format("%.2f, %.2f, %.2f, %.2f, %d\n",cacheOcc, lsOcc, canEvict, gsQlen, elpSec));
 
 					try {
 						Thread.sleep(1000);

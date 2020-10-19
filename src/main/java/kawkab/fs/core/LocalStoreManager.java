@@ -270,6 +270,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 			System.out.print("S ");
 			//FIXME: What should we do here? Should we return?
 			throw new KawkabException(e);
+		} catch(Exception | AssertionError e) { //FIXME: For debugging purposes.
+			e.printStackTrace();
 		} finally {
 			if (channel != null) {
 				channels.releaseFileChannel(bid);

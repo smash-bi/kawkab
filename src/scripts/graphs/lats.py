@@ -69,3 +69,6 @@ print('w', wd['50%Lat'], wd['95%Lat'], wd['99%Lat'])
 print('r', np.percentile(rlf, 50), np.percentile(rlf, 95), np.percentile(rlf, 99))
 print('w', np.percentile(wlf, 50), np.percentile(wlf, 95), np.percentile(wlf, 99))
 print('a', np.percentile(alf, 50), np.percentile(alf, 95), np.percentile(alf, 99))
+
+a,b,c = np.percentile(alf, [50, 95, 99])
+print (a, b, c)

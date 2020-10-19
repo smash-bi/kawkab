@@ -329,10 +329,12 @@ public class TestClientAsync {
 					if (isController)
 						wLog.end(1);
 				} else {
-					if (readRecent)
+					if (readRecent) {
 						batchSize = sendFixedRandomWindowReadRequest(recGen, reqBatchSize, timestamps);
-					else
-						batchSize = sendHistoricalReadRequest(recGen, histReadTS, reqBatchSize);
+					} else {
+						//batchSize = sendHistoricalReadRequest(recGen, histReadTS, reqBatchSize);
+						batchSize = sendHistoricalReadRandomWindowRequest(recGen, histReadTS, reqBatchSize);
+					}
 
 					//batchSize = sendReadRequest(recGen, apClock.currentTime());
 					//batchSize = sendFixedWindowReadRequest(recGen, reqBatchSize, timestamps);
@@ -488,7 +490,7 @@ public class TestClientAsync {
 		long minTS = timestamps[iFile]+1;
 		long maxTS = minTS + batchSize;
 
-		long fs = client.size(fn)/recGen.size();
+		//long fs = client.size(fn)/recGen.size();
 
 		int numRead = client.readRecordsCounts(fn, minTS, maxTS, recGen, false);
 
@@ -508,9 +510,9 @@ public class TestClientAsync {
 		int iFile = fileRand.nextInt(files.length);
 		String fn = files[iFile];
 
-		long fs = client.size(fn);
+		long fs = client.size(fn)/recGen.size();
 
-		long maxTS = (long)(fs/100.0*(10+reqRand.nextInt(50)));
+		long maxTS = (long)(fs/100.0*(5+reqRand.nextInt(10)));
 		long minTS = maxTS - batchSize;
 		if (minTS < 0) minTS = 0;
 

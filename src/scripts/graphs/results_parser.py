@@ -87,12 +87,6 @@ def get_test_id(conf, params):
 
 # ------------------------------------------------------------------------------
 
-def _read_results(fname):
-    with open(fname) as data_file:
-        data = json.load(data_file)
-    return data
-
-
 def _get_results(conf, num_clients, results_dir):
     # cols = {'client':0,'thr':1,'avg_lat':2,'med_lat':3,'99lat':4,}
     results = []
@@ -101,6 +95,12 @@ def _get_results(conf, num_clients, results_dir):
         results.append(_read_results(results_file))
 
     return results
+
+
+def _read_results(fname):
+    with open(fname) as data_file:
+        data = json.load(data_file)
+    return data
 
 
 def get_avg_clients_results(conf, num_clients, results_dir):
@@ -149,13 +149,12 @@ def _num(s):
         return float(s)
 
 
-def get_and_parse_runs_data(res_dir, file_prefix):
+def get_and_parse_runs_data(res_dir, file_prefix, lat_from_hists=False):
     fname = '%s/%s'%(res_dir,file_prefix)
     print ("Loading", fname)
     res = {}
 
     with open(fname) as data_file:
-        #data = json.load(data_file)
         data = data_file.read().splitlines()
         for line in data:
             try:
@@ -181,6 +180,22 @@ def get_and_parse_runs_data(res_dir, file_prefix):
             except ValueError:
                 continue
 
+    if lat_from_hists:
+        mn, mx, avg, p25, p50, p75, p95, p99 = _lats_from_hists(res_dir)
+
+        print ('1 p50=%g, p95=%g, p99=%g'%(res['Median latency'], res['95% latency'], res['99% latency']))
+
+        res['Min latency'] = mn
+        res['Max latency'] = mx
+        res['Mean latency'] = avg
+        res['Median latency'] = p50
+        res['95% latency'] = p95
+        res['99% latency'] = p99
+
+        print ('2 p50=%g, p95=%g, p99=%g'%(res['Median latency'], res['95% latency'], res['99% latency']))
+
+        #import pdb; pdb.set_trace()
+
     #pprint(res)
     return res
 
@@ -196,13 +211,16 @@ def summarize_data(runs_data):
     maxLat = 0
 
     for data in runs_data:
+
         opsThr.append(data[cols['opsThr']])
         dataThr.append(data[cols['dataThr']])
         rpsThr.append(data[cols['rpsThr']])
+
         meanLat.append(data[cols['meanLat']])
         lat50.append(data[cols['lat50']])
         lat95.append(data[cols['lat95']])
         lat99.append(data[cols['lat99']])
+
         if minLat > data[cols['minLat']]: minLat = data[cols['minLat']]
         if maxLat < data[cols['maxLat']]: maxLat = data[cols['maxLat']]
 
@@ -218,11 +236,46 @@ def summarize_data(runs_data):
         'maxLat': (maxLat, 0)
     }
 
-    print('Lat50: ', res['lat50'], lat50)
-    print('Lat95: ', res['lat95'], lat95)
+    #print('Lat50: ', res['lat50'], lat50)
+    #print('Lat95: ', res['lat95'], lat95)
 
     #import pdb; pdb.set_trace()
     return res
+
+def _expand(lats, counts):
+    vals = []
+    l = len(lats)
+    for i in range(l):
+        for j in range(counts[i]):
+            vals.append(lats[i])
+
+    return np.sort(vals)
+
+def _lats_from_hists(res_dir):
+    f = '%s/read-results-hists.json'%(res_dir)
+    print('Reading ',f)
+    data = _read_results(f)
+    rl = data[0]['Latency Histogram']['latency']
+    rc = data[0]['Latency Histogram']['count']
+
+    f = '%s/write-results-hists.json'%(res_dir)
+    print('Reading ',f)
+    data = _read_results(f)
+    wl = data[0]['Latency Histogram']['latency']
+    wc = data[0]['Latency Histogram']['count']
+
+    rlf = _expand(rl, rc)
+    wlf = _expand(wl, wc)
+
+    rwlf = np.concatenate((rlf, wlf))
+
+    p25, p50, p75, p95, p99 = np.percentile(rwlf, [25, 50, 75, 95, 99])
+
+    mn = np.min(rwlf)
+    mx = np.max(rwlf)
+    avg = np.mean(rwlf)
+
+    return mn, mx, avg, p25, p50, p75, p95, p99
 
 def load_results(conf):
     # btrdb-btr3-nc120-cpm15-bs500-rs16-nf1-wr100-iat3.000
@@ -242,6 +295,8 @@ def load_results(conf):
                                     metric_point = point['val']
                                     test_prefix = point['prefix']
                                     res_file = point['res_file']
+                                    from_hists = False
+                                    if 'from_hist' in point and point['from_hist']: from_hists = True
                                     if 'num_clients' in point: clients = point['num_clients']
                                     for iat in point['iat']:
                                         params = {'test_type': test_type, 'test_prefix':test_prefix, 'batch_size': batch_size,
@@ -253,11 +308,13 @@ def load_results(conf):
                                         print (test_id)
                                         run_data = []
 
-                                        func = get_and_parse_runs_data if test_type == 'kawkab' else get_runs_data
-
                                         for run_i in conf['test_runs']:
                                             results_dir = '%s/%s/%s/run_%d' % (conf['results_dir'], test_type, test_id, run_i)
-                                            data = func(results_dir, res_file)
+
+                                            if test_type == 'kawkab':
+                                                data = get_and_parse_runs_data(results_dir, res_file, from_hists)
+                                            else:
+                                                data = get_runs_data(results_dir, res_file)
                                             run_data.append(data)
 
                                         all_results[test_id] = {'runs_data': run_data,
