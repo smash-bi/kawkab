@@ -109,13 +109,13 @@ def get_config():
 
         #(10000, 100, [9])
         #(1000, 100, [2, 4, 6, 8, 9, 10, 11, 12])
-        (100, 100, [2])
+        (100, 100, [2.2])
 
         #(1000, 100, [10.25])
     ]
 
     conf['test_type'] = ['rw']
-    conf['test_prefix'] = ['stable4']#['hq21w']#['kw47']#['kw46']
+    conf['test_prefix'] = ['unstable15']#['hq21w']#['kw47']#['kw46']
     conf['record_size'] = [64]#[64, 128, 256]#[16]#[16]
 
     conf['clients_per_machine'] = 10
@@ -124,13 +124,13 @@ def get_config():
 
     conf['files_per_client'] = [1]  # [2, 4, 12, 24, 36, 28]
 
-    conf['test_duration'] = 900#60#600#1500#60
+    conf['test_duration'] = 350#700#60#600#1500#60
     conf['warmup_sec'] = 0#120#0#120
     conf['init_wait_msec'] = 0
 
     conf['test_runs'] = [1]#[1, 2, 3, 4, 5]
 
-    conf['high_mps'] = 8
+    conf['high_mps'] = 6
     conf['burst_dur_sec'] = 1
     conf['burst_prob_perc'] = 20
     conf['is_synchronous'] = "false"

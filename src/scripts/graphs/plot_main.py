@@ -8,6 +8,7 @@ from batch_size import batch_size_lat_thr, batch_size_bars, batch_size_results_l
 from hist_reads import hist_read_results, hist_read_results_hq16
 from stream_scale import stream_scale_results_bars, stream_scale_lines
 from node_scale import node_scale_bars, node_scale_line
+from burst_handling import burst_handling_results
 
 # plt.use("Agg")
 
@@ -718,13 +719,14 @@ def plot_graphs(conf, figParams):
     # Results
     #--------
     #results_write_ratio(conf, figParams)
-    results_bs_bars(conf, figParams)
-    results_bs_lat50_bars(conf, figParams)
+    #results_bs_bars(conf, figParams)
+    #results_bs_lat50_bars(conf, figParams)
     #results_bs_lines(conf, figParams)
     #stream_scale_results(conf, figParams)
     #hist_read_results_hq16(conf, figParams) #<<< Historical read results
     #scale_nodes_bars(conf, figParams)
     #results_node_scale(conf, figParams)
+    burst_handling_results(conf, figParams)
 
 if __name__ == '__main__':
     conf = configParams({})

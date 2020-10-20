@@ -2,6 +2,7 @@ package kawkab.fs.testclient;
 
 import kawkab.fs.api.Record;
 import kawkab.fs.client.KClient;
+import kawkab.fs.commons.Commons;
 import kawkab.fs.core.ApproximateClock;
 import kawkab.fs.core.Filesystem;
 import kawkab.fs.core.exceptions.KawkabException;
@@ -158,7 +159,7 @@ public class TestClientAsync {
 	private void generateReqsBursty(final double lowMPS, final double highMPS, final int burstProb, final int burstDurSec,
 									int totalClients, int clientsPerMachine, int batchSize, final LinkedBlockingQueue<Instant> rq) {
 
-
+		System.out.println("Generate Requests Bursty... " + Commons.currentTime());
 
 		//double targetMPS = reqRateMPS/((double)totalCleints/(double)clientsPerMachine)/(double)batchSize; //total / ratePerMachine / batchSize
 		//double iatMicros = 1 / (targetMPS);  //Convert millions per second to nano second wait interval
@@ -181,7 +182,7 @@ public class TestClientAsync {
 
 		ApproximateClock apClock = ApproximateClock.instance();
 		long startTime = apClock.currentTime();
-		long lastTime = startTime;
+		long lastTime = 0;
 		BurstGenerator bgen = new BurstGenerator(lowMPS, highMPS, burstProb, burstDurSec, totalClients, clientsPerMachine, batchSize);
 		while(work) {
 			/*elapsedSec = (int)((apClock.currentTime()-startT)/1000.0);
@@ -207,10 +208,11 @@ public class TestClientAsync {
 			}
 
 			rq.add(clock.instant());
-			long elapsed = apClock.currentTime() - startTime;
+			long elapsed = (apClock.currentTime() - startTime)/1000;
 			if (elapsed > lastTime) {
 				lastTime = elapsed;
-				System.out.println("Time: " + new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
+				//System.out.println(new SimpleDateFormat("HH:mm:ss").format(new Date()));
+				System.out.println("t= "+elapsed);
 			}
 		}
 
@@ -622,6 +624,8 @@ public class TestClientAsync {
 
 		private BurstGenerator(final double lowMPS, final double highMPS, final int burstProb, final int burstDurSec,
 							   int totalClients, int clientsPerMachine, int batchSize) {
+			System.out.println("Creating burst generator");
+
 			this.burstDurSec = burstDurSec;
 			this.burstProb = burstProb;
 			burstRand = new Random(2);
