@@ -1,12 +1,12 @@
 package kawkab.fs.core;
 
-import java.io.File;
-import java.io.IOException;
-
 import kawkab.fs.commons.Configuration;
 import net.openhft.chronicle.map.ChronicleMap;
 
-public final class LocalStoreDB {
+import java.io.File;
+import java.io.IOException;
+
+public final class LocalStoreDB implements LocalStoreDBIface{
 	private final int id;
 	private final int maxSize;
 	private final String mapFilePath;
@@ -23,7 +23,7 @@ public final class LocalStoreDB {
 	}
 	
 	private void initMap() {
-		System.out.println("Map file path: " + mapFilePath);
+		System.out.println("Initializing ChronicleMap: " + mapFilePath);
 		File file = new File(mapFilePath).getParentFile();
 		if (!file.exists()) {
 			file.mkdirs();
@@ -41,10 +41,8 @@ public final class LocalStoreDB {
 			e.printStackTrace();
 		}
 	}
-	
-	/**
-	 * @return Previous location associated with blockName, or null if blockName was not already in the DB.
-	 */
+
+	@Override
 	public synchronized void put(BlockID id) {
 		//System.out.println("[LSDB] Added: " + id.name());
 		
@@ -64,6 +62,7 @@ public final class LocalStoreDB {
 	/**
 	 * @return Whether the blockName entry exists in the DB or not
 	 */
+	@Override
 	public synchronized boolean exists(BlockID id) {
 		//System.out.println("[LSDB] Exists: " + id.name());
 		return map.containsKey(id.localPath());
@@ -72,15 +71,18 @@ public final class LocalStoreDB {
 	/**
 	 * @return Location of the blockName, or null if blockName entry was not in the DB.
 	 */
+	@Override
 	public synchronized String removeEntry(BlockID id) {
 		//System.out.println("[LSDB] Removed: " + id.localPath());
 		return map.remove(id.localPath());
 	}
-	
+
+	@Override
 	public synchronized int size() {
 		return map.size();
 	}
-	
+
+	@Override
 	public synchronized void shutdown() {
 		map.close();
 	}

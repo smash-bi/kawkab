@@ -15,7 +15,7 @@ public class LocalStoreCache {
 	private int highMark;
 	private int lowMark;
 	private final LocalCache cache;
-	private LocalStoreDB lsd;
+	private LocalStoreDBIface lsd;
 	private Semaphore storePermits;
 	private int cacheSize;
 	private int toEvict;
@@ -25,7 +25,7 @@ public class LocalStoreCache {
 	private final static long START_TIME = System.currentTimeMillis();
 	private final static ApproximateClock clock = ApproximateClock.instance();
 
-	public LocalStoreCache(int id, int cacheSize, LocalStoreDB lsd, Semaphore permits) {
+	public LocalStoreCache(int id, int cacheSize, LocalStoreDBIface lsd, Semaphore permits) {
 		this.id = id;
 		cache = new LocalCache(cacheSize);
 		this.lsd = lsd;
