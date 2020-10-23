@@ -81,7 +81,7 @@ public final class LocalStoreDBRocksDB implements LocalStoreDBIface {
 			e.printStackTrace();
 			return;
 		}
-		
+
 		size++;
 
 		//System.out.println("Created block: "  + id +", "+ id.localPath());

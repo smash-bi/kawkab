@@ -2,6 +2,7 @@
 
 import json
 from pprint import pprint
+import os.path as path
 
 import numpy as np
 from plotutils import get_mean_and_conf
@@ -181,25 +182,32 @@ def get_and_parse_runs_data(res_dir, file_prefix, lat_from_hists=False):
                 continue
 
     if lat_from_hists:
-        mn, mx, avg, p25, p50, p75, p95, p99 = _lats_from_hists(res_dir)
+        mn, mx, avg, p25, p50, p75, p95, p99, lats = _lats_from_hists(res_dir)
 
-        print ('1 p50=%g, p95=%g, p99=%g'%(res['Median latency'], res['95% latency'], res['99% latency']))
+        print ('1 mn=%g, mx=%g, avg=%g, p50=%g, p95=%g, p99=%g'%(
+            res['Min latency'], res['Max latency'], res['Mean latency'],
+            res['Median latency'], res['95% latency'], res['99% latency']))
 
         res['Min latency'] = mn
         res['Max latency'] = mx
         res['Mean latency'] = avg
+        res['p25'] = p25
         res['Median latency'] = p50
+        res['p75'] = p75
         res['95% latency'] = p95
         res['99% latency'] = p99
+        res['lats'] = lats
 
-        print ('2 p50=%g, p95=%g, p99=%g'%(res['Median latency'], res['95% latency'], res['99% latency']))
+        print ('2 mn=%g, mx=%g, avg=%g, p50=%g, p95=%g, p99=%g'%(
+            res['Min latency'], res['Max latency'], res['Mean latency'],
+            res['Median latency'], res['95% latency'], res['99% latency']))
 
         #import pdb; pdb.set_trace()
 
     #pprint(res)
     return res
 
-def summarize_data(runs_data):
+def summarize_data(runs_data, getCDF=False):
     opsThr = []
     dataThr = []
     rpsThr = []
@@ -209,9 +217,9 @@ def summarize_data(runs_data):
     lat99 = []
     minLat = 9223372036854775807 # INT_MAX
     maxLat = 0
+    lats = []
 
     for data in runs_data:
-
         opsThr.append(data[cols['opsThr']])
         dataThr.append(data[cols['dataThr']])
         rpsThr.append(data[cols['rpsThr']])
@@ -220,6 +228,9 @@ def summarize_data(runs_data):
         lat50.append(data[cols['lat50']])
         lat95.append(data[cols['lat95']])
         lat99.append(data[cols['lat99']])
+
+        if getCDF and 'lats' in data:
+            lats = np.concatenate((lats, data['lats']))
 
         if minLat > data[cols['minLat']]: minLat = data[cols['minLat']]
         if maxLat < data[cols['maxLat']]: maxLat = data[cols['maxLat']]
@@ -233,14 +244,38 @@ def summarize_data(runs_data):
         'lat95': get_mean_and_conf(lat95),
         'lat99': get_mean_and_conf(lat99),
         'minLat': (minLat, 0),
-        'maxLat': (maxLat, 0)
+        'maxLat': (maxLat, 0),
+        #'lats': lats,
+        #'cdf': _dcdf(lats),
     }
+
+    if getCDF and len(lats) > 0:
+        res['lats'] = lats
+        res['cdf'] = _dcdf(lats)
+
+    #import pdb; pdb.set_trace()
 
     #print('Lat50: ', res['lat50'], lat50)
     #print('Lat95: ', res['lat95'], lat95)
 
-    #import pdb; pdb.set_trace()
     return res
+
+from bisect import bisect_right
+def _dcdf(data):
+    data = np.sort(data)
+    dsize = float(len(data))
+    xv = range(int(min(data)), int(max(data)))
+    yv = [_dcdf_calc(data, dsize, point) for point in xv]
+    return (xv, yv)
+
+def _dcdf_calc(data, dsize, point):
+    return (len(data[:bisect_right(data, point)]) / dsize)
+
+def _mycdf(lats):
+    cdf = [0 for _ in range(101)]
+    cnt = 0
+    dsize = len(lats)
+
 
 def _expand(lats, counts):
     vals = []
@@ -253,10 +288,15 @@ def _expand(lats, counts):
 
 def _lats_from_hists(res_dir):
     f = '%s/read-results-hists.json'%(res_dir)
-    print('Reading ',f)
-    data = _read_results(f)
-    rl = data[0]['Latency Histogram']['latency']
-    rc = data[0]['Latency Histogram']['count']
+    if path.exists(f):
+        print('Reading ',f)
+        data = _read_results(f)
+        rl = data[0]['Latency Histogram']['latency']
+        rc = data[0]['Latency Histogram']['count']
+    else:
+        print('File not exist. Skipping... ',f)
+        rl = []
+        rc = []
 
     f = '%s/write-results-hists.json'%(res_dir)
     print('Reading ',f)
@@ -275,7 +315,7 @@ def _lats_from_hists(res_dir):
     mx = np.max(rwlf)
     avg = np.mean(rwlf)
 
-    return mn, mx, avg, p25, p50, p75, p95, p99
+    return mn, mx, avg, p25, p50, p75, p95, p99, rwlf
 
 def load_results(conf):
     # btrdb-btr3-nc120-cpm15-bs500-rs16-nf1-wr100-iat3.000
@@ -296,7 +336,9 @@ def load_results(conf):
                                     test_prefix = point['prefix']
                                     res_file = point['res_file']
                                     from_hists = False
+                                    cdf = False
                                     if 'from_hist' in point and point['from_hist']: from_hists = True
+                                    if 'cdf' in point and point['cdf']: cdf = True
                                     if 'num_clients' in point: clients = point['num_clients']
                                     for iat in point['iat']:
                                         params = {'test_type': test_type, 'test_prefix':test_prefix, 'batch_size': batch_size,
@@ -317,11 +359,12 @@ def load_results(conf):
                                                 data = get_runs_data(results_dir, res_file)
                                             run_data.append(data)
 
+                                        sumdata = summarize_data(run_data, cdf)
                                         all_results[test_id] = {'runs_data': run_data,
-                                                            'agg_data': summarize_data(run_data),
+                                                            'agg_data': sumdata,
                                                             }
                                         all_results[test_id+res_file] = {'runs_data': run_data,
-                                                                'agg_data': summarize_data(run_data),
+                                                                'agg_data': sumdata,
                                                                 }
     return all_results
 

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import matplotlib as plt
-from thr_lat import thr_lat_iat
+from thr_lat import thr_lat_iat, lat_cdf
 from results_parser import load_results
 from plotutils import save_figures, fp_default
 from write_ratio import write_ratio_results
@@ -323,6 +323,49 @@ def results_bs_bars(conf, figParams):
 
     batch_size_bars(config, results, fgp, fig_prefix, title, None, None, True)
 
+def plot_cdf(conf, figParams):
+    config = {}
+    config.update(conf)
+    config['write_ratio'] = [100]
+    config['num_clients'] = [200]
+    config['clients_per_machine'] = [10]
+    config['batch_size'] = [10000]
+    config['record_size'] = [16]
+    config['files_per_client'] = [1]
+    config['test_runs'] = [1, 2, 3, 4, 5]
+
+    config['metric'] = [
+        { 'type':'kawkab', 'label':'Kawkab',
+          'name':'batch_size', 'points':[
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True, 'val':100, 'num_clients':200, 'iat':[6, 7, 9.25]},#, 10, 11, 11.75, 12]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True,  'val':500, 'num_clients':200, 'iat':[8, 9, 9.5]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True,  'val':1000, 'num_clients':200, 'iat':[8, 9, 9.5]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True,  'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5]},
+        ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'write_ratio', 'points':[
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True, 'val':100, 'num_clients':200, 'iat':[7,9, 9.5]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'cdf':True, 'val':80, 'num_clients':200, 'iat':[10, 12, 13]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'cdf':True, 'val':50, 'num_clients':200, 'iat':[17, 19, 19.75]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'cdf':True, 'val':20, 'num_clients':200, 'iat':[36, 38, 40]},
+        # ]},
+    ]
+
+    fgp = {}
+    fgp.update(figParams)
+    fgp.update({
+        'figsize':      (3.5, 2.2),
+        'dimensions':   (0.19, 0.975, 0.85, 0.2),
+        "legend_cols": 3,
+        'legend_position':  (0.5, 1.25),
+    })
+
+    results = load_results(config)
+
+    fig_prefix = "cdf"
+
+    lat_cdf(config, results, fgp, fig_prefix, True)
+
 def results_bs_lat50_bars(conf, figParams):
     config = {}
     config.update(conf)
@@ -432,42 +475,46 @@ def thr_lat_write_ratio(conf, figParams):
     config.update(conf)
 
     config['metric'] = [
-        { 'type':'kawkab', 'label':'writes',
-          'name':'write_ratio', 'points':[
-            #{'res_file':'write-results.json', 'prefix':'rw-kw29', 'val':100, 'num_clients':200, 'iat':[8,10,11]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw30', 'val':90, 'num_clients':200, 'iat':[5, 9, 10.5, 11.25, 11.75, 12]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw30', 'val':50, 'num_clients':200, 'iat':[13, 14, 15, 16, 17, 18, 19, 20]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw30', 'val':10, 'num_clients':200, 'iat':[22, 24, 26, 28, 28.5, 33, 33.5, 34]},
-            #----------------------
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7,9, 9.5, 9.75,10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
-
-        ]},
-        { 'type':'kawkab', 'label':'reads',
-          'name':'write_ratio', 'points':[
-            #{'res_file':'read-results.json', 'prefix':'rw-kw30', 'val':90, 'num_clients':200, 'iat':[5, 9, 10.5, 11.25, 11.75, 12]},
-            #{'res_file':'read-results.json', 'prefix':'rw-kw30', 'val':50, 'num_clients':200, 'iat':[13, 14, 15, 16, 17, 18, 19, 20]},
-            #{'res_file':'read-results.json', 'prefix':'rw-kw30', 'val':10, 'num_clients':200, 'iat':[22, 24, 26, 28, 28.5, 33, 33.5, 34]},
-            #-------------------------
-            {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5, 13.75]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
-            {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
-            {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
-        ]},
-        # { 'type':'kawkab', 'label':'Kawkab',
+        # { 'type':'kawkab', 'label':'writes',
         #   'name':'write_ratio', 'points':[
-        #     #{'res_file':'all-results.json', 'prefix':'rw-kw29', 'val':100, 'num_clients':200, 'iat':[8,10,11]},
-        #     #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':90, 'num_clients':200, 'iat':[5, 9, 10.5, 11.25, 11.75, 12]},
-        #     #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':50, 'num_clients':200, 'iat':[13, 14, 15, 16, 17, 18, 19, 20]},
-        #     #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':10, 'num_clients':200, 'iat':[22, 24, 26, 28, 28.5, 33, 33.5, 34]},
-        #     #-----------------------
-        #     {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75, 10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
-        #     #{'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5, 13.75]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
-        #     #{'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[10, 13, 14, 15, 17, 18, 18.5, 19, 19.5, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
-        #     #{'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[30, 33, 36, 38, 40, 41, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw29', 'val':100, 'num_clients':200, 'iat':[8,10,11]},
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw30', 'val':90, 'num_clients':200, 'iat':[5, 9, 10.5, 11.25, 11.75, 12]},
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw30', 'val':50, 'num_clients':200, 'iat':[13, 14, 15, 16, 17, 18, 19, 20]},
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw30', 'val':10, 'num_clients':200, 'iat':[22, 24, 26, 28, 28.5, 33, 33.5, 34]},
+        #     #----------------------
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7,9, 9.5, 9.75,10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
+        #     #-----------------------------
         #
         # ]},
+        # { 'type':'kawkab', 'label':'reads',
+        #   'name':'write_ratio', 'points':[
+        #     #{'res_file':'read-results.json', 'prefix':'rw-kw30', 'val':90, 'num_clients':200, 'iat':[5, 9, 10.5, 11.25, 11.75, 12]},
+        #     #{'res_file':'read-results.json', 'prefix':'rw-kw30', 'val':50, 'num_clients':200, 'iat':[13, 14, 15, 16, 17, 18, 19, 20]},
+        #     #{'res_file':'read-results.json', 'prefix':'rw-kw30', 'val':10, 'num_clients':200, 'iat':[22, 24, 26, 28, 28.5, 33, 33.5, 34]},
+        #     #-------------------------
+        #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5, 13.75]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
+        #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
+        #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
+        # ]},
+        { 'type':'kawkab', 'label':'Kawkab',
+          'name':'write_ratio', 'points':[
+            #{'res_file':'all-results.json', 'prefix':'rw-kw29', 'val':100, 'num_clients':200, 'iat':[8,10,11]},
+            #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':90, 'num_clients':200, 'iat':[5, 9, 10.5, 11.25, 11.75, 12]},
+            #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':50, 'num_clients':200, 'iat':[13, 14, 15, 16, 17, 18, 19, 20]},
+            #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':10, 'num_clients':200, 'iat':[22, 24, 26, 28, 28.5, 33, 33.5, 34]},
+            #-----------------------
+            {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75, 10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5, 13.75]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
+            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[10, 13, 14, 15, 17, 18, 18.5, 19, 19.5, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
+            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[30, 33, 36, 38, 40, 41, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
+            #------------
+            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'val':100, 'num_clients':200, 'iat':[8, 9, 10, 10.75]},#, 11, 11.75]},
+            #{'res_file':'all-results.json', 'prefix':'rw-kw47', 'from_hist':True, 'val':80, 'num_clients':400, 'iat':[5, 8, 10, 13]},
+
+        ]},
         # { 'type':'kawkab', 'label':'Kawkab',
         #   'name':'write_ratio', 'points':[
         #     #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[8, 9, 9.5, 10, 10.25, 10.5, 10.75]},
@@ -710,6 +757,7 @@ def plot_graphs(conf, figParams):
     # figParams['legend_position'] = (0.47, 1.45)
     # figParams['bars_width'] = 0.1
 
+    plot_cdf(conf, figParams)
     #thr_lat_bs(conf, figParams)
     #thr_lat_write_ratio(conf, figParams)
     #thr_lat_iat(conf, figParams)
@@ -726,7 +774,7 @@ def plot_graphs(conf, figParams):
     #hist_read_results_hq16(conf, figParams) #<<< Historical read results
     #scale_nodes_bars(conf, figParams)
     #results_node_scale(conf, figParams)
-    burst_handling_results(conf, figParams)
+    #burst_handling_results(conf, figParams)
 
 if __name__ == '__main__':
     conf = configParams({})

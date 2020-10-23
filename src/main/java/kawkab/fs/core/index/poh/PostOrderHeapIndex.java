@@ -66,8 +66,11 @@ public class PostOrderHeapIndex implements DeferredWorkReceiver<POHNode> {
 		int headerBytes = POHNode.headerSizeBytes();
 
 		nodeSizeBytes = indexNodeSizeBytes;
-		entriesPerNode = (int) Math.ceil((indexNodeSizeBytes-headerBytes)*1.0*percentEntriesPerNode/100 / entrySize); //FIXME: We should get these values from POHONode
-		childrenPerNode = (int) ((indexNodeSizeBytes-headerBytes-(entriesPerNode*entrySize))*1.0 / childSize);
+		//entriesPerNode = (int) Math.ceil((indexNodeSizeBytes-headerBytes)*1.0*percentEntriesPerNode/100 / entrySize); //FIXME: We should get these values from POHONode
+		//childrenPerNode = (int) ((indexNodeSizeBytes-headerBytes-(entriesPerNode*entrySize))*1.0 / childSize);
+
+		childrenPerNode = 2;
+		entriesPerNode = (int)((indexNodeSizeBytes-headerBytes-(childrenPerNode*childSize))*1.0 / entrySize);
 
 		//System.out.printf("inumber: %d, indexNodeSize=%d, entriesPerNode=%d, childrenPerNode=%d, headerSize=%d, entrySize=%d, childSize=%d, %%entries=%d, nodesPerBlock=%d\n",
 		//		inumber, indexNodeSizeBytes, entriesPerNode, childrenPerNode, headerBytes, entrySize, childSize, percentEntriesPerNode, nodesPerBlock);

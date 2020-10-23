@@ -416,8 +416,8 @@ public class TestClientAsync {
 			//	System.out.printf("cid=%d, file=%s, TS=%d\n", cid, fnames[i], records[i].timestamp());
 		}
 
-		//client.appendRecords(fnames, records);
-		client.appendRecordsUnpacked(fnames, records);
+		client.appendRecords(fnames, records);
+		//client.appendRecordsUnpacked(fnames, records);
 	}
 
 	private void sendAppendRequestSameFile(String[] fnames, Record[] records, long[] timestamps) throws KawkabException {

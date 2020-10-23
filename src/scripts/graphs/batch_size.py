@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 from results_parser import get_test_id, cols
-from plotutils import plotBars, plt, plotTimeSeries
+from plotutils import plotBars, plt, plotTimeSeries, plotCDF
 import pprint as pp
 
 
@@ -141,11 +141,12 @@ def batch_size_bars(conf, results, fig_params, figPrefix="", title="", xMax=None
     pp.pprint(res_bundle)
 
     plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params,
-             yMax=yMax, xMax=xMax, show_improvement=False, show_height=True)
+             yMax=yMax, xMax=xMax, show_improvement=False, show_height=False)
 
     if save_fig:
         plt.savefig("%s/%s.pdf" % (conf["fig_dir"], figPrefix))
         plt.savefig("%s/%s.eps" % (conf["fig_dir"], figPrefix))
+        plt.savefig("%s/%s.png" % (conf["fig_dir"], figPrefix), dpi=300)
 
 def batch_size_bars_lat(conf, results, fig_params, figPrefix="", title="", xMax=None, yMax=None, save_fig=False):
     colors = ["#2b8cbe", "#2b8cbe", "#2b8cbe", #"#2b8cbe",

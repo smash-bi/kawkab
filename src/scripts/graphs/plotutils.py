@@ -277,8 +277,9 @@ def plotTimeSeries(data, title, xlabel, ylabel, fp=fp_default, annotations=None,
 
         annotations = None
     if hline:
-        plt.axhline(0.5, ls="--", c="silver")
-        plt.axhline(percentile_val / 100.0, ls="--", c="silver")
+        plt.axhline(0.5, ls="--", c="darkgray", lw=0.75)
+        plt.axhline(0.95, ls="--", c="darkgray", lw=0.75)
+        plt.axhline(0.99, ls="--", c="darkgray", lw=0.75)
 
     plt.xlabel(xlabel, fontsize=fp["xylabels_font_size"], multialignment="center", labelpad=fp["xlabelpad"])
     plt.ylabel(ylabel, fontsize=fp["xylabels_font_size"], multialignment="center", labelpad=fp["ylabelpad"])
@@ -332,7 +333,7 @@ def plotTimeSeries(data, title, xlabel, ylabel, fp=fp_default, annotations=None,
 def plotCDF(data, title, xlabel, ylabel, fp=fp_default, annotations=None, step=False,
             hline=True, N=0, yMin0=True, exact_ticks=False, xMax=None,
             show_legend=True, legend_loc=0, xticks=True, subplot=None,
-            first_plot=True, logx=False, colors=None):
+            first_plot=True, logx=False, colors=None, lspec=None):
     data_mod = []
     xxMax = 0
     for index, line in enumerate(data):
@@ -367,7 +368,7 @@ def plotCDF(data, title, xlabel, ylabel, fp=fp_default, annotations=None, step=F
     return plotTimeSeries(data_mod, title, xlabel, ylabel,
                           annotations=annotations, step=step, hline=hline,
                           exact_ticks=exact_ticks, show_legend=show_legend,
-                          xticks=xticks, yMax=1.1, xMax=xxMax,
+                          xticks=xticks, yMax=1.1, xMax=xxMax, lspec=lspec,
                           first_plot=first_plot, subplot=subplot, logx=logx, colors=colors, fp=fp)
 
 
