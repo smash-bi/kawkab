@@ -20,12 +20,17 @@ public class KClient {
 	private Map<String, Session> sessions;
 	private ByteBuffer buffer;
 
-	private static int BUFLEN_BYTES = 16 * 1024 * 1024; // Maximum data size per RPC
+	private final int DEFAULT_BUFLEN = 2097152;  ///Match with config.properties maxBufferLen parameter
+	private final int BUFLEN_BYTES; // = 16 * 1024 * 1024; // Maximum data size per RPC
 
 	public KClient (int id) {
 		this.id = id;
 		sessions = new HashMap<>();
+
+		BUFLEN_BYTES = Integer.parseInt(System.getProperty("rpcbufferlen", ""+DEFAULT_BUFLEN));
+
 		buffer = ByteBuffer.allocate(BUFLEN_BYTES);
+
 	}
 
 	public synchronized void connect(String ip, int port) throws KawkabException {

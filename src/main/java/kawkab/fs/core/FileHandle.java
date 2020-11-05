@@ -57,8 +57,8 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 		if (mode == FileMode.APPEND) //Pre-fetch the last block for writes
 			inode.loadLastBlock();
 
-		//rLog = new LatHistogram(TimeUnit.MICROSECONDS, "R-"+inumber, 10, 10000);
-		wLog = new LatHistogram(TimeUnit.NANOSECONDS, "W-"+inumber, 10, 20000);
+		//rLog = new LatHistogram(TimeUnit.MICROSECONDS, "R-"+inumber, 10, 5000);
+		wLog = new LatHistogram(TimeUnit.NANOSECONDS, "W-"+inumber, 10, 10000);
 	}
 
 	/**
@@ -110,7 +110,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				cache.releaseBlock(inb.id());
 			}
 
-			//rLog.end();
+			//rLog.end(1);
 		}
 
 		return bytesRead;
@@ -151,7 +151,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				cache.releaseBlock(inb.id());
 			}
 
-			//rLog.end();
+			//rLog.end(1);
 		}
 	}
 
@@ -182,7 +182,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				cache.releaseBlock(inb.id());
 			}
 
-			//rLog.end();
+			//rLog.end(1);
 		}
 	}
 	
@@ -226,7 +226,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				cache.releaseBlock(inb.id());
 			}
 
-			//rLog.end();
+			//rLog.end(1);
 		}
 	}
 	
@@ -275,7 +275,7 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 				cache.releaseBlock(inb.id());
 			}
 
-			//rLog.end();
+			//rLog.end(1);
 		}
 	}
 
@@ -584,4 +584,8 @@ public final class FileHandle implements DeferredWorkReceiver<InodesBlock> {
 	public LatHistogram writeStats() {
 		return wLog;
 	}
+
+	/*public LatHistogram readStats() {
+		return rLog;
+	}*/
 }

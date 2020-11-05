@@ -1,9 +1,9 @@
 #!/usr/bin/python
 import matplotlib as plt
-from thr_lat import thr_lat_iat, lat_cdf
+from thr_lat import thr_lat_iat, lat_cdf, rs_bars_datathr, rs_bars_rps, lat_rs_cdf
 from results_parser import load_results
 from plotutils import save_figures, fp_default
-from write_ratio import write_ratio_results
+from write_ratio import write_ratio_results, write_ratio_thr_lat, wr_cdf_results
 from batch_size import batch_size_lat_thr, batch_size_bars, batch_size_results_lines, batch_size_bars_lat
 from hist_reads import hist_read_results, hist_read_results_hq16
 from stream_scale import stream_scale_results_bars, stream_scale_lines
@@ -113,6 +113,45 @@ def getLabels():
         'maxLat': 'Max'
     }
 
+def rs_bars(conf, figParams):
+    config = {}
+    config.update(conf)
+
+    config['metric'] = [
+        { 'type':'kawkab', 'label':'Kawkab',
+          'name':'record_size', 'points':[
+            #------------------- Batch size -----------------------------------
+            {'res_file':'all-results.json', 'prefix':'rw-v2t1', 'val':64, 'num_clients':800, 'iat':[6]},
+            {'res_file':'all-results.json', 'prefix':'rw-v2t1', 'val':96, 'num_clients':800, 'iat':[5]},
+            {'res_file':'all-results.json', 'prefix':'rw-v2t1', 'val':128, 'num_clients':800, 'iat':[3]},
+            {'res_file':'all-results.json', 'prefix':'rw-v2t1', 'val':160, 'num_clients':800, 'iat':[2]},
+            {'res_file':'all-results.json', 'prefix':'rw-v2t1', 'val':192, 'num_clients':800, 'iat':[2]},
+        ]},
+    ]
+    config['write_ratio'] = [100]
+    config['num_clients'] = [800]
+    config['clients_per_machine'] = [10]
+    config['batch_size'] = [100]
+    config['record_size'] = [0]
+    config['files_per_client'] = [1]
+    #config['iat'] = [925, 875, 825, 775, 750]
+    config['test_runs'] = [1,2,3]
+
+    fgp = {}
+    fgp.update(figParams)
+    fgp.update({"legend_cols": 3, 'markers': True})
+
+    #metric = ('write_ratio', config['write_ratio'])
+
+    results = load_results(config)
+
+    #title = "Throughput and latency (Batch Size)"
+    title = ""
+    fig_prefix = "rs-bars-data"
+    rs_bars_datathr(config, results, fgp, fig_prefix, title, None, None, True)
+    fig_prefix = "rs-bars-rps"
+    rs_bars_rps(config, results, fgp, fig_prefix, title, None, None, True)
+
 def thr_lat_bs(conf, figParams):
     config = {}
     config.update(conf)
@@ -128,23 +167,35 @@ def thr_lat_bs(conf, figParams):
 
     config['write_ratio'] = [100]
     config['metric'] = [
-        { 'type':'kawkab', 'label':'Kawkab',
-          'name':'batch_size', 'points':[
-            #------------------- Batch size -----------------------------------
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5, 8.5,  9.25, 10, 11, 11.75, 12]},#, 12.25, 12.5, 12.75, 13]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8, 9, 9.5, 10, 10.5, 10.75, 10.85, 11, 11.25, ]}, #, 13]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75]},#, 12, 12.25, 12.5, 12.75, 13]},#, 13.25]}, #, 13]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75,10, 10.2, 10.35, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25, 10.5, 11]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25, 10.75, 11]},
-            #-------------------- Scale nodes ----------------------------------
-            # Tput: 200:10.2, 400:10.2, 600:10.5
-            # {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75,10, 10.2, 10.35, ]},
-            # {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':400, 'iat':[7, 9, 9.5, 9.75, 10.2, 10.5]},
-            # {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':600, 'iat':[7, 9, 9.5, 9.75, 10, 10.2, 10.5, 11]},
-            # {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':800, 'iat':[9.5, 9.75, 10, 10.2, 10.5, 11]},
-            #------------------------ Scale Nodes 1000 --------------------
-        ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'batch_size', 'points':[
+        # #     #------------------- Batch size -----------------------------------
+        # #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5, 8.5,  9.25, 10, 11, 11.75, 12]},#, 12.25, 12.5, 12.75, 13]},
+        # #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8, 9, 9.5, 10, 10.5, 10.75, 10.85, 11, 11.25, ]}, #, 13]},
+        # #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75]},#, 12, 12.25, 12.5, 12.75, 13]},#, 13.25]}, #, 13]},
+        # #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75,10, 10.2, 10.35, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+        # #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25, 10.5, 11]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+        # #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25, 10.75, 11]},
+        #     #-------------------- Scale nodes ----------------------------------
+        #     # Tput: 200:10.2, 400:10.2, 600:10.5
+        #     # {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75,10, 10.2, 10.35, ]},
+        #     # {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':400, 'iat':[7, 9, 9.5, 9.75, 10.2, 10.5]},
+        #     # {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':600, 'iat':[7, 9, 9.5, 9.75, 10, 10.2, 10.5, 11]},
+        #     # {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':10000, 'num_clients':800, 'iat':[9.5, 9.75, 10, 10.2, 10.5, 11]},
+        #
+        #     #--------------- Scale nodes, batch size 1000 --------------------
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5, 8.5,  9.25, 10, 11, 11.75, 12]},
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8, 9, 9.5, 10, 10.5, 10.75, 10.85, 11, 11.25, ]},
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8, 9, 9.25, 9.5,]},
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75,10, 10.2, 10.35, 10.5, 11]},
+        #     # {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25, 10.5, 11]},
+        #     # {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25, 10.75, 11]},
+        #     # {'res_file':'all-results.json', 'prefix':'rw-16kbs8-clp20', 'val':1000, 'num_clients':400, 'iat':[7.75, 8, 8.25, 8.5]},
+        #     # {'res_file':'all-results.json', 'prefix':'rw-16kbs8-clp20', 'val':1000, 'num_clients':600, 'iat':[7.75, 8, 8.25, 8.5]},
+        #     # {'res_file':'all-results.json', 'prefix':'rw-16kbs8-clp20', 'val':1000, 'num_clients':800, 'iat':[8, 8.25, 8.5]},
+        #     # {'res_file':'all-results.json', 'prefix':'rw-16kbs8-clp20', 'val':1000, 'num_clients':1000, 'iat':[8, 8.25, 8.5]},
+        #     #{'res_file':'all-results.json', 'prefix':'rw-16kbs9-clp20', 'val':1000, 'num_clients':200, 'iat':[6.75, 7, 7.25, 7.5, 7.75, 8.25]},
+        # ]},
         # { 'type':'btrdb', 'label':'BTrDB',
         #   'name':'batch_size', 'points':[
         #     #Results for batch size test #<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -165,10 +216,39 @@ def thr_lat_bs(conf, figParams):
         #     #{'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs4','val':500, 'num_clients':800, 'iat':[2.5, 2.75, 3, 3.25, 3.5, 3.75, 3.85, 4, 4.15, 4.30, ]},
         #     #--------------------------
         # ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'record_size', 'points':[
+        #     #------------------- Batch size -----------------------------------
+        #     {'res_file':'all-results.json', 'prefix':'rw-v2t1', 'val':64, 'num_clients':800, 'iat':[1,2,3,4,5,6]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-v2t1', 'val':96, 'num_clients':800, 'iat':[1,2,3,4,5]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-v2t1', 'val':128, 'num_clients':800, 'iat':[1,2,3]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-v2t1', 'val':160, 'num_clients':800, 'iat':[1,2]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-v2t1', 'val':192, 'num_clients':800, 'iat':[1,2]},
+        # ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'batch_size', 'points':[
+        #     {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':100, 'num_clients':800, 'iat':[2, 4, 6, 7, 7.5, 8, 8.5, 9, 9.5, 9.75, 10, 10.5, 11, 11.5, 12]},
+        #     #{'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':500, 'num_clients':800, 'iat':[4, 6, 8, 9, 10, 10.2, 10.4, 10.6, 10.8, 11, 11.5, 12, 12.25, 12.5, 12.75, 13]},
+        #     #{'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':1000, 'num_clients':800, 'iat':[6, 8, 9, 10, 10.4, 11, 11.5, 12, 12.5, 12.75, 13]},
+        #     #{'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':10000, 'num_clients':800, 'iat':[6, 8, 9, 10, 11, 12, 12.5, 13, 13.25, 13.5,]},
+        #     #{'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':20000, 'num_clients':800, 'iat':[6, 8, 9, 10, 11, 12, 13, 13.25,]},
+        #      #{'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':30000, 'num_clients':800, 'iat':[6, 8, 9, 10, 11, 12, 13, 13.25, 13.5, 14]},
+        # ]},
+        { 'type':'kawkab', 'label':'Kawkab',
+          'name':'batch_size', 'points':[
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':100, 'num_clients':800, 'iat':[2, 4, 6, 7, 7.5,]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':500, 'num_clients':800, 'iat':[4, 6, 8, 9, 10, 11, 12, 12.5, 12.75, 13]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':1000, 'num_clients':800, 'iat':[6, 8, 9, 10, 10.4, 11, 11.5, 12, 12.5, 12.75, 13, ]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':10000, 'num_clients':800, 'iat':[6, 8, 9, 10, 11, 12, 12.5, 13, 13.25, 13.5,]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':20000, 'num_clients':800, 'iat':[6, 8, 9, 10, 11, 12, 13, 13.25,]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':30000, 'num_clients':800, 'iat':[6, 8, 9, 10, 11, 12, 13,]},
+        ]},
     ]
+
+    #100:7, 500:12.5, 1000:12.75, 10000:13, 20000:13, 30000:13
     config['num_clients'] = [200]
     config['clients_per_machine'] = [10]
-    config['batch_size'] = [0]
+    config['batch_size'] = [100]
     config['record_size'] = [16]
     config['files_per_client'] = [1]
     #config['iat'] = [925, 875, 825, 775, 750]
@@ -195,30 +275,30 @@ def results_bs_lines(conf, figParams):
     #BTrDB: 1000:5.5, 10000:8.85, 20000:9.4, 25000:9.5, 30000:9.3, 40000:9.3
     #Kawkab: 1000:10.75, 10000:10, 20000:10, 25000:, 30000:9.75
     fgp = {}
-    config['metric'] = [
-        # { 'type':'btrdb', 'label':'BTrDB',
-        #   'name':'batch_size', 'points':[
-        #     {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':100, 'num_clients':200, 'iat':[0.4, 0.6, 1, 1.2, 1.3, 1.5,]},
-        #     #{'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs1','val':500, 'num_clients':200, 'iat':[2.5, 3, 3.75, 4, 4.15, 4.3]},
-        #     #{'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':1000, 'num_clients':200, 'iat':[1,2, 4.5, 5, 5.5, 6]},
-        #     {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':10000, 'num_clients':200, 'iat':[6, 7, 8, 8.65, 8.85, 9]},
-        #     #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':20000, 'num_clients':200, 'iat':[7, 8.5, 9, 9.15, 9.3, 9.4]},
-        #     {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':25000, 'num_clients':200, 'iat':[7, 7.5, 8.5, 9, 9.4, 9.5, 9.6, ]},
-        #     {'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':30000, 'num_clients':200, 'iat':[7, 8, 8.5, 9, 9.2, 9.3, 9.37]},
-        #     #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':40000, 'num_clients':200, 'iat':[7, 8, 9, 9.3, 9.4, 9.5, 9.7]},
-        #     #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':50000, 'num_clients':200, 'iat':[7, 8, 9, 9.5, 9.7]},
-        # ]},
-        { 'type':'kawkab', 'label':'Kawkab',
-          'name':'batch_size', 'points':[
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5, 8.5,  9.25, 10, 11, 11.75, 12]},#, 12.25, 12.5, 12.75, 13]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8, 9, 10, 10.75, 10.85,]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8, 9, 10, 10.75]},#, 11, 11.75]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7,9, 9.5, 10, 10.35]},#, 10.5]},
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7,9, 9.5, 10, 10.25, 11]},#, 11.75, 12], 12.25, 12.5,12.75]},
-            # {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25]},#, 10.75, 11]},
-        ]},
-    ]
     fgp.update(figParams)
+    config['metric'] = [
+        { 'type':'btrdb', 'label':'BTrDB',
+          'name':'batch_size', 'points':[
+            #{'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':100, 'num_clients':200, 'iat':[0.4, 0.6, 1, 1.2, 1.3, 1.5,]},
+            {'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs1','val':500, 'num_clients':200, 'iat':[2.5, 3, 3.75, 4, 4.15, 4.3]},
+            #{'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':1000, 'num_clients':200, 'iat':[1,2, 4.5, 5, 5.5, 6]},
+            #{'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':10000, 'num_clients':200, 'iat':[6, 7, 8, 8.65, 8.85, 9]},
+            #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':20000, 'num_clients':200, 'iat':[7, 8.5, 9, 9.15, 9.3, 9.4]},
+            #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':25000, 'num_clients':200, 'iat':[7, 7.5, 8.5, 9, 9.4, 9.5, 9.6, ]},
+            #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':30000, 'num_clients':200, 'iat':[7, 8, 8.5, 9, 9.2, 9.3, 9.37]},
+            #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':40000, 'num_clients':200, 'iat':[7, 8, 9, 9.3, 9.4, 9.5, 9.7]},
+            #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':50000, 'num_clients':200, 'iat':[7, 8, 9, 9.5, 9.7]},
+        ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'batch_size', 'points':[
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5, 8.5,  9.25, 10, 11, 11.75, 12]},#, 12.25, 12.5, 12.75, 13]},
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8, 9, 10, 10.75, 10.85,]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8, 9, 10, 10.75]},#, 11, 11.75]},
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7,9, 9.5, 10, 10.35]},#, 10.5]},
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7,9, 9.5, 10, 10.25, 11]},#, 11.75, 12], 12.25, 12.5,12.75]},
+        #     # {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7,9, 9.5, 9.75, 10, 10.25]},#, 10.75, 11]},
+        # ]},
+    ]
     fgp.update({
         'figsize':      (6, 2.5),
         'dimensions':   (0.125, 0.975, 0.85, 0.18),
@@ -228,30 +308,6 @@ def results_bs_lines(conf, figParams):
     })
     fig_prefix = "03-batch-lines"
     #-----------------------------------
-
-    # ------------------------
-    # config['metric'] = [
-    #     { 'type':'btrdb', 'label':'BTrDB',
-    #       'name':'batch_size', 'points':[
-    #         {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':100, 'num_clients':200, 'iat':[0.4, 0.6, 1, 1.2, 1.3, 1.5,]},
-    #     ]},
-    #     { 'type':'kawkab', 'label':'Kawkab',
-    #       'name':'batch_size', 'points':[
-    #         {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5, 8.5,  10, 11, 11.75, 12]},
-    #     ]},
-    # ]
-    #
-    # fgp = {}
-    # fgp.update(figParams)
-    # fgp.update({
-    #     'figsize':      (3.5, 2.2),
-    #     'dimensions':   (0.21, 0.975, 0.85, 0.22),
-    #     'legend_cols':  3,
-    #     'legend_position':  (0.5, 1.2),
-    #     'markers': False,
-    # })
-    # fig_prefix = "01-batch-lines"
-    #---------------------------
 
     config['write_ratio'] = [100]
     config['num_clients'] = [200]
@@ -284,15 +340,26 @@ def results_bs_bars(conf, figParams):
     # BTrDB: 100:1.3, 500:3.75, 1000:5.5, 10000:8.85, 20000:9.3, 25000:9.5, 30000:9.2, 40000:9,
 
     config['metric'] = [
-        { 'type':'kawkab', 'label':'Kawkab',
-          'name':'batch_size', 'points':[
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[9.25]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[9]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[9.5]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[9.5]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[9.5]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[9.5]},
-        ]},
+        # { 'type':'kawkab', 'label':'Kawkab-0',
+        #   'name':'batch_size', 'points':[
+        #     # Block size 4KB
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[9.25]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[9]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[9.5]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[9.5]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[9.5]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[9.5]},
+        # ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'batch_size', 'points':[
+        #     # Block size 4KB
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[9.25]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[9]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[9.25]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[9.5]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[10]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[10]},
+        # ]},
         { 'type':'btrdb', 'label':'BTrDB',
           'name':'batch_size', 'points':[
             {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':100, 'num_clients':200, 'iat':[1.3]},
@@ -305,6 +372,18 @@ def results_bs_bars(conf, figParams):
             #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':40000, 'num_clients':200, 'iat':[9]},
             #{'res_file':'results.json','prefix':'btrdb-btr29-clp20-svrs1','val':50000, 'num_clients':200, 'iat':[9]},
         ]},
+        { 'type':'kawkab', 'label':'Kawkab',
+          'name':'batch_size', 'points':[
+            #Block size 16KB
+            #100:7, 500:12.5, 1000:12.75, 10000:13, 20000:13, 30000:13
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':100, 'num_clients':800, 'iat':[7]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':500, 'num_clients':800, 'iat':[12.5]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':1000, 'num_clients':800, 'iat':[12.5]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':10000, 'num_clients':800, 'iat':[13]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':20000, 'num_clients':800, 'iat':[13]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':30000, 'num_clients':800, 'iat':[13,]},
+        ]},
+
     ]
 
     fgp = {}
@@ -326,22 +405,22 @@ def results_bs_bars(conf, figParams):
 def plot_cdf(conf, figParams):
     config = {}
     config.update(conf)
-    config['write_ratio'] = [100]
+    config['write_ratio'] = [0]
     config['num_clients'] = [200]
     config['clients_per_machine'] = [10]
     config['batch_size'] = [10000]
     config['record_size'] = [16]
     config['files_per_client'] = [1]
-    config['test_runs'] = [1, 2, 3, 4, 5]
+    config['test_runs'] = [1,2,3,4,5]
 
     config['metric'] = [
-        { 'type':'kawkab', 'label':'Kawkab',
-          'name':'batch_size', 'points':[
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True, 'val':100, 'num_clients':200, 'iat':[6, 7, 9.25]},#, 10, 11, 11.75, 12]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True,  'val':500, 'num_clients':200, 'iat':[8, 9, 9.5]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True,  'val':1000, 'num_clients':200, 'iat':[8, 9, 9.5]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True,  'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5]},
-        ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'batch_size', 'points':[
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True, 'val':100, 'num_clients':200, 'iat':[6, 7, 9.25]},#, 10, 11, 11.75, 12]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True,  'val':500, 'num_clients':200, 'iat':[8, 9, 9.5]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True,  'val':1000, 'num_clients':200, 'iat':[8, 9, 9.5]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True,  'val':10000, 'num_clients':200, 'iat':[7, 9, 9.5]},
+        # ]},
         # { 'type':'kawkab', 'label':'Kawkab',
         #   'name':'write_ratio', 'points':[
         #     {'res_file':'all-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'cdf':True, 'val':100, 'num_clients':200, 'iat':[7,9, 9.5]},
@@ -349,6 +428,37 @@ def plot_cdf(conf, figParams):
         #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'cdf':True, 'val':50, 'num_clients':200, 'iat':[17, 19, 19.75]},
         #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'cdf':True, 'val':20, 'num_clients':200, 'iat':[36, 38, 40]},
         # ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'record_size', 'points':[
+        #     {'res_file':'write-results.json', 'prefix':'rw-v2t1', 'from_hist':True, 'cdf':True, 'val':64, 'num_clients':800, 'iat':[1, 5, 6]},#, 10, 11, 11.75, 12]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-v2t1', 'from_hist':True, 'cdf':True,  'val':96, 'num_clients':800, 'iat':[1, 4, 5]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-v2t1', 'from_hist':True, 'cdf':True,  'val':128, 'num_clients':800, 'iat':[1, 2, 3]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-v2t1', 'from_hist':True, 'cdf':True,  'val':160, 'num_clients':800, 'iat':[1, 2]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-v2t1', 'from_hist':True, 'cdf':True,  'val':192, 'num_clients':800, 'iat':[1, 2]},
+        # ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'record_size', 'points':[
+        #     # {'res_file':'read-results.json',  'prefix':'rw-hq16r', 'write_ratio':0, 'batch_size':10000, 'from_hist':True, 'cdf':True, 'val':16, 'num_clients':80, 'iat':[1]},#, 10, 11, 11.75, 12]},
+        #     # {'res_file':'write-results.json', 'prefix':'rw-hq16w', 'write_ratio':80, 'batch_size':1000, 'from_hist':True, 'cdf':True, 'val':16, 'num_clients':80, 'iat':[10]},#, 10, 11, 11.75, 12]},
+        #     # {'res_file':'read-results.json',  'prefix':'rw-hq16w', 'write_ratio':80, 'batch_size':1000, 'from_hist':True, 'cdf':True, 'val':16, 'num_clients':80, 'iat':[10]},#, 10, 11, 11.75, 12]},
+        #     {'res_file':'read-results.json',  'prefix':'rw-hq22r', 'write_ratio':0, 'batch_size':1000000, 'from_hist':True, 'cdf':True, 'val':16, 'num_clients':5, 'iat':[0.1]},#, 10, 11, 11.75, 12]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-hq22w', 'write_ratio':80, 'batch_size':1000, 'from_hist':True, 'cdf':True, 'val':16, 'num_clients':200, 'iat':[10]},#, 10, 11, 11.75, 12]},
+        #     {'res_file':'read-results.json',  'prefix':'rw-hq22w', 'write_ratio':80, 'batch_size':1000, 'from_hist':True, 'cdf':True, 'val':16, 'num_clients':200, 'iat':[10]},#, 10, 11, 11.75, 12]},
+        # ]},
+        # { 'type':'kawkab', 'label':'writes',
+        #   'name':'write_ratio', 'points':[
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[2, 7,9, 9.5, 9.75,10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':80, 'num_clients':200, 'iat':[2, 10, 11, 12, 13, 13.5]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':50, 'num_clients':200, 'iat':[10, 17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':20, 'num_clients':200, 'iat':[30, 36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
+        # ]},
+        { 'type':'kawkab', 'label':'writes',
+          'name':'write_ratio', 'points':[
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'cdf':True, 'batch_size':1000, 'val':100, 'num_clients':800, 'iat':[8.25]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'cdf':True, 'batch_size':1000, 'val':80, 'num_clients':800, 'iat':[12]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'cdf':True, 'batch_size':1000, 'val':50, 'num_clients':800, 'iat':[17]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'cdf':True, 'batch_size':1000, 'val':20, 'num_clients':800, 'iat':[32]},
+        ]},
     ]
 
     fgp = {}
@@ -382,15 +492,36 @@ def results_bs_lat50_bars(conf, figParams):
     # BTrDB: 100:1, 500:2.5, 1000:3.75, 10000:6, 20000:7, 25000:7, 30000:7, 40000:7, 50000:
     fgp = {}
     config['metric'] = [
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'batch_size', 'points':[
+        #     # Block size 4KB
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7]},
+        # ]},
         { 'type':'kawkab', 'label':'Kawkab',
           'name':'batch_size', 'points':[
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7]},
+            #Block size 16KB
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':100, 'num_clients':800, 'iat':[4]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':500, 'num_clients':800, 'iat':[9]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':1000, 'num_clients':800, 'iat':[9]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':10000, 'num_clients':800, 'iat':[9]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':20000, 'num_clients':800, 'iat':[9]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':30000, 'num_clients':800, 'iat':[9]},
         ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'batch_size', 'points':[
+        #     # Block size 4KB
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7.5]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':500, 'num_clients':200, 'iat':[8]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1000, 'num_clients':200, 'iat':[8]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':10000, 'num_clients':200, 'iat':[7]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':20000, 'num_clients':200, 'iat':[7]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':30000, 'num_clients':200, 'iat':[7]},
+        # ]},
         { 'type':'btrdb', 'label':'BTrDB',
           'name':'batch_size', 'points':[
             {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':100, 'num_clients':200, 'iat':[0.6]},
@@ -417,9 +548,18 @@ def results_bs_lat50_bars(conf, figParams):
     results = load_results(config)
 
     title = ""#"Throughput with different batch sizes"
-    fig_prefix = "02-batch-bars-lat50"
 
-    batch_size_bars_lat(config, results, fgp, fig_prefix, title, None, None, True)
+    latType = "lat50"
+    fig_prefix = "02-batch-bars-lat50"
+    batch_size_bars_lat(config, results, latType, fgp, fig_prefix, title, None, None, True)
+
+    latType = "lat95"
+    fig_prefix = "02-batch-bars-lat95"
+    batch_size_bars_lat(config, results, latType, fgp, fig_prefix, title, None, None, True)
+
+    latType = "lat99"
+    fig_prefix = "02-batch-bars-lat99"
+    batch_size_bars_lat(config, results, latType, fgp, fig_prefix, title, None, None, True)
 
 def scale_nodes_bars(conf, figParams):
     config = {}
@@ -427,7 +567,7 @@ def scale_nodes_bars(conf, figParams):
     config['write_ratio'] = [100]
     config['num_clients'] = [200]
     config['clients_per_machine'] = [10]
-    config['batch_size'] = [10000]
+    config['batch_size'] = [1000]
     config['record_size'] = [16]
     config['files_per_client'] = [1]
     config['test_runs'] = [1, 2, 3, 4, 5]
@@ -438,19 +578,40 @@ def scale_nodes_bars(conf, figParams):
     # BTrDB: 100:1.3, 500:3.75, 1000:5.5, 10000:8.85, 20000:9.3, 25000:9.5, 30000:9.2, 40000:9,
 
     config['metric'] = [
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'num_servers', 'points':[
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1, 'num_clients':200, 'iat':[11.75]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':2, 'num_clients':400, 'iat':[10.75]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':3, 'num_clients':600, 'iat':[10.25]},
+        #     {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':4, 'num_clients':800, 'iat':[10.75]},
+        # ]},
+        # { 'type':'btrdb', 'label':'BTrDB',
+        #   'name':'num_nodes', 'points':[
+        #     {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':1, 'num_clients':200, 'iat':[8.65]},
+        #     {'res_file':'results.json','prefix':'btrdb-btr32-clp20-svrs2','val':2, 'num_clients':400, 'iat':[8.65]},
+        #     # {'res_file':'results.json','prefix':'btrdb-btr32-clp20-svrs3','val':3, 'num_clients':600, 'iat':[8.65]},
+        #     # {'res_file':'results.json','prefix':'btrdb-btr27-clp20-svrs4','val':4, 'num_clients':800, 'iat':[4.15]},
+        # ]},
+        # { 'type':'kawkab', 'label':'Kawkab-0',
+        #   'name':'num_nodes', 'points':[
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':1, 'num_clients':200, 'iat':[9.75]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':2, 'num_clients':400, 'iat':[9]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':3, 'num_clients':600, 'iat':[9]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':4, 'num_clients':800, 'iat':[9.5]},
+        # ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'num_nodes', 'points':[
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':1, 'num_clients':200, 'iat':[9.5]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':2, 'num_clients':400, 'iat':[9]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':3, 'num_clients':600, 'iat':[9]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':4, 'num_clients':800, 'iat':[9.5]},
+        # ]},
         { 'type':'kawkab', 'label':'Kawkab',
-          'name':'num_servers', 'points':[
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1, 'num_clients':200, 'iat':[11.75]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':2, 'num_clients':400, 'iat':[10.75]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':3, 'num_clients':600, 'iat':[10.25]},
-            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':4, 'num_clients':800, 'iat':[10.75]},
-        ]},
-        { 'type':'btrdb', 'label':'BTrDB',
-          'name':'batch_size', 'points':[
-            {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':1, 'num_clients':200, 'iat':[1.3]},
-            {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':2, 'num_clients':400, 'iat':[1.3]},
-            {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':3, 'num_clients':600, 'iat':[1.3]},
-            {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':4, 'num_clients':800, 'iat':[1.3]},
+          'name':'num_nodes', 'points':[
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'val':1, 'num_clients':800, 'iat':[12.5]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs10-clp40', 'val':2, 'num_clients':800, 'iat':[12]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs10-clp40', 'val':3, 'num_clients':1200, 'iat':[11.75]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs10-clp40', 'val':4, 'num_clients':1600, 'iat':[11.5]},
         ]},
     ]
 
@@ -466,9 +627,9 @@ def scale_nodes_bars(conf, figParams):
     results = load_results(config)
 
     title = ""#"Throughput with different batch sizes"
-    fig_prefix = "02-batch-bars-tput"
+    fig_prefix = "05-node-scale-bars"
 
-    batch_size_bars(config, results, fgp, fig_prefix, title, None, None, True)
+    node_scale_bars(config, results, fgp, fig_prefix, title, None, None, True)
 
 def thr_lat_write_ratio(conf, figParams):
     config = {}
@@ -487,7 +648,6 @@ def thr_lat_write_ratio(conf, figParams):
         #     {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
         #     {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
         #     #-----------------------------
-        #
         # ]},
         # { 'type':'kawkab', 'label':'reads',
         #   'name':'write_ratio', 'points':[
@@ -499,22 +659,21 @@ def thr_lat_write_ratio(conf, figParams):
         #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
         #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
         # ]},
-        { 'type':'kawkab', 'label':'Kawkab',
-          'name':'write_ratio', 'points':[
-            #{'res_file':'all-results.json', 'prefix':'rw-kw29', 'val':100, 'num_clients':200, 'iat':[8,10,11]},
-            #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':90, 'num_clients':200, 'iat':[5, 9, 10.5, 11.25, 11.75, 12]},
-            #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':50, 'num_clients':200, 'iat':[13, 14, 15, 16, 17, 18, 19, 20]},
-            #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':10, 'num_clients':200, 'iat':[22, 24, 26, 28, 28.5, 33, 33.5, 34]},
-            #-----------------------
-            {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75, 10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
-            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5, 13.75]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
-            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[10, 13, 14, 15, 17, 18, 18.5, 19, 19.5, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
-            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[30, 33, 36, 38, 40, 41, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
-            #------------
-            #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'val':100, 'num_clients':200, 'iat':[8, 9, 10, 10.75]},#, 11, 11.75]},
-            #{'res_file':'all-results.json', 'prefix':'rw-kw47', 'from_hist':True, 'val':80, 'num_clients':400, 'iat':[5, 8, 10, 13]},
-
-        ]},
+        # { 'type':'kawkab', 'label':'Kawkab',
+        #   'name':'write_ratio', 'points':[
+        #     #{'res_file':'all-results.json', 'prefix':'rw-kw29', 'val':100, 'num_clients':200, 'iat':[8,10,11]},
+        #     #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':90, 'num_clients':200, 'iat':[5, 9, 10.5, 11.25, 11.75, 12]},
+        #     #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':50, 'num_clients':200, 'iat':[13, 14, 15, 16, 17, 18, 19, 20]},
+        #     #{'res_file':'all-results.json', 'prefix':'rw-kw30', 'val':10, 'num_clients':200, 'iat':[22, 24, 26, 28, 28.5, 33, 33.5, 34]},
+        #     #-----------------------
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7, 9, 9.5, 9.75, 10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5, 13.75]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[10, 13, 14, 15, 17, 18, 18.5, 19, 19.5, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[30, 33, 36, 38, 40, 41, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
+        #     #------------
+        #     #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'from_hist':True, 'val':100, 'num_clients':200, 'iat':[8, 9, 10, 10.75]},#, 11, 11.75]},
+        #     #{'res_file':'all-results.json', 'prefix':'rw-kw47', 'from_hist':True, 'val':80, 'num_clients':400, 'iat':[5, 8, 10, 13]},
+        # ]},
         # { 'type':'kawkab', 'label':'Kawkab',
         #   'name':'write_ratio', 'points':[
         #     #{'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[8, 9, 9.5, 10, 10.25, 10.5, 10.75]},
@@ -522,12 +681,33 @@ def thr_lat_write_ratio(conf, figParams):
         #     #{'res_file':'write-results.json', 'prefix':'rw-kw46', 'val':50, 'num_clients':200, 'iat':[10, 14, 16, 18.5, 18.75, 19, 19.25, 19.5, 20]},
         #     {'res_file':'write-results.json', 'prefix':'rw-kw46', 'val':20, 'num_clients':200, 'iat':[20, 30, 33, 36, 38, 39, 40, 41, 41.25, 41.5, 42, 42.5]},
         # ]},
-        # { 'type':'btrdb', 'label':'BTrDB',
+        { 'type':'btrdb', 'label':'BTrDB',
+          'name':'write_ratio', 'points':[
+            {'res_file':'results.json','prefix':'btrdb-btr25-clp20', 'batch_size':10000, 'from_hist':True,'val':100, 'num_clients':200, 'iat':[6, 7, 8, 8.65, 8.85, 9]},
+            {'res_file':'results.json', 'prefix':'btrdb-btr30-clp20-svrs1', 'batch_size':10000, 'from_hist':True, 'val':80, 'num_clients':200, 'iat':[2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5]},
+            {'res_file':'results.json', 'prefix':'btrdb-btr30-clp20-svrs1', 'batch_size':10000, 'from_hist':True, 'val':50, 'num_clients':200, 'iat':[1, 2, 2.5, 2.75, ]},
+            #{'res_file':'results.json', 'prefix':'btrdb-btr30-clp20-svrs1', 'val':20, 'num_clients':200, 'iat':[1, 2, 2.5, 2.75, ]},
+        ]},
+        # { 'type':'kawkab', 'label':'writes',
         #   'name':'write_ratio', 'points':[
-        #     {'res_file':'results.json','prefix':'btrdb-btr25-clp20','val':100, 'num_clients':200, 'iat':[6, 7, 8, 8.65, 8.85, 9]},
-        #     {'res_file':'results.json', 'prefix':'btrdb-btr30-clp20-svrs1', 'val':80, 'num_clients':200, 'iat':[2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5]},
-        #     {'res_file':'results.json', 'prefix':'btrdb-btr30-clp20-svrs1', 'val':50, 'num_clients':200, 'iat':[1, 2, 2.5, 2.75, ]},
-        #     #{'res_file':'results.json', 'prefix':'btrdb-btr30-clp20-svrs1', 'val':20, 'num_clients':200, 'iat':[1, 2, 2.5, 2.75, ]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw41', 'batch_size':1000, 'val':100, 'num_clients':200, 'iat':[8, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw47', 'batch_size':1000, 'val':80, 'num_clients':400, 'iat':[5, 8, 10, 13,]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw47', 'batch_size':1000, 'val':50, 'num_clients':400, 'iat':[5, 15, 16, 17]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw47', 'batch_size':1000, 'val':20, 'num_clients':400, 'iat':[25, 30, 32, ]},
+        # ]},
+        # { 'type':'kawkab', 'label':'writes',
+        #   'name':'write_ratio', 'points':[
+        #     {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'batch_size':1000, 'val':100, 'num_clients':800, 'iat':[6, 8, 10, 11, 11.5, 12, 12.5, 12.75, 13]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'batch_size':1000, 'val':80, 'num_clients':800, 'iat':[8, 12, 13, 14, 15, 15.5, 16,]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'batch_size':1000, 'val':50, 'num_clients':800, 'iat':[8, 15, 17, 19, 21, 22, 22.5, 23, 23.5, 24, 24.25,]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'batch_size':1000, 'val':20, 'num_clients':800, 'iat':[8, 16, 24, 32, 34, 35, 37, 38, 39, 40, 42, 44]},
+        # ]},
+        # { 'type':'kawkab', 'label':'writes',
+        #   'name':'write_ratio', 'points':[
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[2, 7,9, 9.5, 9.75,10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':80, 'num_clients':200, 'iat':[2, 10, 11, 12, 13, 13.5]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':50, 'num_clients':200, 'iat':[10, 17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':20, 'num_clients':200, 'iat':[30, 36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
         # ]},
     ]
     config['write_ratio'] = [0]
@@ -538,13 +718,14 @@ def thr_lat_write_ratio(conf, figParams):
     config['files_per_client'] = [1]
     config['test_runs'] = [1,2,3,4,5]
 
-
     results = load_results(config)
 
     title = ""
     fig_prefix = "write-ratio"
 
-    write_ratio_results(config, results, figParams, fig_prefix, title, None, None, True, True, True)
+    latTypes = ["meanLat", "lat50", "lat95", "lat99", "maxLat"]
+
+    write_ratio_thr_lat(config, results, latTypes, figParams, fig_prefix, title, None, None, True, True, True)
 
 def results_write_ratio(conf, figParams):
     config = {}
@@ -559,14 +740,13 @@ def results_write_ratio(conf, figParams):
         #     #{'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
         #     #{'res_file':'all-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
         # ]},
-        { 'type':'kawkab', 'label':'writes',
-          'name':'write_ratio', 'points':[
-            {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7,9, 9.5, 9.75,10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
-            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
-            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
-            {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
-        ]},
-
+        # { 'type':'kawkab', 'label':'writes',
+        #   'name':'write_ratio', 'points':[
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':100, 'num_clients':200, 'iat':[7,9, 9.5, 9.75,10, 10.2, 10.5, 11, 11.25]},#, 11.5, 11.75, 12], 12.25, 12.5,12.75]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':50, 'num_clients':200, 'iat':[17, 18, 19, 19.75, 20]},#, 20.25, 20.5, 20.75, 21, 21.25, 21.5]},
+        #     {'res_file':'all-results.json', 'prefix':'rw-kw42', 'from_hist':True, 'val':20, 'num_clients':200, 'iat':[36, 38, 40, 42]},#, 42.5, 43, 43.25, 43.5]},#, 43.75, 44, 44.25]},
+        # ]},
         # { 'type':'kawkab', 'label':'reads',
         #   'name':'write_ratio', 'points':[
         #     {'res_file':'read-results.json', 'prefix':'rw-kw42', 'val':80, 'num_clients':200, 'iat':[10, 11, 12, 13, 13.5, 13.75]},#, 13.75, 14, 14.25, 14.5, 14.75, 15, 15.25]},
@@ -580,6 +760,13 @@ def results_write_ratio(conf, figParams):
         #     {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':50, 'num_clients':200, 'iat':[10, 13, 15, 17, 18, 18.5, 19.5, 20]},
         #     {'res_file':'write-results.json', 'prefix':'rw-kw42', 'val':20, 'num_clients':200, 'iat':[30, 33, 36, 40, 41]},
         # ]},
+        { 'type':'kawkab', 'label':'writes',
+          'name':'write_ratio', 'points':[
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'batch_size':1000, 'val':100, 'num_clients':800, 'iat':[6, 8, 11, 12, 12.5, 12.75, 13]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'batch_size':1000, 'val':80, 'num_clients':800, 'iat':[8, 12, 15, 15.5, 16,]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'batch_size':1000, 'val':50, 'num_clients':800, 'iat':[8, 15, 19, 22, 22.5, 23.5, 24, 24.25,]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'from_hist':True, 'batch_size':1000, 'val':20, 'num_clients':800, 'iat':[8, 16, 32, 38, 40, 44]},
+        ]},
     ]
 
     #--------------------------------------------
@@ -616,12 +803,40 @@ def results_write_ratio(conf, figParams):
     config['files_per_client'] = [1]
     config['test_runs'] = [1,2,3,4,5]
 
+    latTypes = ["meanLat"]#["meanLat", "lat50", "lat95", "lat99", "maxLat"]
 
     results = load_results(config)
 
     title = ""
 
-    write_ratio_results(config, results, figParams, fig_prefix, title, None, None, True, True, True)
+    write_ratio_results(config, results, latTypes, figParams, fig_prefix, title, None, None, True, True, True)
+
+def results_wr_cdf(conf, figParams):
+    config = {}
+    config.update(conf)
+
+    fig_prefix = "04-wr-cdf"
+    config['metric'] = [
+        { 'type':'kawkab', 'label':'writes',
+          'name':'write_ratio', 'points':[
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'cdf':True, 'from_hist':True, 'batch_size':1000, 'val':100, 'num_clients':800, 'iat':[8]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'cdf':True, 'from_hist':True, 'batch_size':1000, 'val':80, 'num_clients':800, 'iat':[8]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'cdf':True, 'from_hist':True, 'batch_size':1000, 'val':50, 'num_clients':800, 'iat':[8]},
+            {'res_file':'all-results.json', 'prefix':'rw-16kbs2', 'cdf':True, 'from_hist':True, 'batch_size':1000, 'val':20, 'num_clients':800, 'iat':[8]},
+        ]},
+    ]
+
+    config['write_ratio'] = [0]
+    config['num_clients'] = [200]
+    config['clients_per_machine'] = [10]
+    config['batch_size'] = [1000]
+    config['record_size'] = [16]
+    config['files_per_client'] = [1]
+    config['test_runs'] = [1,2,3,4,5]
+
+    results = load_results(config)
+
+    wr_cdf_results(config, results, figParams, fig_prefix, True)
 
 def thr_lat_stream_scale(conf, figParams):
     config = {}
@@ -727,7 +942,8 @@ def results_node_scale(conf, figParams):
     config['metric'] = [
         { 'type':'kawkab', 'label':'Kawkab',
           'name':'num_nodes', 'points':[
-            {'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':1, 'num_clients':200, 'iat':[10.2]},
+            {'res_file':'write-results.json', 'prefix':'rw-kw41', 'val':1, 'num_clients':200, 'iat':[9.5]},
+            #{'res_file':'all-results.json', 'prefix':'rw-kw41', 'val':1, 'num_clients':200, 'iat':[10.2]},
             {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':2, 'num_clients':400, 'iat':[10.2]},
             {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':3, 'num_clients':600, 'iat':[10.5]},
             {'res_file':'all-results.json', 'prefix':'rw-kw43', 'val':4, 'num_clients':800, 'iat':[10.5]},
@@ -757,22 +973,25 @@ def plot_graphs(conf, figParams):
     # figParams['legend_position'] = (0.47, 1.45)
     # figParams['bars_width'] = 0.1
 
-    plot_cdf(conf, figParams)
-    #thr_lat_bs(conf, figParams)
+    #rs_bars(conf, figParams)
+    #plot_cdf(conf, figParams)
+    thr_lat_bs(conf, figParams)
     #thr_lat_write_ratio(conf, figParams)
     #thr_lat_iat(conf, figParams)
-    #hist_read_results(conf, figParams) #<<< Historical read results (no realtime reads)
+    #hist_read_results_hq13(conf, figParams) #<<< Historical read results (no realtime reads)
     #thr_lat_stream_scale(conf, figParams)
 
     # Results
     #--------
     #results_write_ratio(conf, figParams)
-    #results_bs_bars(conf, figParams)
-    #results_bs_lat50_bars(conf, figParams)
+    #results_wr_cdf(conf, figParams)
+    results_bs_bars(conf, figParams)
+    results_bs_lat50_bars(conf, figParams)
     #results_bs_lines(conf, figParams)
     #stream_scale_results(conf, figParams)
     #hist_read_results_hq16(conf, figParams) #<<< Historical read results
-    #scale_nodes_bars(conf, figParams)
+    #hist_read_results(conf, figParams)
+    scale_nodes_bars(conf, figParams)
     #results_node_scale(conf, figParams)
     #burst_handling_results(conf, figParams)
 

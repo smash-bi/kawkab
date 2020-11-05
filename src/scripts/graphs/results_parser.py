@@ -252,6 +252,7 @@ def summarize_data(runs_data, getCDF=False):
     if getCDF and len(lats) > 0:
         res['lats'] = lats
         res['cdf'] = _dcdf(lats)
+        res['pdf'] = np.unique(lats, return_counts=True)
 
     #import pdb; pdb.set_trace()
 
@@ -270,12 +271,6 @@ def _dcdf(data):
 
 def _dcdf_calc(data, dsize, point):
     return (len(data[:bisect_right(data, point)]) / dsize)
-
-def _mycdf(lats):
-    cdf = [0 for _ in range(101)]
-    cnt = 0
-    dsize = len(lats)
-
 
 def _expand(lats, counts):
     vals = []
@@ -299,10 +294,15 @@ def _lats_from_hists(res_dir):
         rc = []
 
     f = '%s/write-results-hists.json'%(res_dir)
-    print('Reading ',f)
-    data = _read_results(f)
-    wl = data[0]['Latency Histogram']['latency']
-    wc = data[0]['Latency Histogram']['count']
+    if path.exists(f):
+        print('Reading ',f)
+        data = _read_results(f)
+        wl = data[0]['Latency Histogram']['latency']
+        wc = data[0]['Latency Histogram']['count']
+    else:
+        print('File not exist, skipping...', f)
+        wl = []
+        wc = []
 
     rlf = _expand(rl, rc)
     wlf = _expand(wl, wc)
@@ -340,6 +340,8 @@ def load_results(conf):
                                     if 'from_hist' in point and point['from_hist']: from_hists = True
                                     if 'cdf' in point and point['cdf']: cdf = True
                                     if 'num_clients' in point: clients = point['num_clients']
+                                    if 'batch_size' in point: batch_size = point['batch_size']
+                                    if 'write_ratio' in point: write_ratio = point['write_ratio']
                                     for iat in point['iat']:
                                         params = {'test_type': test_type, 'test_prefix':test_prefix, 'batch_size': batch_size,
                                                   'record_size': record_size, 'num_clients': clients,

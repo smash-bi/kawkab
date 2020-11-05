@@ -35,6 +35,7 @@ public class Main {
 
 		int nodeID = Configuration.getNodeID();
 		String propsFile = System.getProperty("conf", Configuration.propsFileCluster);
+		System.out.println("Config file: " + propsFile);
 		Properties props = Configuration.getProperties(propsFile);
 		Filesystem.bootstrap(nodeID, props);
 

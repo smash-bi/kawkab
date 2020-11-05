@@ -46,18 +46,21 @@ def node_scale_bars(conf, results, fig_params, figPrefix="", title="", xMax=None
         res["label"] = label
         res_bundle.append(res)
 
-    xlabel = "Batch size"
+    xlabel = "Number of nodes"
     ylabel = "Records per second(x$10^6$)"
 
     print(title)
     pp.pprint(res_bundle)
 
+    hlines = [58.3]
+
     plotBars(res_bundle, title, xlabel, ylabel, N=N, show_legend=True, fp=fig_params,
-             yMax=yMax, xMax=xMax, show_improvement=False, show_height=False)
+             yMax=yMax, xMax=xMax, show_improvement=False, show_height=False, hlines=hlines)
 
     if save_fig:
         plt.savefig("%s/%s.pdf" % (conf["fig_dir"], figPrefix))
         plt.savefig("%s/%s.eps" % (conf["fig_dir"], figPrefix))
+        plt.savefig("%s/%s.png" % (conf["fig_dir"], figPrefix), dpi=300)
 
 def node_scale_line(conf, results, fig_params, figPrefix="", title="", xMax=None, yMax=None, logY=False, save_fig=False, show_ci=True):
     colors = ["#2b8cbe", "#2b8cbe", "#2b8cbe", "#2b8cbe",

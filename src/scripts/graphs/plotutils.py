@@ -206,7 +206,7 @@ def xyMarkGenerator():
 
 def plotTimeSeries(data, title, xlabel, ylabel, fp=fp_default, annotations=None, step=False, hline=False, yMin=None,
                    exact_ticks=False, show_legend=True, xticks=True, yticks=True, yMax=None, xMax=None, xMin=None,
-                   subplot=None, first_plot=True, logx=False, logy=False, colors=None, sharey=None, lspec=None, markers=None):
+                   subplot=None, first_plot=True, logx=False, logy=False, colors=None, sharey=None, lspec=None, markers=None, noLine=False):
     """Plot a time series.
 
     Input: data, a list of dicts.
@@ -258,8 +258,10 @@ def plotTimeSeries(data, title, xlabel, ylabel, fp=fp_default, annotations=None,
             x = np.arange(len(x))
             plt.xticks(x, d["x"])
 
-        if fp["markers"]:
-            plt.plot(x, y, label=d["label"], color=next(cgen), dashes=next(lgen), lw=fp["line_width"], marker=next(mgen), ms=fp["marker_size"])
+        if noLine:
+            plt.plot(x, y, label=d["label"], color=next(cgen), lw=fp["line_width"], marker=next(mgen), ms=fp["marker_size"], linestyle='None')
+        elif fp["markers"]:
+            plt.plot(x, y, label=d["label"], color=next(cgen), dashes=next(lgen), lw=fp["line_width"], marker=next(mgen), ms=fp["marker_size"], linestyle='None')
         else:
             plt.plot(x, y, label=d["label"], color=next(cgen), dashes=next(lgen), lw=fp["line_width"])
 
@@ -379,7 +381,8 @@ def _flip(items, ncol):
 def plotBars(res, title="", xlabel="", ylabel="", N=4, show_legend=True,
              show_height=False, subplot=None, first_plot=True, ystep_base=None,
              xticks=True, show_improvement=False, text_height_offset=0, show_text=False,
-             xticks_text=None, yMax=None, xMin=None, xMax=None, yMin0=None, fp=fp_default, colors=None):
+             xticks_text=None, yMax=None, xMin=None, xMax=None, yMin0=None, fp=fp_default,
+             colors=None, hlines=None):
     if fp["colored"]:
         cgen = colorGenerator(colors)
     else:
@@ -495,7 +498,11 @@ def plotBars(res, title="", xlabel="", ylabel="", N=4, show_legend=True,
     else:
         plt.legend().set_visible(False)
 
-    plt.grid(axis="y", color=fp["grid_color"], zorder=2)
+    plt.grid(axis="y", color=fp["grid_color"], zorder=10)
+
+    if hlines:
+        for h in hlines:
+            plt.axhline(h, ls="--", c="black", lw=1, zorder=6)
 
     return ax
 

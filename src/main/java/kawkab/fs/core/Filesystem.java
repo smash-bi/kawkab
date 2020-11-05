@@ -79,8 +79,8 @@ public final class Filesystem {
 		assert opts.recordSize() > 0;
 		assert opts.recordSize() <= Configuration.instance().segmentSizeBytes;
 
-		//long inumber = namespace.openFileDbg(filename, mode == FileMode.APPEND, opts); //FIXME: This is for quick testing.
-		long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
+		long inumber = namespace.openFileDbg(filename, mode == FileMode.APPEND, opts); //FIXME: This is for quick testing.
+		//long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 
 		//long inumber = namespace.openFile(filename, mode == FileMode.APPEND, opts);
 		System.out.println("[FS] Opened file: " + filename + ", inumber: " + inumber + ", mode: " + mode);
@@ -165,14 +165,14 @@ public final class Filesystem {
 		segsQ.shutdown();
 		indexQ.shutdown();
 		inodesQ.shutdown();
-		Cache.instance().shutdown();
-		ApproximateClock.instance().shutdown();
 
 		printStats();
 		System.out.printf("Cache stats:\n%s", Cache.instance().getStats());
 		System.out.print("GC duration stats (ms): "); GCMonitor.printStats();
 		System.out.println("Closed FileSystem");
-		// GlobalStoreManager.instance().shutdown(); //The LocalStore closes the GlobalStore
+
+		Cache.instance().shutdown();
+		ApproximateClock.instance().shutdown();
 
 		//Wakeup the threads waiting in waitUntilShutdown
 		synchronized(instance) {
@@ -212,17 +212,23 @@ public final class Filesystem {
 
 	public void printStats() throws KawkabException {
 		LatHistogram writeStatsAgg = null;
+		//LatHistogram readStatsAgg = null;
 		for (FileHandle file : openFiles.values()) {
 			//file.printStats();
 			if (writeStatsAgg == null) {
 				writeStatsAgg = file.writeStats();
+				//readStatsAgg = file.readStats();
 			} else {
 				writeStatsAgg.merge(file.writeStats());
+				//readStatsAgg.merge(file.readStats());
 			}
 		}
 
 		if (writeStatsAgg != null)
 			System.out.printf("Aggregate write stats: %s\n", writeStatsAgg.getStats());
+
+		//if (readStatsAgg != null)
+		//	System.out.printf("Aggregate read stats: %s\n", readStatsAgg.getStats());
 
 		pns.printStats();
 

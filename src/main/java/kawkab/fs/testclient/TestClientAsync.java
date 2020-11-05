@@ -86,6 +86,12 @@ public class TestClientAsync {
 
 		System.out.printf("Is synchronous = %s and bursty = %s\n", isSynchronous, isBursty);
 
+		/*try { //To avoid creating a herd effect
+			Thread.sleep(reqRand.nextInt(500));
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}*/
+
 		Result[] res = null;
 		try {
 			System.out.printf("Ramp-up for %d seconds..., %s \n", warmupSecs, new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
@@ -199,7 +205,7 @@ public class TestClientAsync {
 
 			sleep(waitTimeMicros);*/
 
-			//bgen.sleepNext();
+			//bgen.sleepNextOnOff();
 			bgen.sleepNextProbabilistic();
 
 			int size = rq.size();
@@ -305,7 +311,8 @@ public class TestClientAsync {
 					}
 				} else {
 					if (isBursty) {
-						bg.sleepNext();
+						bg.sleepNextOnOff();
+						//bg.sleepNextProbabilistic();
 					} else {
 						System.out.println("Should not be here as sending request without sleep.");
 					}
@@ -318,7 +325,6 @@ public class TestClientAsync {
 				if (isAppend) {
 					if (isController)
 						wLog.start();
-
 					try {
 						sendAppendRequest(fnames, records, timestamps);
 						batchSize = reqBatchSize;
@@ -326,7 +332,6 @@ public class TestClientAsync {
 						System.out.print("o");
 						batchSize = 0;
 					}
-
 
 					if (isController)
 						wLog.end(1);
@@ -416,8 +421,8 @@ public class TestClientAsync {
 			//	System.out.printf("cid=%d, file=%s, TS=%d\n", cid, fnames[i], records[i].timestamp());
 		}
 
-		client.appendRecords(fnames, records);
-		//client.appendRecordsUnpacked(fnames, records);
+		//client.appendRecords(fnames, records);
+		client.appendRecordsUnpacked(fnames, records);
 	}
 
 	private void sendAppendRequestSameFile(String[] fnames, Record[] records, long[] timestamps) throws KawkabException {
@@ -454,7 +459,7 @@ public class TestClientAsync {
 		if (maxLimit < batchSize)
 			return 0;
 
-		int winSizeRecords = 1000000;
+		int winSizeRecords = 50000;
 		if (winSizeRecords < batchSize)
 			winSizeRecords = 10*batchSize;
 
@@ -514,7 +519,7 @@ public class TestClientAsync {
 
 		long fs = client.size(fn)/recGen.size();
 
-		long maxTS = (long)(fs/100.0*(5+reqRand.nextInt(10)));
+		long maxTS = (long)(fs/100.0*(5+reqRand.nextInt(60)));
 		long minTS = maxTS - batchSize;
 		if (minTS < 0) minTS = 0;
 
@@ -654,7 +659,7 @@ public class TestClientAsync {
 
 		}
 
-		private void sleepNext() {
+		private void sleepNextOnOff() {
 			if (!inited)
 				reset();
 

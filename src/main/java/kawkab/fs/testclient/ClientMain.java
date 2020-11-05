@@ -104,6 +104,18 @@ public class ClientMain {
 		}
 
 		System.out.println(params);
+		ClientUtils.writeToFile(params.toString(), fp + "/params.txt");
+
+		System.out.printf("Warmup sec=%d, test sec=%d, record size=%d\n", warmupsec, td, rs);
+
+		pr = new Printer();
+		pr.print("Starting client " + cid);
+
+		if (type.toLowerCase().equals("s3")) {
+			runS3Test(cid, rs, nc, fp);
+			pr.print("Finished client " + cid);
+			return;
+		}
 
 		Record recGen;
 		if (rs == 16) {
@@ -116,29 +128,25 @@ public class ClientMain {
 
 		assert recGen.size() == rs;
 
-		//assert nf >= tc : "Total number of files must be greater than total number of clients";
-		//assert nf % tc == 0 : "nf % tc should be 0, i.e., files should be equally distributed";
-		//int nfpc = nf / tc;
-
-		System.out.printf("Warmup sec=%d, test sec=%d, record size=%d\n", warmupsec, td, recGen.size());
-
 		if (mgc) {
 			GCMonitor.initialize();
 		}
 
-		pr = new Printer();
-		pr.print("Starting client " + cid);
-
-		if (type.equals("rw"))
+		if (type.equals("rw")) {
 			runRWTest(testID, iat, wr, bs, cid, td, nc, nf, sip, sport, recGen, warmupsec, tc, mid, mip, mport, wtMs,
 					fp, highMPS, burstProb, burstDurSec, isSynchronous, readRecent);
-		else {
+		} else {
 			runTest(testID, cid, td, nc, nf, sip, sport, bs, recGen, warmupsec, type, tc, mid, mip, mport, wtMs, fp);
 		}
 
-		ClientUtils.writeToFile(params.toString(), fp + "/params.txt");
-
 		pr.print("Finished client " + cid);
+	}
+
+	private void runS3Test(int clid, int objSizeMB, int nCons, String outFolder) throws InterruptedException {
+		S3Test test = new S3Test();
+		//test.testUpload();
+		int objSize = objSizeMB * 1024 * 1024;
+		test.testUpload(clid, objSize, nCons, outFolder);
 	}
 
 	private Result[] runTest(int testID, int cid, int testDurSec, int numCients, int filesPerClient,

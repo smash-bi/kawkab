@@ -50,8 +50,8 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		private LSDevice(int id, int maxBlocks) {
 			this.id = id;
 			this.maxBlocks = maxBlocks;
-			//storedFilesMap = new LocalStoreDB(id, maxBlocks);
-			storedFilesMap = new LocalStoreDBRocksDB(id, maxBlocks);
+			storedFilesMap = new LocalStoreDB(id, maxBlocks);
+			//storedFilesMap = new LocalStoreDBRocksDB(id, maxBlocks);
 			storePermits = new Semaphore(maxBlocks);
 			lscache = new LocalStoreCache(id, maxBlocks, storedFilesMap, storePermits);
 
@@ -443,7 +443,6 @@ public final class LocalStoreManager implements SyncCompleteListener {
 		LSDevice dev = devices[Math.abs(block.id().perBlockTypeKey()) % numDevices];
 		BlockID id = block.id();
 		System.out.println("[LSM] Load block: " + id + " from device " + dev.id);
-
 
 		if (!dev.storedFilesMap.exists(id)) {
 			System.out.println("[LSM] Block is not available locally: " + id);

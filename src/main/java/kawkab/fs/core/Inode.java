@@ -56,7 +56,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		this.recordSize = recordSize;
 	}
 
-	//private LatHistogram idxLog;
+	private LatHistogram idxLog;
 	//private Accumulator loadLog;
 	//private long fileOpenTime;
 	//private LatHistogram tl;
@@ -86,8 +86,8 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		if (recordSize > 1)
 			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, indexQ);
 
-		//idxLog = new LatHistogram(TimeUnit.MICROSECONDS, "Index search", 100, 10000);
-		blkCrLog = new LatHistogram(TimeUnit.MICROSECONDS, "Chunk create", 100, 10000);
+		idxLog = new LatHistogram(TimeUnit.MICROSECONDS, "Index search", 10, 5000);
+		blkCrLog = new LatHistogram(TimeUnit.MICROSECONDS, "Chunk create", 100, 100000);
 		//loadLog = new Accumulator(500);
 		//fileOpenTime = System.currentTimeMillis();
 		//tl = new LatHistogram(TimeUnit.MILLISECONDS, "segLoadLog", 100, 1000);
@@ -157,9 +157,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new KawkabException(String.format("Not enough space in the dstBuf, available %d, required %d\n", dstBuf.remaining(), recordSize));
 		}
 
-		//idxLog.start();
+		idxLog.start();
 		long segInFile = index.findHighest(timestamp, indexLength(fileSize.get()), loadFromPrimary);
-		//idxLog.end();
+		idxLog.end(1);
 
 		if (segInFile == -1) {
 			System.out.printf("[I] Record with timestamp %d not found.\n", timestamp);
@@ -257,9 +257,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new KawkabException(String.format("Record sizes do not match. Given %d, expected %d", recSize, recordSize));
 		}
 
-		//idxLog.start();
+		idxLog.start();
 		List<long[]> offsets = index.findAll(minTS, maxTS, indexLength(fileSize.get()), loadFromPrimary); //Get the offsets
-		//idxLog.end(1);
+		idxLog.end(1);
 
 		if (offsets == null) {
 			System.out.printf("[I] F%d: No recs found between %d and %d. Recs in file = %d\n", inumber, minTS, maxTS, numRecords());
@@ -382,9 +382,9 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			throw new KawkabException(String.format("Record sizes do not match. Given %d, expected %d", recFactory.size(), recordSize));
 		}
 
-		//idxLog.start();
+		idxLog.start();
 		List<long[]> offsets = index.findAll(minTS, maxTS, indexLength(fileSize.get()), loadFromPrimary); //Get the offsets
-		//idxLog.end();
+		idxLog.end(1);
 
 		if (offsets == null)
 			return null;
@@ -973,7 +973,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 		index = null;
 		isInited = false;
 
-		//idxLog.printStats();
+		idxLog.printStats();
 		blkCrLog.printStats();
 		//System.out.printf("Segments loading counts timeline: "); loadLog.printPairs();
 	}
@@ -992,7 +992,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	}
 
 	public void printStats() {
-		//idxLog.printStats();
+		idxLog.printStats();
 		blkCrLog.printStats();
 		//loadLog.printPairs();
 
@@ -1005,7 +1005,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 	}
 
 	public void resetStats() {
-		//idxLog.reset();
+		idxLog.reset();
 		//segLoadLog.reset();
 		if (index != null)
 			index.resetStats();

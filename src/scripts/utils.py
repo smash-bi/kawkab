@@ -93,7 +93,7 @@ def get_hosts_list(conf, hosts):
     elif hosts == "servers":
         hosts_list = get_servers_list(conf)
     elif hosts == "clients":
-        hosts_list = get_clients_list(conf)
+        hosts_list = set(get_clients_list(conf))
     elif hosts == "backends":
         hosts_list = get_backends_list(conf)
     elif type(hosts) == list:
@@ -335,7 +335,7 @@ def wait_for_process(conf, hosts, pname, limit=600, kill=False):
                 _print(err)
                 break
             if out and len(out) > 0:
-                print " %d "%cnt,
+                print(" %d "%cnt),
                 sys.stdout.flush()
                 time.sleep(2)
                 cnt += 1
