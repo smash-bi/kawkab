@@ -8,6 +8,7 @@ then
   exit 1
 fi
 
+#zkDir=zookeeper-3.4.14
 zkDir=zookeeper-3.5.4-beta
 datadir="/tmp/zookeeper/data"
 logdir="/tmp/zookeeper/logs"

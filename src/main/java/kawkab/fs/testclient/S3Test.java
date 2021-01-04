@@ -4,13 +4,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 public class S3Test {
-	private final String accessKey = "kawkab";
-	private final String secretKey = "kawkabsecret";
-	private final String sip = "http://10.10.0.2:9000";
+//	private final String accessKey = "kawkab";
+//	private final String secretKey = "kawkabsecret";
+//	private final String sip = "http://10.10.0.2:9000";
+
+	private final String accessKey = "AKIA5C4WEOCAKUHDCGT6";
+	private final String secretKey = "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";
+	private final String sip = "https://s3.ca-central-1.amazonaws.com";
 
 	private int[] objSizeMB;
 
-	public void testUpload() throws InterruptedException {
+	/*public void testUpload() throws InterruptedException {
 		int[] objSizesMB = new int[]{1, 2, 4, 8, 16};
 		int[] numCons = new int[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 		int testRuns = 5;
@@ -38,17 +42,19 @@ public class S3Test {
 				}
 			}
 		}
-	}
+	}*/
 
 	public void testUpload(int clid, int objSize, int nCons, String outFolder) throws InterruptedException {
 		int numObjs = getNumObjs(objSize);
 
-		double tput = runUploadTest(objSize, numObjs, nCons);
+		Result aggRes = runUploadTest(objSize, numObjs, nCons);
 
-		int objSizeMB = objSize / (1024*1024);
-		String json = json(objSizeMB, nCons, tput);
 		String fp = String.format("%s/s3-results-%d", outFolder, clid);
-		String csv = csv(objSizeMB, nCons, tput);
+		//int objSizeMB = objSize / (1024*1024);
+		//String json = json(objSizeMB, nCons, tput);
+		//String csv = csv(objSizeMB, nCons, tput);
+		String json = aggRes.toJson(false, false);
+		String csv = aggRes.csv();
 		saveResults(json, csv, fp);
 
 		System.out.println(json);
@@ -67,23 +73,25 @@ public class S3Test {
 		return String.format("%d, %d, %.0f",objSize, nCons, tput);
 	}
 
-	private double runUploadTest(int objSizeBytes, int numObjs, int numCons) {
+	private Result runUploadTest(int objSizeBytes, int numObjs, int numCons) {
 		S3TestClient[] clients = connect(numCons);
-		final double[] tputs = new double[numCons];
+		final Result[] results = new Result[numCons];
 
 		System.out.printf("cons=%d, objMB=%.3f, numObjs=%d\n", numCons, objSizeBytes/1024.0/1024.0, numObjs);
 
 		Thread[] threads = new Thread[numCons];
-		for (int i=0; i<numCons; i++) {
+		for (int i=1; i<numCons; i++) {
 			final int iCl = i;
 			threads[i] = new Thread(() -> {
-				tputs[iCl] = clients[iCl].uploadTest(objSizeBytes, numObjs);
+				results[iCl] = clients[iCl].uploadTest(objSizeBytes, numObjs);
 			});
 
 			threads[i].start();
 		}
 
-		for (int i=0; i<numCons; i++) {
+		results[0] = clients[0].uploadTest(objSizeBytes, numObjs);
+
+		for (int i=1; i<numCons; i++) {
 			try {
 				threads[i].join();
 			} catch (InterruptedException e) {
@@ -91,21 +99,26 @@ public class S3Test {
 			}
 		}
 
-		double tputT = 0;
-		for (int i=0; i<numCons; i++) {
+		Result aggRes = results[0];
+
+		//double tputT = 0;
+		for (int i=1; i<numCons; i++) {
 			try {
 				threads[i].join();
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
 
-			System.out.printf("Client %d tput: %.3f MB/s\n", i, tputs[i]);
-			tputT += tputs[i];
+			aggRes.merge(results[i]);
+			System.out.printf("Client %d: %s\n", i, results[i].toJson(false, false));
+			//tputT += tputs[i];
 		}
+
+		System.out.println("Aggregate results: " + aggRes.toJson(false, false));
 
 		disconnect(clients);
 
-		return tputT;
+		return aggRes;
 	}
 
 	private S3TestClient[] connect(int numCons) {
@@ -137,6 +150,7 @@ public class S3Test {
 		}
 
 		return (int)(d2GB / objSize); //2GB
-	}
 
+		//return 300;
+	}
 }

@@ -7,6 +7,7 @@ import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.*;
@@ -16,6 +17,7 @@ import kawkab.fs.core.exceptions.FileNotExistException;
 import kawkab.fs.core.exceptions.KawkabException;
 import kawkab.fs.utils.Accumulator;
 import kawkab.fs.utils.AccumulatorMap;
+import kawkab.fs.utils.LatHistogram;
 import org.apache.zookeeper.server.ByteBufferInputStream;
 
 import java.io.BufferedInputStream;
@@ -30,6 +32,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 
 public final class S3Backend implements GlobalBackend{
@@ -41,6 +44,8 @@ public final class S3Backend implements GlobalBackend{
 	private static final String contentType = "application/octet-stream";
 	private int id;
 	private boolean working;
+	private LatHistogram dlLog;
+	private LatHistogram dlLogBulk;
 	private AccumulatorMap dlRateLog;
 	private AccumulatorMap ulRateLog;
 	private ApproximateClock clock;
@@ -50,14 +55,17 @@ public final class S3Backend implements GlobalBackend{
 		this.id = id;
 		client = newS3Client();
 		working = true;
-		createRootBucket();
+		//createRootBucket();
 		listExistingBuckets();
 		fileLocks = FileLocks.instance();
 		clock = ApproximateClock.instance();
 		startTime = clock.currentTime();
 
+		dlLogBulk = new LatHistogram(TimeUnit.MILLISECONDS, "S3 bulk download lat", 100, 5000);
+		dlLog = new LatHistogram(TimeUnit.MILLISECONDS, "S3 download lat", 100, 5000);
 		dlRateLog = new AccumulatorMap(1000); //Number of seconds we will run
 		ulRateLog = new AccumulatorMap(1000);
+
 
 		//Configuration conf = Configuration.instance();
 		//buffer = ByteBuffer.allocateDirect((Math.max(conf.dataBlockSizeBytes, conf.inodesBlockSizeBytes)));
@@ -87,6 +95,8 @@ public final class S3Backend implements GlobalBackend{
 		
 		int retries = 3;
 		Random rand = new Random();
+
+		dlLog.start();
 		
 		while(retries-- > 0) {
 			try (
@@ -121,6 +131,8 @@ public final class S3Backend implements GlobalBackend{
 				}
 			}
 		}
+
+		dlLog.end(1);
 		
 		//System.out.println("[S3] Loading from global: " + id.name());
 	}
@@ -148,6 +160,8 @@ public final class S3Backend implements GlobalBackend{
 		Random rand = new Random();
 
 		//System.out.printf("[S3 Bulk load: %s. start=%d, end=%d, len=%d\n", bl.blockPath(), rangeStart, rangeEnd, rangeEnd-rangeStart+1);
+
+		dlLogBulk.start();
 
 		while(retries-- > 0) {
 			try (
@@ -183,6 +197,8 @@ public final class S3Backend implements GlobalBackend{
 				}
 			}
 		}
+
+		dlLogBulk.end(1);
 
 		//System.out.println("[S3] Loading from global: " + id.name());
 	}
@@ -296,6 +312,8 @@ public final class S3Backend implements GlobalBackend{
 
 	public void printStats() {
 		System.out.printf("[S3] S3 backend start time ..., %s\n", new SimpleDateFormat("HH:mm:ss.SSS").format(new Date(startTime)));
+		dlLog.printStats();
+		dlLogBulk.printStats();
 		//System.out.printf("[S3] Upload rates (bytes per sec): "); ulRateLog.printPairs();
 		//System.out.printf("[S3] Download rates (bytes per sec):"); dlRateLog.printPairs();
 	}

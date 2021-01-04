@@ -316,10 +316,10 @@ def wait_for_process(conf, hosts, pname, limit=600, kill=False):
         cmd = 'pkill -f %s'%pname
         run_cluster_cmd(cmd, hosts, conf)
     
-    if conf['onEC2']:
-        cmd = 'pgrep -xl %s'%(pname)
-    else:
-        cmd = 'pgrep -fl %s | grep java'%(pname)
+    # if conf['onEC2']:
+    #     cmd = 'pgrep -xl %s'%(pname)
+    # else:
+    cmd = 'pgrep -fl %s | grep java'%(pname)
 
     cnt = 1
     hosts_list = get_hosts_list(conf, hosts)
@@ -344,11 +344,11 @@ def wait_for_process(conf, hosts, pname, limit=600, kill=False):
    
 def stopwatch(t):
     while t > 0:
-        print '%3d            \r'%t,
+        print('%3d            \r'%t),
         t -= 1
         sys.stdout.flush()
         time.sleep(1)
-    print '\r\n'
+    print('\r\n')
 
 def get_server(conf, iSvr):
     ip = conf['servers_pool'][iSvr]
@@ -365,7 +365,6 @@ def get_host_info(conf):
     return info
 
 def get_local_ips(conf):
-    
     localIPs = {}
     commands = []
     
@@ -396,7 +395,7 @@ def get_local_ip(conf, host, iface):
 
 def _print(msg):
     with lock:
-        print msg
+        print(msg)
         
 def _read_lines(fname):
     try:

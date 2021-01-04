@@ -58,7 +58,13 @@ def start_backend(conf):
                 ' %s/minio/reset.sh '
                 ' > %s 2>&1 & ')%( conf['kawkab_dir'], outFile )
 
+        if conf['onEC2']:
+            cmd = ('cd /tmp/kawkab; '
+                   '%s/zookeeper/reset.sh '
+                   ' > %s 2>&1 & ')%( conf['kawkab_dir'], outFile )
+
         hostCmds.append({'host':mac,'cmds':[cmd]})
+
     runCommandsParallelForHost(hostCmds, conf, True)
 
 def start_servers(conf):
@@ -149,7 +155,7 @@ def start_clients(conf):
             if cid == 1:
                 mid = cid
                 mip = clm
-                heap_size = '-Xms8g -Xmx16g '
+                #heap_size = '-Xms8g -Xmx16g '
 
             cmd = ('source ~/.bash_profile; '
                    ' cd /tmp/kawkab; '
@@ -171,9 +177,9 @@ def start_clients(conf):
         runCommandsParallelForHost(hostCmds, conf, True)
         stopwatch(1)
 
-    print ''
+    print ('')
     elapsed = time.time() - now
-    print 'Started %d client processes in %.3f seconds.'%(clCount,elapsed)
+    print ('Started %d client processes in %.3f seconds.'%(clCount,elapsed))
 
 def kill_processes(conf):
     cmds = [
@@ -203,7 +209,7 @@ def cleanup(conf):
     #runCmdParallel(cmd2, "servers", conf, True)
     run_cluster_cmd(cmd2, "servers", conf, True)
 
-    cmd2 = 'rm -r /tmp/fs0/fs/* /tmp/fs1/fs/* /tmp/fs/*'
+    cmd2 = 'rm -r /tmp/fs*/fs/* /tmp/fs0/fs/* /tmp/fs1/fs/* /tmp/fs/*'
     run_cluster_cmd(cmd2, "servers", conf, True)
     
     cmd = 'rm -r %s/*'%(conf['test_dir'])
@@ -224,7 +230,7 @@ def get_results(conf):
     run_cmd(cmd)
     print '============================================'
 
-    cmd = "echo %d, %d, %d, %s, %d, $(tail -n 1 %s/s3-results.csv) >> %s/s3-results.csv"%(
+    cmd = "echo %d, %d, %d, %s, %d, $(tail -n 1 %s/s3-results-1.csv) >> %s/s3-results.csv"%(
         p['tc'], p['nc'], p['rs'], p['test_prefix'], p['test_run'], conf['test_dir'], conf['exp_dir'])
     run_cmd(cmd)
 
@@ -307,14 +313,15 @@ def run_batch(conf):
                                             cleanup(conf)
                                             #stopwatch(3)
                                             prepare_folders(conf)
-                                            start_backend(conf)
-                                            stopwatch(15)
-                                            start_servers(conf)
+                                            if test_type != 's3':
+                                                start_backend(conf)
+                                                stopwatch(3)
+                                                start_servers(conf)
                                             start_clients(conf)
                                             stopwatch(3)
 
                                             duration = conf['warmup_sec'] + conf['test_duration'] + 240
-                                            wait_for_process(conf, "clients", 'java', duration)
+                                            wait_for_process(conf, "clients", 'ClientMain', duration)
                                             wait_for_process(conf, "servers", 'java', 30, True)
 
                                             #---------------------------------------------------

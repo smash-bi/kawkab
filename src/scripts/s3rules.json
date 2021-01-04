@@ -1,0 +1,15 @@
+{
+    "Version": "2012-10-17",
+    "Id": "Policy1605644707209",
+    "Statement": [
+        {
+            "Sid": "Stmt1605644686950",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::899573641344:user/kawkab"
+            },
+            "Action": "s3:*",
+            "Resource": "arn:aws:s3:::kawkab-blocks"
+        }
+    ]
+}

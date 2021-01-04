@@ -154,7 +154,7 @@ def hist_tput_timeline(conf, figp, nptid, npiat, npnc, npnf, npStartOffset, npbs
     prres["label"] = 'Realtime queries\non primary'
 
     figp['figsize'] = (6, 2.5)
-    figp['dimensions'] = (0.095, 0.975, 0.85, 0.19)
+    figp['dimensions'] = (0.12, 0.975, 0.85, 0.19)
     figp['legend_cols'] = 3
     figp['markers'] = False
     figp['legend_position'] = (0.47, 1.26)
@@ -266,6 +266,42 @@ def hist_read_cdf(conf, figp, nptid, npiat, npnc, npnf, npbs, npwr,
     plt.savefig("%s/%s.eps" % (conf["fig_dir"], figprefix))
     plt.savefig("%s/%s.png" % (conf["fig_dir"], figprefix), dpi=300)
 
+def hist_read_results_aws(conf, figParams):
+    # nptid = 'awshq5r'; npnc = 4; npiat = 8; npbs = 250000; npnf = 100; npwr = 0
+    # ptid = 'awshq5w-clp30'; pnc = 600; piat = 15; pbs = 1000; pnf = 1; pwr = 80
+    # npStartOffset = 60
+    # testTime = 180
+
+    # nptid = 'awshq4r'; npnc = 6; npiat = 4; npbs = 500000; npnf = 100; npwr = 0
+    # ptid = 'awshq4w-clp30'; pnc = 600; piat = 15; pbs = 1000; pnf = 1; pwr = 80
+    # npStartOffset = 60
+    # testTime = 180
+
+    #nptid = 'awshq3r'; npnc = 10; npiat = 1; npbs = 1000000; npnf = 60; npwr = 0
+    #nptid = 'awshq3r'; npnc = 10; npiat = 0.1; npbs = 1000000; npnf = 60; npwr = 0 # ---------------------------
+    #nptid = 'awshq3r'; npnc = 10; npiat = 5; npbs = 1000000; npnf = 60; npwr = 0
+    #nptid = 'awshq3r'; npnc = 1; npiat = 5; npbs = 1000000; npnf = 600; npwr = 0
+    #nptid = 'awshq3r'; npnc = 1; npiat = 1; npbs = 1000000; npnf = 600; npwr = 0
+    #nptid = 'awshq3r'; npnc = 1; npiat = 0.1; npbs = 1000000; npnf = 600; npwr = 0 #-------------------------
+    #nptid = 'awshq3r'; npnc = 2; npiat = 2; npbs = 1000000; npnf = 300; npwr = 0
+    ptid = 'awshq3w-clp30'; pnc = 600; piat = 15; pbs = 1000; pnf = 1; pwr = 80
+    npStartOffset = 120
+    testTime = 200
+
+    #nptid = 'awshq3r'; npnc = 10; npnf = 60; npiat = 10; npbs = 500000; npwr = 0
+    #nptid = 'awshq3r'; npnc = 1; npnf = 60; npiat = 7.5; npbs = 500000; npwr = 0
+    #nptid = 'awshq3r'; npnc = 20; npnf = 30; npiat = 10; npbs = 500000; npwr = 0
+    #nptid = 'awshq3r'; npnc = 5; npnf = 120; npiat = 7.5; npbs = 500000; npwr = 0
+    #nptid = 'awshq3r'; npnc = 5; npnf = 60; npiat = 1; npbs = 500000; npwr = 0 #----------------
+    #nptid = 'awshq3r'; npnc = 5; npnf = 60; npiat = 7.5; npbs = 500000; npwr = 0
+    #ptid = 'awshq3w-clp30'; pnc = 600; piat = 15; pbs = 1000; pnf = 1; pwr = 80
+    #npStartOffset = 60
+    #testTime = 240
+
+    hist_tput_timeline(conf, figParams, nptid, npiat, npnc, npnf, npStartOffset, npbs, npwr,
+                       ptid, piat, pnc, pnf, pbs, pwr, testTime, 'hq_timeline_aws')
+
+    hist_read_cdf(conf, figParams, nptid, npiat, npnc, npnf, npbs, npwr, ptid, piat, pnc, pnf, pbs, pwr, 'hq_cdf_aws')
 
 def hist_read_results(conf, figParams):
     #tid = 'hq26'

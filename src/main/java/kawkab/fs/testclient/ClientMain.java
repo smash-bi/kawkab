@@ -142,10 +142,10 @@ public class ClientMain {
 		pr.print("Finished client " + cid);
 	}
 
-	private void runS3Test(int clid, int objSizeMB, int nCons, String outFolder) throws InterruptedException {
+	private void runS3Test(int clid, int objSizeKB, int nCons, String outFolder) throws InterruptedException {
 		S3Test test = new S3Test();
 		//test.testUpload();
-		int objSize = objSizeMB * 1024 * 1024;
+		int objSize = objSizeKB * 1024;
 		test.testUpload(clid, objSize, nCons, outFolder);
 	}
 

@@ -142,7 +142,7 @@ def start_clients(conf):
 
             outFile = '%s/client_%02d.out' % (conf['clients_dir'], cid)
 
-            heap_size = '-Xms2g'
+            heap_size = '-Xms1500m'
 
             if cid == 1:
                 mid = cid

@@ -87,7 +87,7 @@ public final class Inode implements DeferredWorkReceiver<DataSegment> {
 			index = new PostOrderHeapIndex(inumber, conf.indexNodeSizeBytes, conf.nodesPerBlockPOH, conf.percentIndexEntriesPerNode, cache, indexQ);
 
 		idxLog = new LatHistogram(TimeUnit.MICROSECONDS, "Index search", 10, 5000);
-		blkCrLog = new LatHistogram(TimeUnit.MICROSECONDS, "Chunk create", 100, 100000);
+		blkCrLog = new LatHistogram(TimeUnit.MICROSECONDS, "Chunk create", 100, 50000);
 		//loadLog = new Accumulator(500);
 		//fileOpenTime = System.currentTimeMillis();
 		//tl = new LatHistogram(TimeUnit.MILLISECONDS, "segLoadLog", 100, 1000);

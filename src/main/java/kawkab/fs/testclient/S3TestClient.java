@@ -2,23 +2,31 @@ package kawkab.fs.testclient;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.ClientConfiguration;
+import com.amazonaws.SdkBaseException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.AmazonS3Exception;
-import com.amazonaws.services.s3.model.Bucket;
-import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.*;
+import kawkab.fs.core.exceptions.FileNotExistException;
+import kawkab.fs.utils.Accumulator;
+import kawkab.fs.utils.AccumulatorMap;
+import kawkab.fs.utils.LatHistogram;
 import org.apache.zookeeper.server.ByteBufferInputStream;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 public class S3TestClient {
 	private AmazonS3 client;
@@ -37,19 +45,27 @@ public class S3TestClient {
 		//dlRateLog = new AccumulatorMap(1000); //Number of seconds we will run
 	}
 
-	public double uploadTest(int objSizeBytes, int numObjs) {
+	public Result uploadTest(int objSizeBytes, int numObjs) {
 		ByteBuffer buffer = ByteBuffer.allocate(objSizeBytes);
+		AccumulatorMap wLats = new AccumulatorMap(1000);
+		LatHistogram wLog = new LatHistogram(TimeUnit.MICROSECONDS, "S3 upload lat", 50, 100000);
 
 		long st = System.currentTimeMillis();
 		String path = "test/"+id+"/";
 		for (int i=0; i<numObjs; i++) {
 			buffer.limit(buffer.capacity());
 			buffer.position(0);
-
+			int lat = -1;
 			try {
+				wLog.start();
 				storeToGlobal(path+i, buffer);
+				lat = wLog.end(1);
 			} catch (IOException e) {
 				e.printStackTrace();
+			}
+
+			if (lat >= 0) {
+				wLats.put(lat, 1);
 			}
 		}
 
@@ -57,7 +73,96 @@ public class S3TestClient {
 
 		double tput = 1.0 * objSizeBytes * numObjs / (1024*1024.0) / durSec;
 
-		return tput;
+		Result wRes = new Result(numObjs, numObjs/durSec, tput, wLats.min(), wLats.max(), wLats, new Accumulator(1), numObjs/durSec);
+
+		return wRes;
+	}
+
+	public Result downloadTest(int objSizeBytes, int numObjs) {
+		ByteBuffer buffer = ByteBuffer.allocate(objSizeBytes);
+		AccumulatorMap wLats = new AccumulatorMap(1000);
+		LatHistogram wLog = new LatHistogram(TimeUnit.MICROSECONDS, "S3 upload lat", 50, 100000);
+
+		long st = System.currentTimeMillis();
+		String path = "test/"+id+"/";
+		for (int i=0; i<numObjs; i++) {
+			buffer.limit(buffer.capacity());
+			buffer.position(0);
+			int lat = -1;
+			try {
+				wLog.start();
+				storeToGlobal(path+i, buffer);
+				lat = wLog.end(1);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+
+			if (lat >= 0) {
+				wLats.put(lat, 1);
+			}
+		}
+
+		int durSec = (int)(System.currentTimeMillis() - st)/1000;
+
+		double tput = 1.0 * objSizeBytes * numObjs / (1024*1024.0) / durSec;
+
+		Result wRes = new Result(numObjs, numObjs/durSec, tput, wLats.min(), wLats.max(), wLats, new Accumulator(1), numObjs/durSec);
+
+		return wRes;
+	}
+
+	private void download(long rangeStart, long rangeEnd, String path, ByteBuffer dstBuf) throws IOException {
+		GetObjectRequest getReq = new GetObjectRequest(rootBucket, path);
+		getReq.setRange(rangeStart, rangeEnd);
+
+		int retries = 3;
+		Random rand = new Random();
+
+		while(retries-- > 0) {
+			try (
+					S3Object obj = client.getObject(getReq); // client is an S3 client
+					S3ObjectInputStream is = obj.getObjectContent();
+					ReadableByteChannel chan = Channels.newChannel(new BufferedInputStream(is));) {
+
+				int loaded = readFromChannel(chan, dstBuf);
+				break;
+			} catch (SdkBaseException | IOException ae) { // If the block does not exist in S3, it throws NoSucKey error code
+				if (ae instanceof AmazonS3Exception) {
+					if (((AmazonS3Exception)ae).getErrorCode().equals("NoSuchKey")) {
+						throw new IOException("S3 NoSuckKey: " + path);
+					}
+				}
+
+				if (retries == 1)
+					throw new IOException(", failed to complete the request after retires");
+
+				try {
+					long sleepMs = (100+(Math.abs(rand.nextLong())%400));
+					System.out.println(String.format("[S3] Load from the global store failed for %s, retrying in %d ms...",
+							path,sleepMs));
+					Thread.sleep(sleepMs);
+				} catch (InterruptedException e) {
+					//throw new KawkabException(e);
+					return;
+				}
+			}
+		}
+
+	}
+
+	public int readFromChannel(ReadableByteChannel channel, ByteBuffer dstBuffer) throws IOException {
+		int readNow;
+		int totalRead = 0;
+
+		while(dstBuffer.remaining() > 0) {
+			readNow = channel.read(dstBuffer);
+			if (readNow == -1)
+				break;
+
+			totalRead += readNow;
+		}
+
+		return totalRead;
 	}
 
 	private void storeToGlobal(String path, final ByteBuffer buffer) throws IOException {

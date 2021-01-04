@@ -257,7 +257,7 @@
 				<artifactId>maven-thrift-plugin</artifactId>
 				<version>0.1.11</version>
 				<configuration>
-					<thriftExecutable>/home/sm3rizvi/packages/thrift-0.13.0/bin/thrift</thriftExecutable>
+					<!--thriftExecutable>/home/sm3rizvi/packages/thrift-0.13.0/bin/thrift</thriftExecutable-->
 					<thriftSourceRoot>${basedir}/src/main/thrift</thriftSourceRoot>
 					<generator>java</generator>
 				</configuration>
@@ -383,7 +383,7 @@
 		<dependency>
 			<groupId>org.apache.thrift</groupId>
 			<artifactId>libthrift</artifactId>
-			<version>0.12.0</version>
+			<version>0.13.0</version>
 		</dependency>
 
 		<!-- https://mvnrepository.com/artifact/org.apache.commons/commons-lang3 -->
@@ -414,6 +414,13 @@
 			<artifactId>lmdbjava</artifactId>
 			<version>0.8.1</version>
 		</dependency>
+
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>1.7.30</version>
+		</dependency>
+
 	</dependencies>
 
 </project>

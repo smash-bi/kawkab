@@ -165,7 +165,7 @@ public class TestClientAsync {
 	private void generateReqsBursty(final double lowMPS, final double highMPS, final int burstProb, final int burstDurSec,
 									int totalClients, int clientsPerMachine, int batchSize, final LinkedBlockingQueue<Instant> rq) {
 
-		System.out.println("Generate Requests Bursty... " + Commons.currentTime());
+		System.out.println("Generate Requests Bursty... " + new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
 
 		//double targetMPS = reqRateMPS/((double)totalCleints/(double)clientsPerMachine)/(double)batchSize; //total / ratePerMachine / batchSize
 		//double iatMicros = 1 / (targetMPS);  //Convert millions per second to nano second wait interval
@@ -670,12 +670,12 @@ public class TestClientAsync {
 					bursting = false;
 					waitTimeMicros = iatMicrosLow;
 					burstEndSec = elapsedSec + burstDurSec;
-					System.out.printf("No burst window from %d to %d\n", elapsedSec, burstEndSec);
+					System.out.printf("No burst window from %d to %d, sleep micros=%d\n", elapsedSec, burstEndSec, waitTimeMicros);
 				} else {// if (burstRand.nextInt(100) < burstProb) {
 					waitTimeMicros = iatMicrosHigh;
 					bursting = true;
 					burstEndSec = elapsedSec + burstDurSec;
-					System.out.printf("Burst window from %d to %d\n", elapsedSec, burstEndSec);
+					System.out.printf("Burst window from %d to %d, sleep micros=%d\n", elapsedSec, burstEndSec, waitTimeMicros);
 				}
 			}
 

@@ -161,7 +161,7 @@ public final class LocalStoreManager implements SyncCompleteListener {
 				//writeRateLog[workerID].put(elapsed, synced);
 			} catch (KawkabException e) {
 				//e.printStackTrace();
-				System.out.printf("OOS ");
+				System.out.printf("OOS: "+e.getMessage() + " ");
 			}
 		}
 

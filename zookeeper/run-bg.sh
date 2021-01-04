@@ -8,6 +8,7 @@ then
   exit 1
 fi
 
+#zkDir=zookeeper-3.4.14
 zkDir=zookeeper-3.5.4-beta
 BIN=${zkDir}/bin
 datadir="/tmp/zookeeper/data"
@@ -23,9 +24,9 @@ export ZOO_LOG_DIR=${logdir}/${server};
 #export ZOO_LOG4J_PROP="INFO,CONSOLE";
 #export ZOO_LOG4J_PROP="WARN,CONSOLE";
 
-rm -r ${logdir}/${server}/*
-rm -r ${datadir}/${server}/*
-rm -r ${outdir}/${server}/*
+rm -r ${logdir}/${server}
+rm -r ${datadir}/${server}
+rm -r ${outdir}/${server}
 
 mkdir -p ${datadir}/${server}
 echo $1 > ${datadir}/${server}/myid
